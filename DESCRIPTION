@@ -1,12 +1,13 @@
 Package: CovariateSearcher
-Title: What the Package Does (One Line, Title Case)
-Version: 0.0.0.9000
-Authors@R: 
-    person("First", "Last", , "first.last@example.com", role = c("aut", "cre"),
-           comment = c(ORCID = "YOUR-ORCID-ID"))
-Description: What the package does (one paragraph).
-License: `use_mit_license()`, `use_gpl3_license()` or friends to pick a
-    license
+Title: Automated Stepwise Covariate Modeling for NONMEM
+Version: 0.1.0
+Authors@R: person(Oleg Stepanov, email = 'oleg.stepanov@astrazeneca.com', role = 'aut')
+Description: Automated stepwise covariate modeling for NONMEM models with
+    recovery systems, parallel execution, and comprehensive monitoring.
+    Provides a complete functional interface for pharmacometric covariate analysis.
+License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.2.1
+Imports: dplyr, readr, yaml, bbr, cli, rlang, here, purrr, tibble
+Suggests: testthat (>= 3.0.0), knitr, rmarkdown

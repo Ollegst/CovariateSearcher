@@ -1,5 +1,23 @@
+# R package development
 .Rproj.user
 .Rhistory
-.Rdata
-.httr-oauth
+.RData
+.Ruserdata
+*.Rproj
+
+# Package build artifacts
+/src/*.o
+/src/*.so
+/src/*.dll
+/Meta/
+/doc/
+/inst/doc/
+
+# Development
+.vscode/
+*.swp
+*.swo
+
+# OS
 .DS_Store
+Thumbs.db
