@@ -203,7 +203,7 @@ create_comprehensive_table <- function(search_state) {
     ))
   }
 
-  # Create summary
+  # Create summary using the actual database fields
   db %>%
     dplyr::mutate(
       parent_display = ifelse(is.na(parent_model) | parent_model == "", "-", parent_model),
@@ -217,7 +217,12 @@ create_comprehensive_table <- function(search_state) {
       status_display = "not_submitted",
       ofv_display = "pending",
       delta_display = "-",
-      param_display = ifelse(covariate_tested == "Base Model", "2", "3")
+      param_display = dplyr::case_when(
+        covariate_tested == "Base Model" ~ "2",
+        covariate_tested == "Retry Model" ~ "3",
+        !is.na(covariate_tested) ~ "3",
+        TRUE ~ "NA"
+      )
     ) %>%
     dplyr::select(model_name, parent_display, model_type, changes,
                   status = status_display, ofv_display, delta_display, param_display)
