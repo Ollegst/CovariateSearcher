@@ -1,13 +1,31 @@
 Package: CovariateSearcher
-Title: Automated Stepwise Covariate Modeling for NONMEM
+Type: Package
+Title: Stepwise Covariate Modeling with NONMEM/bbi Integration
 Version: 0.1.0
-Authors@R: person("Oleg Stepanov", email = "oleg.stepanov@astrazeneca.com", role = c("aut", "cre"))
-Description: Automated stepwise covariate modeling for NONMEM models with
-    recovery systems, parallel execution, and comprehensive monitoring.
-    Provides a complete functional interface for pharmacometric covariate analysis.
+Authors@R: 
+    person("First", "Last", , "first.last@example.com", role = c("aut", "cre"),
+           comment = c(ORCID = "YOUR-ORCID-ID"))
+Description: Functional R package for automated stepwise covariate modeling (SCM) 
+    with NONMEM integration via bbi/bbr. Provides complete SCM workflow automation,
+    parallel model execution, statistical evaluation, automatic recovery from
+    estimation failures, and comprehensive progress monitoring.
 License: MIT + file LICENSE
 Encoding: UTF-8
+LazyData: true
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.2.1
-Imports: dplyr, readr, yaml, bbr, cli, rlang, here, purrr, tibble
-Suggests: testthat (>= 3.0.0), knitr, rmarkdown
+Imports:
+    bbr (>= 1.0.0),
+    dplyr (>= 1.0.0),
+    tibble (>= 3.0.0),
+    yaml (>= 2.0.0),
+    readr (>= 2.0.0),
+    purrr (>= 0.3.0),
+    stringr (>= 1.4.0)
+Suggests:
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
+URL: https://github.com/Ollegst/CovariateSearcher
+BugReports: https://github.com/Ollegst/CovariateSearcher/issues
