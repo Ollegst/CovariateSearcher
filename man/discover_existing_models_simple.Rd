@@ -2,7 +2,7 @@
 % Please edit documentation in R/03-database.R
 \name{discover_existing_models_simple}
 \alias{discover_existing_models_simple}
-\title{Discover Existing Models Simple}
+\title{Discover Existing Models with YAML Metadata}
 \usage{
 discover_existing_models_simple(models_folder)
 }
@@ -10,8 +10,8 @@ discover_existing_models_simple(models_folder)
 \item{models_folder}{Character. Path to models directory}
 }
 \value{
-Tibble with discovered models
+Tibble with discovered models and their metadata
 }
 \description{
-Discover Existing Models Simple
+Discover Existing Models with YAML Metadata
 }

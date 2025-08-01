@@ -2,6 +2,7 @@
 # CORE FUNCTIONS - MAIN INITIALIZATION AND MODEL MANAGEMENT
 # File: R/01-core-functions.R
 # Part of CovariateSearcher Package
+# Enhanced with functions from 04-models.R
 # =============================================================================
 
 #' Initialize Covariate Search
@@ -185,48 +186,47 @@ initialize_search_config <- function(search_state) {
 
 #' Add Covariate to Model
 #'
-#' @title Add single covariate to parent model
-#' @description Creates a new model by adding one covariate to the parent model
-#' @param search_state List containing search state
-#' @param parent_model Character. Parent model name (e.g., "run1")
-#' @param cov_tag Character. Covariate tag to add (e.g., "cov_cl_wt")
-#' @return List with updated search_state and model information
+#' @title Creates a new model by adding a single covariate to an existing base model
+#' @description This is the core function for stepwise covariate modeling.
+#'   Enhanced version with detailed logging and error handling.
+#' @param search_state List. Current search state from initialize_covariate_search()
+#' @param base_model_id Character. Base model identifier (e.g., "run1")
+#' @param covariate_tag Character. Covariate tag to add (e.g., "cov_cl_wt")
+#' @return Updated search state with new model added to database
 #' @export
-add_covariate_to_model <- function(search_state, parent_model, cov_tag) {
+add_covariate_to_model <- function(search_state, base_model_id, covariate_tag) {
 
-  cat("=== Adding Covariate ===\n")
-  cat("Parent model:", parent_model, "\n")
-  cat("Covariate tag:", cov_tag, "\n")
+  cat(sprintf("🔧 Adding covariate %s to model %s\n", covariate_tag, base_model_id))
 
-  # Get covariate info
-  cov_value <- search_state$tags[[cov_tag]]
-  if (is.null(cov_value)) {
-    stop("Covariate tag not found: ", cov_tag)
+  # Get covariate information
+  if (!covariate_tag %in% names(search_state$tags)) {
+    stop("Covariate tag not found: ", covariate_tag)
   }
 
-  matching_row <- search_state$covariate_search[
-    grepl(paste0("_", cov_value, "$"), search_state$covariate_search$cov_to_test), ]
+  covariate_name <- search_state$tags[[covariate_tag]]
+  cat(sprintf("  Covariate: %s\n", covariate_name))
 
-  if (nrow(matching_row) == 0) {
-    stop("No matching covariate found for tag: ", cov_tag)
-  }
-
-  cov_info <- matching_row[1, ]
-  cov_name <- cov_info$COVARIATE  # e.g., "WT"
-  param_name <- cov_info$PARAMETER # e.g., "CL"
-  cov_on_param <- paste0(cov_name, "_", param_name)  # e.g., "WT_CL"
-
-  cat("Adding covariate:", cov_value, "\n")
-  cat("STATUS:", cov_info$STATUS, "FORMULA:", cov_info$FORMULA, "\n")
-
-  # Create new model name
-  new_model_name <- paste0("run", search_state$model_counter + 1)
+  # Generate new model name
   search_state$model_counter <- search_state$model_counter + 1
+  new_model_name <- sprintf("run%d", search_state$model_counter)
+
+  cat(sprintf("  New model: %s\n", new_model_name))
+
+  # Find covariate definition in search database
+  matching_cov <- search_state$covariate_search[
+    grepl(paste0("_", covariate_name, "$"), search_state$covariate_search$cov_to_test), ]
+
+  if (nrow(matching_cov) == 0) {
+    warning("No matching covariate definition found for: ", covariate_name)
+    cov_definition <- "Unknown"
+  } else {
+    cov_definition <- matching_cov$cov_to_test[1]
+  }
 
   tryCatch({
     # Step 1: Create BBR model
-    cat("Creating BBR model...\n")
-    parent_path <- file.path(search_state$models_folder, parent_model)
+    cat("  Creating BBR model...\n")
+    parent_path <- file.path(search_state$models_folder, base_model_id)
 
     new_mod <- bbr::copy_model_from(
       .parent_mod = bbr::read_model(parent_path),
@@ -234,12 +234,18 @@ add_covariate_to_model <- function(search_state, parent_model, cov_tag) {
       .inherit_tags = TRUE,
       .overwrite = TRUE
     ) %>%
-      bbr::add_tags(search_state$tags[[cov_tag]])
+      bbr::add_tags(search_state$tags[[covariate_tag]])
 
-    cat("✓ BBR model created:", new_model_name, "\n")
+    cat("  ✓ BBR model created\n")
 
     # Step 2: Apply model_add_cov function
-    cat("Adding covariate to model file...\n")
+    cat("  Adding covariate to model file...\n")
+
+    # Get covariate information for model modification
+    cov_info <- matching_cov[1, ]
+    cov_name <- cov_info$COVARIATE  # e.g., "WT"
+    param_name <- cov_info$PARAMETER # e.g., "CL"
+    cov_on_param <- paste0(cov_name, "_", param_name)  # e.g., "WT_CL"
 
     search_state <- model_add_cov(
       search_state = search_state,
@@ -250,25 +256,27 @@ add_covariate_to_model <- function(search_state, parent_model, cov_tag) {
       covariate_search = search_state$covariate_search
     )
 
-    cat("✓ Covariate added to model file\n")
+    cat("  ✓ Covariate added to model file\n")
 
     # Step 3: Add to database
+    cat("  Adding to database...\n")
+
     new_row <- data.frame(
       model_name = new_model_name,
-      step_description = "Individual Covariate Addition",
-      phase = "individual_testing",
-      step_number = as.integer(gsub("run", "", new_model_name)),
-      parent_model = parent_model,
-      covariate_tested = cov_value,
+      step_description = sprintf("Add %s", covariate_name),
+      phase = "forward_selection",
+      step_number = 1L,
+      parent_model = base_model_id,
+      covariate_tested = covariate_name,
       action = "add_single_covariate",
       ofv = NA_real_,
       delta_ofv = NA_real_,
       rse_max = NA_real_,
       status = "created",
-      tags = I(list(c(get_model_covariates(search_state, parent_model), cov_tag))),
+      tags = I(list(c(covariate_name))),
       submission_time = as.POSIXct(NA),
       completion_time = as.POSIXct(NA),
-      retry_attempt = NA_integer_,
+      retry_attempt = 0L,
       original_model = NA_character_,
       estimation_issue = NA_character_,
       excluded_from_step = FALSE,
@@ -277,20 +285,111 @@ add_covariate_to_model <- function(search_state, parent_model, cov_tag) {
 
     search_state$search_database <- rbind(search_state$search_database, new_row)
 
-    return(list(
-      search_state = search_state,
-      model_name = new_model_name,
-      log_file = NULL
-    ))
+    cat(sprintf("✅ Model %s added to database\n", new_model_name))
+
+    return(search_state)
 
   }, error = function(e) {
-    cat("✗ Model creation failed:", e$message, "\n")
-    return(list(
-      search_state = search_state,
-      model_name = NULL,
-      error = e$message
-    ))
+    cat(sprintf("❌ Model creation failed: %s\n", e$message))
+    return(search_state)
   })
+}
+
+#' Get Model Status
+#'
+#' @title Get current status of a model
+#' @description Checks model completion status by examining output files
+#' @param search_state List containing search state
+#' @param model_name Character. Model name to check
+#' @return Character. Status: "completed", "failed", "in_progress", etc.
+#' @export
+get_model_status <- function(search_state, model_name) {
+
+  model_row <- search_state$search_database[
+    search_state$search_database$model_name == model_name, ]
+
+  if (nrow(model_row) == 0) {
+    return("not_found")
+  }
+
+  return(model_row$status[1])
+}
+
+#' Get Model OFV
+#'
+#' @title Extract OFV from completed model
+#' @description Extracts the objective function value from model output
+#' @param search_state List containing search state
+#' @param model_name Character. Model name
+#' @return Numeric. OFV value or NA if not available
+#' @export
+get_model_ofv <- function(search_state, model_name) {
+
+  model_row <- search_state$search_database[
+    search_state$search_database$model_name == model_name, ]
+
+  if (nrow(model_row) == 0) {
+    return(NA_real_)
+  }
+
+  return(model_row$ofv[1])
+}
+
+#' Get Model Covariates
+#'
+#' @title Get list of covariates in a model
+#' @description Returns covariates currently in the specified model
+#' @param search_state List containing search state
+#' @param model_name Character. Model name
+#' @return Character vector. Covariate names in the model
+#' @export
+get_model_covariates <- function(search_state, model_name) {
+
+  model_row <- search_state$search_database[
+    search_state$search_database$model_name == model_name, ]
+
+  if (nrow(model_row) == 0) {
+    return(character(0))
+  }
+
+  # For now, return the single covariate tested
+  # In full implementation, this would track cumulative covariates
+  covariate <- model_row$covariate_tested[1]
+  if (is.na(covariate)) {
+    return(character(0))
+  }
+
+  return(covariate)
+}
+
+#' Get Model Covariates from Database
+#'
+#' @title Get cumulative covariates by tracing model history
+#' @description Traces model hierarchy to get all covariates in a model
+#' @param search_state List containing search state
+#' @param model_name Character. Model name
+#' @return Character vector. All covariate names in the model
+#' @export
+get_model_covariates_from_db <- function(search_state, model_name) {
+  # Trace back through model hierarchy to collect all covariates
+  current_model <- model_name
+  covariates <- character(0)
+
+  while (!is.na(current_model) && current_model != "" && current_model != search_state$base_model) {
+    model_row <- search_state$search_database[
+      search_state$search_database$model_name == current_model, ]
+
+    if (nrow(model_row) == 0) break
+
+    cov_tested <- model_row$covariate_tested[1]
+    if (!is.na(cov_tested) && cov_tested != "" && cov_tested != "Base Model") {
+      covariates <- c(cov_tested, covariates)
+    }
+
+    current_model <- model_row$parent_model[1]
+  }
+
+  return(unique(covariates))
 }
 
 #' Discover Existing Models
@@ -367,9 +466,9 @@ discover_existing_models <- function(search_state) {
     }
 
     # Get model information
-    status <- get_model_status(search_state, model_name)
-    ofv <- if (status == "completed") get_model_ofv(search_state, model_name) else NA
-    covariates <- get_model_covariates(search_state, model_name)
+    status <- get_model_status_from_files(search_state, model_name)
+    ofv <- if (status == "completed") get_model_ofv_from_files(search_state, model_name) else NA
+    covariates <- get_model_covariates_from_files(search_state, model_name)
 
     # Add to database with retry tracking columns
     new_row <- data.frame(
@@ -401,15 +500,15 @@ discover_existing_models <- function(search_state) {
   return(search_state)
 }
 
-#' Get Model Status
+#' Get Model Status from Files
 #'
-#' @title Get current status of a model
-#' @description Checks model completion status by examining output files
+#' @title Check model status by examining output files
+#' @description Determines model status from NONMEM output files
 #' @param search_state List containing search state
 #' @param model_name Character. Model name to check
-#' @return Character. Status: "completed", "failed", "in_progress", etc.
+#' @return Character. Model status
 #' @export
-get_model_status <- function(search_state, model_name) {
+get_model_status_from_files <- function(search_state, model_name) {
 
   model_path <- file.path(search_state$models_folder, model_name)
 
@@ -458,17 +557,17 @@ get_model_status <- function(search_state, model_name) {
   })
 }
 
-#' Get Model OFV
+#' Get Model OFV from Files
 #'
-#' @title Extract OFV from completed model
-#' @description Extracts the objective function value from model output
+#' @title Extract OFV from model output files
+#' @description Extracts OFV value from NONMEM output files
 #' @param search_state List containing search state
 #' @param model_name Character. Model name
-#' @return Numeric. OFV value or NA if not available
+#' @return Numeric. OFV value or NA
 #' @export
-get_model_ofv <- function(search_state, model_name) {
+get_model_ofv_from_files <- function(search_state, model_name) {
 
-  status <- get_model_status(search_state, model_name)
+  status <- get_model_status_from_files(search_state, model_name)
   if (status != "completed") {
     return(NA)
   }
@@ -496,15 +595,15 @@ get_model_ofv <- function(search_state, model_name) {
   })
 }
 
-#' Get Model Covariates
+#' Get Model Covariates from Files
 #'
-#' @title Get list of covariates in a model
-#' @description Extracts covariate tags from model using BBR tags
+#' @title Extract covariates from model using BBR tags
+#' @description Gets covariate information from BBR model tags
 #' @param search_state List containing search state
 #' @param model_name Character. Model name
-#' @return Character vector. Covariate tag names
+#' @return Character vector. Covariate names
 #' @export
-get_model_covariates <- function(search_state, model_name) {
+get_model_covariates_from_files <- function(search_state, model_name) {
 
   tryCatch({
     model_path <- file.path(search_state$models_folder, model_name)
@@ -575,12 +674,12 @@ update_all_model_statuses <- function(search_state) {
 
   for (i in 1:nrow(search_state$search_database)) {
     model_name <- search_state$search_database$model_name[i]
-    new_status <- get_model_status(search_state, model_name)
+    new_status <- get_model_status_from_files(search_state, model_name)
     search_state$search_database$status[i] <- new_status
 
     # Update OFV if completed and not already set
     if (new_status == "completed" && is.na(search_state$search_database$ofv[i])) {
-      search_state$search_database$ofv[i] <- get_model_ofv(search_state, model_name)
+      search_state$search_database$ofv[i] <- get_model_ofv_from_files(search_state, model_name)
       search_state$search_database$completion_time[i] <- Sys.time()
     }
   }
