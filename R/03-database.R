@@ -63,24 +63,24 @@ initialize_search_database <- function(models_folder) {
   ))
 }
 
-#' Discover Existing Models Simple
+#' Discover Existing Models with YAML Metadata
 #'
 #' @param models_folder Character. Path to models directory
-#' @return Tibble with discovered models
+#' @return Tibble with discovered models and their metadata
 discover_existing_models_simple <- function(models_folder) {
 
   # Find model files
   ctl_files <- list.files(models_folder, pattern = "^run\\d+\\.(ctl|mod)$")
   yaml_files <- list.files(models_folder, pattern = "^run\\d+\\.yaml$")
-  
+
   # Get model names
   ctl_models <- gsub("\\.(ctl|mod)$", "", ctl_files)
   yaml_models <- gsub("\\.yaml$", "", yaml_files)
-  
+
   # Combine and get unique models
   all_models <- unique(c(ctl_models, yaml_models))
   all_models <- all_models[grepl("^run\\d+$", all_models)]
-  
+
   if (length(all_models) == 0) {
     return(tibble::tibble(
       model_name = character(0), step_description = character(0),
@@ -94,33 +94,94 @@ discover_existing_models_simple <- function(models_folder) {
       estimation_issue = character(0), excluded_from_step = logical(0)
     ))
   }
-  
+
   # Sort models
   model_numbers <- as.numeric(gsub("run", "", all_models))
   sorted_indices <- order(model_numbers)
   all_models <- all_models[sorted_indices]
-  
-  # Create database entries
-  tibble::tibble(
-    model_name = all_models,
-    step_description = "Existing Model",
-    phase = "discovered",
-    step_number = 0L,
-    parent_model = NA_character_,
-    covariate_tested = NA_character_,
-    action = "existing",
-    ofv = NA_real_,
-    delta_ofv = NA_real_,
-    rse_max = NA_real_,
-    status = "unknown",
-    tags = rep(list(character(0)), length(all_models)),
-    submission_time = as.POSIXct(rep(NA, length(all_models))),
-    completion_time = as.POSIXct(rep(NA, length(all_models))),
-    retry_attempt = rep(0L, length(all_models)),
-    original_model = rep(NA_character_, length(all_models)),
-    estimation_issue = rep(NA_character_, length(all_models)),
-    excluded_from_step = rep(FALSE, length(all_models))
-  )
+
+  # Create database entries with YAML metadata
+  model_entries <- list()
+
+  for (i in seq_along(all_models)) {
+    model_name <- all_models[i]
+    yaml_path <- file.path(models_folder, paste0(model_name, ".yaml"))
+
+    # Default values
+    parent_model <- NA_character_
+    covariate_tested <- NA_character_
+    model_tags <- character(0)
+    step_description <- "Existing Model"
+    phase <- "discovered"
+
+    # Read YAML metadata if available
+    if (file.exists(yaml_path)) {
+      tryCatch({
+        yaml_data <- yaml::read_yaml(yaml_path)
+
+        # Extract parent model
+        if (!is.null(yaml_data$based_on)) {
+          parent_model <- yaml_data$based_on
+        }
+
+        # Extract covariate information from tags
+        if (!is.null(yaml_data$tags) && length(yaml_data$tags) > 0) {
+          model_tags <- yaml_data$tags
+          if (length(model_tags) > 0) {
+            covariate_tested <- model_tags[1]  # Use first tag as primary covariate
+            step_description <- paste("Add", covariate_tested)
+            phase <- "forward_selection"
+          }
+        }
+
+        # Special handling for base model
+        if (model_name == "run1" || is.na(parent_model)) {
+          step_description <- "Base Model"
+          covariate_tested <- "Base Model"
+          phase <- "base"
+        }
+
+        # Special handling for retry models (model numbers > 2000)
+        model_num <- as.numeric(gsub("run", "", model_name))
+        if (!is.na(model_num) && model_num > 2000) {
+          step_description <- "Retry Model"
+          covariate_tested <- "Retry Model"
+          phase <- "retry"
+        }
+
+      }, error = function(e) {
+        warning("Could not read YAML for ", model_name, ": ", e$message)
+      })
+    }
+
+    # Create model entry
+    model_entry <- tibble::tibble(
+      model_name = model_name,
+      step_description = step_description,
+      phase = phase,
+      step_number = if (phase == "base") 0L else 1L,
+      parent_model = parent_model,
+      covariate_tested = covariate_tested,
+      action = if (phase == "base") "base_model" else "add_single_covariate",
+      ofv = NA_real_,
+      delta_ofv = NA_real_,
+      rse_max = NA_real_,
+      status = "unknown",
+      tags = list(model_tags),
+      submission_time = as.POSIXct(NA),
+      completion_time = as.POSIXct(NA),
+      retry_attempt = if (phase == "retry") 1L else 0L,
+      original_model = if (phase == "retry") parent_model else NA_character_,
+      estimation_issue = NA_character_,
+      excluded_from_step = FALSE
+    )
+
+    model_entries[[i]] <- model_entry
+  }
+
+  # Combine all entries
+  result <- dplyr::bind_rows(model_entries)
+  return(result)
 }
 
 #' Create Model Summary Table
