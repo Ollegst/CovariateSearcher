@@ -135,7 +135,7 @@ validate_setup <- function(search_state) {
 #' @param search_state List containing search state
 #' @return Updated search_state with initialized database
 #' @export
-initialize_search_database_core  <- function(search_state) {
+initialize_search_database_core <- function(search_state) {
   search_state$search_database <- data.frame(
     model_name = character(),
     step_description = character(),
