@@ -347,52 +347,63 @@ fix_theta_renumbering <- function(modelcode, theta_numbers_to_remove, log_functi
   return(modelcode)
 }
 
-#' Remove Covariate from Model (look like it work)
-#'
-#' @title Remove covariate from NONMEM model file with detailed logging
-#' @description Removes covariate relationship from model file and updates database
-#' @param search_state List containing search state
-#' @param model_name Character. Base model name
-#' @param covariate_to_remove Character. Covariate to remove (e.g., "beta_WT_CL")
-#' @param save_as_new_model Logical. Whether to create new model (default: TRUE)
-#' @return List with updated search_state and new model information
-#' @export
-remove_covariate_from_model <- function(search_state, model_name, covariate_to_remove, save_as_new_model = TRUE) {
 
-  # Initialize log
+#' Remove Covariate from Model (Clean Interface)
+#'
+#' @title Remove covariate using tag name with automatic search_state update
+#' @description Removes a covariate from a model using tag-based interface.
+#'   Automatically updates search_state in place - no return value needed.
+#' @param search_state List containing search state (updated automatically)
+#' @param model_name Character. Model name to modify
+#' @param covariate_tag Character. Covariate tag to remove (e.g., "cov_cl_race")
+#' @param save_as_new_model Logical. Whether to create new model (default: TRUE)
+#' @export
+remove_covariate_from_model <- function(search_state, model_name, covariate_tag, save_as_new_model = TRUE) {
+
+  cat(sprintf("[-] Removing covariate %s from model %s", covariate_tag, model_name))
+
+  # Step 1: Convert tag to beta format (consistent with add_covariate)
+  if (!covariate_tag %in% names(search_state$tags)) {
+    stop("Covariate tag not found: ", covariate_tag)
+  }
+
+  covariate_value <- search_state$tags[[covariate_tag]]
+
+  # Find matching covariate in search definition
+  matching_cov <- search_state$covariate_search[
+    grepl(paste0("_", covariate_value, "$"), search_state$covariate_search$cov_to_test), ]
+
+  if (nrow(matching_cov) == 0) {
+    stop("No matching covariate definition found for: ", covariate_value)
+  }
+
+  # Get the beta format name and covariate info
+  covariate_to_remove <- matching_cov$cov_to_test[1]  # e.g., "beta_RACE_CL"
+  cov_info <- matching_cov[1, ]
+  cova <- cov_info$COVARIATE
+  param <- cov_info$PARAMETER
+
+  # Initialize logging
   log_messages <- c()
   log_msg <- function(msg) {
     log_messages <<- c(log_messages, paste(Sys.time(), "-", msg))
-    if (length(log_messages) %% 10 == 0) {  # Only show progress every 10 steps
+    if (length(log_messages) %% 10 == 0) {
       cat(".")
     }
   }
 
-  cat("Removing", covariate_to_remove, "from", model_name, "...")
+  log_msg(paste("=== Removing Covariate:", covariate_value, "==="))
+  log_msg(paste("Model:", model_name, "-> Beta format:", covariate_to_remove))
 
-  log_msg(paste("=== Removing Covariate with BBR Integration ==="))
-  log_msg(paste("Model:", model_name))
-  log_msg(paste("Removing covariate:", covariate_to_remove))
-
-  # Find the covariate info
-  cov_info <- search_state$covariate_search[search_state$covariate_search$cov_to_test == covariate_to_remove, ]
-  if (nrow(cov_info) == 0) {
-    stop("Covariate ", covariate_to_remove, " not found in covariate_search")
-  }
-
-  cova <- cov_info$COVARIATE
-  param <- cov_info$PARAMETER
-
-  log_msg(paste("Covariate name:", cova, "Parameter:", param))
-
-  # Step 1: Create new model with BBR if requested
+  # Step 2: Create new model with BBR if requested
   if (save_as_new_model) {
     new_model_name <- paste0("run", search_state$model_counter + 1)
-    search_state$model_counter <- search_state$model_counter + 1
+
+    # ✅ Update counter immediately using <<-
+    search_state$model_counter <<- search_state$model_counter + 1
 
     log_msg(paste("Creating new BBR model:", new_model_name))
 
-    # Create new model using BBR
     tryCatch({
       parent_path <- file.path(search_state$models_folder, model_name)
       new_mod <- bbr::copy_model_from(
@@ -401,26 +412,14 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_to_r
         .inherit_tags = TRUE
       )
 
-      log_msg(paste("Created BBR model with tags:", paste(new_mod$tags, collapse = ", ")))
-
-      # Find and remove the covariate tag
-      # The tag should match the pattern: COVARIATE_PARAMETER (e.g., WT_CL)
-      covariate_tag_value <- paste0(cova, "_", param)  # e.g., "WT_CL"
-
-      log_msg(paste("Looking for tag to remove:", covariate_tag_value))
-
+      # Remove the covariate tag from BBR model
+      covariate_tag_value <- paste0(cova, "_", param)
       if (covariate_tag_value %in% new_mod$tags) {
-        log_msg(paste("Found tag in model:", covariate_tag_value))
-        # Use the working BBR syntax: remove_tags(model, tag)
         new_mod <- bbr::remove_tags(new_mod, covariate_tag_value)
-        log_msg(paste("Removed tag:", covariate_tag_value))
-      } else {
-        log_msg(paste("Warning: Tag", covariate_tag_value, "not found in model tags"))
-        log_msg(paste("Available tags in model:", paste(new_mod$tags, collapse = ", ")))
+        log_msg(paste("Removed BBR tag:", covariate_tag_value))
       }
 
-      log_msg(paste("Final model tags:", paste(new_mod$tags, collapse = ", ")))
-      log_msg(paste("✓ BBR model created successfully:", new_model_name))
+      log_msg(paste("✓ BBR model created:", new_model_name))
     }, error = function(e) {
       log_msg(paste("Error creating BBR model:", e$message))
       stop("Failed to create BBR model: ", e$message)
@@ -432,13 +431,11 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_to_r
     log_msg(paste("Modifying existing model:", model_to_modify))
   }
 
-  # Step 2: Read and modify the model file
+  # Step 3: Read and modify the model file
   modelcode <- read_model_file(search_state, model_to_modify)
   original_file_path <- attr(modelcode, "file_path")
 
-  # FIXED VERSION: Count actual THETA parameters, not line positions
-
-  # Step 3: Find THETA numbers that belong to this covariate
+  # Step 4: FIXED THETA DETECTION - Count actual THETA parameters, not line positions
   theta_start <- grep("^\\$THETA", modelcode)
   next_section <- grep("^\\$", modelcode)
   theta_end <- next_section[next_section > theta_start[1]][1] - 1
@@ -464,7 +461,7 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_to_r
     if (grepl(paste0("\\b", covariate_to_remove, "\\b"), line) ||
         grepl(paste0("\\b", covariate_to_remove, "_[^\\s;]+"), line)) {
 
-      theta_numbers_to_remove <- c(theta_numbers_to_remove, theta_count)  # ✅ Use theta_count
+      theta_numbers_to_remove <- c(theta_numbers_to_remove, theta_count)
       theta_lines_to_remove <- c(theta_lines_to_remove, i)
       log_msg(paste("Found THETA", theta_count, "at line", i, ":", trimws(line)))
     }
@@ -477,22 +474,8 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_to_r
   theta_numbers_to_remove <- sort(theta_numbers_to_remove)
   log_msg(paste("THETA numbers to remove:", paste(theta_numbers_to_remove, collapse = ", ")))
 
-  # Step 4: Store original parameter lines for logging
-  original_param_lines <- list()
-  lines_to_modify <- c()
-
-  for (i in 1:length(modelcode)) {
-    line <- modelcode[i]
-
-    if (grepl(cova, line)) {
-      original_param_lines[[as.character(i)]] <- line
-      lines_to_modify <- c(lines_to_modify, i)
-    }
-  }
-
   # Step 5: Remove covariate effects from parameter equations
   lines_modified <- 0
-
   for (i in 1:length(modelcode)) {
     line <- modelcode[i]
 
@@ -512,15 +495,12 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_to_r
         if (grepl(pattern1, modified_line)) {
           modified_line <- gsub(pattern1, "", modified_line)
           line_changed <- TRUE
-          log_msg(paste("Removed linear effect for THETA(", theta_num, ")"))
         } else if (grepl(pattern2, modified_line)) {
           modified_line <- gsub(pattern2, "", modified_line)
           line_changed <- TRUE
-          log_msg(paste("Removed power effect for THETA(", theta_num, ")"))
         } else if (grepl(pattern3, modified_line)) {
           modified_line <- gsub(pattern3, "", modified_line)
           line_changed <- TRUE
-          log_msg(paste("Removed categorical variable for THETA(", theta_num, ")"))
         }
       }
 
@@ -535,8 +515,6 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_to_r
 
   # Step 6: Remove IF-THEN-ELSE blocks for categorical covariates
   if (cov_info$STATUS == "cat") {
-    log_msg("Looking for IF-THEN-ELSE blocks to remove...")
-
     pk_start <- grep("^\\$PK", modelcode)
     if (length(pk_start) > 0) {
       pk_end <- grep("^\\$", modelcode)
@@ -552,7 +530,6 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_to_r
         if (grepl(paste0("IF\\s*\\(", cova), line) ||
             grepl(paste0("\\b", covariate_to_remove, "\\s*="), line)) {
           in_if_block <- TRUE
-          log_msg(paste("Found IF block or variable assignment at line", i))
         }
 
         if (in_if_block) {
@@ -561,24 +538,14 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_to_r
 
         if (grepl("ENDIF", line) && in_if_block) {
           in_if_block <- FALSE
-          log_msg(paste("Found IF block end at line", i))
         }
       }
 
       if (length(lines_to_remove) > 0) {
-        log_msg(paste("Removing", length(lines_to_remove), "lines from IF-THEN-ELSE block"))
         modelcode <- modelcode[-lines_to_remove]
         # Adjust THETA line indices after removing IF blocks
         theta_lines_to_remove <- theta_lines_to_remove - sapply(theta_lines_to_remove, function(x) sum(lines_to_remove < x))
-        # Adjust parameter line indices for final logging
-        for (idx_str in names(original_param_lines)) {
-          idx <- as.numeric(idx_str)
-          adjustment <- sum(lines_to_remove < idx)
-          if (adjustment > 0) {
-            new_idx <- idx - adjustment
-            names(original_param_lines)[names(original_param_lines) == idx_str] <- as.character(new_idx)
-          }
-        }
+        log_msg(paste("Removed", length(lines_to_remove), "lines from IF-THEN-ELSE block"))
       }
     }
   }
@@ -595,44 +562,28 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_to_r
   log_msg("Starting THETA renumbering...")
   modelcode <- fix_theta_renumbering(modelcode, theta_numbers_to_remove, log_msg)
 
-  # Step 9: Log final parameter line changes (AFTER renumbering)
-  log_msg("=== Final Parameter Line Changes ===")
-  for (idx_str in names(original_param_lines)) {
-    idx <- as.numeric(idx_str)
-    if (idx <= length(modelcode)) {
-      original_line <- original_param_lines[[idx_str]]
-      final_line <- modelcode[idx]
-      if (original_line != final_line) {
-        log_msg(paste("Final change for line", idx, ":"))
-        log_msg(paste("  Before:", original_line))
-        log_msg(paste("  After: ", final_line))
-      }
-    }
-  }
-
-  # Step 10: Write the modified model file
+  # Step 9: Write the modified model file
   attr(modelcode, "file_path") <- original_file_path
   search_state <- write_model_file(search_state, modelcode)
   log_msg(paste("Model file updated:", basename(original_file_path)))
 
-  # Step 11: Update database
+  # Step 10: Update database automatically using <<-
   final_model_name <- if (save_as_new_model) new_model_name else model_name
 
   if (save_as_new_model) {
-    # Add new model to database
     new_row <- data.frame(
       model_name = new_model_name,
-      step_description = sprintf("Remove %s", gsub("beta_", "", covariate_to_remove)),
+      step_description = sprintf("Remove %s", covariate_value),
       phase = "covariate_removal",
       step_number = max(search_state$search_database$step_number, na.rm = TRUE) + 1,
       parent_model = model_name,
-      covariate_tested = gsub("beta_", "", covariate_to_remove),
+      covariate_tested = covariate_value,
       action = "remove_single_covariate",
       ofv = NA_real_,
       delta_ofv = NA_real_,
       rse_max = NA_real_,
       status = "created",
-      tags = I(list(character(0))),  # Empty tags after removal
+      tags = I(list(character(0))),
       submission_time = as.POSIXct(NA),
       completion_time = as.POSIXct(NA),
       retry_attempt = 0L,
@@ -642,24 +593,23 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_to_r
       stringsAsFactors = FALSE
     )
 
-    search_state$search_database <- rbind(search_state$search_database, new_row)
+    # ✅ Update database immediately using <<-
+    search_state$search_database <<- rbind(search_state$search_database, new_row)
     log_msg(paste("Added", new_model_name, "to database"))
   }
 
-  # Step 12: Save detailed log
-  log_file <- file.path(search_state$models_folder, paste0(final_model_name, "_remove_", gsub("beta_", "", covariate_to_remove), "_log.txt"))
+  # Step 11: Save detailed log
+  log_file <- file.path(search_state$models_folder,
+                        paste0(final_model_name, "_remove_", covariate_value, "_log.txt"))
   writeLines(log_messages, log_file)
 
   cat(" Complete. Created", final_model_name, "\n")
-  log_msg(paste("✓ Covariate", covariate_to_remove, "successfully removed"))
+  log_msg(paste("✓ Covariate", covariate_value, "successfully removed"))
   log_msg(paste("Final model:", final_model_name))
-  log_msg(paste("Log saved to:", basename(log_file)))
+  log_msg(paste("Database updated: now has", nrow(search_state$search_database), "models"))
 
-  return(list(
-    search_state = search_state,
-    model_name = final_model_name,
-    log_file = log_file
-  ))
+  # ✅ NO RETURN VALUE - search_state is automatically updated
+  invisible(NULL)
 }
 
 #' Add Covariate to Model with Detailed Logging
