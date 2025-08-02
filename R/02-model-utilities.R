@@ -27,6 +27,146 @@ extract_model_results <- function(search_state, model_name) {
   return(results)
 }
 
+#' Read Model File
+#'
+#' @title Read NONMEM control file with proper path handling
+#' @description Reads model control file (.ctl or .mod) and stores file path as attribute
+#' @param search_state List containing search state
+#' @param run_name Character. Model name
+#' @param extensions Character vector. File extensions to try (default: c(".ctl", ".mod"))
+#' @return Character vector of model file lines with file_path attribute
+#' @export
+read_model_file <- function(search_state, run_name, extensions = c(".ctl", ".mod")) {
+  base_path <- file.path(search_state$models_folder, run_name, run_name)
+  for (ext in extensions) {
+    file_path <- paste0(base_path, ext)
+    if (file.exists(file_path)) {
+      lines <- readLines(file_path, warn = FALSE)
+      attr(lines, "file_path") <- file_path
+      return(lines)
+    }
+  }
+  stop("No file found for ", run_name, " with extensions: ", paste(extensions, collapse = ", "))
+}
+
+#' Write Model File
+#'
+#' @title Write modified NONMEM control file back to disk
+#' @description Writes model file lines back to original location using stored file_path attribute
+#' @param search_state List containing search state (unused but kept for consistency)
+#' @param lines Character vector. Model file lines with file_path attribute
+#' @return Updated search_state (unchanged)
+#' @export
+write_model_file <- function(search_state, lines) {
+  file_path <- attr(lines, "file_path")
+  if (is.null(file_path)) {
+    stop("No file path found. Make sure the lines were read using read_model_file()")
+  }
+  writeLines(lines, file_path)
+  cat("File saved to:", basename(file_path), "\n")
+  return(search_state)
+}
+
+#' Add Covariate to Model File
+#'
+#' @title Core functionality to add covariate to NONMEM model file
+#' @description Modifies NONMEM control file to add covariate relationship
+#' @param search_state List containing search state
+#' @param ref_model Character. Model name to modify
+#' @param cov_on_param Character. Combined covariate-parameter name (e.g., "WT_CL")
+#' @param id_var Character. ID variable name (default: "ID")
+#' @param data_file Data.frame. Dataset for time-varying checks
+#' @param covariate_search Data.frame. Covariate search configuration
+#' @return Updated search_state (unchanged - file modification is side effect)
+#' @export
+model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
+                          data_file, covariate_search) {
+
+  modelcode <- read_model_file(search_state, ref_model)
+  original_file_path <- attr(modelcode, "file_path")
+
+  cov_on_param <- paste0("beta_", cov_on_param)
+
+  cova <- covariate_search$COVARIATE[covariate_search$cov_to_test == cov_on_param]
+  param <- covariate_search$PARAMETER[covariate_search$cov_to_test == cov_on_param]
+  ref <- covariate_search$REFERENCE[covariate_search$cov_to_test == cov_on_param]
+
+  # Get max THETA number
+  thetas <- modelcode[grepl('THETA\\(..?\\)', modelcode)] %>%
+    gsub(pattern = '.*THETA\\(', replacement = '') %>%
+    gsub(pattern = '\\).*', replacement = '') %>%
+    as.double()
+
+  newtheta <- max(thetas) + 1
+  temp_cov <- dplyr::filter(covariate_search, cov_to_test == cov_on_param)
+
+  # Determine covariate type and formula
+  cov_status <- temp_cov$STATUS[temp_cov$COVARIATE == cova]
+  cov_formula <- temp_cov$FORMULA[temp_cov$COVARIATE == cova]
+
+  FLAG <- dplyr::case_when(
+    length(cov_status) == 0 | length(cov_formula) == 0 ~ "ERROR: Missing covariate info",
+    cov_status == "cat" & cov_formula == "linear" ~ "1",
+    cov_status == "cat" & cov_formula == "power" ~ "2",
+    cov_status == "con" & cov_formula == "linear" ~ "3",
+    cov_status == "con" & cov_formula == "power" ~ "2",
+    cov_status == "con" & cov_formula == "power1" ~ "5",
+    cov_status == "con" & cov_formula == "power0.75" ~ "6",
+    .default = "Please check covariate status and formula"
+  )
+
+  initialValuethetacov <- dplyr::case_when(
+    FLAG == "5" ~ "1 FIX",
+    FLAG == "6" ~ "0.75 FIX",
+    .default = "0.1"
+  )
+
+  # Generate formula based on FLAG
+  if(FLAG == "2") formule <- paste0(' * (',cova,'/',ref,')**THETA(', newtheta ,')')
+  if(FLAG == "3") formule <- paste0(' * (1 + (',cova,'-',ref, ') * THETA(',newtheta ,'))')
+  if(FLAG == "5") formule <- paste0(' * (',cova,'/',ref,')** THETA(', newtheta ,')')
+  if(FLAG == "6") formule <- paste0(' * (',cova,'/',ref,')** THETA(', newtheta ,')')
+
+  # Handle categorical covariates (simplified for core module)
+  if(FLAG == "1") {
+    formule <- paste0(' * (1 + THETA(', newtheta ,') * ',cova ,')')
+  }
+
+  # Check if time-dependent
+  max_levels <- max(tapply(data_file[[cova]], data_file[[id_var]],
+                           function(x) length(unique(x))), na.rm = TRUE)
+  time_varying <- max_levels > 1
+
+  if(time_varying == FALSE){
+    linetu <- grep(paste0('^\\s*TV_', param), modelcode)
+  } else {
+    linetu <- grep(paste0('^\\s*', param), modelcode)
+  }
+
+  # Add covariate to parameter line
+  if(grepl(";", modelcode[linetu])){
+    modelcode[linetu] <- sub("(.*?)(\\s*;)", paste0("\\1", formule, "\\2"), modelcode[linetu])
+  } else {
+    modelcode[linetu] <- paste0(modelcode[linetu], formule)
+  }
+
+  # Add THETA line
+  newthetaline <- paste0(initialValuethetacov, ' ; ', cov_on_param, ' ;  ; RATIO')
+  lineomeg <- grep('\\$OMEGA', modelcode)[1]
+
+  modelcode <- c(
+    modelcode[1:(lineomeg - 1)],
+    newthetaline,
+    modelcode[lineomeg:length(modelcode)]
+  )
+
+  # Write back
+  attr(modelcode, "file_path") <- original_file_path
+  search_state <- write_model_file(search_state, modelcode)
+
+  return(search_state)
+}
+
 #' Add Covariate to Model with Detailed Logging
 #'
 #' @title Wrapper for add_covariate_to_model with comprehensive logging

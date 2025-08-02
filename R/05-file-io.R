@@ -23,7 +23,7 @@ read_nonmem_ext <- function(model_path) {
       file.path(dirname(model_path), paste0(model_name, ".ext")),
       paste0(model_path, ".ext")
     )
-    
+
     ext_file <- NULL
     for (path in possible_ext_files) {
       if (file.exists(path)) {
@@ -45,24 +45,24 @@ read_nonmem_ext <- function(model_path) {
   # Read and parse .ext file
   tryCatch({
     ext_lines <- readLines(ext_file, warn = FALSE)
-    
+
     # Find the final estimates (last non-comment line)
     data_lines <- ext_lines[!grepl("^\\s*;|^\\s*TABLE|^\\s*$", ext_lines)]
-    
+
     if (length(data_lines) == 0) {
       return(list(found = FALSE, error = "No data lines in EXT file"))
     }
-    
+
     # Get the last line (final estimates)
     final_line <- data_lines[length(data_lines)]
     values <- as.numeric(strsplit(trimws(final_line), "\\s+")[[1]])
-    
+
     # First column is usually iteration, second is OFV
     ofv <- if (length(values) >= 2) values[2] else NA_real_
-    
+
     # Extract parameter estimates (remaining columns)
     parameters <- if (length(values) > 2) values[3:length(values)] else numeric(0)
-    
+
     return(list(
       found = TRUE,
       file = ext_file,
@@ -70,7 +70,7 @@ read_nonmem_ext <- function(model_path) {
       parameters = parameters,
       n_parameters = length(parameters)
     ))
-    
+
   }, error = function(e) {
     return(list(
       found = FALSE,
@@ -99,7 +99,7 @@ read_nonmem_lst <- function(model_path) {
       file.path(dirname(model_path), paste0(model_name, ".lst")),
       paste0(model_path, ".lst")
     )
-    
+
     lst_file <- NULL
     for (path in possible_lst_files) {
       if (file.exists(path)) {
@@ -120,7 +120,7 @@ read_nonmem_lst <- function(model_path) {
   # Read and analyze .lst file
   tryCatch({
     lst_content <- readLines(lst_file, warn = FALSE)
-    
+
     # Check for successful completion
     if (any(grepl("MINIMIZATION SUCCESSFUL", lst_content))) {
       status <- "completed"
@@ -138,7 +138,7 @@ read_nonmem_lst <- function(model_path) {
       status <- "unknown"
       termination <- "unknown"
     }
-    
+
     # Check for common issues
     issues <- character(0)
     if (any(grepl("COVARIANCE STEP ABORTED", lst_content))) {
@@ -152,7 +152,7 @@ read_nonmem_lst <- function(model_path) {
     } else {
       issues <- c(issues, "no_standard_errors")
     }
-    
+
     return(list(
       found = TRUE,
       file = lst_file,
@@ -161,7 +161,7 @@ read_nonmem_lst <- function(model_path) {
       issues = issues,
       has_issues = length(issues) > 0
     ))
-    
+
   }, error = function(e) {
     return(list(
       found = FALSE,
@@ -182,15 +182,15 @@ get_model_status_from_files <- function(model_path) {
 
   lst_info <- read_nonmem_lst(model_path)
   ext_info <- read_nonmem_ext(model_path)
-  
+
   if (!lst_info$found && !ext_info$found) {
     return("not_run")
   }
-  
+
   if (!lst_info$found) {
     return("incomplete")
   }
-  
+
   # Determine status based on LST file analysis
   if (lst_info$status == "completed" && !lst_info$has_issues) {
     return("completed")
@@ -201,31 +201,4 @@ get_model_status_from_files <- function(model_path) {
   } else {
     return("unknown")
   }
-}
-
-#' Extract Model Results
-#'
-#' Extracts key results from NONMEM output for database storage
-#'
-#' @param model_path Character. Path to model directory
-#' @return List with extracted results
-#' @export
-extract_model_results <- function(model_path) {
-
-  lst_info <- read_nonmem_lst(model_path)
-  ext_info <- read_nonmem_ext(model_path)
-  
-  results <- list(
-    model_path = model_path,
-    status = get_model_status_from_files(model_path),
-    ofv = if (ext_info$found) ext_info$ofv else NA_real_,
-    n_parameters = if (ext_info$found) ext_info$n_parameters else NA_integer_,
-    termination = if (lst_info$found) lst_info$termination else NA_character_,
-    issues = if (lst_info$found) lst_info$issues else character(0),
-    has_ext = ext_info$found,
-    has_lst = lst_info$found,
-    extraction_time = Sys.time()
-  )
-  
-  return(results)
 }
