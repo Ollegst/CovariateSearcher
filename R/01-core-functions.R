@@ -65,7 +65,7 @@ initialize_covariate_search <- function(base_model_path,
   search_state <- validate_setup(search_state)
 
   # Initialize search database and configuration
-  search_state <- initialize_search_database(search_state)
+  search_state <- initialize_search_database_core(search_state)
   search_state <- initialize_search_config(search_state)
 
   # Discover existing models if requested
@@ -135,7 +135,7 @@ validate_setup <- function(search_state) {
 #' @param search_state List containing search state
 #' @return Updated search_state with initialized database
 #' @export
-initialize_search_database <- function(search_state) {
+initialize_search_database_core  <- function(search_state) {
   search_state$search_database <- data.frame(
     model_name = character(),
     step_description = character(),
@@ -404,7 +404,7 @@ discover_existing_models <- function(search_state) {
   cat("Discovering existing models...\n")
 
   # Clear existing database
-  search_state <- initialize_search_database(search_state)
+  search_state <- initialize_search_database_core(search_state)
 
   # Get all model files in models folder
   model_files <- list.files(search_state$models_folder, pattern = "^run\\d+\\.(ctl|mod)$",
