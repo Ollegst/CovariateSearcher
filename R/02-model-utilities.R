@@ -154,7 +154,7 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
         group_by(!!parse_expr(cova)) %>%
         tally() %>%
         arrange(desc(n)) %>%
-        pull(!!parse_expr(cova))
+       dplyr::pull(!!parse_expr(cova))
 
       thetanmulti <- tibble(covx = uniqueval[uniqueval != temp_cov$REFERENCE])
       for(a in 2:length(uniqueval)){
