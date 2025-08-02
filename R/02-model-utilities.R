@@ -37,7 +37,7 @@ extract_model_results <- function(search_state, model_name) {
 #' @return Character vector of model file lines with file_path attribute
 #' @export
 read_model_file <- function(search_state, run_name, extensions = c(".ctl", ".mod")) {
-  base_path <- file.path(search_state$models_folder, run_name)
+  base_path <- file.path(search_state$models_folder, run_name, run_name)
   for (ext in extensions) {
     file_path <- paste0(base_path, ext)
     if (file.exists(file_path)) {
@@ -252,7 +252,7 @@ fix_theta_renumbering <- function(modelcode, theta_numbers_to_remove, log_functi
 
   for (old_num in all_theta_nums) {
     # Calculate how many removed THETAs were before this one
-    adjustment <- length(theta_numbers_to_remove[theta_numbers_to_remove <= old_num])  # Count ALL removed before or at position
+    adjustment <- sum(theta_numbers_to_remove <= old_num)
     new_num <- old_num - adjustment
 
     # Only create mapping if the number actually changes
