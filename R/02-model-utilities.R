@@ -149,8 +149,9 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   if(FLAG == "6") formule <- paste0(' * (',cova,'/',ref,')** THETA(', newtheta ,')')
 
   # Handle categorical covariates (simplified for core module)
+  thetanmulti <- tibble()
   if(FLAG == "1"){
-    thetanmulti <- tibble()
+
     uniqueval <- unique(data_file[[cova]])
     if(length(uniqueval) == 2 & sum(uniqueval) == 1 ){
       formule <- paste0(' * (1 + THETA(', newtheta ,') * ',cova ,')')
