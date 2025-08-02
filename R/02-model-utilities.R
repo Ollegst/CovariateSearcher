@@ -252,7 +252,7 @@ fix_theta_renumbering <- function(modelcode, theta_numbers_to_remove, log_functi
 
   for (old_num in all_theta_nums) {
     # Calculate how many removed THETAs were before this one
-    adjustment <- sum(theta_numbers_to_remove < old_num)
+    adjustment <- length(theta_numbers_to_remove[theta_numbers_to_remove <= old_num])  # Count ALL removed before or at position
     new_num <- old_num - adjustment
 
     # Only create mapping if the number actually changes
@@ -432,7 +432,20 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_to_r
   theta_numbers_to_remove <- sort(theta_numbers_to_remove)
   log_msg(paste("THETA numbers to remove:", paste(theta_numbers_to_remove, collapse = ", ")))
 
-  # Step 4: Remove covariate effects from parameter equations
+  # Step 4: Store original parameter lines for logging
+  original_param_lines <- list()
+  lines_to_modify <- c()
+
+  for (i in 1:length(modelcode)) {
+    line <- modelcode[i]
+
+    if (grepl(cova, line)) {
+      original_param_lines[[as.character(i)]] <- line
+      lines_to_modify <- c(lines_to_modify, i)
+    }
+  }
+
+  # Step 5: Remove covariate effects from parameter equations
   lines_modified <- 0
 
   for (i in 1:length(modelcode)) {
@@ -467,9 +480,6 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_to_r
       }
 
       if (line_changed) {
-        log_msg(paste("Line", i, "modified:"))
-        log_msg(paste("  Before:", original_line))
-        log_msg(paste("  After: ", modified_line))
         modelcode[i] <- modified_line
         lines_modified <- lines_modified + 1
       }
@@ -478,7 +488,7 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_to_r
 
   log_msg(paste("Modified", lines_modified, "parameter lines"))
 
-  # Step 5: Remove IF-THEN-ELSE blocks for categorical covariates
+  # Step 6: Remove IF-THEN-ELSE blocks for categorical covariates
   if (cov_info$STATUS == "cat") {
     log_msg("Looking for IF-THEN-ELSE blocks to remove...")
 
@@ -515,11 +525,20 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_to_r
         modelcode <- modelcode[-lines_to_remove]
         # Adjust THETA line indices after removing IF blocks
         theta_lines_to_remove <- theta_lines_to_remove - sapply(theta_lines_to_remove, function(x) sum(lines_to_remove < x))
+        # Adjust parameter line indices for final logging
+        for (idx_str in names(original_param_lines)) {
+          idx <- as.numeric(idx_str)
+          adjustment <- sum(lines_to_remove < idx)
+          if (adjustment > 0) {
+            new_idx <- idx - adjustment
+            names(original_param_lines)[names(original_param_lines) == idx_str] <- as.character(new_idx)
+          }
+        }
       }
     }
   }
 
-  # Step 6: Remove THETA lines (in reverse order)
+  # Step 7: Remove THETA lines (in reverse order)
   for (line_idx in rev(theta_lines_to_remove)) {
     if (line_idx > 0 && line_idx <= length(modelcode)) {
       log_msg(paste("Removing THETA line:", trimws(modelcode[line_idx])))
@@ -527,16 +546,31 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_to_r
     }
   }
 
-  # Step 7: Apply THETA renumbering
+  # Step 8: Apply THETA renumbering
   log_msg("Starting THETA renumbering...")
   modelcode <- fix_theta_renumbering(modelcode, theta_numbers_to_remove, log_msg)
 
-  # Step 8: Write the modified model file
+  # Step 9: Log final parameter line changes (AFTER renumbering)
+  log_msg("=== Final Parameter Line Changes ===")
+  for (idx_str in names(original_param_lines)) {
+    idx <- as.numeric(idx_str)
+    if (idx <= length(modelcode)) {
+      original_line <- original_param_lines[[idx_str]]
+      final_line <- modelcode[idx]
+      if (original_line != final_line) {
+        log_msg(paste("Final change for line", idx, ":"))
+        log_msg(paste("  Before:", original_line))
+        log_msg(paste("  After: ", final_line))
+      }
+    }
+  }
+
+  # Step 10: Write the modified model file
   attr(modelcode, "file_path") <- original_file_path
   search_state <- write_model_file(search_state, modelcode)
   log_msg(paste("Model file updated:", basename(original_file_path)))
 
-  # Step 9: Update database
+  # Step 11: Update database
   final_model_name <- if (save_as_new_model) new_model_name else model_name
 
   if (save_as_new_model) {
@@ -567,7 +601,7 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_to_r
     log_msg(paste("Added", new_model_name, "to database"))
   }
 
-  # Step 10: Save detailed log
+  # Step 12: Save detailed log
   log_file <- file.path(search_state$models_folder, paste0(final_model_name, "_remove_", gsub("beta_", "", covariate_to_remove), "_log.txt"))
   writeLines(log_messages, log_file)
 
