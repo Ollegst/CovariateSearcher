@@ -484,8 +484,13 @@ discover_existing_models <- function(search_state) {
             action <- if (startsWith(notes, "+")) "Add" else "Remove"
             covariate <- gsub("^[+-]\\s*", "", notes)
             step_desc <- paste(action, covariate)
+            ##debug ""###
+            cat("step_desc set to:", step_desc, "\n")
           } else {
             step_desc <- "Added Covariate"  # fallback for models without notes
+
+            ### debug
+            cat("step_desc fallback to: Added Covariate\n")
           }
           phase <- "individual_testing"
           action <- "add_single_covariate"
