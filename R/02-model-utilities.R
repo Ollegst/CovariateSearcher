@@ -37,7 +37,7 @@ extract_model_results <- function(search_state, model_name) {
 #' @return Character vector of model file lines with file_path attribute
 #' @export
 read_model_file <- function(search_state, run_name, extensions = c(".ctl", ".mod")) {
-  base_path <- file.path(search_state$models_folder, run_name, run_name)
+  base_path <- file.path(search_state$models_folder, run_name)
   for (ext in extensions) {
     file_path <- paste0(base_path, ext)
     if (file.exists(file_path)) {
