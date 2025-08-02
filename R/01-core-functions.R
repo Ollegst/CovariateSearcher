@@ -468,7 +468,18 @@ discover_existing_models <- function(search_state) {
 
         if (!is.null(mod$based_on) && length(mod$based_on) > 0) {
           parent_model <- mod$based_on[1]
-          step_desc <- "Added Covariate"
+          notes <- tryCatch({
+            if (length(mod$notes) > 0) mod$notes[1] else ""
+          }, error = function(e) "")
+
+          if (notes != "" && grepl("^[+-]", notes)) {
+            # Parse notes like "+ WT_CL" or "- RACE_CL"
+            action <- if (startsWith(notes, "+")) "Add" else "Remove"
+            covariate <- gsub("^[+-]\\s*", "", notes)
+            step_desc <- paste(action, covariate)
+          } else {
+            step_desc <- "Added Covariate"  # fallback for models without notes
+          }
           phase <- "individual_testing"
           action <- "add_single_covariate"
         } else {
