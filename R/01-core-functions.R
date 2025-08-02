@@ -496,6 +496,12 @@ discover_existing_models <- function(search_state) {
     status <- get_model_status_from_files(model_path)
     ofv <- if (status == "completed") get_model_ofv_from_files(search_state, model_name) else NA
     covariates <- get_model_covariates_from_files(search_state, model_name)
+    model_tags <- tryCatch({
+      mod <- bbr::read_model(model_path)
+      mod$tags
+    }, error = function(e) {
+      character(0)
+    })
 
     # Add to database with retry tracking columns
     new_row <- data.frame(
@@ -510,7 +516,7 @@ discover_existing_models <- function(search_state) {
       delta_ofv = NA_real_,
       rse_max = NA_real_,
       status = status,
-      tags = I(list(covariates)),
+      tags = I(list(model_tags)),
       submission_time = as.POSIXct(NA),
       completion_time = if (status == "completed") Sys.time() else as.POSIXct(NA),
       retry_attempt = ifelse(grepl("\\d{3}$", model_name), 1L, NA_integer_),
