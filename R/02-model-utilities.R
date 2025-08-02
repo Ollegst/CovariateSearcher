@@ -37,7 +37,7 @@ extract_model_results <- function(search_state, model_name) {
 #' @return Character vector of model file lines with file_path attribute
 #' @export
 read_model_file <- function(search_state, run_name, extensions = c(".ctl", ".mod")) {
-  base_path <- file.path(search_state$models_folder, run_name)
+  base_path <- file.path(search_state$models_folder, run_name, run_name)
   for (ext in extensions) {
     file_path <- paste0(base_path, ext)
     if (file.exists(file_path)) {
@@ -141,35 +141,17 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   )
 
   log_function(paste("Initial THETA value:", initialValuethetacov))
-  if(FLAG == "1"){
-    uniqueval <- unique(data_file[[cova]])
-    if(length(uniqueval) == 2 & sum(uniqueval) == 1 ){
-      formule <- paste0(' * (1 + THETA(', newtheta ,') * ',cova ,')')
-    } else {
-      newvari <- cov_on_param
-      formule <- paste0(' * ', newvari)
-      ifelcode <- paste0('IF(', cova, '.EQ.', temp_cov$REFERENCE,')THEN\n', newvari, ' = 1\n' )
 
-      uniqueval <- data_file %>%
-        dplyr::count(!!rlang::parse_expr(cova)) %>%   # count() instead of group_by + tally
-        dplyr::arrange(desc(n)) %>%
-        dplyr::pull(!!rlang::parse_expr(cova))
-
-      thetanmulti <- tibble(covx = uniqueval[uniqueval != temp_cov$REFERENCE])
-      for(a in 2:length(uniqueval)){
-        ifelcode <- paste0(ifelcode, 'ELSEIF(', cova, '.EQ.', uniqueval[[a]], ')THEN\n',
-                           newvari, ' = 1 + THETA(', newtheta + a -2, ')\n')
-      }
-      ifelcode <- paste0(ifelcode, 'ENDIF\n')
-      modelcode[grep('^\\$PK', modelcode)] <- paste0(modelcode[grep('^\\$PK', modelcode)], '\n\n', ifelcode)
-    }
-  }
   # Generate formula based on FLAG
   if(FLAG == "2") formule <- paste0(' * (',cova,'/',ref,')**THETA(', newtheta ,')')
   if(FLAG == "3") formule <- paste0(' * (1 + (',cova,'-',ref, ') * THETA(',newtheta ,'))')
   if(FLAG == "5") formule <- paste0(' * (',cova,'/',ref,')** THETA(', newtheta ,')')
   if(FLAG == "6") formule <- paste0(' * (',cova,'/',ref,')** THETA(', newtheta ,')')
 
+  # Handle categorical covariates (simplified for core module)
+  if(FLAG == "1") {
+    formule <- paste0(' * (1 + THETA(', newtheta ,') * ',cova ,')')
+  }
 
   log_function(paste("Generated formula:", formule))
 
@@ -210,11 +192,6 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
 
   # Add THETA line
   newthetaline <- paste0(initialValuethetacov, ' ; ', cov_on_param, ' ;  ; RATIO')
-  if(nrow(thetanmulti) > 0){
-    newthetaline <- purrr::map_chr(1:nrow(thetanmulti), ~ paste0('0.1 ; ', paste0(cov_on_param,"_",thetanmulti$covx[[.x]]), ';  ; RATIO')) %>%
-      paste0(collapse = '\n')
-  }
-
   log_function(paste("New THETA line to add:", newthetaline))
 
   lineomeg <- grep('\\$OMEGA', modelcode)[1]
@@ -595,7 +572,7 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_to_r
 #' @param search_state List containing search state
 #' @param base_model_id Character. Base model identifier (e.g., "run1")
 #' @param covariate_tag Character. Covariate tag to add (e.g., "cov_cl_wt")
-#' @return List with result and log information
+#' @return List with result and log information (search_state updated in place)
 #' @export
 add_covariate_with_detailed_logging <- function(search_state, base_model_id, covariate_tag) {
 
@@ -625,7 +602,6 @@ add_covariate_with_detailed_logging <- function(search_state, base_model_id, cov
     error_log_filename <- file.path(search_state$models_folder, paste0("ERROR_", covariate_tag, "_", format(Sys.time(), "%Y%m%d_%H%M%S"), "_log.txt"))
     writeLines(log_entries, error_log_filename)
     return(list(
-      search_state = search_state,
       status = "error",
       error_message = "Covariate tag not found",
       log_file = error_log_filename,
@@ -646,7 +622,6 @@ add_covariate_with_detailed_logging <- function(search_state, base_model_id, cov
     error_log_filename <- file.path(search_state$models_folder, paste0("ERROR_", covariate_tag, "_", format(Sys.time(), "%Y%m%d_%H%M%S"), "_log.txt"))
     writeLines(log_entries, error_log_filename)
     return(list(
-      search_state = search_state,
       status = "error",
       error_message = "No matching covariate definition found",
       log_file = error_log_filename,
@@ -657,57 +632,64 @@ add_covariate_with_detailed_logging <- function(search_state, base_model_id, cov
   # Predict new model name
   new_model_number <- search_state$model_counter + 1
   predicted_model <- paste0("run", new_model_number)
-  log_msg(paste("New model name:", predicted_model))
+  log_msg(paste("Predicted model name:", predicted_model))
 
   # Call the actual function with comprehensive error capture
-  tryCatch({
-    log_msg("Step 1: Creating BBR model...")
+  log_msg("Step 1: Creating BBR model and adding covariate...")
 
-    # Call the existing add_covariate_to_model function
-    result_state <- add_covariate_to_model(search_state, base_model_id, covariate_tag)
+  # Call the updated add_covariate_to_model function (modifies search_state in place)
+  result <- add_covariate_to_model(search_state, base_model_id, covariate_tag)
 
+  # Calculate processing time
+  process_time <- round(as.numeric(difftime(Sys.time(), start_time, units = "secs")), 2)
+
+  if (result$status == "success") {
     log_msg("BBR model created successfully")
-    log_msg("Step 2: Adding covariate to model file...")
-    log_msg("Covariate successfully added to model file")
-
-    # Calculate processing time
-    process_time <- round(as.numeric(difftime(Sys.time(), start_time, units = "secs")), 2)
+    log_msg("Step 2: Covariate addition completed")
     log_msg(paste("=== Process completed successfully in", process_time, "seconds ==="))
+    log_msg(paste("Final model created:", result$model_name))
 
     # Save success log file
-    log_filename <- file.path(search_state$models_folder, paste0(predicted_model, "_add_", tag_value, "_log.txt"))
-    log_msg(paste("Saving log to:", log_filename))
+    log_filename <- file.path(search_state$models_folder, paste0(result$model_name, "_add_", tag_value, "_log.txt"))
+    log_msg(paste("Saving log to:", basename(log_filename)))
 
     writeLines(log_entries, log_filename)
 
     return(list(
-      search_state = result_state,
       status = "success",
-      model_name = predicted_model,
+      model_name = result$model_name,
       covariate_added = tag_value,
       log_file = log_filename,
       log_entries = log_entries,
       processing_time_seconds = process_time
     ))
 
-  }, error = function(e) {
-    log_msg(paste("ERROR occurred:", e$message))
-    log_msg("=== Process failed ===")
+  } else {
+    # Handle error case
+    log_msg(paste("ERROR occurred:", result$error_message))
+    log_msg(paste("=== Process failed after", process_time, "seconds ==="))
+
+    if (!is.null(result$file_exists) && result$file_exists) {
+      log_msg(paste("Physical model file was created:", result$attempted_model))
+      log_msg("Model counter was updated to match existing file")
+    } else {
+      log_msg("No physical model file was created")
+    }
 
     # Save error log with detailed error information
     error_log_filename <- file.path(search_state$models_folder, paste0("ERROR_", covariate_tag, "_", format(Sys.time(), "%Y%m%d_%H%M%S"), "_log.txt"))
-    log_msg(paste("Saving error log to:", error_log_filename))
+    log_msg(paste("Saving error log to:", basename(error_log_filename)))
 
     writeLines(log_entries, error_log_filename)
 
     return(list(
-      search_state = search_state,
       status = "error",
-      error_message = e$message,
+      error_message = result$error_message,
       log_file = error_log_filename,
       log_entries = log_entries,
-      attempted_model = predicted_model,
-      attempted_covariate = tag_value
+      attempted_model = result$attempted_model,
+      file_exists = result$file_exists,
+      processing_time_seconds = process_time
     ))
-  })
+  }
 }

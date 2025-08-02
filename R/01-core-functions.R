@@ -195,7 +195,6 @@ initialize_search_config <- function(search_state) {
 #' @return Updated search state with new model added to database
 #' @export
 add_covariate_to_model <- function(search_state, base_model_id, covariate_tag) {
-
   cat(sprintf("[+] Adding covariate %s to model %s\n", covariate_tag, base_model_id))
 
   # Get covariate information
@@ -206,10 +205,8 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag) {
   covariate_name <- search_state$tags[[covariate_tag]]
   cat(sprintf("  Covariate: %s\n", covariate_name))
 
-  # Generate new model name
-  search_state$model_counter <- search_state$model_counter + 1
-  new_model_name <- sprintf("run%d", search_state$model_counter)
-
+  # Calculate new model name (don't increment counter yet)
+  new_model_name <- sprintf("run%d", search_state$model_counter + 1)
   cat(sprintf("  New model: %s\n", new_model_name))
 
   # Find covariate definition in search database
@@ -224,7 +221,7 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag) {
   }
 
   tryCatch({
-    # Step 1: Create BBR model
+    # Step 1: Create BBR model (creates physical file)
     cat("  Creating BBR model...\n")
     parent_path <- file.path(search_state$models_folder, base_model_id)
 
@@ -238,7 +235,11 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag) {
 
     cat("  [OK] BBR model created\n")
 
-    # Step 2: Apply model_add_cov function
+    # Step 2: INCREMENT COUNTER NOW (physical file exists)
+    search_state$model_counter <<- search_state$model_counter + 1
+    cat(sprintf("  [OK] Model counter updated to: %d\n", search_state$model_counter))
+
+    # Step 3: Try to add covariate (may fail, but file already exists)
     cat("  Adding covariate to model file...\n")
 
     # Get covariate information for model modification
@@ -247,7 +248,7 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag) {
     param_name <- cov_info$PARAMETER # e.g., "CL"
     cov_on_param <- paste0(cov_name, "_", param_name)  # e.g., "WT_CL"
 
-    search_state <- model_add_cov(
+    model_add_cov(
       search_state = search_state,
       ref_model = new_model_name,
       cov_on_param = cov_on_param,
@@ -258,7 +259,7 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag) {
 
     cat("  [OK] Covariate added to model file\n")
 
-    # Step 3: Add to database
+    # Step 4: Add to database (may fail, but file exists and counter updated)
     cat("  Adding to database...\n")
 
     new_row <- data.frame(
@@ -283,15 +284,39 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag) {
       stringsAsFactors = FALSE
     )
 
-    search_state$search_database <- rbind(search_state$search_database, new_row)
+    search_state$search_database <<- rbind(search_state$search_database, new_row)
 
     cat(sprintf("[OK] Model %s added to database\n", new_model_name))
 
-    return(search_state)
+    return(list(status = "success", model_name = new_model_name, covariate_added = covariate_name))
 
   }, error = function(e) {
     cat(sprintf("[X] Model creation failed: %s\n", e$message))
-    return(search_state)
+
+    # Check if physical model file was created
+    model_file_path <- file.path(search_state$models_folder, paste0(new_model_name, ".ctl"))
+    file_exists <- file.exists(model_file_path)
+
+    if (file_exists) {
+      # File was created but later steps failed
+      cat(sprintf("  [INFO] Physical model file exists: %s\n", basename(model_file_path)))
+
+      # Make sure counter was incremented (it should have been)
+      if (search_state$model_counter < as.numeric(gsub("run", "", new_model_name))) {
+        search_state$model_counter <<- as.numeric(gsub("run", "", new_model_name))
+        cat(sprintf("  [FIX] Updated counter to match existing file: %d\n", search_state$model_counter))
+      }
+    } else {
+      # File creation failed completely
+      cat(sprintf("  [INFO] No physical model file created\n"))
+    }
+
+    return(list(
+      status = "error",
+      error_message = e$message,
+      attempted_model = new_model_name,
+      file_exists = file_exists
+    ))
   })
 }
 
