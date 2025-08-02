@@ -141,17 +141,35 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   )
 
   log_function(paste("Initial THETA value:", initialValuethetacov))
+  if(FLAG == "1"){
+    uniqueval <- unique(data_file[[cova]])
+    if(length(uniqueval) == 2 & sum(uniqueval) == 1 ){
+      formule <- paste0(' * (1 + THETA(', newtheta ,') * ',cova ,')')
+    } else {
+      newvari <- cov_on_param
+      formule <- paste0(' * ', newvari)
+      ifelcode <- paste0('IF(', cova, '.EQ.', temp_cov$REFERENCE,')THEN\n', newvari, ' = 1\n' )
 
+      uniqueval <- data_file %>%
+        dplyr::count(!!rlang::parse_expr(cova)) %>%   # count() instead of group_by + tally
+        dplyr::arrange(desc(n)) %>%
+        dplyr::pull(!!rlang::parse_expr(cova))
+
+      thetanmulti <- tibble(covx = uniqueval[uniqueval != temp_cov$REFERENCE])
+      for(a in 2:length(uniqueval)){
+        ifelcode <- paste0(ifelcode, 'ELSEIF(', cova, '.EQ.', uniqueval[[a]], ')THEN\n',
+                           newvari, ' = 1 + THETA(', newtheta + a -2, ')\n')
+      }
+      ifelcode <- paste0(ifelcode, 'ENDIF\n')
+      modelcode[grep('^\\$PK', modelcode)] <- paste0(modelcode[grep('^\\$PK', modelcode)], '\n\n', ifelcode)
+    }
+  }
   # Generate formula based on FLAG
   if(FLAG == "2") formule <- paste0(' * (',cova,'/',ref,')**THETA(', newtheta ,')')
   if(FLAG == "3") formule <- paste0(' * (1 + (',cova,'-',ref, ') * THETA(',newtheta ,'))')
   if(FLAG == "5") formule <- paste0(' * (',cova,'/',ref,')** THETA(', newtheta ,')')
   if(FLAG == "6") formule <- paste0(' * (',cova,'/',ref,')** THETA(', newtheta ,')')
 
-  # Handle categorical covariates (simplified for core module)
-  if(FLAG == "1") {
-    formule <- paste0(' * (1 + THETA(', newtheta ,') * ',cova ,')')
-  }
 
   log_function(paste("Generated formula:", formule))
 
@@ -192,6 +210,11 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
 
   # Add THETA line
   newthetaline <- paste0(initialValuethetacov, ' ; ', cov_on_param, ' ;  ; RATIO')
+  if(nrow(thetanmulti) > 0){
+    newthetaline <- purrr::map_chr(1:nrow(thetanmulti), ~ paste0('0.1 ; ', paste0(cov_on_param,"_",thetanmulti$covx[[.x]]), ';  ; RATIO')) %>%
+      paste0(collapse = '\n')
+  }
+
   log_function(paste("New THETA line to add:", newthetaline))
 
   lineomeg <- grep('\\$OMEGA', modelcode)[1]
@@ -214,7 +237,6 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   log_function(paste("=== Covariate Addition Complete ==="))
   return(search_state)
 }
-
 #' Fix THETA Renumbering
 #'
 #' @title Renumber THETA parameters after removing some
