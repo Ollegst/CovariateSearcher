@@ -347,7 +347,7 @@ fix_theta_renumbering <- function(modelcode, theta_numbers_to_remove, log_functi
   return(modelcode)
 }
 
-#' Remove Covariate from Model
+#' Remove Covariate from Model (look like it work)
 #'
 #' @title Remove covariate from NONMEM model file with detailed logging
 #' @description Removes covariate relationship from model file and updates database
