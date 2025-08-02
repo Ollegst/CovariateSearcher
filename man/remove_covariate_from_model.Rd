@@ -2,30 +2,28 @@
 % Please edit documentation in R/02-model-utilities.R
 \name{remove_covariate_from_model}
 \alias{remove_covariate_from_model}
-\title{Remove covariate from NONMEM model file with detailed logging}
+\title{Remove covariate using tag name with automatic search_state update}
 \usage{
 remove_covariate_from_model(
   search_state,
   model_name,
-  covariate_to_remove,
+  covariate_tag,
   save_as_new_model = TRUE
 )
 }
 \arguments{
-\item{search_state}{List containing search state}
+\item{search_state}{List containing search state (updated automatically)}
 
-\item{model_name}{Character. Base model name}
+\item{model_name}{Character. Model name to modify}
 
-\item{covariate_to_remove}{Character. Covariate to remove (e.g., "beta_WT_CL")}
+\item{covariate_tag}{Character. Covariate tag to remove (e.g., "cov_cl_race")}
 
 \item{save_as_new_model}{Logical. Whether to create new model (default: TRUE)}
 }
-\value{
-List with updated search_state and new model information
-}
 \description{
-Removes covariate relationship from model file and updates database
+Removes a covariate from a model using tag-based interface.
+Automatically updates search_state in place - no return value needed.
 }
 \details{
-Remove Covariate from Model
+Remove Covariate from Model (Clean Interface)
 }

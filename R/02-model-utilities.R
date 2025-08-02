@@ -398,12 +398,9 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
   # Step 2: Create new model with BBR if requested
   if (save_as_new_model) {
     new_model_name <- paste0("run", search_state$model_counter + 1)
-
     # ✅ Update counter immediately using <<-
     search_state$model_counter <<- search_state$model_counter + 1
-
     log_msg(paste("Creating new BBR model:", new_model_name))
-
     tryCatch({
       parent_path <- file.path(search_state$models_folder, model_name)
       new_mod <- bbr::copy_model_from(
@@ -419,12 +416,15 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
         log_msg(paste("Removed BBR tag:", covariate_tag_value))
       }
 
+      # Add notes about the removal
+      new_mod <- bbr::add_notes(new_mod, paste0("- ", covariate_tag_value))
+      log_msg(paste("Added removal note:", paste0("- ", covariate_tag_value)))
+
       log_msg(paste("✓ BBR model created:", new_model_name))
     }, error = function(e) {
       log_msg(paste("Error creating BBR model:", e$message))
       stop("Failed to create BBR model: ", e$message)
     })
-
     model_to_modify <- new_model_name
   } else {
     model_to_modify <- model_name
@@ -567,7 +567,18 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
   search_state <- write_model_file(search_state, modelcode)
   log_msg(paste("Model file updated:", basename(original_file_path)))
 
-  # Step 10: Update database automatically using <<-
+  # Step 10 Calculate remaining tags after covariate removal
+
+  parent_row <- search_state$search_database[search_state$search_database$model_name == model_name, ]
+  parent_tags <- if (nrow(parent_row) > 0 && !is.null(parent_row$tags[[1]])) parent_row$tags[[1]] else character(0)
+  covariate_tag_value <- paste0(cova, "_", param)
+  remaining_tags <- setdiff(parent_tags, covariate_tag_value)
+   if (save_as_new_model) {
+  log_msg(paste("Parent tags:", paste(parent_tags, collapse = ", ")))
+  log_msg(paste("Removing tag:", covariate_tag_value))
+  log_msg(paste("Remaining tags:", paste(remaining_tags, collapse = ", ")))
+  }
+  # Step 11: Update database automatically using <<-
   final_model_name <- if (save_as_new_model) new_model_name else model_name
 
   if (save_as_new_model) {

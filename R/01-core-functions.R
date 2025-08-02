@@ -231,7 +231,8 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag) {
       .inherit_tags = TRUE,
       .overwrite = TRUE
     ) %>%
-      bbr::add_tags(.tags = search_state$tags[[covariate_tag]])
+      bbr::add_tags(.tags = search_state$tags[[covariate_tag]]) %>%
+      bbr::add_notes(.notes = paste0("+ ", search_state$tags[[covariate_tag]]))
 
     cat("  [OK] BBR model created\n")
 
