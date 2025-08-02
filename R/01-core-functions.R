@@ -471,7 +471,14 @@ discover_existing_models <- function(search_state) {
           notes <- tryCatch({
             if (length(mod$notes) > 0) mod$notes[1] else ""
           }, error = function(e) "")
-
+          ###debugging for removal !!!###
+          cat("Model:", model_name, "\n")
+          cat("Notes length:", length(mod$notes), "\n")
+          cat("Notes content:", if(length(mod$notes) > 0) mod$notes[1] else "EMPTY", "\n")
+          cat("Notes variable:", notes, "\n")
+          cat("Grep result:", grepl("^[+-]", notes), "\n")
+          cat("---\n")
+          ##############
           if (notes != "" && grepl("^[+-]", notes)) {
             # Parse notes like "+ WT_CL" or "- RACE_CL"
             action <- if (startsWith(notes, "+")) "Add" else "Remove"
