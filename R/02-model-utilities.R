@@ -436,6 +436,8 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_to_r
   modelcode <- read_model_file(search_state, model_to_modify)
   original_file_path <- attr(modelcode, "file_path")
 
+  # FIXED VERSION: Count actual THETA parameters, not line positions
+
   # Step 3: Find THETA numbers that belong to this covariate
   theta_start <- grep("^\\$THETA", modelcode)
   next_section <- grep("^\\$", modelcode)
@@ -445,18 +447,26 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_to_r
   theta_numbers_to_remove <- c()
   theta_lines_to_remove <- c()
 
-  # Look for THETA lines that match our covariate pattern
+  # Count actual THETA parameters (skip empty lines and comments)
+  theta_count <- 0
   for (i in (theta_start + 1):theta_end) {
     line <- modelcode[i]
 
-    # Check for exact match or level-specific variants
+    # Skip empty lines and comment-only lines
+    if (grepl("^\\s*$", line) || grepl("^\\s*;", line)) {
+      next
+    }
+
+    # This is an actual THETA parameter line
+    theta_count <- theta_count + 1
+
+    # Check if this THETA contains our covariate
     if (grepl(paste0("\\b", covariate_to_remove, "\\b"), line) ||
         grepl(paste0("\\b", covariate_to_remove, "_[^\\s;]+"), line)) {
 
-      theta_line_pos <- i - theta_start
-      theta_numbers_to_remove <- c(theta_numbers_to_remove, theta_line_pos)
+      theta_numbers_to_remove <- c(theta_numbers_to_remove, theta_count)  # ✅ Use theta_count
       theta_lines_to_remove <- c(theta_lines_to_remove, i)
-      log_msg(paste("Found THETA", theta_line_pos, "at line", i, ":", trimws(line)))
+      log_msg(paste("Found THETA", theta_count, "at line", i, ":", trimws(line)))
     }
   }
 
