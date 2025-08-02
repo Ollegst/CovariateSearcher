@@ -37,7 +37,7 @@ extract_model_results <- function(search_state, model_name) {
 #' @return Character vector of model file lines with file_path attribute
 #' @export
 read_model_file <- function(search_state, run_name, extensions = c(".ctl", ".mod")) {
-  base_path <- file.path(search_state$models_folder, run_name)
+  base_path <- file.path(search_state$models_folder, run_name, run_name)
   for (ext in extensions) {
     file_path <- paste0(base_path, ext)
     if (file.exists(file_path)) {
@@ -229,7 +229,7 @@ fix_theta_renumbering <- function(modelcode, theta_numbers_to_remove, log_functi
   log_function("=== Starting THETA Renumbering ===")
   log_function(paste("Removing THETA numbers:", paste(theta_numbers_to_remove, collapse = ", ")))
 
-  # Step 1: Find all unique THETA numbers
+  # Step 1: Find all unique THETA numbers currently in the model
   all_theta_nums <- c()
   for (line in modelcode) {
     if (grepl("THETA\\(", line)) {
@@ -244,49 +244,68 @@ fix_theta_renumbering <- function(modelcode, theta_numbers_to_remove, log_functi
   all_theta_nums <- unique(all_theta_nums)
   all_theta_nums <- sort(all_theta_nums)
 
-  log_function(paste("Found THETA numbers:", paste(all_theta_nums, collapse = ", ")))
+  log_function(paste("Found THETA numbers in model:", paste(all_theta_nums, collapse = ", ")))
 
-  # Step 2: Calculate final mapping
+  # Step 2: Calculate final mapping for REMAINING theta numbers
+  # Key fix: Only map THETA numbers that still exist in the model
   final_mapping <- list()
+
   for (old_num in all_theta_nums) {
-    if (!old_num %in% theta_numbers_to_remove) {
-      adjustment <- sum(theta_numbers_to_remove < old_num)
-      new_num <- old_num - adjustment
+    # Calculate how many removed THETAs were before this one
+    adjustment <- sum(theta_numbers_to_remove < old_num)
+    new_num <- old_num - adjustment
+
+    # Only create mapping if the number actually changes
+    if (old_num != new_num) {
       final_mapping[[as.character(old_num)]] <- new_num
-
-      if (old_num != new_num) {
-        log_function(paste("THETA(", old_num, ") -> THETA(", new_num, ")"))
-      }
+      log_function(paste("THETA(", old_num, ") -> THETA(", new_num, ")"))
+    } else {
+      log_function(paste("THETA(", old_num, ") remains unchanged"))
     }
   }
 
-  # Step 3: Replace with temporary placeholders first
-  log_function("Converting to temporary placeholders...")
-  for (old_str in names(final_mapping)) {
-    old_num <- as.numeric(old_str)
-    temp_placeholder <- paste0("TEMP_THETA_", old_num, "_TEMP")
-    old_pattern <- paste0("THETA(", old_num, ")")
+  # Step 3: Apply renumbering only if there are mappings to make
+  if (length(final_mapping) > 0) {
+    log_function("Converting to temporary placeholders...")
 
-    for (i in 1:length(modelcode)) {
-      if (grepl(old_pattern, modelcode[i], fixed = TRUE)) {
-        modelcode[i] <- gsub(old_pattern, temp_placeholder, modelcode[i], fixed = TRUE)
+    # Convert to temporary placeholders first
+    for (old_str in names(final_mapping)) {
+      old_num <- as.numeric(old_str)
+      temp_placeholder <- paste0("TEMP_THETA_", old_num, "_TEMP")
+      old_pattern <- paste0("THETA(", old_num, ")")
+
+      for (i in 1:length(modelcode)) {
+        if (grepl(old_pattern, modelcode[i], fixed = TRUE)) {
+          old_line <- modelcode[i]
+          modelcode[i] <- gsub(old_pattern, temp_placeholder, modelcode[i], fixed = TRUE)
+          log_function(paste("Line", i, "converted to placeholder:"))
+          log_function(paste("  Before:", old_line))
+          log_function(paste("  After: ", modelcode[i]))
+        }
       }
     }
-  }
 
-  # Step 4: Convert placeholders to final THETA numbers
-  log_function("Converting placeholders to final THETA numbers...")
-  for (old_str in names(final_mapping)) {
-    old_num <- as.numeric(old_str)
-    new_num <- final_mapping[[old_str]]
-    temp_placeholder <- paste0("TEMP_THETA_", old_num, "_TEMP")
-    final_pattern <- paste0("THETA(", new_num, ")")
+    log_function("Converting placeholders to final THETA numbers...")
 
-    for (i in 1:length(modelcode)) {
-      if (grepl(temp_placeholder, modelcode[i], fixed = TRUE)) {
-        modelcode[i] <- gsub(temp_placeholder, final_pattern, modelcode[i], fixed = TRUE)
+    # Convert placeholders to final THETA numbers
+    for (old_str in names(final_mapping)) {
+      old_num <- as.numeric(old_str)
+      new_num <- final_mapping[[old_str]]
+      temp_placeholder <- paste0("TEMP_THETA_", old_num, "_TEMP")
+      final_pattern <- paste0("THETA(", new_num, ")")
+
+      for (i in 1:length(modelcode)) {
+        if (grepl(temp_placeholder, modelcode[i], fixed = TRUE)) {
+          old_line <- modelcode[i]
+          modelcode[i] <- gsub(temp_placeholder, final_pattern, modelcode[i], fixed = TRUE)
+          log_function(paste("Line", i, "converted to final:"))
+          log_function(paste("  Before:", old_line))
+          log_function(paste("  After: ", modelcode[i]))
+        }
       }
     }
+  } else {
+    log_function("No THETA renumbering needed - all remaining THETAs keep their positions")
   }
 
   log_function("✓ THETA renumbering completed")
