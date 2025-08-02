@@ -37,7 +37,7 @@ extract_model_results <- function(search_state, model_name) {
 #' @return Character vector of model file lines with file_path attribute
 #' @export
 read_model_file <- function(search_state, run_name, extensions = c(".ctl", ".mod")) {
-  base_path <- file.path(search_state$models_folder, run_name)
+  base_path <- file.path(search_state$models_folder, run_name, run_name)
   for (ext in extensions) {
     file_path <- paste0(base_path, ext)
     if (file.exists(file_path)) {
@@ -202,7 +202,7 @@ add_covariate_with_detailed_logging <- function(search_state, base_model_id, cov
     log_msg(paste("Tag value found:", tag_value))
   } else {
     log_msg(paste("ERROR: Covariate tag not found:", covariate_tag))
-    error_log_filename <- paste0("ERROR_", covariate_tag, "_", format(Sys.time(), "%Y%m%d_%H%M%S"), "_log.txt")
+    error_log_filename <- file.path(search_state$models_folder, paste0("ERROR_", covariate_tag, "_", format(Sys.time(), "%Y%m%d_%H%M%S"), "_log.txt"))
     writeLines(log_entries, error_log_filename)
     return(list(
       search_state = search_state,
@@ -223,7 +223,7 @@ add_covariate_with_detailed_logging <- function(search_state, base_model_id, cov
     log_msg(paste("Combined parameter name:", combined_param))
   } else {
     log_msg(paste("ERROR: No matching covariate definition found for:", tag_value))
-    error_log_filename <- paste0("ERROR_", covariate_tag, "_", format(Sys.time(), "%Y%m%d_%H%M%S"), "_log.txt")
+    error_log_filename <- file.path(search_state$models_folder, paste0("ERROR_", covariate_tag, "_", format(Sys.time(), "%Y%m%d_%H%M%S"), "_log.txt"))
     writeLines(log_entries, error_log_filename)
     return(list(
       search_state = search_state,
@@ -255,7 +255,7 @@ add_covariate_with_detailed_logging <- function(search_state, base_model_id, cov
     log_msg(paste("=== Process completed successfully in", process_time, "seconds ==="))
 
     # Save success log file
-    log_filename <- paste0(predicted_model, "_add_", tag_value, "_log.txt")
+    log_filename <- file.path(search_state$models_folder, paste0(predicted_model, "_add_", tag_value, "_log.txt"))
     log_msg(paste("Saving log to:", log_filename))
 
     writeLines(log_entries, log_filename)
@@ -275,7 +275,7 @@ add_covariate_with_detailed_logging <- function(search_state, base_model_id, cov
     log_msg("=== Process failed ===")
 
     # Save error log with detailed error information
-    error_log_filename <- paste0("ERROR_", covariate_tag, "_", format(Sys.time(), "%Y%m%d_%H%M%S"), "_log.txt")
+    error_log_filename <- file.path(search_state$models_folder, paste0("ERROR_", covariate_tag, "_", format(Sys.time(), "%Y%m%d_%H%M%S"), "_log.txt"))
     log_msg(paste("Saving error log to:", error_log_filename))
 
     writeLines(log_entries, error_log_filename)
