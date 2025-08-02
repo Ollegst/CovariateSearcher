@@ -2,7 +2,7 @@
 # CORE FUNCTIONS - MAIN INITIALIZATION AND MODEL MANAGEMENT
 # File: R/01-core-functions.R
 # Part of CovariateSearcher Package
-# Enhanced with functions from 04-models.R
+# Enhanced with functions from 04-models.R (DUPLICATES REMOVED)
 # =============================================================================
 
 #' Initialize Covariate Search
@@ -196,7 +196,7 @@ initialize_search_config <- function(search_state) {
 #' @export
 add_covariate_to_model <- function(search_state, base_model_id, covariate_tag) {
 
-  cat(sprintf("🔧 Adding covariate %s to model %s\n", covariate_tag, base_model_id))
+  cat(sprintf("[+] Adding covariate %s to model %s\n", covariate_tag, base_model_id))
 
   # Get covariate information
   if (!covariate_tag %in% names(search_state$tags)) {
@@ -234,9 +234,9 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag) {
       .inherit_tags = TRUE,
       .overwrite = TRUE
     ) %>%
-      bbr::add_tags(search_state$tags[[covariate_tag]])
+      bbr::add_tags(.tags = search_state$tags[[covariate_tag]])
 
-    cat("  ✓ BBR model created\n")
+    cat("  [OK] BBR model created\n")
 
     # Step 2: Apply model_add_cov function
     cat("  Adding covariate to model file...\n")
@@ -256,7 +256,7 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag) {
       covariate_search = search_state$covariate_search
     )
 
-    cat("  ✓ Covariate added to model file\n")
+    cat("  [OK] Covariate added to model file\n")
 
     # Step 3: Add to database
     cat("  Adding to database...\n")
@@ -285,20 +285,20 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag) {
 
     search_state$search_database <- rbind(search_state$search_database, new_row)
 
-    cat(sprintf("✅ Model %s added to database\n", new_model_name))
+    cat(sprintf("[OK] Model %s added to database\n", new_model_name))
 
     return(search_state)
 
   }, error = function(e) {
-    cat(sprintf("❌ Model creation failed: %s\n", e$message))
+    cat(sprintf("[X] Model creation failed: %s\n", e$message))
     return(search_state)
   })
 }
 
 #' Get Model Status
 #'
-#' @title Get current status of a model
-#' @description Checks model completion status by examining output files
+#' @title Get current status of a model from database
+#' @description Checks model completion status from search database
 #' @param search_state List containing search state
 #' @param model_name Character. Model name to check
 #' @return Character. Status: "completed", "failed", "in_progress", etc.
@@ -317,8 +317,8 @@ get_model_status <- function(search_state, model_name) {
 
 #' Get Model OFV
 #'
-#' @title Extract OFV from completed model
-#' @description Extracts the objective function value from model output
+#' @title Extract OFV from completed model database entry
+#' @description Extracts the objective function value from search database
 #' @param search_state List containing search state
 #' @param model_name Character. Model name
 #' @return Numeric. OFV value or NA if not available
@@ -337,7 +337,7 @@ get_model_ofv <- function(search_state, model_name) {
 
 #' Get Model Covariates
 #'
-#' @title Get list of covariates in a model
+#' @title Get list of covariates in a model from database
 #' @description Returns covariates currently in the specified model
 #' @param search_state List containing search state
 #' @param model_name Character. Model name
@@ -465,8 +465,9 @@ discover_existing_models <- function(search_state) {
       })
     }
 
-    # Get model information
-    status <- get_model_status_from_files(search_state, model_name)
+    # Get model information - using functions from other files
+    model_path <- file.path(search_state$models_folder, model_name)
+    status <- get_model_status_from_files(model_path)
     ofv <- if (status == "completed") get_model_ofv_from_files(search_state, model_name) else NA
     covariates <- get_model_covariates_from_files(search_state, model_name)
 
@@ -500,125 +501,6 @@ discover_existing_models <- function(search_state) {
   return(search_state)
 }
 
-#' Get Model Status from Files
-#'
-#' @title Check model status by examining output files
-#' @description Determines model status from NONMEM output files
-#' @param search_state List containing search state
-#' @param model_name Character. Model name to check
-#' @return Character. Model status
-#' @export
-get_model_status_from_files <- function(search_state, model_name) {
-
-  model_path <- file.path(search_state$models_folder, model_name)
-
-  # Check if model file exists
-  if (!any(file.exists(paste0(model_path, c(".ctl", ".mod"))))) {
-    return("not_found")
-  }
-
-  # Check if output folder exists
-  output_folder <- file.path(search_state$models_folder, model_name)
-  if (!dir.exists(output_folder)) {
-    return("not_submitted")
-  }
-
-  # Check .lst file for completion
-  lst_file <- file.path(output_folder, paste0(model_name, ".lst"))
-
-  if (!file.exists(lst_file)) {
-    return("in_progress")
-  }
-
-  # Check completion status
-  tryCatch({
-    lst_content <- readLines(lst_file, warn = FALSE)
-
-    if (any(grepl("Stop Time:", lst_content))) {
-      # Look for failure patterns
-      failure_patterns <- c(
-        "CONVERGENCE NOT ACHIEVED",
-        "OPTIMIZATION WAS TERMINATED",
-        "NONMEM STOP",
-        "FATAL ERROR",
-        "EXECUTION ERROR"
-      )
-
-      if (any(sapply(failure_patterns, function(pattern) any(grepl(pattern, lst_content))))) {
-        return("failed")
-      } else {
-        return("completed")
-      }
-    } else {
-      return("in_progress")
-    }
-  }, error = function(e) {
-    return("in_progress")
-  })
-}
-
-#' Get Model OFV from Files
-#'
-#' @title Extract OFV from model output files
-#' @description Extracts OFV value from NONMEM output files
-#' @param search_state List containing search state
-#' @param model_name Character. Model name
-#' @return Numeric. OFV value or NA
-#' @export
-get_model_ofv_from_files <- function(search_state, model_name) {
-
-  status <- get_model_status_from_files(search_state, model_name)
-  if (status != "completed") {
-    return(NA)
-  }
-
-  tryCatch({
-    # Try .lst file parsing first
-    lst_file <- file.path(search_state$models_folder, model_name, paste0(model_name, ".lst"))
-    if (file.exists(lst_file)) {
-      lst_content <- readLines(lst_file, warn = FALSE)
-
-      ofv_lines <- grep("OBJECTIVE FUNCTION VALUE", lst_content, value = TRUE)
-      if (length(ofv_lines) > 0) {
-        final_ofv_line <- tail(ofv_lines, 1)
-        ofv_match <- regmatches(final_ofv_line,
-                                regexpr("[-+]?[0-9]*\\.?[0-9]+([eE][-+]?[0-9]+)?", final_ofv_line))
-        if (length(ofv_match) > 0) {
-          return(as.numeric(ofv_match[1]))
-        }
-      }
-    }
-
-    return(NA)
-  }, error = function(e) {
-    return(NA)
-  })
-}
-
-#' Get Model Covariates from Files
-#'
-#' @title Extract covariates from model using BBR tags
-#' @description Gets covariate information from BBR model tags
-#' @param search_state List containing search state
-#' @param model_name Character. Model name
-#' @return Character vector. Covariate names
-#' @export
-get_model_covariates_from_files <- function(search_state, model_name) {
-
-  tryCatch({
-    model_path <- file.path(search_state$models_folder, model_name)
-    mod <- bbr::read_model(model_path)
-    mod_tags <- mod$tags
-    cov_tags <- names(search_state$tags)[grepl("^cov_", names(search_state$tags))]
-    cov_tag_values <- unlist(search_state$tags[cov_tags])
-    present_cov_values <- intersect(cov_tag_values, mod_tags)
-    present_cov_names <- names(search_state$tags)[search_state$tags %in% present_cov_values]
-    return(present_cov_names)
-  }, error = function(e) {
-    return(character(0))
-  })
-}
-
 #' Update Model Counter
 #'
 #' @title Update model counter excluding retry models
@@ -636,7 +518,7 @@ update_model_counter <- function(search_state) {
     if (length(main_models) > 0) {
       model_numbers <- as.numeric(gsub("run", "", main_models))
       sorted_numbers <- sort(model_numbers, na.last = TRUE)
-      search_state$model_counter <- tail(sorted_numbers, 1)
+      search_state$model_counter <- utils::tail(sorted_numbers, 1)
 
       cat("Model counter set to:", search_state$model_counter,
           "(last in sequence, excluding retry models)\n")
@@ -674,7 +556,8 @@ update_all_model_statuses <- function(search_state) {
 
   for (i in 1:nrow(search_state$search_database)) {
     model_name <- search_state$search_database$model_name[i]
-    new_status <- get_model_status_from_files(search_state, model_name)
+    model_path <- file.path(search_state$models_folder, model_name)
+    new_status <- get_model_status_from_files(model_path)
     search_state$search_database$status[i] <- new_status
 
     # Update OFV if completed and not already set
@@ -685,4 +568,67 @@ update_all_model_statuses <- function(search_state) {
   }
 
   return(search_state)
+}
+
+#' Get Model OFV from Files
+#'
+#' @title Extract OFV from model output files
+#' @description Extracts OFV value from NONMEM output files
+#' @param search_state List containing search state
+#' @param model_name Character. Model name
+#' @return Numeric. OFV value or NA
+#' @export
+get_model_ofv_from_files <- function(search_state, model_name) {
+
+  model_path <- file.path(search_state$models_folder, model_name)
+  status <- get_model_status_from_files(model_path)
+  if (status != "completed") {
+    return(NA)
+  }
+
+  tryCatch({
+    # Try .lst file parsing first
+    lst_file <- file.path(search_state$models_folder, model_name, paste0(model_name, ".lst"))
+    if (file.exists(lst_file)) {
+      lst_content <- readLines(lst_file, warn = FALSE)
+
+      ofv_lines <- grep("OBJECTIVE FUNCTION VALUE", lst_content, value = TRUE)
+      if (length(ofv_lines) > 0) {
+        final_ofv_line <- utils::tail(ofv_lines, 1)
+        ofv_match <- regmatches(final_ofv_line,
+                                regexpr("[-+]?[0-9]*\\.?[0-9]+([eE][-+]?[0-9]+)?", final_ofv_line))
+        if (length(ofv_match) > 0) {
+          return(as.numeric(ofv_match[1]))
+        }
+      }
+    }
+
+    return(NA)
+  }, error = function(e) {
+    return(NA)
+  })
+}
+
+#' Get Model Covariates from Files
+#'
+#' @title Extract covariates from model using BBR tags
+#' @description Gets covariate information from BBR model tags
+#' @param search_state List containing search state
+#' @param model_name Character. Model name
+#' @return Character vector. Covariate names
+#' @export
+get_model_covariates_from_files <- function(search_state, model_name) {
+
+  tryCatch({
+    model_path <- file.path(search_state$models_folder, model_name)
+    mod <- bbr::read_model(model_path)
+    mod_tags <- mod$tags
+    cov_tags <- names(search_state$tags)[grepl("^cov_", names(search_state$tags))]
+    cov_tag_values <- unlist(search_state$tags[cov_tags])
+    present_cov_values <- intersect(cov_tag_values, mod_tags)
+    present_cov_names <- names(search_state$tags)[search_state$tags %in% present_cov_values]
+    return(present_cov_names)
+  }, error = function(e) {
+    return(character(0))
+  })
 }
