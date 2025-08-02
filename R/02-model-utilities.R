@@ -141,6 +141,14 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   )
 
   log_function(paste("Initial THETA value:", initialValuethetacov))
+
+  # Generate formula based on FLAG
+  if(FLAG == "2") formule <- paste0(' * (',cova,'/',ref,')**THETA(', newtheta ,')')
+  if(FLAG == "3") formule <- paste0(' * (1 + (',cova,'-',ref, ') * THETA(',newtheta ,'))')
+  if(FLAG == "5") formule <- paste0(' * (',cova,'/',ref,')** THETA(', newtheta ,')')
+  if(FLAG == "6") formule <- paste0(' * (',cova,'/',ref,')** THETA(', newtheta ,')')
+
+  # Handle categorical covariates (simplified for core module)
   if(FLAG == "1"){
     uniqueval <- unique(data_file[[cova]])
     if(length(uniqueval) == 2 & sum(uniqueval) == 1 ){
@@ -164,6 +172,7 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
       modelcode[grep('^\\$PK', modelcode)] <- paste0(modelcode[grep('^\\$PK', modelcode)], '\n\n', ifelcode)
     }
   }
+
   # Generate formula based on FLAG
   if(FLAG == "2") formule <- paste0(' * (',cova,'/',ref,')**THETA(', newtheta ,')')
   if(FLAG == "3") formule <- paste0(' * (1 + (',cova,'-',ref, ') * THETA(',newtheta ,'))')
@@ -237,6 +246,8 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   log_function(paste("=== Covariate Addition Complete ==="))
   return(search_state)
 }
+
+
 #' Fix THETA Renumbering
 #'
 #' @title Renumber THETA parameters after removing some
