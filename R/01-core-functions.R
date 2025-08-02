@@ -524,7 +524,7 @@ discover_existing_models <- function(search_state) {
       phase = phase,
       step_number = step_num,
       parent_model = parent_model,
-      covariate_tested = paste(covariates, collapse = ";"),
+      covariate_tested = if (exists("covariate")) covariate else paste(covariates, collapse = ";"),
       action = action,
       ofv = ofv,
       delta_ofv = NA_real_,
