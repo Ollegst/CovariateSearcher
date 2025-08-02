@@ -2,7 +2,7 @@
 % Please edit documentation in R/02-model-utilities.R
 \name{model_add_cov}
 \alias{model_add_cov}
-\title{Core functionality to add covariate to NONMEM model file}
+\title{Core functionality to add covariate to NONMEM model file with enhanced logging}
 \usage{
 model_add_cov(
   search_state,
@@ -10,7 +10,8 @@ model_add_cov(
   cov_on_param,
   id_var = "ID",
   data_file,
-  covariate_search
+  covariate_search,
+  log_function = NULL
 )
 }
 \arguments{
@@ -25,12 +26,14 @@ model_add_cov(
 \item{data_file}{Data.frame. Dataset for time-varying checks}
 
 \item{covariate_search}{Data.frame. Covariate search configuration}
+
+\item{log_function}{Function. Logging function (optional)}
 }
 \value{
 Updated search_state (unchanged - file modification is side effect)
 }
 \description{
-Modifies NONMEM control file to add covariate relationship
+Modifies NONMEM control file to add covariate relationship with detailed logging
 }
 \details{
 Add Covariate to Model File
