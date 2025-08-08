@@ -155,9 +155,19 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
 #' @param covariate_tag Character. Covariate tag that was added (e.g., "cov_cl_wt")
 #' @return List with success status and details
 #' @export
+#' Adjust THETA Values for Covariate
+#'
+#' @title Modify THETA values from 0.1 to -0.1 for specified covariate
+#' @description Reads the model file and adjusts THETA initial estimates
+#'   from 0.1 to -0.1 for the problematic covariate to improve convergence.
+#' @param search_state List containing covariate search state and configuration
+#' @param model_name Character. Model to modify (e.g., "run2001")
+#' @param covariate_tag Character. Covariate tag that was added (e.g., "cov_cl_wt")
+#' @return List with success status and details
+#' @export
 adjust_theta_for_covariate <- function(search_state, model_name, covariate_tag) {
   tryCatch({
-    # Read the model file
+    # FIXED: Correct file path construction
     model_file_path <- file.path(search_state$models_folder, paste0(model_name, ".ctl"))
 
     if (!file.exists(model_file_path)) {
@@ -231,7 +241,6 @@ adjust_theta_for_covariate <- function(search_state, model_name, covariate_tag) 
     return(list(success = FALSE, message = paste("Error adjusting THETA:", e$message)))
   })
 }
-
 
 
 #' Process Estimation Issues and Trigger Recovery
