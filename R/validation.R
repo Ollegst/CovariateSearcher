@@ -101,7 +101,7 @@ update_model_status_from_files <- function(search_state, model_name) {
               model_name, results$status,
               ifelse(is.na(results$ofv), "NA", round(results$ofv, 2))))
 
-  return(list(search_state = search_state))
+  return(search_state)
 }
 #' Calculate Delta OFV
 #'
