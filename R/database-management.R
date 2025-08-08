@@ -12,7 +12,7 @@
 #' @title Initialize the search database with retry tracking columns
 #' @description Creates empty search database with all required columns
 #' @param search_state List containing search state
-#' @return Updated search_state with initialized database
+#' @return Updated search_state (initialization function - returns directly)
 #' @export
 initialize_search_database_core <- function(search_state) {
   search_state$search_database <- data.frame(
@@ -152,7 +152,7 @@ get_model_covariates_from_db <- function(search_state, model_name) {
 #' @title Update model counter excluding retry models
 #' @description Sets the model counter based on existing models
 #' @param search_state List containing search state
-#' @return Updated search_state with model counter set
+#' @return Updated search_state (initialization function - returns directly)
 #' @export
 update_model_counter <- function(search_state) {
   if (nrow(search_state$search_database) > 0) {
@@ -312,4 +312,3 @@ view_comprehensive_table <- function(search_state) {
   print(comprehensive)
   return(invisible(comprehensive))
 }
-

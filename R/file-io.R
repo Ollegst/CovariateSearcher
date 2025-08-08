@@ -65,7 +65,7 @@ read_model_file <- function(search_state, run_name, extensions = c(".ctl", ".mod
 #'
 #' @title Write modified NONMEM control file back to disk
 #' @description Writes model file lines back to original location using stored file_path attribute
-#' @param search_state List containing search state (unused but kept for consistency)
+#' @param search_state List containing search state (unchanged in functional version)
 #' @param lines Character vector. Model file lines with file_path attribute
 #' @return Updated search_state (unchanged)
 #' @export
@@ -351,4 +351,3 @@ get_model_covariates_from_files <- function(search_state, model_name) {
     return(character(0))
   })
 }
-

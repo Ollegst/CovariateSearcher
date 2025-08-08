@@ -20,7 +20,7 @@ validate_model_quality <- function(model_path, rse_threshold = 50, ofv_threshold
 
   # Extract basic results
   results <- extract_model_results(model_path)
-  
+
   validation <- list(
     model_path = model_path,
     overall_status = "unknown",
@@ -30,7 +30,7 @@ validate_model_quality <- function(model_path, rse_threshold = 50, ofv_threshold
     issues = character(0),
     recommendations = character(0)
   )
-  
+
   # Check convergence
   if (results$status == "completed") {
     validation$converged <- TRUE
@@ -42,14 +42,14 @@ validate_model_quality <- function(model_path, rse_threshold = 50, ofv_threshold
     validation$issues <- c(validation$issues, "did_not_converge")
     validation$recommendations <- c(validation$recommendations, "retry_with_different_initial_estimates")
   }
-  
+
   # Check OFV availability
   if (!is.na(results$ofv)) {
     validation$ofv <- results$ofv
   } else {
     validation$issues <- c(validation$issues, "no_ofv_available")
   }
-  
+
   # Overall assessment
   if (validation$converged && length(validation$issues) == 0) {
     validation$overall_status <- "acceptable"
@@ -58,7 +58,7 @@ validate_model_quality <- function(model_path, rse_threshold = 50, ofv_threshold
   } else {
     validation$overall_status <- "not_acceptable"
   }
-  
+
   return(validation)
 }
 
@@ -83,12 +83,12 @@ calculate_delta_ofv <- function(base_ofv, test_ofv, significance_threshold = 3.8
       error = "Missing OFV values"
     ))
   }
-  
+
   delta_ofv <- base_ofv - test_ofv
   significant <- abs(delta_ofv) > significance_threshold
-  
+
   direction <- if (delta_ofv > 0) "improvement" else "worse"
-  
+
   return(list(
     delta_ofv = delta_ofv,
     significant = significant,
@@ -106,29 +106,29 @@ calculate_delta_ofv <- function(base_ofv, test_ofv, significance_threshold = 3.8
 #'
 #' @param search_state List. Current search state
 #' @param model_name Character. Model name to update
-#' @return Updated search state
+#' @return List with updated search_state
 #' @export
 update_model_status_from_files <- function(search_state, model_name) {
 
   model_path <- file.path(search_state$models_folder, model_name)
-  
+
   # Extract results from files
   results <- extract_model_results(model_path)
   validation <- validate_model_quality(model_path)
-  
+
   # Find model in database
   db_idx <- which(search_state$search_database$model_name == model_name)
-  
+
   if (length(db_idx) == 0) {
     cat(sprintf("⚠️  Model %s not found in database\n", model_name))
-    return(search_state)
+    return(list(search_state = search_state))
   }
-  
+
   # Update database
   search_state$search_database$status[db_idx] <- results$status
   search_state$search_database$ofv[db_idx] <- results$ofv
   search_state$search_database$completion_time[db_idx] <- Sys.time()
-  
+
   # Calculate delta OFV if parent exists
   parent_model <- search_state$search_database$parent_model[db_idx]
   if (!is.na(parent_model)) {
@@ -141,12 +141,12 @@ update_model_status_from_files <- function(search_state, model_name) {
       }
     }
   }
-  
-  cat(sprintf("✅ Updated %s: %s (OFV: %s)\n", 
-              model_name, results$status, 
+
+  cat(sprintf("✅ Updated %s: %s (OFV: %s)\n",
+              model_name, results$status,
               ifelse(is.na(results$ofv), "NA", round(results$ofv, 2))))
-  
-  return(search_state)
+
+  return(list(search_state = search_state))
 }
 
 
@@ -156,19 +156,19 @@ update_model_status_from_files <- function(search_state, model_name) {
 #' Updates all models in database from NONMEM output files
 #'
 #' @param search_state List. Current search state
-#' @return Updated search state
+#' @return List with updated search_state
 #' @export
 update_all_model_statuses <- function(search_state) {
 
   cat("📊 Updating all model statuses from NONMEM output files...\n")
-  
-  models_to_update <- search_state$search_database$model_name
-  
-  for (model_name in models_to_update) {
-    search_state <- update_model_status_from_files(search_state, model_name)
-  }
-  
-  cat(sprintf("✅ Updated %d models\n", length(models_to_update)))
-  return(search_state)
-}
 
+  models_to_update <- search_state$search_database$model_name
+
+  for (model_name in models_to_update) {
+    update_result <- update_model_status_from_files(search_state, model_name)
+    search_state <- update_result$search_state
+  }
+
+  cat(sprintf("✅ Updated %d models\n", length(models_to_update)))
+  return(list(search_state = search_state))
+}
