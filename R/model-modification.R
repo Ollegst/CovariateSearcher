@@ -217,7 +217,7 @@ create_model_info_log <- function(search_state, model_name, parent_model, covari
 #' @param id_var Character. ID variable name (default: "ID")
 #' @param data_file Data.frame. Dataset for time-varying checks
 #' @param covariate_search Data.frame. Covariate search configuration
-#' @param log_function Function. Logging function (optional)
+#' @param capture_log Function. Logging function (optional)
 #' @return Updated search_state
 #' @export
 model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",

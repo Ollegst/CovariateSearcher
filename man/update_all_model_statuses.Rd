@@ -10,7 +10,7 @@ update_all_model_statuses(search_state)
 \item{search_state}{List. Current search state}
 }
 \value{
-Updated search state
+List with updated search_state
 }
 \description{
 Updates all models in database from NONMEM output files

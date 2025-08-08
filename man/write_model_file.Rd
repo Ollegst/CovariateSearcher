@@ -7,7 +7,7 @@
 write_model_file(search_state, lines)
 }
 \arguments{
-\item{search_state}{List containing search state (unused but kept for consistency)}
+\item{search_state}{List containing search state (unchanged in functional version)}
 
 \item{lines}{Character vector. Model file lines with file_path attribute}
 }

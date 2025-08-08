@@ -12,7 +12,7 @@ update_model_status_from_files(search_state, model_name)
 \item{model_name}{Character. Model name to update}
 }
 \value{
-Updated search state
+List with updated search_state
 }
 \description{
 Updates search database with results from NONMEM output

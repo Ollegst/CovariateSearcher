@@ -10,7 +10,7 @@ update_model_counter(search_state)
 \item{search_state}{List containing search state}
 }
 \value{
-Updated search_state with model counter set
+Updated search_state (initialization function - returns directly)
 }
 \description{
 Sets the model counter based on existing models

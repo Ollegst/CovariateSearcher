@@ -14,7 +14,7 @@ add_covariate_to_model(search_state, base_model_id, covariate_tag)
 \item{covariate_tag}{Character. Covariate tag to add (e.g., "cov_cl_wt")}
 }
 \value{
-Updated search state with new model added to database
+List with updated search_state and new model information
 }
 \description{
 This is the core function for stepwise covariate modeling.

@@ -10,7 +10,7 @@ initialize_search_database_core(search_state)
 \item{search_state}{List containing search state}
 }
 \value{
-Updated search_state with initialized database
+Updated search_state (initialization function - returns directly)
 }
 \description{
 Creates empty search database with all required columns

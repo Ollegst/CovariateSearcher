@@ -11,7 +11,7 @@ model_add_cov(
   id_var = "ID",
   data_file,
   covariate_search,
-  log_function = NULL
+  capture_log = FALSE
 )
 }
 \arguments{
@@ -27,14 +27,11 @@ model_add_cov(
 
 \item{covariate_search}{Data.frame. Covariate search configuration}
 
-\item{log_function}{Function. Logging function (optional)}
+\item{capture_log}{Function. Logging function (optional)}
 }
 \value{
-Updated search_state (unchanged - file modification is side effect)
+Updated search_state
 }
 \description{
 Modifies NONMEM control file to add covariate relationship with detailed logging
-}
-\details{
-Add Covariate to Model File
 }

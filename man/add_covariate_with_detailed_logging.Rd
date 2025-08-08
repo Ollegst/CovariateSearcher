@@ -14,7 +14,7 @@ add_covariate_with_detailed_logging(search_state, base_model_id, covariate_tag)
 \item{covariate_tag}{Character. Covariate tag to add (e.g., "cov_cl_wt")}
 }
 \value{
-List with result and log information (search_state updated in place)
+List with result and log information (search_state updated in result)
 }
 \description{
 Calls add_covariate_to_model with detailed timestamped logging
