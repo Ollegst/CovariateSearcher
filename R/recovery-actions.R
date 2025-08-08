@@ -97,9 +97,27 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
       cat(" ⚠️  No parent model info - using original values\n")
     }
 
-    # Step 4: Add retry model to database
-    cat("  Adding to database...")
+    if (exists("latest_covariate_name")) {
+      # Get covariate info for the log
+      matching_cov_for_log <- search_state$covariate_search[
+        grepl(paste0("_", latest_covariate_name, "$"), search_state$covariate_search$cov_to_test), ]
 
+      if (nrow(matching_cov_for_log) > 0) {
+        create_model_info_log(
+          search_state = search_state,
+          model_name = retry_model_name,
+          parent_model = original_model_name,  # Original failed model as "parent"
+          covariate_name = latest_covariate_name,
+          cov_info = matching_cov_for_log[1, ]
+        )
+      }
+      cat(" ✓\n")
+    } else {
+      cat(" ⚠️  No covariate info for log\n")
+    }
+
+    # Step 5: Add retry model to database
+    cat("  Adding to database...")
     new_row <- data.frame(
       model_name = retry_model_name,
       step_description = paste(original_row$step_description[1], "- Retry"),
