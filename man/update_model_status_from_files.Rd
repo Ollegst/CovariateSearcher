@@ -5,6 +5,8 @@
 \title{Updates search database with enhanced results from NONMEM output}
 \usage{
 update_model_status_from_files(search_state, model_name)
+
+update_model_status_from_files(search_state, model_name)
 }
 \arguments{
 \item{search_state}{List. Current search state}
@@ -12,6 +14,8 @@ update_model_status_from_files(search_state, model_name)
 \item{model_name}{Character. Model name to update}
 }
 \value{
+List with updated search_state
+
 List with updated search_state
 }
 \description{

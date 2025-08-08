@@ -4,10 +4,17 @@
 \alias{validate_model_quality}
 \title{Validate Model Quality}
 \usage{
-validate_model_quality(model_path, rse_threshold = 50, ofv_threshold = 3.84)
+validate_model_quality(
+  search_state,
+  model_name,
+  rse_threshold = 50,
+  ofv_threshold = 3.84
+)
 }
 \arguments{
-\item{model_path}{Character. Path to model directory}
+\item{search_state}{List containing search state}
+
+\item{model_name}{Character. Model name}
 
 \item{rse_threshold}{Numeric. RSE threshold (default 50)}
 
