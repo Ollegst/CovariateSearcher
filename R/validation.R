@@ -99,11 +99,10 @@ calculate_delta_ofv <- function(base_ofv, test_ofv, significance_threshold = 3.8
 }
 
 
-
-#' Update Model Status in Database
+#' Update Model Status from Files with Enhanced Error Detection
 #'
-#' Updates search database with results from NONMEM output
-#'
+#' @title Updates search database with enhanced results from NONMEM output
+#' @description Enhanced version with detailed error reporting and LST excerpts
 #' @param search_state List. Current search state
 #' @param model_name Character. Model name to update
 #' @return List with updated search_state
@@ -112,9 +111,11 @@ update_model_status_from_files <- function(search_state, model_name) {
 
   model_path <- file.path(search_state$models_folder, model_name)
 
-  # Extract results from files
-  results <- extract_model_results(model_path)
-  validation <- validate_model_quality(model_path)
+  # Get enhanced LST analysis
+  lst_info <- read_nonmem_lst(model_path)
+
+  # Get basic results
+  results <- extract_model_results(search_state, model_name)
 
   # Find model in database
   db_idx <- which(search_state$search_database$model_name == model_name)
@@ -124,14 +125,28 @@ update_model_status_from_files <- function(search_state, model_name) {
     return(list(search_state = search_state))
   }
 
-  # Update database
-  search_state$search_database$status[db_idx] <- results$status
+  # Update database with enhanced information
+  search_state$search_database$status[db_idx] <- lst_info$status
   search_state$search_database$ofv[db_idx] <- results$ofv
+  search_state$search_database$estimation_issue[db_idx] <- lst_info$error_message
   search_state$search_database$completion_time[db_idx] <- Sys.time()
 
-  # Calculate delta OFV if parent exists
+  # Print detailed status with error information
+  if (lst_info$has_issues) {
+    cat(sprintf("❌ Model %s FAILED: %s\n", model_name, lst_info$error_message))
+    if (nchar(lst_info$error_excerpt) > 0) {
+      cat("📄 LST file excerpt:\n")
+      cat(paste0("  ", gsub("\n", "\n  ", lst_info$error_excerpt)), "\n")
+    }
+  } else {
+    cat(sprintf("✅ Model %s completed: %s (OFV: %s)\n",
+                model_name, lst_info$status,
+                ifelse(is.na(results$ofv), "NA", round(results$ofv, 2))))
+  }
+
+  # Calculate delta OFV if parent exists and both models successful
   parent_model <- search_state$search_database$parent_model[db_idx]
-  if (!is.na(parent_model)) {
+  if (!is.na(parent_model) && lst_info$status == "completed") {
     parent_idx <- which(search_state$search_database$model_name == parent_model)
     if (length(parent_idx) > 0) {
       parent_ofv <- search_state$search_database$ofv[parent_idx[1]]
@@ -142,13 +157,8 @@ update_model_status_from_files <- function(search_state, model_name) {
     }
   }
 
-  cat(sprintf("✅ Updated %s: %s (OFV: %s)\n",
-              model_name, results$status,
-              ifelse(is.na(results$ofv), "NA", round(results$ofv, 2))))
-
   return(list(search_state = search_state))
 }
-
 
 
 #' Update All Model Statuses

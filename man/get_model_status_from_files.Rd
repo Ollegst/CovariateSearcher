@@ -2,7 +2,7 @@
 % Please edit documentation in R/file-io.R
 \name{get_model_status_from_files}
 \alias{get_model_status_from_files}
-\title{Get Model Status from Files}
+\title{Determine overall model status with detailed error reporting}
 \usage{
 get_model_status_from_files(model_path)
 }
@@ -10,8 +10,11 @@ get_model_status_from_files(model_path)
 \item{model_path}{Character. Path to model directory}
 }
 \value{
-Character. Overall model status
+Character. Overall model status with enhanced error detection
 }
 \description{
-Determines overall model status from NONMEM output files
+Enhanced version that provides detailed failure information
+}
+\details{
+Get Model Status from Files with Enhanced Error Detection
 }

@@ -160,12 +160,13 @@ read_nonmem_ext <- function(model_path) {
 
 
 
-#' Read NONMEM LST File Status
+#' Read NONMEM LST File with Comprehensive Error Detection
 #'
-#' Reads NONMEM .lst file to determine model status and issues
-#'
+#' @title Enhanced LST file reader that detects all types of failures
+#' @description Reads NONMEM .lst files and detects successful completion,
+#'   various failure modes, and extracts relevant error messages
 #' @param model_path Character. Path to model directory or lst file
-#' @return List with status information
+#' @return List with detailed status and error information
 #' @export
 read_nonmem_lst <- function(model_path) {
 
@@ -193,7 +194,9 @@ read_nonmem_lst <- function(model_path) {
     return(list(
       found = FALSE,
       status = "not_run",
-      error = "LST file not found"
+      error = "LST file not found",
+      error_message = "LST file not found",
+      error_excerpt = ""
     ))
   }
 
@@ -201,64 +204,104 @@ read_nonmem_lst <- function(model_path) {
   tryCatch({
     lst_content <- readLines(lst_file, warn = FALSE)
 
-    # Check for successful completion
-    if (any(grepl("MINIMIZATION SUCCESSFUL", lst_content))) {
-      status <- "completed"
-      termination <- "successful"
-    } else if (any(grepl("MINIMIZATION TERMINATED", lst_content))) {
-      status <- "terminated"
-      termination <- "terminated"
-    } else if (any(grepl("PARAMETER ESTIMATE IS NEAR ITS BOUNDARY", lst_content))) {
-      status <- "boundary"
-      termination <- "boundary_issue"
-    } else if (any(grepl("ROUNDING ERRORS", lst_content))) {
-      status <- "rounding_errors"
-      termination <- "rounding_errors"
-    } else {
-      status <- "unknown"
-      termination <- "unknown"
-    }
-
-    # Check for common issues
-    issues <- character(0)
-    if (any(grepl("COVARIANCE STEP ABORTED", lst_content))) {
-      issues <- c(issues, "covariance_failed")
-    }
-    if (any(grepl("R MATRIX ALGORITHMICALLY SINGULAR", lst_content))) {
-      issues <- c(issues, "singular_matrix")
-    }
-    if (any(grepl("STANDARD ERROR OF ESTIMATE", lst_content))) {
-      # Has standard errors
-    } else {
-      issues <- c(issues, "no_standard_errors")
-    }
-
-    return(list(
+    # Initialize result
+    result <- list(
       found = TRUE,
       file = lst_file,
-      status = status,
-      termination = termination,
-      issues = issues,
-      has_issues = length(issues) > 0
-    ))
+      status = "unknown",
+      termination = "unknown",
+      issues = character(0),
+      error_message = "",
+      error_excerpt = "",
+      has_issues = FALSE
+    )
+
+    # Check for successful completion
+    if (any(grepl("MINIMIZATION SUCCESSFUL", lst_content))) {
+      result$status <- "completed"
+      result$termination <- "successful"
+
+    } else if (any(grepl("MINIMIZATION TERMINATED", lst_content))) {
+      result$status <- "failed"
+      result$termination <- "terminated"
+      result$has_issues <- TRUE
+
+      # Extract termination reason
+      term_lines <- grep("MINIMIZATION TERMINATED", lst_content, value = TRUE)
+      if (length(term_lines) > 0) {
+        # Get context around termination
+        term_idx <- grep("MINIMIZATION TERMINATED", lst_content)[1]
+        context_start <- max(1, term_idx - 2)
+        context_end <- min(length(lst_content), term_idx + 5)
+        result$error_excerpt <- paste(lst_content[context_start:context_end], collapse = "\n")
+
+        # Specific error detection
+        if (any(grepl("OBJ. FUNC. IS INFINITE", lst_content))) {
+          result$issues <- c(result$issues, "infinite_objective_function")
+          result$error_message <- "Objective function became infinite"
+        }
+        if (any(grepl("OMEGA.*SINGULAR", lst_content))) {
+          result$issues <- c(result$issues, "singular_omega")
+          result$error_message <- paste(result$error_message, "OMEGA matrix is singular", sep = "; ")
+        }
+        if (any(grepl("ERROR=136", lst_content))) {
+          result$issues <- c(result$issues, "error_136")
+          result$error_message <- paste(result$error_message, "NONMEM Error 136", sep = "; ")
+        }
+      }
+
+    } else if (any(grepl("PARAMETER ESTIMATE IS NEAR ITS BOUNDARY", lst_content))) {
+      result$status <- "boundary_issue"
+      result$termination <- "boundary"
+      result$has_issues <- TRUE
+      result$issues <- c(result$issues, "boundary_parameters")
+      result$error_message <- "Parameters at boundary"
+
+    } else {
+      result$status <- "incomplete"
+      result$termination <- "unknown"
+      result$has_issues <- TRUE
+      result$error_message <- "No clear termination status found"
+    }
+
+    # Check for additional issues regardless of termination
+    if (any(grepl("COVARIANCE STEP ABORTED", lst_content))) {
+      result$issues <- c(result$issues, "covariance_failed")
+    }
+    if (any(grepl("R MATRIX ALGORITHMICALLY SINGULAR", lst_content))) {
+      result$issues <- c(result$issues, "singular_r_matrix")
+    }
+    if (any(grepl("NO. OF SIG. DIGITS UNREPORTABLE", lst_content))) {
+      result$issues <- c(result$issues, "unreportable_digits")
+    }
+
+    # Update has_issues flag
+    result$has_issues <- length(result$issues) > 0 || result$status %in% c("failed", "boundary_issue", "incomplete")
+
+    # Clean up error message
+    result$error_message <- gsub("^; ", "", result$error_message)
+
+    return(result)
 
   }, error = function(e) {
     return(list(
       found = FALSE,
-      status = "error",
-      error = paste("Error reading LST file:", e$message)
+      status = "read_error",
+      error = paste("Error reading LST file:", e$message),
+      error_message = paste("Error reading LST file:", e$message),
+      error_excerpt = ""
     ))
   })
 }
 
 
 
-#' Get Model Status from Files
+#' Get Model Status from Files with Enhanced Error Detection
 #'
-#' Determines overall model status from NONMEM output files
-#'
+#' @title Determine overall model status with detailed error reporting
+#' @description Enhanced version that provides detailed failure information
 #' @param model_path Character. Path to model directory
-#' @return Character. Overall model status
+#' @return Character. Overall model status with enhanced error detection
 #' @export
 get_model_status_from_files <- function(model_path) {
 
@@ -273,16 +316,8 @@ get_model_status_from_files <- function(model_path) {
     return("incomplete")
   }
 
-  # Determine status based on LST file analysis
-  if (lst_info$status == "completed" && !lst_info$has_issues) {
-    return("completed")
-  } else if (lst_info$status == "completed" && lst_info$has_issues) {
-    return("completed_with_issues")
-  } else if (lst_info$status %in% c("boundary", "rounding_errors")) {
-    return("failed")
-  } else {
-    return("unknown")
-  }
+  # Return the status from enhanced LST analysis
+  return(lst_info$status)
 }
 
 

@@ -2,7 +2,7 @@
 % Please edit documentation in R/validation.R
 \name{update_model_status_from_files}
 \alias{update_model_status_from_files}
-\title{Update Model Status in Database}
+\title{Updates search database with enhanced results from NONMEM output}
 \usage{
 update_model_status_from_files(search_state, model_name)
 }
@@ -15,5 +15,8 @@ update_model_status_from_files(search_state, model_name)
 List with updated search_state
 }
 \description{
-Updates search database with results from NONMEM output
+Enhanced version with detailed error reporting and LST excerpts
+}
+\details{
+Update Model Status from Files with Enhanced Error Detection
 }

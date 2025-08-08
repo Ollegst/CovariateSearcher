@@ -2,7 +2,7 @@
 % Please edit documentation in R/file-io.R
 \name{read_nonmem_lst}
 \alias{read_nonmem_lst}
-\title{Read NONMEM LST File Status}
+\title{Enhanced LST file reader that detects all types of failures}
 \usage{
 read_nonmem_lst(model_path)
 }
@@ -10,8 +10,12 @@ read_nonmem_lst(model_path)
 \item{model_path}{Character. Path to model directory or lst file}
 }
 \value{
-List with status information
+List with detailed status and error information
 }
 \description{
-Reads NONMEM .lst file to determine model status and issues
+Reads NONMEM .lst files and detects successful completion,
+various failure modes, and extracts relevant error messages
+}
+\details{
+Read NONMEM LST File with Comprehensive Error Detection
 }
