@@ -21,3 +21,6 @@
 # OS
 .DS_Store
 Thumbs.db
+R_backup/
+migration.R
+scripts/

@@ -1,7 +1,11 @@
-#' @title Validation Functions
-#' @description Model validation and quality assessment
-#' @name validation-functions
-NULL
+# =============================================================================
+# VALIDATION
+# File: R/validation.R
+# Part of CovariateSearcher Package
+# Model validation and quality assessment
+# =============================================================================
+
+
 
 #' Validate Model Quality
 #'
@@ -58,6 +62,8 @@ validate_model_quality <- function(model_path, rse_threshold = 50, ofv_threshold
   return(validation)
 }
 
+
+
 #' Calculate Delta OFV
 #'
 #' Calculate OFV difference between models
@@ -91,6 +97,8 @@ calculate_delta_ofv <- function(base_ofv, test_ofv, significance_threshold = 3.8
     meets_threshold = significant && direction == "improvement"
   ))
 }
+
+
 
 #' Update Model Status in Database
 #'
@@ -141,6 +149,8 @@ update_model_status_from_files <- function(search_state, model_name) {
   return(search_state)
 }
 
+
+
 #' Update All Model Statuses
 #'
 #' Updates all models in database from NONMEM output files
@@ -161,3 +171,4 @@ update_all_model_statuses <- function(search_state) {
   cat(sprintf("✅ Updated %d models\n", length(models_to_update)))
   return(search_state)
 }
+

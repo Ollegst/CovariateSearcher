@@ -1,7 +1,11 @@
-#' @title Utility Functions
-#' @description Utility functions and helpers
-#' @name utility-functions
-NULL
+# =============================================================================
+# UTILITIES
+# File: R/utilities.R
+# Part of CovariateSearcher Package
+# Utility functions and helpers
+# =============================================================================
+
+
 
 #' Read Model Information from YAML
 #'
@@ -77,6 +81,8 @@ read_model_yaml <- function(model_name, models_folder = "models") {
   })
 }
 
+
+
 #' Analyze Model Covariates from YAML
 #'
 #' @param model_name Character. Model name
@@ -109,6 +115,8 @@ analyze_model_covariates_yaml <- function(model_name, models_folder = "models", 
   return(model_tags)
 }
 
+
+
 #' Get Model Parent from YAML
 #'
 #' @param model_name Character. Model name
@@ -125,6 +133,8 @@ get_model_parent_yaml <- function(model_name, models_folder = "models") {
 
   return(yaml_info$based_on[1])
 }
+
+
 
 #' Analyze Model Using Logical Rules
 #'
@@ -143,80 +153,3 @@ analyze_model_from_logic <- function(model_name) {
   return("UNKNOWN")
 }
 
-#' Update Database with YAML Analysis
-#'
-#' @param search_state List. Current search state
-#' @return Updated search state with analyzed covariates
-#' @export
-analyze_existing_models_yaml <- function(search_state) {
-
-  cat("[CHECK] Analyzing existing models using YAML files...\n")
-
-  existing_models <- search_state$search_database[
-    search_state$search_database$phase == "discovered", ]
-
-  if (nrow(existing_models) == 0) {
-    cat("  No existing models to analyze\n")
-    return(search_state)
-  }
-
-  for (i in 1:nrow(existing_models)) {
-    model_name <- existing_models$model_name[i]
-    cat(sprintf("  [LIST] Analyzing %s... ", model_name))
-
-    yaml_info <- read_model_yaml(model_name, search_state$models_folder)
-    covariates <- analyze_model_covariates_yaml(model_name, search_state$models_folder, search_state$tags)
-    yaml_parent <- get_model_parent_yaml(model_name, search_state$models_folder)
-
-    db_idx <- which(search_state$search_database$model_name == model_name)
-
-    if (length(db_idx) > 0) {
-
-      if ("BASE_MODEL" %in% covariates) {
-        search_state$search_database$covariate_tested[db_idx] <- "Base Model"
-        search_state$search_database$step_description[db_idx] <- "Base Model"
-        search_state$search_database$phase[db_idx] <- "base"
-        search_state$search_database$parent_model[db_idx] <- NA_character_
-        cat("Base Model\n")
-
-      } else if ("RETRY_MODEL" %in% covariates) {
-        search_state$search_database$covariate_tested[db_idx] <- "Retry Model"
-        search_state$search_database$step_description[db_idx] <- "Retry Model"
-        search_state$search_database$phase[db_idx] <- "retry"
-        search_state$search_database$retry_attempt[db_idx] <- 1L
-
-        # Fixed retry parent logic
-        if (!is.na(yaml_parent)) {
-          original_parent <- get_model_parent_yaml(yaml_parent, search_state$models_folder)
-          if (!is.na(original_parent)) {
-            search_state$search_database$parent_model[db_idx] <- original_parent
-          } else {
-            search_state$search_database$parent_model[db_idx] <- "run1"
-          }
-        } else {
-          search_state$search_database$parent_model[db_idx] <- "run1"
-        }
-        cat("Retry Model\n")
-
-      } else if (length(covariates) > 0 && !"UNKNOWN" %in% covariates) {
-        cov_string <- paste(covariates, collapse = ", ")
-        search_state$search_database$covariate_tested[db_idx] <- cov_string
-        search_state$search_database$step_description[db_idx] <- sprintf("Has: %s", cov_string)
-        search_state$search_database$phase[db_idx] <- "existing_with_covariates"
-
-        if (!is.na(yaml_parent)) {
-          search_state$search_database$parent_model[db_idx] <- yaml_parent
-        }
-
-        cat(sprintf("Found: %s\n", cov_string))
-      } else {
-        search_state$search_database$covariate_tested[db_idx] <- "Unknown"
-        search_state$search_database$step_description[db_idx] <- "Unknown"
-        cat("Unknown\n")
-      }
-    }
-  }
-
-  cat("[OK] YAML analysis complete\n")
-  return(search_state)
-}

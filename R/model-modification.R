@@ -1,71 +1,150 @@
-#' Extract Model Results
+# =============================================================================
+# MODEL MODIFICATION
+# File: R/model-modification.R
+# Part of CovariateSearcher Package
+# Model modification operations (add/remove covariates)
+# =============================================================================
+
+
+
+#' Add Covariate to Model
 #'
-#' @title Extract comprehensive model results from output files
-#' @description Extracts OFV, parameters, and other results from NONMEM output
-#' @param search_state List containing search state
-#' @param model_name Character. Model name
-#' @return List with extracted results
+#' @title Creates a new model by adding a single covariate to an existing base model
+#' @description This is the core function for stepwise covariate modeling.
+#'   Enhanced version with detailed logging and error handling.
+#' @param search_state List. Current search state from initialize_covariate_search()
+#' @param base_model_id Character. Base model identifier (e.g., "run1")
+#' @param covariate_tag Character. Covariate tag to add (e.g., "cov_cl_wt")
+#' @return Updated search state with new model added to database
 #' @export
-extract_model_results <- function(search_state, model_name) {
+add_covariate_to_model <- function(search_state, base_model_id, covariate_tag) {
+  cat(sprintf("[+] Adding covariate %s to model %s\n", covariate_tag, base_model_id))
 
-  status <- get_model_status(search_state, model_name)
-  ofv <- get_model_ofv(search_state, model_name)
+  # Get covariate information
+  if (!covariate_tag %in% names(search_state$tags)) {
+    stop("Covariate tag not found: ", covariate_tag)
+  }
 
-  # Basic result structure
-  results <- list(
-    model_name = model_name,
-    status = status,
-    ofv = ofv,
-    parameters = NULL,
-    rse_values = NULL,
-    extraction_time = Sys.time()
-  )
+  covariate_name <- search_state$tags[[covariate_tag]]
+  cat(sprintf("  Covariate: %s\n", covariate_name))
 
-  # TODO: Add parameter and RSE extraction when .ext parsing is implemented
-  # For now, return basic results
+  # Calculate new model name (don't increment counter yet)
+  new_model_name <- sprintf("run%d", search_state$model_counter + 1)
+  cat(sprintf("  New model: %s\n", new_model_name))
 
-  return(results)
-}
+  # Find covariate definition in search database
+  matching_cov <- search_state$covariate_search[
+    grepl(paste0("_", covariate_name, "$"), search_state$covariate_search$cov_to_test), ]
 
-#' Read Model File
-#'
-#' @title Read NONMEM control file with proper path handling
-#' @description Reads model control file (.ctl or .mod) and stores file path as attribute
-#' @param search_state List containing search state
-#' @param run_name Character. Model name
-#' @param extensions Character vector. File extensions to try (default: c(".ctl", ".mod"))
-#' @return Character vector of model file lines with file_path attribute
-#' @export
-read_model_file <- function(search_state, run_name, extensions = c(".ctl", ".mod")) {
-  base_path <- file.path(search_state$models_folder, run_name)
-  for (ext in extensions) {
-    file_path <- paste0(base_path, ext)
-    if (file.exists(file_path)) {
-      lines <- readLines(file_path, warn = FALSE)
-      attr(lines, "file_path") <- file_path
-      return(lines)
+  if (nrow(matching_cov) == 0) {
+    warning("No matching covariate definition found for: ", covariate_name)
+    cov_definition <- "Unknown"
+  } else {
+    cov_definition <- matching_cov$cov_to_test[1]
+  }
+
+  tryCatch({
+    # Step 1: Create BBR model (creates physical file)
+    cat("  Creating BBR model...\n")
+    parent_path <- file.path(search_state$models_folder, base_model_id)
+
+    new_mod <- bbr::copy_model_from(
+      .parent_mod = bbr::read_model(parent_path),
+      .new_model = new_model_name,
+      .inherit_tags = TRUE,
+      .overwrite = TRUE
+    ) %>%
+      bbr::add_tags(.tags = search_state$tags[[covariate_tag]]) %>%
+      bbr::add_notes(.notes = paste0("+ ", search_state$tags[[covariate_tag]]))
+
+    cat("  [OK] BBR model created\n")
+
+    # Step 2: INCREMENT COUNTER NOW (physical file exists)
+    search_state$model_counter <<- search_state$model_counter + 1
+    cat(sprintf("  [OK] Model counter updated to: %d\n", search_state$model_counter))
+
+    # Step 3: Try to add covariate (may fail, but file already exists)
+    cat("  Adding covariate to model file...\n")
+
+    # Get covariate information for model modification
+    cov_info <- matching_cov[1, ]
+    cov_name <- cov_info$COVARIATE  # e.g., "WT"
+    param_name <- cov_info$PARAMETER # e.g., "CL"
+    cov_on_param <- paste0(cov_name, "_", param_name)  # e.g., "WT_CL"
+
+    model_add_cov(
+      search_state = search_state,
+      ref_model = new_model_name,
+      cov_on_param = cov_on_param,
+      id_var = search_state$idcol,
+      data_file = search_state$data_file,
+      covariate_search = search_state$covariate_search
+    )
+
+    cat("  [OK] Covariate added to model file\n")
+
+    # Step 4: Add to database (may fail, but file exists and counter updated)
+    cat("  Adding to database...\n")
+
+    new_row <- data.frame(
+      model_name = new_model_name,
+      step_description = sprintf("Add %s", covariate_name),
+      phase = "forward_selection",
+      step_number = 1L,
+      parent_model = base_model_id,
+      covariate_tested = covariate_name,
+      action = "add_single_covariate",
+      ofv = NA_real_,
+      delta_ofv = NA_real_,
+      rse_max = NA_real_,
+      status = "created",
+      tags = I(list(c(covariate_name))),
+      submission_time = as.POSIXct(NA),
+      completion_time = as.POSIXct(NA),
+      retry_attempt = 0L,
+      original_model = NA_character_,
+      estimation_issue = NA_character_,
+      excluded_from_step = FALSE,
+      stringsAsFactors = FALSE
+    )
+
+    search_state$search_database <<- rbind(search_state$search_database, new_row)
+
+    cat(sprintf("[OK] Model %s added to database\n", new_model_name))
+
+    return(list(status = "success", model_name = new_model_name, covariate_added = covariate_name))
+
+  }, error = function(e) {
+    cat(sprintf("[X] Model creation failed: %s\n", e$message))
+
+    # Check if physical model file was created
+    model_file_path <- file.path(search_state$models_folder, paste0(new_model_name, ".ctl"))
+    file_exists <- file.exists(model_file_path)
+
+    if (file_exists) {
+      # File was created but later steps failed
+      cat(sprintf("  [INFO] Physical model file exists: %s\n", basename(model_file_path)))
+
+      # Make sure counter was incremented (it should have been)
+      if (search_state$model_counter < as.numeric(gsub("run", "", new_model_name))) {
+        search_state$model_counter <<- as.numeric(gsub("run", "", new_model_name))
+        cat(sprintf("  [FIX] Updated counter to match existing file: %d\n", search_state$model_counter))
+      }
+    } else {
+      # File creation failed completely
+      cat(sprintf("  [INFO] No physical model file created\n"))
     }
-  }
-  stop("No file found for ", run_name, " with extensions: ", paste(extensions, collapse = ", "))
+
+    return(list(
+      status = "error",
+      error_message = e$message,
+      attempted_model = new_model_name,
+      file_exists = file_exists
+    ))
+  })
 }
 
-#' Write Model File
-#'
-#' @title Write modified NONMEM control file back to disk
-#' @description Writes model file lines back to original location using stored file_path attribute
-#' @param search_state List containing search state (unused but kept for consistency)
-#' @param lines Character vector. Model file lines with file_path attribute
-#' @return Updated search_state (unchanged)
-#' @export
-write_model_file <- function(search_state, lines) {
-  file_path <- attr(lines, "file_path")
-  if (is.null(file_path)) {
-    stop("No file path found. Make sure the lines were read using read_model_file()")
-  }
-  writeLines(lines, file_path)
-  cat("File saved to:", basename(file_path), "\n")
-  return(search_state)
-}
+
 
 #' Add Covariate to Model File
 #'
@@ -250,6 +329,8 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
 }
 
 
+
+
 #' Fix THETA Renumbering
 #'
 #' @title Renumber THETA parameters after removing some
@@ -346,6 +427,8 @@ fix_theta_renumbering <- function(modelcode, theta_numbers_to_remove, log_functi
   log_function("✓ THETA renumbering completed")
   return(modelcode)
 }
+
+
 
 
 #' Remove Covariate from Model (Clean Interface)
@@ -623,6 +706,8 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
   invisible(NULL)
 }
 
+
+
 #' Add Covariate to Model with Detailed Logging
 #'
 #' @title Wrapper for add_covariate_to_model with comprehensive logging
@@ -752,3 +837,4 @@ add_covariate_with_detailed_logging <- function(search_state, base_model_id, cov
     ))
   }
 }
+

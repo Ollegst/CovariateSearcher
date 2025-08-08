@@ -1,7 +1,85 @@
-#' @title File I/O Functions
-#' @description NONMEM file reading and parsing utilities
-#' @name file-io-functions
-NULL
+# =============================================================================
+# FILE IO
+# File: R/file-io.R
+# Part of CovariateSearcher Package
+# NONMEM file I/O operations
+# =============================================================================
+
+
+#' Extract Model Results
+#'
+#' @title Extract comprehensive model results from output files
+#' @description Extracts OFV, parameters, and other results from NONMEM output
+#' @param search_state List containing search state
+#' @param model_name Character. Model name
+#' @return List with extracted results
+#' @export
+extract_model_results <- function(search_state, model_name) {
+
+  status <- get_model_status(search_state, model_name)
+  ofv <- get_model_ofv(search_state, model_name)
+
+  # Basic result structure
+  results <- list(
+    model_name = model_name,
+    status = status,
+    ofv = ofv,
+    parameters = NULL,
+    rse_values = NULL,
+    extraction_time = Sys.time()
+  )
+
+  # TODO: Add parameter and RSE extraction when .ext parsing is implemented
+  # For now, return basic results
+
+  return(results)
+}
+
+
+
+#' Read Model File
+#'
+#' @title Read NONMEM control file with proper path handling
+#' @description Reads model control file (.ctl or .mod) and stores file path as attribute
+#' @param search_state List containing search state
+#' @param run_name Character. Model name
+#' @param extensions Character vector. File extensions to try (default: c(".ctl", ".mod"))
+#' @return Character vector of model file lines with file_path attribute
+#' @export
+read_model_file <- function(search_state, run_name, extensions = c(".ctl", ".mod")) {
+  base_path <- file.path(search_state$models_folder, run_name)
+  for (ext in extensions) {
+    file_path <- paste0(base_path, ext)
+    if (file.exists(file_path)) {
+      lines <- readLines(file_path, warn = FALSE)
+      attr(lines, "file_path") <- file_path
+      return(lines)
+    }
+  }
+  stop("No file found for ", run_name, " with extensions: ", paste(extensions, collapse = ", "))
+}
+
+
+
+#' Write Model File
+#'
+#' @title Write modified NONMEM control file back to disk
+#' @description Writes model file lines back to original location using stored file_path attribute
+#' @param search_state List containing search state (unused but kept for consistency)
+#' @param lines Character vector. Model file lines with file_path attribute
+#' @return Updated search_state (unchanged)
+#' @export
+write_model_file <- function(search_state, lines) {
+  file_path <- attr(lines, "file_path")
+  if (is.null(file_path)) {
+    stop("No file path found. Make sure the lines were read using read_model_file()")
+  }
+  writeLines(lines, file_path)
+  cat("File saved to:", basename(file_path), "\n")
+  return(search_state)
+}
+
+
 
 #' Read NONMEM EXT File
 #'
@@ -79,6 +157,8 @@ read_nonmem_ext <- function(model_path) {
     ))
   })
 }
+
+
 
 #' Read NONMEM LST File Status
 #'
@@ -171,6 +251,8 @@ read_nonmem_lst <- function(model_path) {
   })
 }
 
+
+
 #' Get Model Status from Files
 #'
 #' Determines overall model status from NONMEM output files
@@ -202,3 +284,71 @@ get_model_status_from_files <- function(model_path) {
     return("unknown")
   }
 }
+
+
+
+#' Get Model OFV from Files
+#'
+#' @title Extract OFV from model output files
+#' @description Extracts OFV value from NONMEM output files
+#' @param search_state List containing search state
+#' @param model_name Character. Model name
+#' @return Numeric. OFV value or NA
+#' @export
+get_model_ofv_from_files <- function(search_state, model_name) {
+
+  model_path <- file.path(search_state$models_folder, model_name)
+  status <- get_model_status_from_files(model_path)
+  if (status != "completed") {
+    return(NA)
+  }
+
+  tryCatch({
+    # Try .lst file parsing first
+    lst_file <- file.path(search_state$models_folder, model_name, paste0(model_name, ".lst"))
+    if (file.exists(lst_file)) {
+      lst_content <- readLines(lst_file, warn = FALSE)
+
+      ofv_lines <- grep("OBJECTIVE FUNCTION VALUE", lst_content, value = TRUE)
+      if (length(ofv_lines) > 0) {
+        final_ofv_line <- utils::tail(ofv_lines, 1)
+        ofv_match <- regmatches(final_ofv_line,
+                                regexpr("[-+]?[0-9]*\\.?[0-9]+([eE][-+]?[0-9]+)?", final_ofv_line))
+        if (length(ofv_match) > 0) {
+          return(as.numeric(ofv_match[1]))
+        }
+      }
+    }
+
+    return(NA)
+  }, error = function(e) {
+    return(NA)
+  })
+}
+
+
+
+#' Get Model Covariates from Files
+#'
+#' @title Extract covariates from model using BBR tags
+#' @description Gets covariate information from BBR model tags
+#' @param search_state List containing search state
+#' @param model_name Character. Model name
+#' @return Character vector. Covariate names
+#' @export
+get_model_covariates_from_files <- function(search_state, model_name) {
+
+  tryCatch({
+    model_path <- file.path(search_state$models_folder, model_name)
+    mod <- bbr::read_model(model_path)
+    mod_tags <- mod$tags
+    cov_tags <- names(search_state$tags)[grepl("^cov_", names(search_state$tags))]
+    cov_tag_values <- unlist(search_state$tags[cov_tags])
+    present_cov_values <- intersect(cov_tag_values, mod_tags)
+    present_cov_names <- names(search_state$tags)[search_state$tags %in% present_cov_values]
+    return(present_cov_names)
+  }, error = function(e) {
+    return(character(0))
+  })
+}
+

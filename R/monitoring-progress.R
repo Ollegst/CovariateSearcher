@@ -1,8 +1,11 @@
 # =============================================================================
-# SCM MONITORING AND PROGRESS TRACKING
-# File: R/08-monitoring.R
+# MONITORING PROGRESS
+# File: R/monitoring-progress.R
 # Part of CovariateSearcher Package
+# Progress monitoring and reporting
 # =============================================================================
+
+
 
 #' Get SCM Progress Summary
 #'
@@ -76,6 +79,8 @@ get_scm_progress_summary <- function(search_state) {
   ))
 }
 
+
+
 #' Print SCM Progress Report
 #'
 #' @title Print formatted progress report to console
@@ -140,6 +145,8 @@ print_scm_progress_report <- function(search_state, show_details = TRUE) {
   invisible(NULL)
 }
 
+
+
 #' Monitor SCM Progress in Real-Time
 #'
 #' @title Monitor SCM progress with periodic updates
@@ -202,6 +209,8 @@ monitor_scm_progress <- function(search_state, update_interval_seconds = 60,
   return(search_state)
 }
 
+
+
 #' Get Model Status Dashboard
 #'
 #' @title Create a comprehensive model status dashboard
@@ -256,6 +265,8 @@ get_model_status_dashboard <- function(search_state, filter_status = NULL, sort_
 
   return(dashboard)
 }
+
+
 
 #' Print Model Status Dashboard
 #'
@@ -314,3 +325,4 @@ print_model_status_dashboard <- function(search_state, filter_status = NULL, max
 
   invisible(NULL)
 }
+

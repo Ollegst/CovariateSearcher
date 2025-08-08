@@ -1,6 +1,11 @@
-#' Data Functions
-#' @name data-functions
-NULL
+# =============================================================================
+# DATA OPERATIONS
+# File: R/data-operations.R
+# Part of CovariateSearcher Package
+# Data loading and validation operations
+# =============================================================================
+
+
 
 #' Load Search Data
 #' @param data_file_path Character path to data file
@@ -15,12 +20,16 @@ load_search_data <- function(data_file_path, covariate_search_path) {
   return(list(data_file = data_file, covariate_search = covariate_search, tags = tags))
 }
 
+
+
 #' Load Search Configuration
 #' @return List with configuration
 #' @export
 load_search_config <- function() {
   list(forward_ofv_threshold = 3.84, max_rse_threshold = 50, threads = 4)
 }
+
+
 
 #' Validate Search Inputs
 #' @param base_model_path Character base model path
@@ -33,3 +42,4 @@ validate_search_inputs <- function(base_model_path, data_file_path, covariate_se
   if (!file.exists(covariate_search_path)) stop("Covariate search file not found: ", covariate_search_path)
   return(TRUE)
 }
+

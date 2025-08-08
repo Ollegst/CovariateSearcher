@@ -1,12 +1,27 @@
 # =============================================================================
-# PACKAGE IMPORTS - GLOBAL IMPORT STATEMENTS
-# File: R/00-imports.R
-# Part of CovariateSearcher Package
+# COVARIATESEARCHER PACKAGE
+# Package-level documentation and imports
 # =============================================================================
 
-#' Package Imports
+#' CovariateSearcher: Automated Stepwise Covariate Modeling for NONMEM
 #'
-#' @description Global imports for CovariateSearcher package
+#' @description
+#' Functional R package for stepwise covariate modeling with NONMEM integration
+#' via the bbr package. Provides automated covariate selection, model execution,
+#' progress monitoring, and intelligent error recovery.
+#'
+#' @section Main Functions:
+#' \itemize{
+#'   \item \code{\link{initialize_covariate_search}}: Initialize search state
+#'   \item \code{\link{run_stepwise_covariate_modeling}}: Run complete SCM
+#'   \item \code{\link{add_covariate_to_model}}: Add single covariate
+#'   \item \code{\link{remove_covariate_from_model}}: Remove single covariate
+#' }
+#'
+#' @docType package
+#' @name CovariateSearcher-package
+#' @aliases CovariateSearcher
+#'
 #' @importFrom dplyr %>% mutate arrange filter select group_by summarise bind_rows case_when count n desc
 #' @importFrom tibble tibble
 #' @importFrom bbr read_model copy_model_from submit_model add_tags
@@ -16,19 +31,8 @@
 #' @importFrom stringr str_detect str_extract
 #' @importFrom stats median
 #' @importFrom utils head tail
-#' @name imports
 NULL
 
-# Define %||% operator for NULL coalescing
-#' NULL-coalescing operator
-#'
-#' @name null-coalesce
-#' @rdname null-coalesce
-#' @param x Left-hand side
-#' @param y Right-hand side
-#' @return x if not NULL, otherwise y
-#' @export
-`%||%` <- function(x, y) if (is.null(x)) y else x
 
 # Suppress R CMD check warnings for dplyr column names
 utils::globalVariables(c(
