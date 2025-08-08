@@ -97,6 +97,9 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
       cat(" ⚠️  No parent model info - using original values\n")
     }
 
+    # Step 4: Create info log file with standard naming format
+    cat("  Creating model info log...")
+
     if (exists("latest_covariate_name")) {
       # Get covariate info for the log
       matching_cov_for_log <- search_state$covariate_search[
@@ -106,7 +109,7 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
         create_model_info_log(
           search_state = search_state,
           model_name = retry_model_name,
-          parent_model = original_model_name,  # Original failed model as "parent"
+          parent_model = parent_model,  # Use original parent (run1), not failed model (run2)
           covariate_name = latest_covariate_name,
           cov_info = matching_cov_for_log[1, ]
         )
