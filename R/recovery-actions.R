@@ -64,16 +64,30 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
       added_covs <- setdiff(original_covs, parent_covs)
 
       if (length(added_covs) > 0) {
-        latest_covariate <- added_covs[1]
-        cat(sprintf(" (covariate: %s)", latest_covariate))
+        latest_covariate_name <- added_covs[1]  # e.g., "WT_CL"
 
-        # Call the THETA adjustment function
-        adjustment_result <- adjust_theta_for_covariate(search_state, retry_model_name, latest_covariate)
+        # Convert covariate name back to tag
+        latest_covariate_tag <- NULL
+        for (tag_name in names(search_state$tags)) {
+          if (search_state$tags[[tag_name]] == latest_covariate_name) {
+            latest_covariate_tag <- tag_name
+            break
+          }
+        }
 
-        if (adjustment_result$success) {
-          cat(" ✓\n")
+        if (!is.null(latest_covariate_tag)) {
+          cat(sprintf(" (covariate: %s)", latest_covariate_name))
+
+          # Call the THETA adjustment function
+          adjustment_result <- adjust_theta_for_covariate(search_state, retry_model_name, latest_covariate_tag)
+
+          if (adjustment_result$success) {
+            cat(" ✓\n")
+          } else {
+            cat(" ⚠️  THETA adjustment failed - using original values\n")
+          }
         } else {
-          cat(" ⚠️  THETA adjustment failed - using original values\n")
+          cat(" ⚠️  Could not find covariate tag - using original values\n")
         }
 
       } else {
@@ -142,7 +156,6 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
     ))
   })
 }
-
 
 
 #' Adjust THETA Values for Covariate
