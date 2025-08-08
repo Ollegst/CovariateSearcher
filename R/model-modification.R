@@ -110,6 +110,9 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag) {
 
     cat(sprintf("[OK] Model %s added to database\n", new_model_name))
 
+    # Step 4: Create model info log file
+    create_model_info_log(search_state, new_model_name, base_model_id, covariate_name, cov_info)
+
     return(list(
       status = "success",
       model_name = new_model_name,
@@ -145,7 +148,64 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag) {
 
 
 
-#' Add Covariate to Model File
+#' Create Model Info Log File
+#'
+#' @title Create detailed log file for model creation
+#' @description Creates a timestamped log file with model creation details
+#' @param search_state List containing search state
+#' @param model_name Character. New model name
+#' @param parent_model Character. Parent model name
+#' @param covariate_name Character. Covariate added
+#' @param cov_info Data.frame. Covariate information from search definition
+#' @return NULL (side effect: creates log file)
+#' @export
+create_model_info_log <- function(search_state, model_name, parent_model, covariate_name, cov_info) {
+
+  timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
+  log_file <- file.path(search_state$models_folder, paste0(model_name, "_info.txt"))
+
+  # Determine relationship type
+  relationship_type <- dplyr::case_when(
+    cov_info$STATUS == "con" & cov_info$FORMULA == "power" ~ "power relationship",
+    cov_info$STATUS == "con" & cov_info$FORMULA == "linear" ~ "linear relationship",
+    cov_info$STATUS == "cat" & cov_info$FORMULA == "linear" ~ "categorical relationship",
+    TRUE ~ paste(cov_info$STATUS, cov_info$FORMULA, "relationship")
+  )
+
+  # Generate formula for display
+  if (cov_info$STATUS == "con" & cov_info$FORMULA == "power") {
+    formula_display <- sprintf("* (%s/%s)**THETA(3)", cov_info$COVARIATE, cov_info$REFERENCE)
+  } else if (cov_info$STATUS == "con" & cov_info$FORMULA == "linear") {
+    formula_display <- sprintf("* (1 + (%s-%s) * THETA(3))", cov_info$COVARIATE, cov_info$REFERENCE)
+  } else if (cov_info$STATUS == "cat") {
+    formula_display <- sprintf("* beta_%s_%s", cov_info$COVARIATE, cov_info$PARAMETER)
+  } else {
+    formula_display <- "See model file for details"
+  }
+
+  # Create log content
+  log_content <- c(
+    sprintf("[%s] Model %s created from %s", timestamp, model_name, parent_model),
+    sprintf("[%s] Added covariate: %s (%s)", timestamp, covariate_name, relationship_type),
+    sprintf("[%s] Parameter: %s, Covariate: %s", timestamp, cov_info$PARAMETER, cov_info$COVARIATE),
+    sprintf("[%s] Reference value: %s", timestamp, cov_info$REFERENCE),
+    sprintf("[%s] Formula: %s", timestamp, formula_display),
+    sprintf("[%s] THETA added with initial value: 0.1", timestamp),
+    sprintf("[%s] Status: created", timestamp),
+    "",
+    "Model Details:",
+    sprintf("- Model file: %s.ctl", model_name),
+    sprintf("- BBR YAML: %s.yaml", model_name),
+    sprintf("- Parent model: %s", parent_model),
+    sprintf("- Creation time: %s", timestamp),
+    sprintf("- Covariate type: %s (%s)", cov_info$STATUS, cov_info$FORMULA),
+    sprintf("- Time dependent: %s", cov_info$TIME_DEPENDENT)
+  )
+
+  # Write log file
+  writeLines(log_content, log_file)
+  cat(sprintf("  📝 Model info log created: %s\n", basename(log_file)))
+}
 #'
 #' @title Core functionality to add covariate to NONMEM model file with enhanced logging
 #' @description Modifies NONMEM control file to add covariate relationship with detailed logging
@@ -704,6 +764,138 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
     covariate_removed = covariate_value,
     search_state = search_state
   ))
+}
+
+
+
+#' Remove Covariate from Model with Detailed Logging
+#'
+#' @title Wrapper for remove_covariate_from_model with comprehensive logging
+#' @description Calls remove_covariate_from_model with detailed timestamped logging
+#'   and saves complete log files for debugging and audit purposes.
+#' @param search_state List containing search state
+#' @param model_name Character. Model name to modify
+#' @param covariate_tag Character. Covariate tag to remove (e.g., "cov_cl_race")
+#' @param save_as_new_model Logical. Whether to create new model (default: TRUE)
+#' @return List with result and log information (search_state updated in result)
+#' @export
+remove_covariate_with_detailed_logging <- function(search_state, model_name, covariate_tag, save_as_new_model = TRUE) {
+
+  # Initialize logging
+  log_entries <- character(0)
+  start_time <- Sys.time()
+
+  # Logging helper function
+  log_msg <- function(message) {
+    timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
+    entry <- paste0(timestamp, " - ", message)
+    log_entries <<- c(log_entries, entry)
+    cat(entry, "\n")
+  }
+
+  # Start logging
+  log_msg("=== Starting Covariate Removal Process ===")
+  log_msg(paste("Parent model:", model_name))
+  log_msg(paste("Covariate tag to remove:", covariate_tag))
+
+  # Get and validate tag value
+  if (covariate_tag %in% names(search_state$tags)) {
+    tag_value <- search_state$tags[[covariate_tag]]
+    log_msg(paste("Tag value found:", tag_value))
+  } else {
+    log_msg(paste("ERROR: Covariate tag not found:", covariate_tag))
+    error_log_filename <- file.path(search_state$models_folder, paste0("ERROR_REMOVE_", covariate_tag, "_", format(Sys.time(), "%Y%m%d_%H%M%S"), "_log.txt"))
+    writeLines(log_entries, error_log_filename)
+    return(list(
+      status = "error",
+      error_message = "Covariate tag not found",
+      log_file = error_log_filename,
+      log_entries = log_entries,
+      search_state = search_state
+    ))
+  }
+
+  # Find matching covariate in search definition
+  matching_cov <- search_state$covariate_search[
+    grepl(paste0("_", tag_value, "$"), search_state$covariate_search$cov_to_test), ]
+
+  if (nrow(matching_cov) > 0) {
+    log_msg(paste("Matching covariate found:", matching_cov$COVARIATE[1]))
+    combined_param <- paste0(matching_cov$COVARIATE[1], "_", matching_cov$PARAMETER[1])
+    log_msg(paste("Combined parameter name:", combined_param))
+  } else {
+    log_msg(paste("ERROR: No matching covariate definition found for:", tag_value))
+    error_log_filename <- file.path(search_state$models_folder, paste0("ERROR_REMOVE_", covariate_tag, "_", format(Sys.time(), "%Y%m%d_%H%M%S"), "_log.txt"))
+    writeLines(log_entries, error_log_filename)
+    return(list(
+      status = "error",
+      error_message = "No matching covariate definition found",
+      log_file = error_log_filename,
+      log_entries = log_entries,
+      search_state = search_state
+    ))
+  }
+
+  # Predict new model name if creating new model
+  if (save_as_new_model) {
+    new_model_number <- search_state$model_counter + 1
+    predicted_model <- paste0("run", new_model_number)
+    log_msg(paste("Predicted model name:", predicted_model))
+  } else {
+    log_msg("Modifying existing model in place")
+  }
+
+  # Call the actual removal function with comprehensive error capture
+  log_msg("Step 1: Removing covariate from model...")
+
+  # Call the remove_covariate_from_model function (returns updated search_state)
+  result <- remove_covariate_from_model(search_state, model_name, covariate_tag, save_as_new_model)
+
+  # Calculate processing time
+  process_time <- round(as.numeric(difftime(Sys.time(), start_time, units = "secs")), 2)
+
+  if (result$status == "success") {
+    log_msg("Covariate removal completed successfully")
+    log_msg("Step 2: Model file modifications completed")
+    log_msg(paste("=== Process completed successfully in", process_time, "seconds ==="))
+    log_msg(paste("Final model:", result$model_name))
+
+    # Save success log file
+    log_filename <- file.path(search_state$models_folder, paste0(result$model_name, "_remove_", tag_value, "_log.txt"))
+    log_msg(paste("Saving log to:", basename(log_filename)))
+
+    writeLines(log_entries, log_filename)
+
+    return(list(
+      status = "success",
+      model_name = result$model_name,
+      covariate_removed = tag_value,
+      log_file = log_filename,
+      log_entries = log_entries,
+      processing_time_seconds = process_time,
+      search_state = result$search_state
+    ))
+
+  } else {
+    # Handle error case
+    log_msg(paste("ERROR occurred:", result$error_message))
+    log_msg(paste("=== Process failed after", process_time, "seconds ==="))
+
+    # Save error log with detailed error information
+    error_log_filename <- file.path(search_state$models_folder, paste0("ERROR_REMOVE_", covariate_tag, "_", format(Sys.time(), "%Y%m%d_%H%M%S"), "_log.txt"))
+    log_msg(paste("Saving error log to:", basename(error_log_filename)))
+
+    writeLines(log_entries, error_log_filename)
+
+    return(list(
+      status = "error",
+      error_message = result$error_message,
+      log_file = error_log_filename,
+      log_entries = log_entries,
+      processing_time_seconds = process_time,
+      search_state = result$search_state
+    ))
+  }
 }
 
 
