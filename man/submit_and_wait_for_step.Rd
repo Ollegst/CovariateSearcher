@@ -8,7 +8,7 @@ submit_and_wait_for_step(
   search_state,
   model_names,
   step_name,
-  max_wait_minutes = 60,
+  max_wait_minutes = 10000,
   threads = NULL,
   auto_submit = TRUE
 )
