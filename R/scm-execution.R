@@ -122,7 +122,7 @@ run_univariate_step <- function(search_state, base_model_id, covariates_to_test,
 #' @return List with completion results and updated search_state
 #' @export
 submit_and_wait_for_step <- function(search_state, model_names, step_name,
-                                     max_wait_minutes = 60, threads = NULL,
+                                     max_wait_minutes = 10000, threads = NULL,
                                      auto_submit = TRUE) {
   if (length(model_names) == 0) {
     return(list(
@@ -168,7 +168,7 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
 
       # Read and submit model using bbr
       mod <- bbr::read_model(model_path)
-      bbr::submit_model(mod, .mode = "local", .threads = threads)
+      bbr::submit_model(mod,  .bbi_args = list(threads = 60), .overwrite = TRUE)
 
       # Update database status
       db_idx <- which(search_state$search_database$model_name == model_name)
