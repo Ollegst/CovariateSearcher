@@ -32,9 +32,16 @@ run_univariate_step <- function(search_state, base_model_id, covariates_to_test,
 
   cat(sprintf("\n🔬 %s\n", step_name))
   cat(sprintf("Base model: %s\n", base_model_id))
+
+  # FIX: Pre-compute the covariate names to avoid scoping issues
+  covariate_names <- character(length(covariates_to_test))
+  for (i in seq_along(covariates_to_test)) {
+    covariate_names[i] <- search_state$tags[[covariates_to_test[i]]]
+  }
+
   cat(sprintf("Testing %d covariates: %s\n",
               length(covariates_to_test),
-              paste(sapply(covariates_to_test, function(x) search_state$tags[[x]]), collapse = ", ")))
+              paste(covariate_names, collapse = ", ")))
 
   # Create models for each covariate
   created_models <- list()
@@ -56,9 +63,6 @@ run_univariate_step <- function(search_state, base_model_id, covariates_to_test,
       if (!is.null(result$model_name)) {
         model_name <- result$model_name
         created_models[[cov_tag]] <- model_name
-
-        # Update search_state with the new model
-        search_state <- result$search_state
 
         # Add step-specific information to database
         db_idx <- which(search_state$search_database$model_name == model_name)
@@ -94,7 +98,6 @@ run_univariate_step <- function(search_state, base_model_id, covariates_to_test,
     creation_time = creation_time
   ))
 }
-
 
 
 #' Submit Models and Wait for Completion
