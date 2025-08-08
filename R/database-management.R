@@ -5,48 +5,6 @@
 # Search database operations and management
 # =============================================================================
 
-#' Initialize New Covariate Search
-#'
-#' @title Create a completely fresh covariate search state
-#' @description Creates a new search state with empty database, for starting
-#'   a new covariate search from scratch. Never discovers existing models.
-#' @param base_model_path Character. Path to base model (e.g., "run1")
-#' @param data_file_path Character. Path to NONMEM dataset CSV
-#' @param covariate_search_path Character. Path to covariate search CSV
-#' @param models_folder Character. Directory containing models (default: "models")
-#' @param timecol Character. Time column name (default: "TIME")
-#' @param idcol Character. ID column name (default: "ID")
-#' @param threads Integer. Number of threads for execution (default: 60)
-#' @return List containing fresh search state configuration
-#' @export
-initialize_new_search <- function(base_model_path,
-                                  data_file_path,
-                                  covariate_search_path,
-                                  models_folder = "models",
-                                  timecol = "TIME",
-                                  idcol = "ID",
-                                  threads = 60) {
-
-  cat("🆕 Initializing NEW Covariate Search (Fresh Start)...\n")
-
-  # Call the existing function with discover_existing = FALSE
-  search_state <- initialize_covariate_search(
-    base_model_path = base_model_path,
-    data_file_path = data_file_path,
-    covariate_search_path = covariate_search_path,
-    models_folder = models_folder,
-    timecol = timecol,
-    idcol = idcol,
-    threads = threads,
-    discover_existing = FALSE
-  )
-
-  cat("✅ NEW search initialized - Empty database, ready for fresh start\n")
-  cat(sprintf("📊 Database: %d models, Counter: %d\n",
-              nrow(search_state$search_database), search_state$model_counter))
-
-  return(search_state)
-}
 
 #' Load Existing Covariate Search
 #'
@@ -142,7 +100,44 @@ save_search_state <- function(search_state, filename = "search_state_backup.rds"
   return(invisible(TRUE))
 }
 
+#' Ensure Base Model in Database
+#' @param search_state List containing search state
+#' @return Updated search_state with base model added if missing
+ensure_base_model_in_database <- function(search_state) {
+  # Check if base model already exists in database
+  if (search_state$base_model %in% search_state$search_database$model_name) {
+    cat(sprintf("Base model '%s' already in database\n", search_state$base_model))
+    return(search_state)
+  }
 
+  # Add base model with minimal required information
+  base_row <- data.frame(
+    model_name = search_state$base_model,
+    step_description = "Base Model",
+    phase = "base",
+    step_number = 0L,
+    parent_model = NA_character_,
+    covariate_tested = "Base Model",
+    action = "base_model",
+    ofv = NA_real_,  # Will be updated when needed
+    delta_ofv = NA_real_,
+    rse_max = NA_real_,
+    status = "unknown",  # Can be updated later
+    tags = I(list(character(0))),
+    submission_time = as.POSIXct(NA),
+    completion_time = as.POSIXct(NA),
+    retry_attempt = 0L,
+    original_model = NA_character_,
+    estimation_issue = NA_character_,
+    excluded_from_step = FALSE,
+    stringsAsFactors = FALSE
+  )
+
+  search_state$search_database <- rbind(search_state$search_database, base_row)
+  cat(sprintf("✅ Base model '%s' added to database\n", search_state$base_model))
+
+  return(search_state)
+}
 
 #' Load Search State from File
 #'
@@ -347,66 +342,6 @@ update_model_counter <- function(search_state) {
 }
 
 
-
-#' Initialize Search Database
-#'
-#' @param models_folder Character. Path to models directory
-#' @return List with database and counter
-#' @export
-initialize_search_database <- function(models_folder) {
-
-  cat(sprintf("🔍 Initializing database with models folder: %s\n", models_folder))
-
-  # Create empty database with required columns
-  search_database <- tibble::tibble(
-    model_name = character(0),
-    step_description = character(0),
-    phase = character(0),
-    step_number = integer(0),
-    parent_model = character(0),
-    covariate_tested = character(0),
-    action = character(0),
-    ofv = numeric(0),
-    delta_ofv = numeric(0),
-    rse_max = numeric(0),
-    status = character(0),
-    tags = list(),
-    submission_time = as.POSIXct(character(0)),
-    completion_time = as.POSIXct(character(0)),
-    retry_attempt = integer(0),
-    original_model = character(0),
-    estimation_issue = character(0),
-    excluded_from_step = logical(0)
-  )
-
-  # Discover existing models if folder exists
-  if (dir.exists(models_folder)) {
-    cat(sprintf("✅ Models folder '%s' found\n", models_folder))
-    existing_models <- discover_existing_models_simple(models_folder)
-    if (nrow(existing_models) > 0) {
-      search_database <- existing_models
-      cat(sprintf("📊 Discovered %d existing models\n", nrow(existing_models)))
-    }
-  } else {
-    cat(sprintf("⚠️  Models folder '%s' not found\n", models_folder))
-  }
-
-  # Set counter
-  if (nrow(search_database) > 0) {
-    model_numbers <- as.numeric(gsub("run", "", search_database$model_name))
-    model_numbers <- model_numbers[!is.na(model_numbers) & model_numbers < 1000]
-    counter <- if (length(model_numbers) > 0) max(model_numbers) else 1
-  } else {
-    counter <- 1
-  }
-
-  cat(sprintf("🔢 Model counter set to: %d\n", counter))
-
-  return(list(
-    database = search_database,
-    counter = counter
-  ))
-}
 
 
 

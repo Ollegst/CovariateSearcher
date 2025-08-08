@@ -68,6 +68,7 @@ initialize_covariate_search <- function(base_model_path,
 
   # Initialize search database and configuration
   search_state <- initialize_search_database_core(search_state)
+  search_state <- ensure_base_model_in_database(search_state)  # ADD THIS LINE
   search_state <- initialize_search_config(search_state)
 
   # Discover existing models if requested
