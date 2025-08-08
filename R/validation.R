@@ -19,7 +19,7 @@
 #' @export
 validate_model_quality <- function(search_state, model_name, rse_threshold = 50, ofv_threshold = 3.84) {
 
-  model_path <- file.path(search_state$models_folder, model_name)
+  model_path <- file.path(search_state, model_name)
 
   # Extract basic results - CORRECTED ARGUMENTS
   results <- extract_model_results(search_state, model_name)
