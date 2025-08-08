@@ -5,6 +5,164 @@
 # Search database operations and management
 # =============================================================================
 
+#' Initialize New Covariate Search
+#'
+#' @title Create a completely fresh covariate search state
+#' @description Creates a new search state with empty database, for starting
+#'   a new covariate search from scratch. Never discovers existing models.
+#' @param base_model_path Character. Path to base model (e.g., "run1")
+#' @param data_file_path Character. Path to NONMEM dataset CSV
+#' @param covariate_search_path Character. Path to covariate search CSV
+#' @param models_folder Character. Directory containing models (default: "models")
+#' @param timecol Character. Time column name (default: "TIME")
+#' @param idcol Character. ID column name (default: "ID")
+#' @param threads Integer. Number of threads for execution (default: 60)
+#' @return List containing fresh search state configuration
+#' @export
+initialize_new_search <- function(base_model_path,
+                                  data_file_path,
+                                  covariate_search_path,
+                                  models_folder = "models",
+                                  timecol = "TIME",
+                                  idcol = "ID",
+                                  threads = 60) {
+
+  cat("🆕 Initializing NEW Covariate Search (Fresh Start)...\n")
+
+  # Call the existing function with discover_existing = FALSE
+  search_state <- initialize_covariate_search(
+    base_model_path = base_model_path,
+    data_file_path = data_file_path,
+    covariate_search_path = covariate_search_path,
+    models_folder = models_folder,
+    timecol = timecol,
+    idcol = idcol,
+    threads = threads,
+    discover_existing = FALSE
+  )
+
+  cat("✅ NEW search initialized - Empty database, ready for fresh start\n")
+  cat(sprintf("📊 Database: %d models, Counter: %d\n",
+              nrow(search_state$search_database), search_state$model_counter))
+
+  return(search_state)
+}
+
+#' Load Existing Covariate Search
+#'
+#' @title Load existing models and recreate search state
+#' @description Discovers existing models in the models folder and recreates
+#'   the search database. Use this to continue work on an existing project.
+#' @param base_model_path Character. Path to base model (e.g., "run1")
+#' @param data_file_path Character. Path to NONMEM dataset CSV
+#' @param covariate_search_path Character. Path to covariate search CSV
+#' @param models_folder Character. Directory containing models (default: "models")
+#' @param timecol Character. Time column name (default: "TIME")
+#' @param idcol Character. ID column name (default: "ID")
+#' @param threads Integer. Number of threads for execution (default: 60)
+#' @return List containing search state with discovered models
+#' @export
+load_existing_search <- function(base_model_path,
+                                 data_file_path,
+                                 covariate_search_path,
+                                 models_folder = "models",
+                                 timecol = "TIME",
+                                 idcol = "ID",
+                                 threads = 60) {
+
+  cat("📂 Loading EXISTING Covariate Search (Discovery Mode)...\n")
+
+  # First check if models folder exists and has models
+  if (!dir.exists(models_folder)) {
+    stop("Models folder '", models_folder, "' not found. Use initialize_new_search() instead.")
+  }
+
+  model_files <- list.files(models_folder, pattern = "^run\\d+\\.(ctl|mod|yaml)$")
+  if (length(model_files) <= 2) {  # Only base model files
+    cat("⚠️  Few/no existing models found. Consider using initialize_new_search()\n")
+  }
+
+  cat(sprintf("🔍 Found %d model files in %s\n", length(model_files), models_folder))
+
+  # Call with discovery enabled, but with error handling
+  tryCatch({
+    search_state <- initialize_covariate_search(
+      base_model_path = base_model_path,
+      data_file_path = data_file_path,
+      covariate_search_path = covariate_search_path,
+      models_folder = models_folder,
+      timecol = timecol,
+      idcol = idcol,
+      threads = threads,
+      discover_existing = TRUE
+    )
+
+    cat("✅ EXISTING search loaded successfully\n")
+    cat(sprintf("📊 Database: %d models discovered, Counter: %d\n",
+                nrow(search_state$search_database), search_state$model_counter))
+
+    # Show discovered models
+    if (nrow(search_state$search_database) > 0) {
+      cat("📋 Discovered models:\n")
+      discovered <- search_state$search_database[, c("model_name", "covariate_tested")]
+      for (i in 1:min(5, nrow(discovered))) {
+        cat(sprintf("  - %s: %s\n", discovered$model_name[i],
+                    ifelse(is.na(discovered$covariate_tested[i]), "Base", discovered$covariate_tested[i])))
+      }
+      if (nrow(discovered) > 5) {
+        cat(sprintf("  ... and %d more models\n", nrow(discovered) - 5))
+      }
+    }
+
+    return(search_state)
+
+  }, error = function(e) {
+    cat("❌ Discovery failed:", e$message, "\n")
+    cat("💡 Try using initialize_new_search() instead, or check your models folder\n")
+    stop("Model discovery failed. Use initialize_new_search() for a fresh start.")
+  })
+}
+
+
+
+#' Save Search State to File
+#'
+#' @title Save current search state for later loading
+#' @description Saves the complete search state to an RDS file for backup
+#'   or to resume work later.
+#' @param search_state List. Current search state
+#' @param filename Character. Filename to save to (default: "search_state_backup.rds")
+#' @return Invisible TRUE if successful
+#' @export
+save_search_state <- function(search_state, filename = "search_state_backup.rds") {
+  saveRDS(search_state, file = filename)
+  cat(sprintf("💾 Search state saved to %s\n", filename))
+  cat(sprintf("📊 Saved: %d models, counter: %d\n",
+              nrow(search_state$search_database), search_state$model_counter))
+  return(invisible(TRUE))
+}
+
+
+
+#' Load Search State from File
+#'
+#' @title Load previously saved search state
+#' @description Loads a complete search state from an RDS file.
+#' @param filename Character. Filename to load from
+#' @return List containing loaded search state
+#' @export
+load_search_state <- function(filename) {
+  if (!file.exists(filename)) {
+    stop("File '", filename, "' not found")
+  }
+
+  search_state <- readRDS(filename)
+  cat(sprintf("📁 Search state loaded from %s\n", filename))
+  cat(sprintf("📊 Loaded: %d models, counter: %d\n",
+              nrow(search_state$search_database), search_state$model_counter))
+
+  return(search_state)
+}
 
 
 #' Initialize Search Database
