@@ -51,26 +51,25 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
 
     cat(" ✓\n")
 
-    # Step 2.5: Update BBR YAML metadata for retry model
+    # Step 2.5: Update BBR YAML metadata FIRST (before any file modifications)
     cat("  Updating BBR YAML metadata...")
 
-    # Update based_on to point to original parent (run1), not failed model (run2)
-    retry_mod$based_on <- parent_model
+    # Get parent model info
+    parent_model <- original_row$parent_model[1]
 
-    # Update notes to indicate this is a retry with THETA adjustment
-    if (exists("latest_covariate_name")) {
-      retry_mod <- bbr::add_notes(retry_mod, paste0("+ ", latest_covariate_name, " (retry, THETA=-0.1)"))
-    } else {
-      retry_mod <- bbr::add_notes(retry_mod, "Retry model with adjusted initial estimates")
+    if (!is.na(parent_model) && nchar(parent_model) > 0) {
+      # Update based_on to point to original parent (run1), not failed model (run2)
+      retry_mod$based_on <- parent_model
     }
+
+    # Add initial retry note
+    retry_mod <- bbr::add_notes(retry_mod, "Retry model with adjusted initial estimates")
 
     cat(" ✓\n")
 
     # Step 3: Modify THETA values in the model file
     cat("  Adjusting THETA values for latest covariate...")
 
-    # Find the latest added covariate from the original model
-    parent_model <- original_row$parent_model[1]
 
     if (!is.na(parent_model) && nchar(parent_model) > 0) {
       # Get covariates in parent vs original to find what was added
