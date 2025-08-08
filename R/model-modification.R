@@ -224,7 +224,16 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
                           data_file, covariate_search, capture_log = FALSE) {
 
   # Default logging function if none provided
-  if (is.null(log_function)) {
+  captured_log <- character(0)
+
+  # Logging function that either prints or captures
+  if (capture_log) {
+    log_function <- function(msg) {
+      entry <- paste(Sys.time(), "-", msg)
+      captured_log <<- c(captured_log, entry)
+      cat(entry, "\n")
+    }
+  } else {
     log_function <- function(msg) cat(paste(Sys.time(), "-", msg, "\n"))
   }
 
@@ -386,7 +395,11 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   log_function(paste("✓ Model file written successfully"))
 
   log_function(paste("=== Covariate Addition Complete ==="))
-  return(search_state)
+  if (capture_log) {
+    return(list(search_state = search_state, log_entries = captured_log))
+  } else {
+    return(search_state)
+  }
 }
 
 
