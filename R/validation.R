@@ -11,15 +11,18 @@
 #'
 #' Comprehensive model quality assessment
 #'
-#' @param model_path Character. Path to model directory
+#' @param search_state List containing search state
+#' @param model_name Character. Model name
 #' @param rse_threshold Numeric. RSE threshold (default 50)
 #' @param ofv_threshold Numeric. OFV significance threshold (default 3.84)
 #' @return List with validation results
 #' @export
-validate_model_quality <- function(model_path, rse_threshold = 50, ofv_threshold = 3.84) {
+validate_model_quality <- function(search_state, model_name, rse_threshold = 50, ofv_threshold = 3.84) {
 
-  # Extract basic results
-  results <- extract_model_results(model_path)
+  model_path <- file.path(search_state$models_folder, model_name)
+
+  # Extract basic results - CORRECTED ARGUMENTS
+  results <- extract_model_results(search_state, model_name)
 
   validation <- list(
     model_path = model_path,
@@ -30,6 +33,7 @@ validate_model_quality <- function(model_path, rse_threshold = 50, ofv_threshold
     issues = character(0),
     recommendations = character(0)
   )
+
 
   # Check convergence
   if (results$status == "completed") {
