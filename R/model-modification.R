@@ -221,7 +221,7 @@ create_model_info_log <- function(search_state, model_name, parent_model, covari
 #' @return Updated search_state
 #' @export
 model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
-                          data_file, covariate_search, log_function = NULL) {
+                          data_file, covariate_search, capture_log = FALSE) {
 
   # Default logging function if none provided
   if (is.null(log_function)) {
