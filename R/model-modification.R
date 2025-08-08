@@ -110,9 +110,6 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag) {
 
     cat(sprintf("[OK] Model %s added to database\n", new_model_name))
 
-    # Step 4: Create model info log file
-    create_model_info_log(search_state, new_model_name, base_model_id, covariate_name, cov_info)
-
     return(list(
       status = "success",
       model_name = new_model_name,
