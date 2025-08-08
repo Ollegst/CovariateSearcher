@@ -216,7 +216,7 @@ update_model_status_from_files <- function(search_state, model_name) {
       }
     }
   }
-  return(list(search_state = search_state))
+  return(search_state)
 }
 
 
@@ -239,5 +239,5 @@ update_all_model_statuses <- function(search_state) {
   }
 
   cat(sprintf("✅ Updated %d models\n", length(models_to_update)))
-  return(list(search_state = search_state))
+  return(search_state)
 }
