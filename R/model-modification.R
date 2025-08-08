@@ -70,14 +70,18 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag) {
     param_name <- cov_info$PARAMETER # e.g., "CL"
     cov_on_param <- paste0(cov_name, "_", param_name)  # e.g., "WT_CL"
 
-    search_state <- model_add_cov(
+    model_result <- model_add_cov(
       search_state = search_state,
       ref_model = new_model_name,
       cov_on_param = cov_on_param,
       id_var = search_state$idcol,
       data_file = search_state$data_file,
-      covariate_search = search_state$covariate_search
+      covariate_search = search_state$covariate_search,
+      capture_log = TRUE
     )
+
+    search_state <- model_result$search_state
+    technical_log <- model_result$log_entries
 
     cat("  [OK] Covariate added to model file\n")
 
@@ -114,7 +118,8 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag) {
       status = "success",
       model_name = new_model_name,
       covariate_added = covariate_name,
-      search_state = search_state
+      search_state = search_state,
+      technical_log = technical_log
     ))
 
   }, error = function(e) {
@@ -970,7 +975,7 @@ add_covariate_with_detailed_logging <- function(search_state, base_model_id, cov
   log_msg(paste("Predicted model name:", predicted_model))
 
   # Call the actual function with comprehensive error capture
-  log_msg("Step 1: Creating BBR model and adding covariate...")
+  log_msg("Creating BBR model and adding covariate...")
 
   # Call the updated add_covariate_to_model function (returns updated search_state)
   result <- add_covariate_to_model(search_state, base_model_id, covariate_tag)
@@ -979,16 +984,21 @@ add_covariate_with_detailed_logging <- function(search_state, base_model_id, cov
   process_time <- round(as.numeric(difftime(Sys.time(), start_time, units = "secs")), 2)
 
   if (result$status == "success") {
-    log_msg("BBR model created successfully")
-    log_msg("Step 2: Covariate addition completed")
-    log_msg(paste("=== Process completed successfully in", process_time, "seconds ==="))
+    log_msg("Model creation completed successfully")
     log_msg(paste("Final model created:", result$model_name))
 
-    # Save success log file
+    # Save technical log file
     log_filename <- file.path(search_state$models_folder, paste0(result$model_name, "_add_", tag_value, "_log.txt"))
-    log_msg(paste("Saving log to:", basename(log_filename)))
 
-    writeLines(log_entries, log_filename)
+    if (!is.null(result$technical_log)) {
+      # Use the captured technical log from model_add_cov
+      writeLines(result$technical_log, log_filename)
+    } else {
+      # Fallback to basic log
+      writeLines(log_entries, log_filename)
+    }
+
+    cat(sprintf("📝 Model log created: %s\n", basename(log_filename)))
 
     return(list(
       status = "success",
