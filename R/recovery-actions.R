@@ -64,7 +64,6 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
 
     # Add initial retry note
     retry_mod <- bbr::add_notes(retry_mod, "Retry model with adjusted initial estimates")
-
     cat(" ✓\n")
 
     # Step 3: Modify THETA values in the model file
