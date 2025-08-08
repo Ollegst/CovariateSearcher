@@ -57,8 +57,7 @@ run_univariate_step <- function(search_state, base_model_id, covariates_to_test,
         model_name <- result$model_name
         created_models[[cov_tag]] <- model_name
 
-        # Update search_state with the new model
-        search_state <- result$search_state
+
 
         # Add step-specific information to database
         db_idx <- which(search_state$search_database$model_name == model_name)
