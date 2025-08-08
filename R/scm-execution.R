@@ -46,7 +46,11 @@ run_univariate_step <- function(search_state, base_model_id, covariates_to_test,
   # Create models for each covariate
   created_models <- list()
   step_start_time <- Sys.time()
-  step_number <- max(search_state$search_database$step_number, na.rm = TRUE) + 1
+  if (nrow(search_state$search_database) == 0) {
+    step_number <- 1
+  } else {
+    step_number <- max(search_state$search_database$step_number, na.rm = TRUE) + 1
+  }
 
   cat("🔧 Creating test models...\n")
 
