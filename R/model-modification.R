@@ -15,7 +15,7 @@
 #' @param search_state List. Current search state from initialize_covariate_search()
 #' @param base_model_id Character. Base model identifier (e.g., "run1")
 #' @param covariate_tag Character. Covariate tag to add (e.g., "cov_cl_wt")
-#' @return Updated search state with new model added to database
+#' @return List with updated search_state and new model information
 #' @export
 add_covariate_to_model <- function(search_state, base_model_id, covariate_tag) {
   cat(sprintf("[+] Adding covariate %s to model %s\n", covariate_tag, base_model_id))
@@ -28,8 +28,9 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag) {
   covariate_name <- search_state$tags[[covariate_tag]]
   cat(sprintf("  Covariate: %s\n", covariate_name))
 
-  # Calculate new model name (don't increment counter yet)
-  new_model_name <- sprintf("run%d", search_state$model_counter + 1)
+  # Calculate new model name (increment counter FIRST)
+  search_state$model_counter <- search_state$model_counter + 1
+  new_model_name <- sprintf("run%d", search_state$model_counter)
   cat(sprintf("  New model: %s\n", new_model_name))
 
   # Find covariate definition in search database
@@ -58,12 +59,9 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag) {
       bbr::add_notes(.notes = paste0("+ ", search_state$tags[[covariate_tag]]))
 
     cat("  [OK] BBR model created\n")
-
-    # Step 2: INCREMENT COUNTER NOW (physical file exists)
-    search_state$model_counter <<- search_state$model_counter + 1
     cat(sprintf("  [OK] Model counter updated to: %d\n", search_state$model_counter))
 
-    # Step 3: Try to add covariate (may fail, but file already exists)
+    # Step 2: Try to add covariate (may fail, but file already exists)
     cat("  Adding covariate to model file...\n")
 
     # Get covariate information for model modification
@@ -72,7 +70,7 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag) {
     param_name <- cov_info$PARAMETER # e.g., "CL"
     cov_on_param <- paste0(cov_name, "_", param_name)  # e.g., "WT_CL"
 
-    model_add_cov(
+    search_state <- model_add_cov(
       search_state = search_state,
       ref_model = new_model_name,
       cov_on_param = cov_on_param,
@@ -83,7 +81,7 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag) {
 
     cat("  [OK] Covariate added to model file\n")
 
-    # Step 4: Add to database (may fail, but file exists and counter updated)
+    # Step 3: Add to database
     cat("  Adding to database...\n")
 
     new_row <- data.frame(
@@ -108,11 +106,16 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag) {
       stringsAsFactors = FALSE
     )
 
-    search_state$search_database <<- rbind(search_state$search_database, new_row)
+    search_state$search_database <- rbind(search_state$search_database, new_row)
 
     cat(sprintf("[OK] Model %s added to database\n", new_model_name))
 
-    return(list(status = "success", model_name = new_model_name, covariate_added = covariate_name))
+    return(list(
+      status = "success",
+      model_name = new_model_name,
+      covariate_added = covariate_name,
+      search_state = search_state
+    ))
 
   }, error = function(e) {
     cat(sprintf("[X] Model creation failed: %s\n", e$message))
@@ -124,22 +127,18 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag) {
     if (file_exists) {
       # File was created but later steps failed
       cat(sprintf("  [INFO] Physical model file exists: %s\n", basename(model_file_path)))
-
-      # Make sure counter was incremented (it should have been)
-      if (search_state$model_counter < as.numeric(gsub("run", "", new_model_name))) {
-        search_state$model_counter <<- as.numeric(gsub("run", "", new_model_name))
-        cat(sprintf("  [FIX] Updated counter to match existing file: %d\n", search_state$model_counter))
-      }
     } else {
-      # File creation failed completely
-      cat(sprintf("  [INFO] No physical model file created\n"))
+      # File creation failed completely - rollback counter
+      search_state$model_counter <- search_state$model_counter - 1
+      cat(sprintf("  [INFO] No physical model file created, counter rolled back\n"))
     }
 
     return(list(
       status = "error",
       error_message = e$message,
       attempted_model = new_model_name,
-      file_exists = file_exists
+      file_exists = file_exists,
+      search_state = search_state
     ))
   })
 }
@@ -157,7 +156,7 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag) {
 #' @param data_file Data.frame. Dataset for time-varying checks
 #' @param covariate_search Data.frame. Covariate search configuration
 #' @param log_function Function. Logging function (optional)
-#' @return Updated search_state (unchanged - file modification is side effect)
+#' @return Updated search_state
 #' @export
 model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
                           data_file, covariate_search, log_function = NULL) {
@@ -330,7 +329,6 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
 
 
 
-
 #' Fix THETA Renumbering
 #'
 #' @title Renumber THETA parameters after removing some
@@ -430,16 +428,16 @@ fix_theta_renumbering <- function(modelcode, theta_numbers_to_remove, log_functi
 
 
 
-
 #' Remove Covariate from Model (Clean Interface)
 #'
-#' @title Remove covariate using tag name with automatic search_state update
+#' @title Remove covariate using tag name with functional state update
 #' @description Removes a covariate from a model using tag-based interface.
-#'   Automatically updates search_state in place - no return value needed.
-#' @param search_state List containing search state (updated automatically)
+#'   Returns updated search_state.
+#' @param search_state List containing search state
 #' @param model_name Character. Model name to modify
 #' @param covariate_tag Character. Covariate tag to remove (e.g., "cov_cl_race")
 #' @param save_as_new_model Logical. Whether to create new model (default: TRUE)
+#' @return List with updated search_state and operation details
 #' @export
 remove_covariate_from_model <- function(search_state, model_name, covariate_tag, save_as_new_model = TRUE) {
 
@@ -480,9 +478,8 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
 
   # Step 2: Create new model with BBR if requested
   if (save_as_new_model) {
-    new_model_name <- paste0("run", search_state$model_counter + 1)
-    # ✅ Update counter immediately using <<-
-    search_state$model_counter <<- search_state$model_counter + 1
+    search_state$model_counter <- search_state$model_counter + 1
+    new_model_name <- paste0("run", search_state$model_counter)
     log_msg(paste("Creating new BBR model:", new_model_name))
     tryCatch({
       parent_path <- file.path(search_state$models_folder, model_name)
@@ -650,18 +647,18 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
   search_state <- write_model_file(search_state, modelcode)
   log_msg(paste("Model file updated:", basename(original_file_path)))
 
-  # Step 10 Calculate remaining tags after covariate removal
-
+  # Step 10: Calculate remaining tags after covariate removal
   parent_row <- search_state$search_database[search_state$search_database$model_name == model_name, ]
   parent_tags <- if (nrow(parent_row) > 0 && !is.null(parent_row$tags[[1]])) parent_row$tags[[1]] else character(0)
   covariate_tag_value <- paste0(cova, "_", param)
   remaining_tags <- setdiff(parent_tags, covariate_tag_value)
-   if (save_as_new_model) {
-  log_msg(paste("Parent tags:", paste(parent_tags, collapse = ", ")))
-  log_msg(paste("Removing tag:", covariate_tag_value))
-  log_msg(paste("Remaining tags:", paste(remaining_tags, collapse = ", ")))
+  if (save_as_new_model) {
+    log_msg(paste("Parent tags:", paste(parent_tags, collapse = ", ")))
+    log_msg(paste("Removing tag:", covariate_tag_value))
+    log_msg(paste("Remaining tags:", paste(remaining_tags, collapse = ", ")))
   }
-  # Step 11: Update database automatically using <<-
+
+  # Step 11: Update database
   final_model_name <- if (save_as_new_model) new_model_name else model_name
 
   if (save_as_new_model) {
@@ -687,12 +684,11 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
       stringsAsFactors = FALSE
     )
 
-    # ✅ Update database immediately using <<-
-    search_state$search_database <<- rbind(search_state$search_database, new_row)
+    search_state$search_database <- rbind(search_state$search_database, new_row)
     log_msg(paste("Added", new_model_name, "to database"))
   }
 
-  # Step 11: Save detailed log
+  # Step 12: Save detailed log
   log_file <- file.path(search_state$models_folder,
                         paste0(final_model_name, "_remove_", covariate_value, "_log.txt"))
   writeLines(log_messages, log_file)
@@ -702,8 +698,12 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
   log_msg(paste("Final model:", final_model_name))
   log_msg(paste("Database updated: now has", nrow(search_state$search_database), "models"))
 
-  # ✅ NO RETURN VALUE - search_state is automatically updated
-  invisible(NULL)
+  return(list(
+    status = "success",
+    model_name = final_model_name,
+    covariate_removed = covariate_value,
+    search_state = search_state
+  ))
 }
 
 
@@ -716,7 +716,7 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
 #' @param search_state List containing search state
 #' @param base_model_id Character. Base model identifier (e.g., "run1")
 #' @param covariate_tag Character. Covariate tag to add (e.g., "cov_cl_wt")
-#' @return List with result and log information (search_state updated in place)
+#' @return List with result and log information (search_state updated in result)
 #' @export
 add_covariate_with_detailed_logging <- function(search_state, base_model_id, covariate_tag) {
 
@@ -749,7 +749,8 @@ add_covariate_with_detailed_logging <- function(search_state, base_model_id, cov
       status = "error",
       error_message = "Covariate tag not found",
       log_file = error_log_filename,
-      log_entries = log_entries
+      log_entries = log_entries,
+      search_state = search_state
     ))
   }
 
@@ -769,7 +770,8 @@ add_covariate_with_detailed_logging <- function(search_state, base_model_id, cov
       status = "error",
       error_message = "No matching covariate definition found",
       log_file = error_log_filename,
-      log_entries = log_entries
+      log_entries = log_entries,
+      search_state = search_state
     ))
   }
 
@@ -781,7 +783,7 @@ add_covariate_with_detailed_logging <- function(search_state, base_model_id, cov
   # Call the actual function with comprehensive error capture
   log_msg("Step 1: Creating BBR model and adding covariate...")
 
-  # Call the updated add_covariate_to_model function (modifies search_state in place)
+  # Call the updated add_covariate_to_model function (returns updated search_state)
   result <- add_covariate_to_model(search_state, base_model_id, covariate_tag)
 
   # Calculate processing time
@@ -805,7 +807,8 @@ add_covariate_with_detailed_logging <- function(search_state, base_model_id, cov
       covariate_added = tag_value,
       log_file = log_filename,
       log_entries = log_entries,
-      processing_time_seconds = process_time
+      processing_time_seconds = process_time,
+      search_state = result$search_state
     ))
 
   } else {
@@ -833,8 +836,8 @@ add_covariate_with_detailed_logging <- function(search_state, base_model_id, cov
       log_entries = log_entries,
       attempted_model = result$attempted_model,
       file_exists = result$file_exists,
-      processing_time_seconds = process_time
+      processing_time_seconds = process_time,
+      search_state = result$search_state
     ))
   }
 }
-

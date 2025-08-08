@@ -60,6 +60,9 @@ run_univariate_step <- function(search_state, base_model_id, covariates_to_test,
       # Use existing add_covariate_to_model function
       result <- add_covariate_to_model(search_state, base_model_id, cov_tag)
 
+      # FUNCTIONAL FIX: Use returned search_state
+      search_state <- result$search_state
+
       if (!is.null(result$model_name)) {
         model_name <- result$model_name
         created_models[[cov_tag]] <- model_name
@@ -98,6 +101,7 @@ run_univariate_step <- function(search_state, base_model_id, covariates_to_test,
     creation_time = creation_time
   ))
 }
+
 
 
 #' Submit Models and Wait for Completion
@@ -211,7 +215,8 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
   while (Sys.time() < max_wait_time) {
 
     # Update status for all models
-    search_state <- update_all_model_statuses(search_state)
+    update_result <- update_all_model_statuses(search_state)
+    search_state <- update_result$search_state
 
     # Check current status
     current_status <- search_state$search_database[
@@ -271,4 +276,3 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
     status = "completed"
   ))
 }
-
