@@ -2,13 +2,13 @@
 % Please edit documentation in R/scm-execution.R
 \name{submit_and_wait_for_step}
 \alias{submit_and_wait_for_step}
-\title{Submit models and wait for all to complete before proceeding}
+\title{Submit models and wait for all to complete with automatic status updates}
 \usage{
 submit_and_wait_for_step(
   search_state,
   model_names,
   step_name,
-  max_wait_minutes = 10000,
+  max_wait_minutes = 120,
   threads = NULL,
   auto_submit = TRUE
 )
@@ -31,8 +31,8 @@ List with completion results and updated search_state
 }
 \description{
 Submits a batch of models in parallel using bbr and monitors
-their completion status with timeout protection.
+their completion status with 1-minute updates and timeout protection.
 }
 \details{
-Submit Models and Wait for Completion
+Submit Models and Wait for Completion with Auto-Updates
 }

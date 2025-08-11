@@ -22,7 +22,7 @@
 #' @name CovariateSearcher-package
 #' @aliases CovariateSearcher
 #'
-#' @importFrom dplyr %>% mutate arrange filter select group_by summarise bind_rows case_when count n desc
+#' @importFrom dplyr %>% mutate arrange filter select group_by summarise bind_rows case_when count n desc pull
 #' @importFrom tibble tibble
 #' @importFrom bbr read_model copy_model_from submit_model add_tags
 #' @importFrom yaml read_yaml
@@ -39,7 +39,7 @@ utils::globalVariables(c(
   # Database column names
   "model_name", "parent_model", "status", "ofv", "delta_ofv", "rse_max",
   "step_description", "step_number", "covariate_tested", "submission_time",
-  "completion_time", "runtime_minutes", "cov_to_test",
+  "completion_time", "runtime_minutes", "cov_to_test", "estimation_issue", # Add this
 
   # Generated variables in dplyr chains
   "parent_display", "model_type", "changes", "status_display", "ofv_display",

@@ -84,7 +84,7 @@ update_model_status_from_files <- function(search_state, model_name) {
 
   if (length(db_idx) == 0) {
     cat(sprintf("⚠️  Model %s not found in database\n", model_name))
-    return(list(search_state = search_state))
+    return(search_state)
   }
 
   # Update database

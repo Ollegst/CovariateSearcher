@@ -192,16 +192,7 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
 }
 
 
-#' Adjust THETA Values for Covariate
-#'
-#' @title Modify THETA values from 0.1 to -0.1 for specified covariate
-#' @description Reads the model file and adjusts THETA initial estimates
-#'   from 0.1 to -0.1 for the problematic covariate to improve convergence.
-#' @param search_state List containing covariate search state and configuration
-#' @param model_name Character. Model to modify (e.g., "run2001")
-#' @param covariate_tag Character. Covariate tag that was added (e.g., "cov_cl_wt")
-#' @return List with success status and details
-#' @export
+
 #' Adjust THETA Values for Covariate
 #'
 #' @title Modify THETA values from 0.1 to -0.1 for specified covariate
