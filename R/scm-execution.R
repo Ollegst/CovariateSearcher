@@ -178,7 +178,7 @@ run_univariate_step <- function(search_state, base_model_id, covariates_to_test,
 #' @export
 submit_and_wait_for_step <- function(search_state, model_names, step_name,
                                      max_wait_minutes = 120, threads = NULL,
-                                     auto_submit = TRUE) {
+                                     auto_submit = TRUE, auto_retry = TRUE) {
   if (length(model_names) == 0) {
     return(list(
       search_state = search_state,
@@ -205,6 +205,9 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
   cat(sprintf("\n🚀 SUBMITTING %s\n", step_name))
   cat(sprintf("Models: %s\n", paste(model_names, collapse = ", ")))
   cat(sprintf("Threads per model: %d\n", threads))
+  if (auto_retry) {
+    cat("🔄 Auto-retry: ENABLED\n")
+  }
 
   # Submit all models
   submission_results <- list()
@@ -271,6 +274,9 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
   completed_models <- character(0)
   failed_models <- character(0)
 
+  # Initialize retry tracking before the monitoring loop
+  already_processed_for_retry <- character(0)  # Track models we've already created retries for
+
   while (Sys.time() < max_wait_time) {
     update_count <- update_count + 1
 
@@ -279,6 +285,105 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
 
     # Update all model statuses from NONMEM files
     search_state <- update_all_model_statuses(search_state)
+
+    # ===================================================================
+    # NEW: IMMEDIATE AUTO-RETRY LOGIC (FIXED VERSION)
+    # ===================================================================
+    if (auto_retry) {
+      # Check for newly failed models this cycle (that we haven't processed yet)
+      newly_failed_this_cycle <- setdiff(newly_failed, already_processed_for_retry)
+
+      if (length(newly_failed_this_cycle) > 0) {
+        cat(sprintf("🔧 IMMEDIATE RETRY: %d models just failed - creating retries\n",
+                    length(newly_failed_this_cycle)))
+
+        tryCatch({
+          # Create models_with_issues for newly failed models
+          models_with_issues <- list()
+          for (model_name in newly_failed_this_cycle) {
+            # Get the specific error from database
+            model_row <- search_state$search_database[search_state$search_database$model_name == model_name, ]
+            issue_type <- if (nrow(model_row) > 0 && !is.na(model_row$estimation_issue[1]) && model_row$estimation_issue[1] != "") {
+              model_row$estimation_issue[1]
+            } else {
+              "failed_model"
+            }
+
+            models_with_issues[[model_name]] <- list(
+              model_name = model_name,
+              issue_type = issue_type,
+              detection_time = Sys.time()
+            )
+
+            cat(sprintf("  %s: %s\n", model_name, issue_type))
+          }
+
+          # Use existing process_estimation_issues() function
+          recovery_result <- process_estimation_issues(search_state, models_with_issues)
+          search_state <- recovery_result$search_state
+
+          # Handle retry models if created
+          if (length(recovery_result$retry_models_created) > 0) {
+            cat(sprintf("✅ Created %d retry models: %s\n",
+                        length(recovery_result$retry_models_created),
+                        paste(recovery_result$retry_models_created, collapse = ", ")))
+
+            # Add retry models to monitoring list
+            successful_submissions <- c(successful_submissions, recovery_result$retry_models_created)
+
+            # Check if retry models need to be submitted (they might already be submitted by process_estimation_issues)
+            for (retry_model in recovery_result$retry_models_created) {
+              retry_row <- search_state$search_database[search_state$search_database$model_name == retry_model, ]
+
+              # Only submit if status is "created" (not already submitted)
+              if (nrow(retry_row) > 0 && retry_row$status[1] == "created") {
+                cat(sprintf("🚀 Submitting retry model %s... ", retry_model))
+
+                tryCatch({
+                  model_path <- file.path(search_state$models_folder, retry_model)
+                  mod <- bbr::read_model(model_path)
+                  bbr::submit_model(mod, .bbi_args = list(threads = threads), .overwrite = TRUE)
+
+                  # Update database status
+                  db_idx <- which(search_state$search_database$model_name == retry_model)
+                  if (length(db_idx) > 0) {
+                    search_state$search_database$submission_time[db_idx] <- Sys.time()
+                    search_state$search_database$status[db_idx] <- "in_progress"
+                  }
+
+                  cat("✓\n")
+
+                }, error = function(submit_error) {
+                  cat(sprintf("✗ Submission failed: %s\n", submit_error$message))
+
+                  # Update status to reflect submission failure
+                  db_idx <- which(search_state$search_database$model_name == retry_model)
+                  if (length(db_idx) > 0) {
+                    search_state$search_database$status[db_idx] <- "submission_failed"
+                  }
+                })
+              } else {
+                cat(sprintf("ℹ️  Retry model %s already submitted or has status: %s\n",
+                            retry_model, if(nrow(retry_row) > 0) retry_row$status[1] else "unknown"))
+              }
+            }
+          }
+
+          # Mark these models as processed to avoid re-processing
+          already_processed_for_retry <- c(already_processed_for_retry, newly_failed_this_cycle)
+
+        }, error = function(retry_error) {
+          cat(sprintf("❌ Error in retry processing: %s\n", retry_error$message))
+          cat("Continuing with normal monitoring...\n")
+
+          # Still mark as processed to avoid infinite retry attempts
+          already_processed_for_retry <- c(already_processed_for_retry, newly_failed_this_cycle)
+        })
+      }
+    }
+    # ===================================================================
+    # END IMMEDIATE AUTO-RETRY LOGIC
+    # ===================================================================
 
     # Update submission and completion times with actual NONMEM timestamps
     for (model_name in successful_submissions) {
@@ -299,6 +404,7 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
         }
       }
     }
+
 
     # Get current status of submitted models
     current_status <- search_state$search_database %>%

@@ -25,5 +25,5 @@ Creates a retry model (e.g., run2001 from run2) with THETA values
 adjusted from 0.1 to -0.1 for the problematic covariate.
 }
 \details{
-Create Retry Model with Adjusted THETA Values
+Create Retry Model with Adjusted THETA Values (FIXED VERSION)
 }

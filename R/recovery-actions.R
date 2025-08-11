@@ -7,7 +7,7 @@
 
 
 
-#' Create Retry Model with Adjusted THETA Values
+#' Create Retry Model with Adjusted THETA Values (FIXED VERSION)
 #'
 #' @title Create retry model with modified initial estimates
 #' @description Creates a retry model (e.g., run2001 from run2) with THETA values
@@ -68,7 +68,6 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
 
     # Step 3: Modify THETA values in the model file
     cat("  Adjusting THETA values for latest covariate...")
-
 
     if (!is.na(parent_model) && nchar(parent_model) > 0) {
       # Get covariates in parent vs original to find what was added
@@ -132,31 +131,51 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
       cat(" ⚠️  No covariate info for log\n")
     }
 
-    # Step 5: Add retry model to database
+    # Step 5: Add retry model to database (FIXED - TEMPLATE APPROACH)
     cat("  Adding to database...")
-    new_row <- data.frame(
-      model_name = retry_model_name,
-      step_description = paste(original_row$step_description[1], "- Retry"),
-      phase = original_row$phase[1],
-      step_number = original_row$step_number[1],
-      parent_model = original_row$parent_model[1],
-      covariate_tested = original_row$covariate_tested[1],
-      action = "retry_with_theta_adjustment",
-      ofv = NA_real_,
-      delta_ofv = NA_real_,
-      rse_max = NA_real_,
-      status = "created",
-      tags = original_row$tags[1],
-      submission_time = as.POSIXct(NA),
-      completion_time = as.POSIXct(NA),
-      retry_attempt = 1L,
-      original_model = original_model_name,
-      estimation_issue = issue_type,
-      excluded_from_step = FALSE,
-      stringsAsFactors = FALSE
-    )
 
-    search_state$search_database <- rbind(search_state$search_database, new_row)
+    tryCatch({
+      # FIXED: Use template approach to avoid column structure mismatches
+      # Take the first row as a template to ensure exact structure match
+      template_row <- search_state$search_database[1, , drop = FALSE]
+
+      # Create new row with same structure
+      new_row <- template_row
+      new_row[1, ] <- NA  # Clear all values but keep structure
+
+      # Set the new values (preserving column types and structure)
+      new_row$model_name <- retry_model_name
+      new_row$step_number <- original_row$step_number[1]
+      new_row$parent_model <- original_row$parent_model[1]
+      new_row$covariate_tested <- original_row$covariate_tested[1]
+      new_row$action <- "retry"
+      new_row$ofv <- NA_real_
+      new_row$delta_ofv <- NA_real_
+      new_row$rse_max <- NA_real_
+      new_row$status <- "created"
+      new_row$tags <- original_row$tags[1]  # Copy the list structure
+      new_row$submission_time <- as.POSIXct(NA)
+      new_row$completion_time <- as.POSIXct(NA)
+      new_row$retry_attempt <- 1L
+      new_row$original_model <- original_model_name
+      new_row$estimation_issue <- issue_type
+      new_row$excluded_from_step <- FALSE
+
+      # Add to database using rbind (now structure matches exactly)
+      search_state$search_database <- rbind(search_state$search_database, new_row)
+
+      cat(" ✓\n")
+
+    }, error = function(db_error) {
+      cat(sprintf(" ❌ Database insertion failed: %s\n", db_error$message))
+
+      # Enhanced debug info
+      cat("  Debug info:\n")
+      cat(sprintf("    Database columns: %s\n", paste(names(search_state$search_database), collapse = ", ")))
+      cat(sprintf("    Template row classes: %s\n", paste(sapply(template_row, class), collapse = ", ")))
+
+      stop("Database insertion failed: ", db_error$message)
+    })
 
     # Update original model status
     orig_idx <- which(search_state$search_database$model_name == original_model_name)
@@ -164,8 +183,6 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
       search_state$search_database$status[orig_idx] <- "error"
       search_state$search_database$estimation_issue[orig_idx] <- issue_type
     }
-
-    cat(" ✓\n")
 
     cat(sprintf("✅ Retry model %s created successfully\n", retry_model_name))
 

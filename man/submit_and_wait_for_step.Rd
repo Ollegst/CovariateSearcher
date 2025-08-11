@@ -10,7 +10,8 @@ submit_and_wait_for_step(
   step_name,
   max_wait_minutes = 120,
   threads = NULL,
-  auto_submit = TRUE
+  auto_submit = TRUE,
+  auto_retry = TRUE
 )
 }
 \arguments{
