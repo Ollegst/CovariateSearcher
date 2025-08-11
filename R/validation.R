@@ -147,30 +147,37 @@ calculate_delta_ofv <- function(base_ofv, test_ofv, significance_threshold = 3.8
 #' @return List with updated search_state
 #' @export
 update_model_status_from_files <- function(search_state, model_name) {
-
   model_path <- file.path(search_state$models_folder, model_name)
-
-  # Get enhanced LST analysis
   lst_info <- read_nonmem_lst(model_path)
-
-  # Get basic results
   results <- extract_model_results(search_state, model_name)
 
-  # Find model in database
   db_idx <- which(search_state$search_database$model_name == model_name)
-
   if (length(db_idx) == 0) {
     cat(sprintf("⚠️  Model %s not found in database\n", model_name))
-    return(list(search_state = search_state))
+    return(search_state)  # Fixed: consistent return format
   }
 
-  # Update database with enhanced information
+  # Extract actual timestamps from LST file
+  timestamps <- extract_nonmem_timestamps(model_name, search_state$models_folder)
+
+  # Update database with file-based information
   search_state$search_database$status[db_idx] <- lst_info$status
   search_state$search_database$ofv[db_idx] <- results$ofv
   search_state$search_database$estimation_issue[db_idx] <- lst_info$error_message
-  search_state$search_database$completion_time[db_idx] <- Sys.time()
 
-  # Print detailed status with error information
+  # Update submission_time with actual start time from LST file
+  if (!is.na(timestamps$start_time)) {
+    search_state$search_database$submission_time[db_idx] <- timestamps$start_time
+  }
+
+  # Update completion_time with actual stop time from LST file
+  if (!is.na(timestamps$stop_time)) {
+    search_state$search_database$completion_time[db_idx] <- timestamps$stop_time
+  } else if (lst_info$status %in% c("completed", "failed")) {
+    # Fallback: use current time if no stop time but model is done
+    search_state$search_database$completion_time[db_idx] <- Sys.time()
+  }
+
   if (lst_info$has_issues) {
     cat(sprintf("❌ Model %s FAILED: %s\n", model_name, lst_info$error_message))
     if (nchar(lst_info$error_excerpt) > 0) {
@@ -179,11 +186,10 @@ update_model_status_from_files <- function(search_state, model_name) {
     }
   } else {
     cat(sprintf("✅ Model %s completed: %s (OFV: %s)\n",
-                model_name, lst_info$status,
-                ifelse(is.na(results$ofv), "NA", round(results$ofv, 2))))
+                model_name, lst_info$status, ifelse(is.na(results$ofv),
+                                                    "NA", round(results$ofv, 2))))
   }
 
-  # Calculate delta OFV if parent exists and both models successful
   parent_model <- search_state$search_database$parent_model[db_idx]
   if (!is.na(parent_model)) {
     parent_idx <- which(search_state$search_database$model_name == parent_model)
@@ -194,28 +200,22 @@ update_model_status_from_files <- function(search_state, model_name) {
       current_status <- lst_info$status
 
       if (parent_status == "completed" && current_status == "completed") {
-        # Both completed - normal delta OFV
         delta_result <- calculate_delta_ofv(parent_ofv, current_ofv)
         search_state$search_database$delta_ofv[db_idx] <- delta_result$delta_ofv
-
       } else if (parent_status == "failed" && current_status == "completed") {
-        # Fixed a failed model - mark as major improvement
-        search_state$search_database$delta_ofv[db_idx] <- 999999  # Large positive number
+        search_state$search_database$delta_ofv[db_idx] <- 999999
         cat(sprintf("🎉 Model %s FIXED failed parent %s!\n", model_name, parent_model))
-
       } else if (parent_status == "completed" && current_status == "failed") {
-        # Broke a working model - mark as major deterioration
-        search_state$search_database$delta_ofv[db_idx] <- -999999  # Large negative number
+        search_state$search_database$delta_ofv[db_idx] <- -999999
         cat(sprintf("💥 Model %s BROKE working parent %s\n", model_name, parent_model))
-
       } else {
-        # Both failed or other combinations
         search_state$search_database$delta_ofv[db_idx] <- NA_real_
         cat(sprintf("⚠️ No meaningful OFV comparison: %s (%s) vs %s (%s)\n",
                     model_name, current_status, parent_model, parent_status))
       }
     }
   }
+
   return(search_state)
 }
 
@@ -234,8 +234,8 @@ update_all_model_statuses <- function(search_state) {
   models_to_update <- search_state$search_database$model_name
 
   for (model_name in models_to_update) {
-    update_result <- update_model_status_from_files(search_state, model_name)
-    search_state <- update_result$search_state
+
+    search_state <- update_model_status_from_files(search_state, model_name)
   }
 
   cat(sprintf("✅ Updated %d models\n", length(models_to_update)))
