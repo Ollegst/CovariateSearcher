@@ -42,5 +42,5 @@ All models within each step run in parallel.
 }
 }
 \details{
-Run Complete Stepwise Covariate Modeling
+Run Complete Stepwise Covariate Modeling (FIXED CRITICAL FIELD NAME ERRORS)
 }

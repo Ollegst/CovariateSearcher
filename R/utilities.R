@@ -153,3 +153,45 @@ analyze_model_from_logic <- function(model_name) {
   return("UNKNOWN")
 }
 
+
+#' Clean Directory - Remove NONMEM Working Files
+#'
+#' @title Remove all files starting with "WK_" from all model subdirectories
+#' @param models_folder Character. Path to models directory (default: "models")
+#' @return Number of files deleted
+#' @export
+clean_dir <- function(models_folder = "models") {
+
+  # Get all model subdirectories (run1, run2, etc.)
+  model_dirs <- list.dirs(models_folder, recursive = FALSE)
+
+  if (length(model_dirs) == 0) {
+    cat("No model directories found\n")
+    return(0)
+  }
+
+  total_deleted <- 0
+
+  # Process each model directory
+  for (model_dir in model_dirs) {
+    wk_files <- list.files(
+      path = model_dir,
+      pattern = "^WK_",
+      full.names = TRUE
+    )
+
+    if (length(wk_files) > 0) {
+      deleted <- sum(file.remove(wk_files))
+      total_deleted <- total_deleted + deleted
+    }
+  }
+
+  if (total_deleted == 0) {
+    cat("No WK_ files found\n")
+  } else {
+    cat(sprintf("Deleted %d WK_ files from %d model directories\n", total_deleted, length(model_dirs)))
+  }
+
+  return(total_deleted)
+}
+

@@ -18,5 +18,5 @@ Character vector of excluded covariate names, or data.frame if return_details=TR
 Returns covariates that have been excluded due to estimation issues
 }
 \details{
-Get Excluded Covariates (ENHANCED VERSION)
+Get Excluded Covariates (ENHANCED VERSION - FIXED COLUMN REFERENCE)
 }

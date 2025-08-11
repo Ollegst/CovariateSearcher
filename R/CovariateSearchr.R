@@ -34,15 +34,18 @@
 NULL
 
 
+# In CovariateSearchr.R file, update the globalVariables section:
+
 # Suppress R CMD check warnings for dplyr column names
 utils::globalVariables(c(
   # Database column names
   "model_name", "parent_model", "status", "ofv", "delta_ofv", "rse_max",
   "step_description", "step_number", "covariate_tested", "submission_time",
-  "completion_time", "runtime_minutes", "cov_to_test", "estimation_issue", # Add this
+  "completion_time", "runtime_minutes", "cov_to_test", "estimation_issue",
+  "original_model",
 
   # Generated variables in dplyr chains
   "parent_display", "model_type", "changes", "status_display", "ofv_display",
   "delta_display", "param_display", "delta_ofv_significant", "rse_acceptable",
-  "completed", "total", "best_delta_ofv"
+  "completed", "total", "best_delta_ofv", "retry_model", "exclusion_reason"
 ))

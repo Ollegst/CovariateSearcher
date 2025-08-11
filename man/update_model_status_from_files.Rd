@@ -5,8 +5,6 @@
 \title{Updates search database with enhanced results from NONMEM output}
 \usage{
 update_model_status_from_files(search_state, model_name)
-
-update_model_status_from_files(search_state, model_name)
 }
 \arguments{
 \item{search_state}{List. Current search state}
@@ -15,12 +13,10 @@ update_model_status_from_files(search_state, model_name)
 }
 \value{
 List with updated search_state
-
-List with updated search_state
 }
 \description{
 Enhanced version with detailed error reporting and LST excerpts
 }
 \details{
-Update Model Status from Files with Enhanced Error Detection
+Update Model Status from Files with Enhanced Error Detection (SINGLE DEFINITION)
 }

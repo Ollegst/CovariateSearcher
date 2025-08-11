@@ -416,7 +416,7 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
           }
 
           # Use new exclusion-based processing instead of unlimited retries
-          recovery_result <- process_estimation_issues_with_exclusion(search_state, models_with_issues)
+          recovery_result <- process_estimation_issues(search_state, models_with_issues)
           search_state <- recovery_result$search_state
 
           # Handle retry models if created
