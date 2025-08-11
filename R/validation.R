@@ -24,8 +24,7 @@ validate_model_quality <- function(search_state, model_name, rse_threshold = 50,
   # Extract basic results - CORRECTED ARGUMENTS
   results <- extract_model_results(search_state, model_name)
 
-  validation <- list(#' Update Model Status from Files (Working Version)
-
+  validation <- list(
     model_path = model_path,
     overall_status = "unknown",
     converged = FALSE,
@@ -68,41 +67,6 @@ validate_model_quality <- function(search_state, model_name, rse_threshold = 50,
 }
 
 
-#'
-#' @param search_state List. Current search state
-#' @param model_name Character. Model name to update
-#' @return List with updated search_state
-#' @export
-update_model_status_from_files <- function(search_state, model_name) {
-
-  # Extract results
-  results <- extract_model_results(search_state, model_name)
-  validation <- validate_model_quality(search_state, model_name)
-
-  # Find model in database
-  db_idx <- which(search_state$search_database$model_name == model_name)
-
-  if (length(db_idx) == 0) {
-    cat(sprintf("⚠️  Model %s not found in database\n", model_name))
-    return(search_state)
-  }
-
-  # Update database
-  search_state$search_database$status[db_idx] <- results$status
-  search_state$search_database$ofv[db_idx] <- results$ofv
-  search_state$search_database$completion_time[db_idx] <- Sys.time()
-
-  # Add error information for failed models
-  if (results$status == "failed") {
-    search_state$search_database$estimation_issue[db_idx] <- "Model failed - check LST file"
-  }
-
-  cat(sprintf("✅ Updated %s: %s (OFV: %s)\n",
-              model_name, results$status,
-              ifelse(is.na(results$ofv), "NA", round(results$ofv, 2))))
-
-  return(search_state)
-}
 #' Calculate Delta OFV
 #'
 #' Calculate OFV difference between models
@@ -138,7 +102,7 @@ calculate_delta_ofv <- function(base_ofv, test_ofv, significance_threshold = 3.8
 }
 
 
-#' Update Model Status from Files with Enhanced Error Detection
+#' Update Model Status from Files with Enhanced Error Detection (SINGLE DEFINITION)
 #'
 #' @title Updates search database with enhanced results from NONMEM output
 #' @description Enhanced version with detailed error reporting and LST excerpts

@@ -100,7 +100,7 @@ save_search_state <- function(search_state, filename = "search_state_backup.rds"
   return(invisible(TRUE))
 }
 
-#' Ensure Base Model in Database (SIMPLIFIED SCHEMA)
+#' Ensure Base Model in Database (FIXED SCHEMA CONSISTENCY)
 #' @param search_state List containing search state
 #' @return Updated search_state with base model added if missing
 #' @export
@@ -110,6 +110,7 @@ ensure_base_model_in_database <- function(search_state) {
     return(search_state)
   }
 
+  # FIXED: Create base row with COMPLETE schema that matches initialize_search_database_core
   base_row <- data.frame(
     model_name = search_state$base_model,
     step_number = 0L,
@@ -135,7 +136,6 @@ ensure_base_model_in_database <- function(search_state) {
 
   return(search_state)
 }
-
 
 #' Load Search State from File
 #'

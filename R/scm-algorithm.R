@@ -73,7 +73,7 @@ get_dropped_covariates <- function(search_state, current_model_id, tested_covari
 
 
 
-#' Get Excluded Covariates (ENHANCED VERSION)
+#' Get Excluded Covariates (ENHANCED VERSION - FIXED COLUMN REFERENCE)
 #'
 #' @title Get list of covariates excluded from current step with details
 #' @description Returns covariates that have been excluded due to estimation issues
@@ -101,15 +101,30 @@ get_excluded_covariates <- function(search_state, return_details = FALSE) {
   }
 
   if (return_details) {
-    # Return detailed exclusion information
-    exclusion_details <- excluded_models %>%
-      dplyr::filter(!is.na(covariate_tested) & covariate_tested != "") %>%
-      dplyr::select(covariate_tested, model_name, original_model, estimation_issue, step_number) %>%
-      dplyr::rename(
-        retry_model = model_name,
-        exclusion_reason = estimation_issue
-      ) %>%
-      dplyr::arrange(covariate_tested)
+    # FIXED: Handle the original_model column properly - check if it exists
+    if ("original_model" %in% names(excluded_models)) {
+      # Use original_model column if it exists
+      exclusion_details <- excluded_models %>%
+        dplyr::filter(!is.na(covariate_tested) & covariate_tested != "") %>%
+        dplyr::select(covariate_tested, model_name, original_model, estimation_issue, step_number) %>%
+        dplyr::rename(
+          retry_model = model_name,
+          exclusion_reason = estimation_issue
+        ) %>%
+        dplyr::arrange(covariate_tested)
+    } else {
+      # Fallback if original_model column doesn't exist
+      exclusion_details <- excluded_models %>%
+        dplyr::filter(!is.na(covariate_tested) & covariate_tested != "") %>%
+        dplyr::select(covariate_tested, model_name, estimation_issue, step_number) %>%
+        dplyr::mutate(original_model = NA_character_) %>%
+        dplyr::rename(
+          retry_model = model_name,
+          exclusion_reason = estimation_issue
+        ) %>%
+        dplyr::select(covariate_tested, original_model, retry_model, exclusion_reason, step_number) %>%
+        dplyr::arrange(covariate_tested)
+    }
 
     return(exclusion_details)
   } else {
@@ -122,7 +137,7 @@ get_excluded_covariates <- function(search_state, return_details = FALSE) {
 
 
 
-#' Run Complete Stepwise Covariate Modeling
+#' Run Complete Stepwise Covariate Modeling (FIXED CRITICAL FIELD NAME ERRORS)
 #'
 #' @title Execute complete stepwise covariate modeling algorithm
 #' @description Main orchestration function that runs the complete SCM workflow:
@@ -186,6 +201,18 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id,
     step_name = "Step 1: Initial Univariate Analysis"
   )
 
+  # VALIDATION: Check that step1_creation is valid
+  if (is.null(step1_creation) || is.null(step1_creation$search_state)) {
+    cat("❌ Failed to create initial models - invalid result from run_univariate_step\n")
+    return(list(
+      search_state = search_state,
+      status = "step1_creation_failed",
+      final_model = current_base_model,
+      steps_completed = 0,
+      error = "Invalid result from run_univariate_step"
+    ))
+  }
+
   search_state <- step1_creation$search_state
 
   if (step1_creation$status != "models_created") {
@@ -194,7 +221,8 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id,
       search_state = search_state,
       status = "step1_creation_failed",
       final_model = current_base_model,
-      steps_completed = 0
+      steps_completed = 0,
+      error = paste("Step1 creation status:", step1_creation$status)
     ))
   }
 
@@ -207,6 +235,18 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id,
     auto_submit = auto_submit
   )
 
+  # VALIDATION: Check that step1_completion is valid
+  if (is.null(step1_completion) || is.null(step1_completion$search_state)) {
+    cat("❌ Failed in step1 completion - invalid result from submit_and_wait_for_step\n")
+    return(list(
+      search_state = search_state,
+      status = "step1_completion_failed",
+      final_model = current_base_model,
+      steps_completed = 0,
+      error = "Invalid result from submit_and_wait_for_step"
+    ))
+  }
+
   search_state <- step1_completion$search_state
 
   # Step 1c: Select best model
@@ -217,6 +257,18 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id,
     rse_threshold = rse_threshold
   )
 
+  # VALIDATION: Check that step1_selection is valid
+  if (is.null(step1_selection) || is.null(step1_selection$search_state)) {
+    cat("❌ Failed in step1 selection - invalid result from select_best_model\n")
+    return(list(
+      search_state = search_state,
+      status = "step1_selection_failed",
+      final_model = current_base_model,
+      steps_completed = 0,
+      error = "Invalid result from select_best_model"
+    ))
+  }
+
   search_state <- step1_selection$search_state
 
   step_results[["step_1"]] <- list(
@@ -225,8 +277,8 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id,
     selection = step1_selection
   )
 
-  # Update tracking
-  all_tested_covariates <- c(all_tested_covariates, step1_creation$covariate_tags)
+  # FIXED: Update tracking with correct field name
+  all_tested_covariates <- c(all_tested_covariates, step1_creation$successful_covariates)
 
   if (is.null(step1_selection$best_model)) {
     cat("🏁 No significant improvement found in initial analysis\n")
@@ -268,6 +320,12 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id,
       step_name = sprintf("Step %d: Forward Selection", forward_step)
     )
 
+    # VALIDATION: Check step_creation result
+    if (is.null(step_creation) || is.null(step_creation$search_state)) {
+      cat(sprintf("❌ Failed to create Step %d models - invalid result\n", forward_step))
+      break
+    }
+
     search_state <- step_creation$search_state
 
     if (step_creation$status != "models_created") {
@@ -284,6 +342,12 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id,
       auto_submit = auto_submit
     )
 
+    # VALIDATION: Check step_completion result
+    if (is.null(step_completion) || is.null(step_completion$search_state)) {
+      cat(sprintf("❌ Failed in Step %d completion - invalid result\n", forward_step))
+      break
+    }
+
     search_state <- step_completion$search_state
 
     # Select best model
@@ -294,6 +358,12 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id,
       rse_threshold = rse_threshold
     )
 
+    # VALIDATION: Check step_selection result
+    if (is.null(step_selection) || is.null(step_selection$search_state)) {
+      cat(sprintf("❌ Failed in Step %d selection - invalid result\n", forward_step))
+      break
+    }
+
     search_state <- step_selection$search_state
 
     # Store results
@@ -303,8 +373,8 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id,
       selection = step_selection
     )
 
-    # Update tracking
-    all_tested_covariates <- c(all_tested_covariates, step_creation$covariate_tags)
+    # FIXED: Update tracking with correct field name
+    all_tested_covariates <- c(all_tested_covariates, step_creation$successful_covariates)
 
     # Check if we found improvement
     if (is.null(step_selection$best_model)) {
@@ -334,40 +404,49 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id,
       step_name = "Final Step: Dropped Covariate Testing"
     )
 
-    search_state <- final_creation$search_state
+    # VALIDATION: Check final_creation result
+    if (!is.null(final_creation) && !is.null(final_creation$search_state)) {
+      search_state <- final_creation$search_state
 
-    if (final_creation$status == "models_created") {
-      # Submit and wait
-      final_completion <- submit_and_wait_for_step(
-        search_state = search_state,
-        model_names = final_creation$models_created,
-        step_name = "Final Step Models",
-        max_wait_minutes = max_wait_minutes,
-        auto_submit = auto_submit
-      )
+      if (final_creation$status == "models_created") {
+        # Submit and wait
+        final_completion <- submit_and_wait_for_step(
+          search_state = search_state,
+          model_names = final_creation$models_created,
+          step_name = "Final Step Models",
+          max_wait_minutes = max_wait_minutes,
+          auto_submit = auto_submit
+        )
 
-      search_state <- final_completion$search_state
+        # VALIDATION: Check final_completion result
+        if (!is.null(final_completion) && !is.null(final_completion$search_state)) {
+          search_state <- final_completion$search_state
 
-      # Select best model
-      final_selection <- select_best_model(
-        search_state = search_state,
-        model_names = final_completion$completed_models,
-        ofv_threshold = ofv_threshold,
-        rse_threshold = rse_threshold
-      )
+          # Select best model
+          final_selection <- select_best_model(
+            search_state = search_state,
+            model_names = final_completion$completed_models,
+            ofv_threshold = ofv_threshold,
+            rse_threshold = rse_threshold
+          )
 
-      search_state <- final_selection$search_state
+          # VALIDATION: Check final_selection result
+          if (!is.null(final_selection) && !is.null(final_selection$search_state)) {
+            search_state <- final_selection$search_state
 
-      step_results[["final_step"]] <- list(
-        creation = final_creation,
-        completion = final_completion,
-        selection = final_selection
-      )
+            step_results[["final_step"]] <- list(
+              creation = final_creation,
+              completion = final_completion,
+              selection = final_selection
+            )
 
-      # Update final model if improvement found
-      if (!is.null(final_selection$best_model)) {
-        current_base_model <- final_selection$best_model
-        cat(sprintf("🎯 Final improvement found - final model: %s\n", current_base_model))
+            # Update final model if improvement found
+            if (!is.null(final_selection$best_model)) {
+              current_base_model <- final_selection$best_model
+              cat(sprintf("🎯 Final improvement found - final model: %s\n", current_base_model))
+            }
+          }
+        }
       }
     }
   } else {
@@ -439,4 +518,3 @@ view_exclusion_status <- function(search_state) {
   cat(paste(rep("=", 60), collapse=""), "\n")
   return(invisible(NULL))
 }
-
