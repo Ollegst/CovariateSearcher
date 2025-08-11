@@ -136,6 +136,7 @@ ensure_base_model_in_database <- function(search_state) {
   return(search_state)
 }
 
+
 #' Load Search State from File
 #'
 #' @title Load previously saved search state
@@ -155,7 +156,6 @@ load_search_state <- function(filename) {
 
   return(search_state)
 }
-
 
 #' Initialize Search Database (SIMPLIFIED SCHEMA)
 #' @param search_state List containing search state
@@ -184,7 +184,6 @@ initialize_search_database_core <- function(search_state) {
   cat("Simplified search database initialized (removed redundant columns)\n")
   return(search_state)
 }
-
 
 
 #' Get Model Status
@@ -342,22 +341,37 @@ update_model_counter <- function(search_state) {
 #' @param search_state List. Current search state
 #' @return Data frame with model summary using generated descriptions
 #' @export
-create_comprehensive_table <- function(search_state) {
+create_comprehensive_table <- function(search_state, use_separate_columns = TRUE) {
   db <- search_state$search_database
 
   # Handle NULL or empty database
   if (is.null(db) || nrow(db) == 0) {
-    return(data.frame(
-      model_name = character(0),
-      parent_display = character(0),
-      model_type = character(0),
-      changes = character(0),
-      status = character(0),
-      ofv_display = character(0),
-      delta_display = character(0),
-      param_display = character(0),
-      stringsAsFactors = FALSE
-    ))
+    if (use_separate_columns) {
+      return(data.frame(
+        model_name = character(0),
+        parent_display = character(0),
+        model_type = character(0),
+        step = character(0),
+        changes = character(0),
+        status = character(0),
+        ofv_display = character(0),
+        delta_display = character(0),
+        param_display = character(0),
+        stringsAsFactors = FALSE
+      ))
+    } else {
+      return(data.frame(
+        model_name = character(0),
+        parent_display = character(0),
+        model_type = character(0),
+        changes = character(0),
+        status = character(0),
+        ofv_display = character(0),
+        delta_display = character(0),
+        param_display = character(0),
+        stringsAsFactors = FALSE
+      ))
+    }
   }
 
   # Validate required columns exist
@@ -371,17 +385,6 @@ create_comprehensive_table <- function(search_state) {
   # Create working copy
   result_df <- db
 
-  # Ensure we have all rows (defensive programming)
-  if (nrow(result_df) == 0) {
-    return(data.frame(
-      model_name = character(0), parent_display = character(0),
-      model_type = character(0), changes = character(0),
-      status = character(0), ofv_display = character(0),
-      delta_display = character(0), param_display = character(0),
-      stringsAsFactors = FALSE
-    ))
-  }
-
   # Generate all display columns using vectorized functions
   tryCatch({
     # Parent display - handle NA/empty values
@@ -394,12 +397,35 @@ create_comprehensive_table <- function(search_state) {
     # Model type (all development for now)
     result_df$model_type <- "Development"
 
-    # Changes description using vectorized helper function
-    result_df$changes <- generate_step_description(
-      result_df$step_number,
-      result_df$action,
-      result_df$covariate_tested
-    )
+    if (use_separate_columns) {
+      # NEW VERSION: Separate Step and Changes columns
+      result_df$step <- generate_step_display(
+        result_df$step_number,
+        result_df$action
+      )
+
+      result_df$changes <- generate_changes_display(
+        result_df$action,
+        result_df$covariate_tested
+      )
+
+      final_cols <- c("model_name", "parent_display", "model_type", "step", "changes",
+                      "status_display", "ofv_display", "delta_display", "param_display")
+      final_names <- c("model_name", "parent_display", "model_type", "step", "changes",
+                       "status", "ofv_display", "delta_display", "param_display")
+    } else {
+      # ORIGINAL VERSION: Single Changes column
+      result_df$changes <- generate_step_description(
+        result_df$step_number,
+        result_df$action,
+        result_df$covariate_tested
+      )
+
+      final_cols <- c("model_name", "parent_display", "model_type", "changes",
+                      "status_display", "ofv_display", "delta_display", "param_display")
+      final_names <- c("model_name", "parent_display", "model_type", "changes",
+                       "status", "ofv_display", "delta_display", "param_display")
+    }
 
     # Status display with proper handling of all possible values
     result_df$status_display <- ifelse(
@@ -443,10 +469,6 @@ create_comprehensive_table <- function(search_state) {
     order_idx <- order(result_df$step_number, result_df$model_name)
     result_df <- result_df[order_idx, ]
 
-    # Select final columns matching original interface
-    final_cols <- c("model_name", "parent_display", "model_type", "changes",
-                    "status_display", "ofv_display", "delta_display", "param_display")
-
     # Ensure all columns exist before selecting
     missing_final_cols <- setdiff(final_cols, names(result_df))
     if (length(missing_final_cols) > 0) {
@@ -455,9 +477,8 @@ create_comprehensive_table <- function(search_state) {
 
     final_df <- result_df[, final_cols, drop = FALSE]
 
-    # Rename columns to match original interface exactly
-    names(final_df) <- c("model_name", "parent_display", "model_type", "changes",
-                         "status", "ofv_display", "delta_display", "param_display")
+    # Rename columns to match desired interface
+    names(final_df) <- final_names
 
     return(final_df)
 
@@ -467,20 +488,41 @@ create_comprehensive_table <- function(search_state) {
 }
 
 
+#' Generate Step Display (NEW FUNCTION FOR STEP COLUMN)
+#' @param step_number Integer vector of step numbers
+#' @param action Character vector of action types
+#' @return Character vector of step displays
+generate_step_display <- function(step_number, action) {
+  # Input validation and cleaning
+  step_number <- ifelse(is.na(step_number) | is.null(step_number), 0, step_number)
+  action <- ifelse(is.na(action) | is.null(action) | action == "", "unknown", as.character(action))
+
+  # Generate step display
+  result <- ifelse(
+    action == "base_model", "Base",
+    ifelse(action == "retry", sprintf("Step %d (Retry)", step_number),
+           sprintf("Step %d", step_number))
+  )
+
+  return(result)
+}
+
+
 
 #' View Comprehensive Table (UPDATED FOR SIMPLIFIED SCHEMA)
 #' @param search_state List. Current search state
 #' @export
-view_comprehensive_table <- function(search_state) {
+view_comprehensive_table <- function(search_state, use_separate_columns = TRUE) {
   tryCatch({
-    comprehensive <- create_comprehensive_table(search_state)
+    comprehensive <- create_comprehensive_table(search_state, use_separate_columns)
 
     if (nrow(comprehensive) == 0) {
       cat("📊 No models found\n")
       return(invisible(NULL))
     }
 
-    cat(sprintf("📊 Model Table (%d models)\n", nrow(comprehensive)))
+    table_type <- if (use_separate_columns) "Two-Column" else "Original"
+    cat(sprintf("📊 Model Table (%s Format, %d models)\n", table_type, nrow(comprehensive)))
     print(comprehensive)
     return(invisible(comprehensive))
 
@@ -490,6 +532,28 @@ view_comprehensive_table <- function(search_state) {
   })
 }
 
+#' Generate Changes Display (NEW FUNCTION FOR CHANGES COLUMN)
+#' @param action Character vector of action types
+#' @param covariate_tested Character vector of covariate names
+#' @return Character vector of changes descriptions
+generate_changes_display <- function(action, covariate_tested) {
+  # Input validation and cleaning
+  action <- ifelse(is.na(action) | is.null(action) | action == "", "unknown", as.character(action))
+  covariate_tested <- ifelse(is.na(covariate_tested) | is.null(covariate_tested) | covariate_tested == "", "unknown", as.character(covariate_tested))
+
+  # Generate changes description
+  result <- ifelse(
+    action == "base_model", "Base Model",
+    ifelse(action == "add_covariate", sprintf("Add %s", covariate_tested),
+           ifelse(action == "remove_covariate", sprintf("Remove %s", covariate_tested),
+                  ifelse(action == "retry", sprintf("Retry %s", covariate_tested),
+                         sprintf("Unknown: %s", covariate_tested))))
+  )
+
+  return(result)
+}
+
+
 #' Generate Step Description (VECTORIZED VERSION)
 #' @param step_number Integer vector of step numbers
 #' @param action Character vector of action types
@@ -498,8 +562,8 @@ view_comprehensive_table <- function(search_state) {
 generate_step_description <- function(step_number, action, covariate_tested) {
   # Input validation and cleaning
   step_number <- ifelse(is.na(step_number) | is.null(step_number), 0, step_number)
-  action <- ifelse(is.na(action) | is.null(action), "unknown", action)
-  covariate_tested <- ifelse(is.na(covariate_tested) | is.null(covariate_tested), "unknown", covariate_tested)
+  action <- ifelse(is.na(action) | is.null(action) | action == "", "unknown", as.character(action))
+  covariate_tested <- ifelse(is.na(covariate_tested) | is.null(covariate_tested) | covariate_tested == "", "unknown", as.character(covariate_tested))
 
   # Vectorized case_when equivalent using ifelse
   result <- ifelse(
@@ -507,13 +571,15 @@ generate_step_description <- function(step_number, action, covariate_tested) {
     ifelse(action == "add_covariate", sprintf("Step %d: Add %s", step_number, covariate_tested),
            ifelse(action == "remove_covariate", sprintf("Step %d: Remove %s", step_number, covariate_tested),
                   ifelse(action == "retry", sprintf("Step %d: Retry %s", step_number, covariate_tested),
-                         sprintf("Step %d: %s", step_number, action))))
+                         ifelse(action == "unknown", sprintf("Step %d: Unknown", step_number),
+                                sprintf("Step %d: %s", step_number, action)))))
   )
 
   return(result)
 }
 
-#' Generate Phase (VECTORIZED VERSION)
+
+#' Generate Phase (VECTORIZED VERSION - KEPT FOR COMPATIBILITY)
 #' @param step_number Integer vector of step numbers
 #' @param action Character vector of action types
 #' @return Character vector of phases

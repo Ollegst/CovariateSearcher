@@ -4,7 +4,7 @@
 \alias{view_comprehensive_table}
 \title{View Comprehensive Table (UPDATED FOR SIMPLIFIED SCHEMA)}
 \usage{
-view_comprehensive_table(search_state)
+view_comprehensive_table(search_state, use_separate_columns = TRUE)
 }
 \arguments{
 \item{search_state}{List. Current search state}

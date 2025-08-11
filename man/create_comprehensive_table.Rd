@@ -4,7 +4,7 @@
 \alias{create_comprehensive_table}
 \title{Create Comprehensive Table (UPDATED FOR SIMPLIFIED SCHEMA - FIXED)}
 \usage{
-create_comprehensive_table(search_state)
+create_comprehensive_table(search_state, use_separate_columns = TRUE)
 }
 \arguments{
 \item{search_state}{List. Current search state}
