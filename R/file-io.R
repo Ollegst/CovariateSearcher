@@ -17,7 +17,7 @@
 extract_model_results <- function(search_state, model_name) {
 
   status <- get_model_status(search_state, model_name)
-  ofv <- get_model_ofv(search_state, model_name)
+  ofv <- get_model_ofv_from_database(search_state, model_name)
 
   # Basic result structure
   results <- list(

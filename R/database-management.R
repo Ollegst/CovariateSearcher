@@ -217,15 +217,16 @@ get_model_status <- function(search_state, model_name) {
 
 
 
-#' Get Model OFV
+#' Get Model OFV from Database
 #'
 #' @title Extract OFV from completed model database entry
-#' @description Extracts the objective function value from search database
-#' @param search_state List containing search state
-#' @param model_name Character. Model name
-#' @return Numeric. OFV value or NA if not available
+#' @description Fast lookup of cached OFV value from search database
+#' @param search_state Search state object
+#' @param model_name Model name
+#' @return Numeric OFV or NA if not found
+#' @note For authoritative values, use get_model_ofv_from_files()
 #' @export
-get_model_ofv <- function(search_state, model_name) {
+get_model_ofv_from_database  <- function(search_state, model_name) {
 
   model_row <- search_state$search_database[
     search_state$search_database$model_name == model_name, ]
