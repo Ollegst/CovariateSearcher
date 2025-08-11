@@ -108,11 +108,11 @@ run_univariate_step <- function(search_state, base_model_id, covariates_to_test,
 
 
 
-#' Submit Models and Wait for Completion
+#' Submit Models and Wait for Completion with Auto-Updates
 #'
-#' @title Submit models and wait for all to complete before proceeding
+#' @title Submit models and wait for all to complete with automatic status updates
 #' @description Submits a batch of models in parallel using bbr and monitors
-#'   their completion status with timeout protection.
+#'   their completion status with 1-minute updates and timeout protection.
 #' @param search_state List containing covariate search state and configuration
 #' @param model_names Character vector. Model names to submit and monitor
 #' @param step_name Character. Description of current step
@@ -122,7 +122,7 @@ run_univariate_step <- function(search_state, base_model_id, covariates_to_test,
 #' @return List with completion results and updated search_state
 #' @export
 submit_and_wait_for_step <- function(search_state, model_names, step_name,
-                                     max_wait_minutes = 10000, threads = NULL,
+                                     max_wait_minutes = 120, threads = NULL,
                                      auto_submit = TRUE) {
   if (length(model_names) == 0) {
     return(list(
@@ -153,7 +153,7 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
 
   # Submit all models
   submission_results <- list()
-  failed_submissions <- character(0)
+  failed_submissions <- character()
 
   for (model_name in model_names) {
     cat(sprintf("  Submitting %s... ", model_name))
@@ -168,9 +168,9 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
 
       # Read and submit model using bbr
       mod <- bbr::read_model(model_path)
-      bbr::submit_model(mod,  .bbi_args = list(threads = 60), .overwrite = TRUE)
+      bbr::submit_model(mod, .bbi_args = list(threads = threads), .overwrite = TRUE)
 
-      # Update database status
+      # Initially set submission time to current time (will be updated with actual start time)
       db_idx <- which(search_state$search_database$model_name == model_name)
       if (length(db_idx) > 0) {
         search_state$search_database$submission_time[db_idx] <- Sys.time()
@@ -206,53 +206,113 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
     ))
   }
 
-  # Wait for all models to complete
-  cat(sprintf("\n⏳ WAITING FOR COMPLETION (%d minutes max)\n", max_wait_minutes))
+  # Wait for all models to complete with 1-minute updates
+  cat(sprintf("\n⏳ MONITORING WITH 1-MINUTE UPDATES (%d minutes max)\n", max_wait_minutes))
 
   start_time <- Sys.time()
   max_wait_time <- start_time + (max_wait_minutes * 60)
-  last_status_print <- start_time - 61  # Force initial status print
+  update_count <- 0
 
   completed_models <- character(0)
   failed_models <- character(0)
 
   while (Sys.time() < max_wait_time) {
+    update_count <- update_count + 1
 
-    # Update status for all models
-    update_result <- update_all_model_statuses(search_state)
-    search_state <- update_result$search_state
+    # 1-MINUTE UPDATE CYCLE
+    cat(sprintf("\n[Update %d] Checking model statuses...\n", update_count))
 
-    # Check current status
-    current_status <- search_state$search_database[
-      search_state$search_database$model_name %in% successful_submissions,
-      c("model_name", "status")]
+    # Update all model statuses from NONMEM files
+    search_state <- update_all_model_statuses(search_state)
 
-    # Count status types
-    completed_now <- current_status$model_name[current_status$status == "completed"]
-    failed_now <- current_status$model_name[current_status$status == "failed"]
-    in_progress <- current_status$model_name[current_status$status == "in_progress"]
+    # Update submission and completion times with actual NONMEM timestamps
+    for (model_name in successful_submissions) {
+      db_idx <- which(search_state$search_database$model_name == model_name)
+      if (length(db_idx) > 0) {
 
-    # Update tracking
-    completed_models <- unique(c(completed_models, completed_now))
-    failed_models <- unique(c(failed_models, failed_now))
+        # Extract actual timestamps from LST file
+        timestamps <- extract_nonmem_timestamps(model_name, search_state$models_folder)
 
-    # Print status update every minute
-    if (difftime(Sys.time(), last_status_print, units = "secs") >= 60) {
-      elapsed_mins <- round(as.numeric(difftime(Sys.time(), start_time, units = "mins")), 1)
-      cat(sprintf("  [%.1f min] Status: %d completed, %d failed, %d running\n",
-                  elapsed_mins, length(completed_models), length(failed_models),
-                  length(in_progress)))
-      last_status_print <- Sys.time()
+        # Update submission_time with actual start time if available
+        if (!is.na(timestamps$start_time)) {
+          search_state$search_database$submission_time[db_idx] <- timestamps$start_time
+        }
+
+        # Update completion_time with actual stop time if available
+        if (!is.na(timestamps$stop_time)) {
+          search_state$search_database$completion_time[db_idx] <- timestamps$stop_time
+        }
+      }
     }
 
-    # Check if all models are done (including submission failures)
-    total_done <- length(completed_models) + length(failed_models) + length(failed_submissions)
-    if (total_done >= length(model_names)) {
+    # Get current status of submitted models
+    current_status <- search_state$search_database %>%
+      filter(model_name %in% successful_submissions) %>%
+      select(model_name, covariate_tested, status, ofv, delta_ofv, estimation_issue) %>%
+      arrange(model_name)
+
+    # Update tracking
+    newly_completed <- current_status %>%
+      filter(status == "completed", !model_name %in% completed_models) %>%
+      pull(model_name)
+
+    newly_failed <- current_status %>%
+      filter(status %in% c("failed", "estimation_error"), !model_name %in% failed_models) %>%
+      pull(model_name)
+
+    completed_models <- unique(c(completed_models, newly_completed))
+    failed_models <- unique(c(failed_models, newly_failed))
+
+    # Count status types
+    status_counts <- current_status %>% count(status)
+    in_progress_count <- status_counts$n[status_counts$status == "in_progress"]
+    if (is.na(in_progress_count)) in_progress_count <- 0
+
+    # Print progress update
+    elapsed_mins <- round(as.numeric(difftime(Sys.time(), start_time, units = "mins")), 1)
+    cat(sprintf("[%.1f min] Status: %d completed, %d failed, %d running\n",
+                elapsed_mins, length(completed_models), length(failed_models), in_progress_count))
+
+    # Show individual model status (if not too many models)
+    if (nrow(current_status) <= 10) {
+      for (i in 1:nrow(current_status)) {
+        row <- current_status[i, ]
+        status_icon <- case_when(
+          row$status == "completed" ~ "✅",
+          row$status == "in_progress" ~ "🔄",
+          row$status %in% c("failed", "estimation_error") ~ "❌",
+          TRUE ~ "❓"
+        )
+
+        cat(sprintf("  %s %s (%s)", status_icon, row$model_name, row$covariate_tested))
+        if (!is.na(row$ofv)) {
+          cat(sprintf(" - OFV: %.2f", row$ofv))
+          if (!is.na(row$delta_ofv)) {
+            cat(sprintf(", ΔOFV: %.2f", row$delta_ofv))
+          }
+        }
+        cat("\n")
+      }
+    }
+
+    # Check if all models are done
+    if (in_progress_count == 0) {
+      cat(sprintf("\n🏁 ALL MODELS FINISHED! (%d completed, %d failed)\n",
+                  length(completed_models), length(failed_models)))
       break
     }
 
-    # Wait before next check
-    Sys.sleep(30)  # Check every 30 seconds
+    # Save intermediate state every 5 updates
+    if (update_count %% 5 == 0) {
+      save_search_state(search_state, sprintf("monitoring_update_%d.rds", update_count))
+      cat("💾 Progress saved\n")
+    }
+
+    # Wait 1 minute before next update
+    if (in_progress_count > 0) {
+      cat("⏱️  Waiting 1 minute for next update...\n")
+      Sys.sleep(60)
+    }
   }
 
   # Final status
@@ -260,7 +320,10 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
   all_failed <- c(failed_models, failed_submissions)
 
   if (Sys.time() >= max_wait_time) {
-    still_running <- setdiff(successful_submissions, c(completed_models, failed_models))
+    still_running <- current_status %>%
+      filter(status == "in_progress") %>%
+      pull(model_name)
+
     cat(sprintf("⏰ Timeout reached after %.1f minutes\n", total_time))
     cat(sprintf("📊 Final Status: %d completed, %d failed, %d still running\n",
                 length(completed_models), length(all_failed), length(still_running)))
@@ -277,6 +340,7 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
     still_running = setdiff(successful_submissions, c(completed_models, failed_models)),
     total_time_minutes = total_time,
     timed_out = Sys.time() >= max_wait_time,
+    updates_performed = update_count,
     status = "completed"
   ))
 }

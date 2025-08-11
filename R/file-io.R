@@ -15,18 +15,21 @@
 #' @return List with extracted results
 #' @export
 extract_model_results <- function(search_state, model_name) {
+  # Get status and OFV from actual NONMEM files, not database
+  model_path <- file.path(search_state$models_folder, model_name)
+  status <- get_model_status_from_files(model_path)  # ✅ From files
+  ofv <- get_model_ofv_from_files(search_state, model_name)  # ✅ From files
 
-  status <- get_model_status(search_state, model_name)
-  ofv <- get_model_ofv_from_database(search_state, model_name)
+  # Extract timestamps from LST file
+  timestamps <- extract_nonmem_timestamps(model_name, search_state$models_folder)
 
-  # Basic result structure
   results <- list(
     model_name = model_name,
     status = status,
     ofv = ofv,
     parameters = NULL,
     rse_values = NULL,
-    extraction_time = Sys.time()
+    extraction_time = timestamps$stop_time %||% Sys.time()  # Use actual completion time
   )
 
   # TODO: Add parameter and RSE extraction when .ext parsing is implemented
@@ -386,3 +389,93 @@ get_model_covariates_from_files <- function(search_state, model_name) {
     return(character(0))
   })
 }
+
+
+#' Extract NONMEM Start and Stop Timestamps from LST File
+#'
+#' @title Parse LST file to extract actual NONMEM execution timestamps
+#' @description Reads NONMEM .lst file to extract the start time (first line)
+#'   and stop time (line after "Stop Time:") when available.
+#' @param model_name Character. Model name (e.g., "run1")
+#' @param models_folder Character. Path to models folder (default: "models")
+#' @return List with start_time and stop_time (POSIXct or NA)
+#' @export
+extract_nonmem_timestamps <- function(model_name, models_folder = "models") {
+
+  lst_file_path <- file.path(models_folder, paste0(model_name, ".lst"))
+
+  if (!file.exists(lst_file_path)) {
+    return(list(
+      start_time = NA,
+      stop_time = NA,
+      error = "LST file not found"
+    ))
+  }
+
+  tryCatch({
+    lst_lines <- readLines(lst_file_path, warn = FALSE)
+
+    if (length(lst_lines) == 0) {
+      return(list(
+        start_time = NA,
+        stop_time = NA,
+        error = "Empty LST file"
+      ))
+    }
+
+    # Extract start time (first line)
+    start_time <- NA
+    if (length(lst_lines) >= 1) {
+      first_line <- trimws(lst_lines[1])
+      # Parse timestamp format: "Mon Aug 11 07:19:54 EDT 2025"
+      start_time <- tryCatch({
+        # Remove timezone abbreviation and parse without it
+        cleaned_line <- gsub(" [A-Z]{3,4} ", " ", first_line)  # Remove EDT/EST etc
+        as.POSIXct(cleaned_line, format = "%a %b %d %H:%M:%S %Y")
+      }, error = function(e) {
+        # Fallback: try different format
+        tryCatch({
+          as.POSIXct(first_line, format = "%a %b %d %H:%M:%S %Z %Y", tz = "")
+        }, error = function(e2) NA)
+      })
+    }
+
+    # Extract stop time (line after "Stop Time:")
+    stop_time <- NA
+    stop_time_idx <- grep("^Stop Time:", lst_lines)
+
+    if (length(stop_time_idx) > 0) {
+      # Get the line after "Stop Time:"
+      stop_line_idx <- stop_time_idx[1] + 1
+      if (stop_line_idx <= length(lst_lines)) {
+        stop_line <- trimws(lst_lines[stop_line_idx])
+        # Parse timestamp format: "Mon Aug 11 07:23:07 EDT 2025"
+        stop_time <- tryCatch({
+          # Remove timezone abbreviation and parse without it
+          cleaned_line <- gsub(" [A-Z]{3,4} ", " ", stop_line)  # Remove EDT/EST etc
+          as.POSIXct(cleaned_line, format = "%a %b %d %H:%M:%S %Y")
+        }, error = function(e) {
+          # Fallback: try different format
+          tryCatch({
+            as.POSIXct(stop_line, format = "%a %b %d %H:%M:%S %Z %Y", tz = "")
+          }, error = function(e2) NA)
+        })
+      }
+    }
+
+    return(list(
+      start_time = start_time,
+      stop_time = stop_time,
+      found_start = !is.na(start_time),
+      found_stop = !is.na(stop_time)
+    ))
+
+  }, error = function(e) {
+    return(list(
+      start_time = NA,
+      stop_time = NA,
+      error = paste("Error reading LST file:", e$message)
+    ))
+  })
+}
+
