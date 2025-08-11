@@ -26,6 +26,8 @@ submit_and_wait_for_step(
 \item{threads}{Numeric. Number of threads per model (uses config if NULL)}
 
 \item{auto_submit}{Logical. Whether to automatically submit models (default: TRUE)}
+
+\item{auto_retry}{Logical. Whether to enable automatic retry for failed models (default: TRUE)}
 }
 \value{
 List with completion results and updated search_state

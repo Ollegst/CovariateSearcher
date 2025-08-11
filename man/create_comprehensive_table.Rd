@@ -8,6 +8,8 @@ create_comprehensive_table(search_state, use_separate_columns = TRUE)
 }
 \arguments{
 \item{search_state}{List. Current search state}
+
+\item{use_separate_columns}{Logical. Whether to use separate Step and Changes columns (default: TRUE)}
 }
 \value{
 Data frame with model summary using generated descriptions

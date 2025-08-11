@@ -7,7 +7,7 @@
 
 
 
-#' Create Retry Model with Adjusted THETA Values (FIXED VERSION)
+#' Create Retry Model with Adjusted THETA Values (FIXED - STANDARDIZED LOGGING)
 #'
 #' @title Create retry model with modified initial estimates
 #' @description Creates a retry model (e.g., run2001 from run2) with THETA values
@@ -26,6 +26,15 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
 
   cat(sprintf("  Original: %s → Retry: %s\n", original_model_name, retry_model_name))
 
+  # Initialize detailed logging
+  log_entries <- character(0)
+  log_msg <- function(message) {
+    timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
+    entry <- paste0(timestamp, " - ", message)
+    log_entries <<- c(log_entries, entry)
+    cat("  ", message, "\n")
+  }
+
   tryCatch({
     # Step 1: Get information about the original model
     original_row <- search_state$search_database[
@@ -35,10 +44,10 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
       stop("Original model not found in database: ", original_model_name)
     }
 
-    cat("  ✓ Original model found in database\n")
+    log_msg("✓ Original model found in database")
 
     # Step 2: Create BBR model copy
-    cat("  Creating BBR model copy...")
+    log_msg("Creating BBR model copy...")
 
     original_model_path <- file.path(search_state$models_folder, original_model_name)
 
@@ -49,10 +58,10 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
       .overwrite = TRUE
     )
 
-    cat(" ✓\n")
+    log_msg("✓ BBR model copy created")
 
     # Step 2.5: Update BBR YAML metadata FIRST (before any file modifications)
-    cat("  Updating BBR YAML metadata...")
+    log_msg("Updating BBR YAML metadata...")
 
     # Get parent model info
     parent_model <- original_row$parent_model[1]
@@ -60,14 +69,18 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
     if (!is.na(parent_model) && nchar(parent_model) > 0) {
       # Update based_on to point to original parent (run1), not failed model (run2)
       retry_mod$based_on <- parent_model
+      log_msg(sprintf("Set based_on to original parent: %s", parent_model))
     }
 
     # Add initial retry note
     retry_mod <- bbr::add_notes(retry_mod, "Retry model with adjusted initial estimates")
-    cat(" ✓\n")
+    log_msg("✓ BBR YAML metadata updated")
 
     # Step 3: Modify THETA values in the model file
-    cat("  Adjusting THETA values for latest covariate...")
+    log_msg("Adjusting THETA values for latest covariate...")
+
+    latest_covariate_name <- NULL
+    latest_covariate_tag <- NULL
 
     if (!is.na(parent_model) && nchar(parent_model) > 0) {
       # Get covariates in parent vs original to find what was added
@@ -77,9 +90,9 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
 
       if (length(added_covs) > 0) {
         latest_covariate_name <- added_covs[1]  # e.g., "WT_CL"
+        log_msg(sprintf("Latest covariate identified: %s", latest_covariate_name))
 
         # Convert covariate name back to tag
-        latest_covariate_tag <- NULL
         for (tag_name in names(search_state$tags)) {
           if (search_state$tags[[tag_name]] == latest_covariate_name) {
             latest_covariate_tag <- tag_name
@@ -88,51 +101,29 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
         }
 
         if (!is.null(latest_covariate_tag)) {
-          cat(sprintf(" (covariate: %s)", latest_covariate_name))
+          log_msg(sprintf("Covariate tag found: %s", latest_covariate_tag))
 
           # Call the THETA adjustment function
           adjustment_result <- adjust_theta_for_covariate(search_state, retry_model_name, latest_covariate_tag)
 
           if (adjustment_result$success) {
-            cat(" ✓\n")
+            log_msg(sprintf("✓ THETA adjustment successful: %d lines modified", adjustment_result$theta_lines_modified))
           } else {
-            cat(" ⚠️  THETA adjustment failed - using original values\n")
+            log_msg(sprintf("⚠️  THETA adjustment failed: %s", adjustment_result$message))
           }
         } else {
-          cat(" ⚠️  Could not find covariate tag - using original values\n")
+          log_msg("⚠️  Could not find covariate tag - using original values")
         }
 
       } else {
-        cat(" ⚠️  No added covariate found - using original values\n")
+        log_msg("⚠️  No added covariate found - using original values")
       }
     } else {
-      cat(" ⚠️  No parent model info - using original values\n")
+      log_msg("⚠️  No parent model info - using original values")
     }
 
-    # Step 4: Create info log file with standard naming format
-    cat("  Creating model info log...")
-
-    if (exists("latest_covariate_name")) {
-      # Get covariate info for the log
-      matching_cov_for_log <- search_state$covariate_search[
-        grepl(paste0("_", latest_covariate_name, "$"), search_state$covariate_search$cov_to_test), ]
-
-      if (nrow(matching_cov_for_log) > 0) {
-        create_model_info_log(
-          search_state = search_state,
-          model_name = retry_model_name,
-          parent_model = parent_model,  # Use original parent (run1), not failed model (run2)
-          covariate_name = latest_covariate_name,
-          cov_info = matching_cov_for_log[1, ]
-        )
-      }
-      cat(" ✓\n")
-    } else {
-      cat(" ⚠️  No covariate info for log\n")
-    }
-
-    # Step 5: Add retry model to database (FIXED - TEMPLATE APPROACH)
-    cat("  Adding to database...")
+    # Step 4: Add retry model to database (FIXED - TEMPLATE APPROACH)
+    log_msg("Adding to database...")
 
     tryCatch({
       # FIXED: Use template approach to avoid column structure mismatches
@@ -164,16 +155,10 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
       # Add to database using rbind (now structure matches exactly)
       search_state$search_database <- rbind(search_state$search_database, new_row)
 
-      cat(" ✓\n")
+      log_msg("✓ Added to database successfully")
 
     }, error = function(db_error) {
-      cat(sprintf(" ❌ Database insertion failed: %s\n", db_error$message))
-
-      # Enhanced debug info
-      cat("  Debug info:\n")
-      cat(sprintf("    Database columns: %s\n", paste(names(search_state$search_database), collapse = ", ")))
-      cat(sprintf("    Template row classes: %s\n", paste(sapply(template_row, class), collapse = ", ")))
-
+      log_msg(sprintf("❌ Database insertion failed: %s", db_error$message))
       stop("Database insertion failed: ", db_error$message)
     })
 
@@ -184,18 +169,55 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
       search_state$search_database$estimation_issue[orig_idx] <- issue_type
     }
 
+    # FIXED: Save standardized log file instead of simple info file
+    if (!is.null(latest_covariate_name)) {
+      log_filename <- file.path(search_state$models_folder,
+                                paste0(retry_model_name, "_retry_", latest_covariate_name, "_log.txt"))
+    } else {
+      log_filename <- file.path(search_state$models_folder,
+                                paste0(retry_model_name, "_retry_unknown_log.txt"))
+    }
+
+    # Add summary to log
+    log_msg("=== RETRY MODEL CREATION SUMMARY ===")
+    log_msg(sprintf("Original model: %s (failed with: %s)", original_model_name, issue_type))
+    log_msg(sprintf("Retry model: %s", retry_model_name))
+    log_msg(sprintf("Parent model: %s", parent_model))
+    log_msg(sprintf("Covariate: %s", latest_covariate_name %||% "unknown"))
+    log_msg(sprintf("THETA adjustment: %s", if(exists("adjustment_result") && adjustment_result$success) "successful" else "failed/skipped"))
+    log_msg(sprintf("Database status: added successfully"))
+    log_msg("=== RETRY MODEL READY FOR SUBMISSION ===")
+
+    # Write log file
+    writeLines(log_entries, log_filename)
+
     cat(sprintf("✅ Retry model %s created successfully\n", retry_model_name))
+    cat(sprintf("📝 Log saved: %s\n", basename(log_filename)))
 
     return(list(
       search_state = search_state,
       retry_model_name = retry_model_name,
       original_model_name = original_model_name,
       issue_type = issue_type,
+      latest_covariate = latest_covariate_name,
+      log_file = log_filename,
       status = "created"
     ))
 
   }, error = function(e) {
+    log_msg(sprintf("❌ Failed to create retry model: %s", e$message))
+
+    # Save error log
+    error_log_filename <- file.path(search_state$models_folder,
+                                    paste0("ERROR_retry_", original_model_name, "_", format(Sys.time(), "%Y%m%d_%H%M%S"), "_log.txt"))
+    log_msg("=== ERROR SUMMARY ===")
+    log_msg(sprintf("Retry creation failed for: %s", original_model_name))
+    log_msg(sprintf("Error: %s", e$message))
+
+    writeLines(log_entries, error_log_filename)
+
     cat(sprintf("❌ Failed to create retry model: %s\n", e$message))
+    cat(sprintf("📝 Error log saved: %s\n", basename(error_log_filename)))
 
     return(list(
       search_state = search_state,
@@ -203,7 +225,8 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
       original_model_name = original_model_name,
       issue_type = issue_type,
       status = "failed",
-      error = e$message
+      error = e$message,
+      log_file = error_log_filename
     ))
   })
 }

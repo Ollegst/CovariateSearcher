@@ -174,6 +174,7 @@ run_univariate_step <- function(search_state, base_model_id, covariates_to_test,
 #' @param max_wait_minutes Numeric. Maximum time to wait for completion (default: 60)
 #' @param threads Numeric. Number of threads per model (uses config if NULL)
 #' @param auto_submit Logical. Whether to automatically submit models (default: TRUE)
+#' @param auto_retry Logical. Whether to enable automatic retry for failed models (default: TRUE)
 #' @return List with completion results and updated search_state
 #' @export
 submit_and_wait_for_step <- function(search_state, model_names, step_name,

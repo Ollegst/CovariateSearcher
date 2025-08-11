@@ -7,7 +7,7 @@
 
 
 
-#' Add Covariate to Model (SIMPLIFIED DATABASE VERSION)
+#' Add Covariate to Model (FIXED - WITH PROPER LOG FILE SAVING)
 #' @param search_state List. Current search state from initialize_covariate_search()
 #' @param base_model_id Character. Base model identifier (e.g., "run1")
 #' @param covariate_tag Character. Covariate tag to add (e.g., "cov_cl_wt")
@@ -98,6 +98,16 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag,
     technical_log <- model_result$log_entries
     cat("  [OK] Covariate added to model file\n")
 
+    # FIXED: Save log file with standardized naming
+    if (!is.null(technical_log) && length(technical_log) > 0) {
+      log_filename <- file.path(search_state$models_folder,
+                                paste0(new_model_name, "_add_", covariate_name, "_log.txt"))
+      writeLines(technical_log, log_filename)
+      cat(sprintf("  📝 Log saved: %s\n", basename(log_filename)))
+    } else {
+      cat("  ⚠️  No log entries captured\n")
+    }
+
     # Sub-step 3c: Add to database (SIMPLIFIED SCHEMA)
     cat("  Adding to database...\n")
 
@@ -138,7 +148,8 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag,
       covariate_added = covariate_name,
       step_number = final_step_number,
       search_state = search_state,
-      technical_log = if(exists("technical_log")) technical_log else character(0)
+      technical_log = technical_log,
+      log_file = if(exists("log_filename")) log_filename else NULL
     ))
 
   }, error = function(e) {
@@ -157,7 +168,6 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag,
     ))
   })
 }
-
 #' Create Model Info Log File
 #'
 #' @title Create detailed log file for model creation

@@ -339,6 +339,7 @@ update_model_counter <- function(search_state) {
 
 #' Create Comprehensive Table (UPDATED FOR SIMPLIFIED SCHEMA - FIXED)
 #' @param search_state List. Current search state
+#' @param use_separate_columns Logical. Whether to use separate Step and Changes columns (default: TRUE)
 #' @return Data frame with model summary using generated descriptions
 #' @export
 create_comprehensive_table <- function(search_state, use_separate_columns = TRUE) {
@@ -511,6 +512,7 @@ generate_step_display <- function(step_number, action) {
 
 #' View Comprehensive Table (UPDATED FOR SIMPLIFIED SCHEMA)
 #' @param search_state List. Current search state
+#' @param use_separate_columns Logical. Whether to use separate Step and Changes columns (default: TRUE)
 #' @export
 view_comprehensive_table <- function(search_state, use_separate_columns = TRUE) {
   tryCatch({

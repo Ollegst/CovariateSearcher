@@ -2,7 +2,7 @@
 % Please edit documentation in R/model-modification.R
 \name{add_covariate_to_model}
 \alias{add_covariate_to_model}
-\title{Add Covariate to Model (SIMPLIFIED DATABASE VERSION)}
+\title{Add Covariate to Model (FIXED - WITH PROPER LOG FILE SAVING)}
 \usage{
 add_covariate_to_model(
   search_state,
@@ -24,5 +24,5 @@ add_covariate_to_model(
 List with updated search_state and new model information
 }
 \description{
-Add Covariate to Model (SIMPLIFIED DATABASE VERSION)
+Add Covariate to Model (FIXED - WITH PROPER LOG FILE SAVING)
 }
