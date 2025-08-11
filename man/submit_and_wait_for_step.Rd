@@ -37,5 +37,5 @@ Submits a batch of models in parallel using bbr and monitors
 their completion status with 1-minute updates and timeout protection.
 }
 \details{
-Submit Models and Wait for Completion with Auto-Updates
+Submit Models and Wait for Completion with Auto-Updates (CORRECTED VERSION)
 }

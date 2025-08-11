@@ -7,28 +7,51 @@
 
 
 
-#' Get Remaining Covariates for Testing
+#' Get Remaining Covariates for Testing (ENHANCED WITH EXCLUSION)
 #'
 #' @title Get list of covariate tags that haven't been tested from base model
 #' @description Identifies which covariates from the search definition haven't
-#'   been added to the specified base model yet.
+#'   been added to the specified base model yet, with exclusion filtering.
 #' @param search_state List containing covariate search state and configuration
 #' @param base_model_id Character. Model to check current covariates against
+#' @param include_excluded Logical. Whether to include excluded covariates (default: FALSE)
 #' @return Character vector of covariate tag names that can still be tested
 #' @export
-get_remaining_covariates <- function(search_state, base_model_id) {
+get_remaining_covariates <- function(search_state, base_model_id, include_excluded = FALSE) {
   # Get current covariates in the base model
   current_covs <- get_model_covariates(search_state, base_model_id)
 
   # Get all available covariate tags
   all_cov_tags <- names(search_state$tags)[grepl("^cov_", names(search_state$tags))]
 
+  # Get excluded covariates (if not including them)
+  if (!include_excluded) {
+    excluded_cov_names <- get_excluded_covariates(search_state)
+    excluded_tags <- character(0)
+
+    # Convert excluded names back to tags
+    for (tag in names(search_state$tags)) {
+      if (search_state$tags[[tag]] %in% excluded_cov_names) {
+        excluded_tags <- c(excluded_tags, tag)
+      }
+    }
+
+    # Remove excluded tags
+    all_cov_tags <- setdiff(all_cov_tags, excluded_tags)
+
+    if (length(excluded_tags) > 0) {
+      cat(sprintf("🚫 Excluding %d covariates from testing: %s\n",
+                  length(excluded_tags), paste(excluded_cov_names, collapse = ", ")))
+    }
+  } else {
+    cat("📋 Including previously excluded covariates for testing\n")
+  }
+
   # Return tags not currently in the model
   remaining_tags <- setdiff(all_cov_tags, current_covs)
 
   return(remaining_tags)
 }
-
 
 
 #' Get Dropped Covariates from Previous Steps
@@ -50,23 +73,50 @@ get_dropped_covariates <- function(search_state, current_model_id, tested_covari
 
 
 
-#' Get Excluded Covariates
+#' Get Excluded Covariates (ENHANCED VERSION)
 #'
-#' @title Get list of covariates excluded from current step
+#' @title Get list of covariates excluded from current step with details
 #' @description Returns covariates that have been excluded due to estimation issues
 #' @param search_state List containing covariate search state and configuration
-#' @return Character vector of excluded covariate names
+#' @param return_details Logical. Whether to return detailed exclusion info (default: FALSE)
+#' @return Character vector of excluded covariate names, or data.frame if return_details=TRUE
 #' @export
-get_excluded_covariates <- function(search_state) {
+get_excluded_covariates <- function(search_state, return_details = FALSE) {
 
   excluded_models <- search_state$search_database[search_state$search_database$excluded_from_step == TRUE, ]
 
-  if (nrow(excluded_models) > 0) {
+  if (nrow(excluded_models) == 0) {
+    if (return_details) {
+      return(data.frame(
+        covariate_tested = character(0),
+        original_model = character(0),
+        retry_model = character(0),
+        exclusion_reason = character(0),
+        step_number = integer(0),
+        stringsAsFactors = FALSE
+      ))
+    } else {
+      return(character(0))
+    }
+  }
+
+  if (return_details) {
+    # Return detailed exclusion information
+    exclusion_details <- excluded_models %>%
+      dplyr::filter(!is.na(covariate_tested) & covariate_tested != "") %>%
+      dplyr::select(covariate_tested, model_name, original_model, estimation_issue, step_number) %>%
+      dplyr::rename(
+        retry_model = model_name,
+        exclusion_reason = estimation_issue
+      ) %>%
+      dplyr::arrange(covariate_tested)
+
+    return(exclusion_details)
+  } else {
+    # Return simple character vector of excluded covariate names
     excluded_covs <- unique(excluded_models$covariate_tested)
     excluded_covs <- excluded_covs[!is.na(excluded_covs) & excluded_covs != ""]
     return(excluded_covs)
-  } else {
-    return(character(0))
   }
 }
 
@@ -355,5 +405,38 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id,
     total_time_minutes = scm_time,
     final_covariates = final_covariates
   ))
+}
+
+#' View Exclusion Status Summary
+#'
+#' @title Display current exclusion status with details
+#' @description Shows which covariates are excluded and why
+#' @param search_state List containing search state
+#' @return Invisible NULL (prints to console)
+#' @export
+view_exclusion_status <- function(search_state) {
+  cat("\n📋 COVARIATE EXCLUSION STATUS\n")
+  cat(paste(rep("=", 60), collapse=""), "\n")
+
+  exclusion_details <- get_excluded_covariates(search_state, return_details = TRUE)
+
+  if (nrow(exclusion_details) == 0) {
+    cat("✅ No covariates currently excluded\n")
+  } else {
+    cat(sprintf("🚫 %d covariates excluded from forward steps:\n\n", nrow(exclusion_details)))
+
+    for (i in 1:nrow(exclusion_details)) {
+      row <- exclusion_details[i, ]
+      cat(sprintf("  ❌ %s (Step %d)\n", row$covariate_tested, row$step_number))
+      cat(sprintf("     Original: %s → Retry: %s\n", row$original_model, row$retry_model))
+      cat(sprintf("     Reason: %s\n", row$exclusion_reason))
+      cat("\n")
+    }
+
+    cat("💡 These covariates will be available for final testing before backward elimination\n")
+  }
+
+  cat(paste(rep("=", 60), collapse=""), "\n")
+  return(invisible(NULL))
 }
 

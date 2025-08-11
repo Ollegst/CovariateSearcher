@@ -2,7 +2,7 @@
 % Please edit documentation in R/recovery-actions.R
 \name{process_estimation_issues}
 \alias{process_estimation_issues}
-\title{Process detected estimation issues and trigger appropriate recovery}
+\title{Process detected estimation issues with smart retry/exclusion logic}
 \usage{
 process_estimation_issues(search_state, models_with_issues)
 }
@@ -19,5 +19,5 @@ Orchestrates the recovery process for models with estimation
 issues. Creates retries for original models or excludes covariates for failed retries.
 }
 \details{
-Process Estimation Issues and Trigger Recovery
+Process Estimation Issues (ENHANCED WITH NO-RETRY LOGIC)
 }

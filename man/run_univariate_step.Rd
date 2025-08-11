@@ -2,22 +2,30 @@
 % Please edit documentation in R/scm-execution.R
 \name{run_univariate_step}
 \alias{run_univariate_step}
-\title{Run Univariate Step (SIMPLIFIED DATABASE VERSION)}
+\title{Run Univariate Step (ENHANCED WITH EXCLUSION FILTERING)}
 \usage{
-run_univariate_step(search_state, base_model_id, covariates_to_test, step_name)
+run_univariate_step(
+  search_state,
+  base_model_id,
+  covariates_to_test = NULL,
+  step_name,
+  include_excluded = FALSE
+)
 }
 \arguments{
 \item{search_state}{List containing covariate search state and configuration}
 
 \item{base_model_id}{Character. Base model to test from}
 
-\item{covariates_to_test}{Character vector. Covariate tags to test}
+\item{covariates_to_test}{Character vector. Covariate tags to test (optional)}
 
 \item{step_name}{Character. Description for this step}
+
+\item{include_excluded}{Logical. Whether to include excluded covariates (default: FALSE for forward, TRUE for final testing)}
 }
 \value{
 List with created model information and updated search_state
 }
 \description{
-Run Univariate Step (SIMPLIFIED DATABASE VERSION)
+Run Univariate Step (ENHANCED WITH EXCLUSION FILTERING)
 }

@@ -25,5 +25,5 @@ When a retry model fails, exclude the associated covariate
 from the current step but keep it available for final phase testing.
 }
 \details{
-Handle Failed Retry Model
+Handle Failed Retry Model (ENHANCED VERSION)
 }

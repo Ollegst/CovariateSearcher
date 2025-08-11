@@ -2,19 +2,21 @@
 % Please edit documentation in R/scm-algorithm.R
 \name{get_excluded_covariates}
 \alias{get_excluded_covariates}
-\title{Get list of covariates excluded from current step}
+\title{Get list of covariates excluded from current step with details}
 \usage{
-get_excluded_covariates(search_state)
+get_excluded_covariates(search_state, return_details = FALSE)
 }
 \arguments{
 \item{search_state}{List containing covariate search state and configuration}
+
+\item{return_details}{Logical. Whether to return detailed exclusion info (default: FALSE)}
 }
 \value{
-Character vector of excluded covariate names
+Character vector of excluded covariate names, or data.frame if return_details=TRUE
 }
 \description{
 Returns covariates that have been excluded due to estimation issues
 }
 \details{
-Get Excluded Covariates
+Get Excluded Covariates (ENHANCED VERSION)
 }

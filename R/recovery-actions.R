@@ -321,9 +321,9 @@ adjust_theta_for_covariate <- function(search_state, model_name, covariate_tag) 
 }
 
 
-#' Process Estimation Issues and Trigger Recovery
+#' Process Estimation Issues (ENHANCED WITH NO-RETRY LOGIC)
 #'
-#' @title Process detected estimation issues and trigger appropriate recovery
+#' @title Process detected estimation issues with smart retry/exclusion logic
 #' @description Orchestrates the recovery process for models with estimation
 #'   issues. Creates retries for original models or excludes covariates for failed retries.
 #' @param search_state List containing covariate search state and configuration
@@ -355,7 +355,7 @@ process_estimation_issues <- function(search_state, models_with_issues) {
     is_retry <- grepl("\\d{3}$", model_name)
 
     if (is_retry) {
-      cat("  This is a retry model - excluding covariate from step\n")
+      cat("  This is a retry model - excluding covariate from forward steps\n")
 
       # Handle failed retry by excluding covariate
       exclusion_result <- handle_failed_retry(search_state, model_name, issue_info$issue_type)
@@ -427,8 +427,7 @@ process_estimation_issues <- function(search_state, models_with_issues) {
 }
 
 
-
-#' Handle Failed Retry Model
+#' Handle Failed Retry Model (ENHANCED VERSION)
 #'
 #' @title Handle failed retry model by excluding covariate from step
 #' @description When a retry model fails, exclude the associated covariate
@@ -462,18 +461,22 @@ handle_failed_retry <- function(search_state, retry_model_name, exclusion_reason
   cat(sprintf("   Original: %s, Covariate: %s, Step: %d\n",
               original_model_name, covariate_tested, current_step))
 
-  # Step 1: Update retry model status to "failed"
+  # Step 1: Update retry model status to "failed" and mark as excluded
   search_state$search_database$status[retry_idx] <- "failed"
   search_state$search_database$excluded_from_step[retry_idx] <- TRUE
   search_state$search_database$completion_time[retry_idx] <- Sys.time()
+  search_state$search_database$estimation_issue[retry_idx] <- exclusion_reason
 
   # Step 2: Update original model exclusion
   original_idx <- which(search_state$search_database$model_name == original_model_name)
   if (length(original_idx) > 0) {
     search_state$search_database$excluded_from_step[original_idx] <- TRUE
+    search_state$search_database$estimation_issue[original_idx] <- exclusion_reason
   }
 
-  cat(sprintf("✅ Excluded covariate '%s' from step %d\n", covariate_tested, current_step))
+  cat(sprintf("✅ Excluded covariate '%s' from current step\n", covariate_tested))
+  cat(sprintf("   Reason: %s\n", exclusion_reason))
+  cat(sprintf("   Available for final testing before backward elimination\n"))
 
   return(list(
     search_state = search_state,
@@ -481,7 +484,7 @@ handle_failed_retry <- function(search_state, retry_model_name, exclusion_reason
     excluded_covariate = covariate_tested,
     retry_model = retry_model_name,
     original_model = original_model_name,
-    step_number = current_step
+    step_number = current_step,
+    exclusion_reason = exclusion_reason
   ))
 }
-
