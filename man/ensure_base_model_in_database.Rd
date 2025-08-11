@@ -2,7 +2,7 @@
 % Please edit documentation in R/database-management.R
 \name{ensure_base_model_in_database}
 \alias{ensure_base_model_in_database}
-\title{Ensure Base Model in Database}
+\title{Ensure Base Model in Database (SIMPLIFIED SCHEMA)}
 \usage{
 ensure_base_model_in_database(search_state)
 }
@@ -13,5 +13,5 @@ ensure_base_model_in_database(search_state)
 Updated search_state with base model added if missing
 }
 \description{
-Ensure Base Model in Database
+Ensure Base Model in Database (SIMPLIFIED SCHEMA)
 }

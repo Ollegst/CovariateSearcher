@@ -100,29 +100,26 @@ save_search_state <- function(search_state, filename = "search_state_backup.rds"
   return(invisible(TRUE))
 }
 
-#' Ensure Base Model in Database
+#' Ensure Base Model in Database (SIMPLIFIED SCHEMA)
 #' @param search_state List containing search state
 #' @return Updated search_state with base model added if missing
+#' @export
 ensure_base_model_in_database <- function(search_state) {
-  # Check if base model already exists in database
   if (search_state$base_model %in% search_state$search_database$model_name) {
     cat(sprintf("Base model '%s' already in database\n", search_state$base_model))
     return(search_state)
   }
 
-  # Add base model with minimal required information
   base_row <- data.frame(
     model_name = search_state$base_model,
-    step_description = "Base Model",
-    phase = "base",
     step_number = 0L,
     parent_model = NA_character_,
     covariate_tested = "Base Model",
     action = "base_model",
-    ofv = NA_real_,  # Will be updated when needed
+    ofv = NA_real_,
     delta_ofv = NA_real_,
     rse_max = NA_real_,
-    status = "unknown",  # Can be updated later
+    status = "unknown",
     tags = I(list(character(0))),
     submission_time = as.POSIXct(NA),
     completion_time = as.POSIXct(NA),
@@ -160,18 +157,13 @@ load_search_state <- function(filename) {
 }
 
 
-#' Initialize Search Database
-#'
-#' @title Initialize the search database with retry tracking columns
-#' @description Creates empty search database with all required columns
+#' Initialize Search Database (SIMPLIFIED SCHEMA)
 #' @param search_state List containing search state
-#' @return Updated search_state (initialization function - returns directly)
+#' @return Updated search_state with simplified database schema
 #' @export
 initialize_search_database_core <- function(search_state) {
   search_state$search_database <- data.frame(
     model_name = character(),
-    step_description = character(),
-    phase = character(),
     step_number = integer(),
     parent_model = character(),
     covariate_tested = character(),
@@ -189,7 +181,7 @@ initialize_search_database_core <- function(search_state) {
     excluded_from_step = logical(),
     stringsAsFactors = FALSE
   )
-  cat("Search database initialized with retry tracking columns\n")
+  cat("Simplified search database initialized (removed redundant columns)\n")
   return(search_state)
 }
 
@@ -346,63 +338,198 @@ update_model_counter <- function(search_state) {
 
 
 
-#' Create Model Summary Table
-#'
+#' Create Comprehensive Table (UPDATED FOR SIMPLIFIED SCHEMA - FIXED)
 #' @param search_state List. Current search state
-#' @return Data frame with model summary
+#' @return Data frame with model summary using generated descriptions
 #' @export
 create_comprehensive_table <- function(search_state) {
-
   db <- search_state$search_database
 
-  # Handle NULL database
+  # Handle NULL or empty database
   if (is.null(db) || nrow(db) == 0) {
-    return(tibble::tibble(
-      model_name = character(0), parent_display = character(0),
-      model_type = character(0), changes = character(0),
-      status = character(0), ofv_display = character(0),
-      delta_display = character(0), param_display = character(0)
+    return(data.frame(
+      model_name = character(0),
+      parent_display = character(0),
+      model_type = character(0),
+      changes = character(0),
+      status = character(0),
+      ofv_display = character(0),
+      delta_display = character(0),
+      param_display = character(0),
+      stringsAsFactors = FALSE
     ))
   }
 
-  # Create summary using the actual database fields
-  db %>%
-    dplyr::mutate(
-      parent_display = ifelse(is.na(parent_model) | parent_model == "", "-", parent_model),
-      model_type = "Development",
-      changes = dplyr::case_when(
-        covariate_tested == "Base Model" ~ "Base model",
-        covariate_tested == "Retry Model" ~ "+ Retry",
-        is.na(covariate_tested) | covariate_tested == "Unknown" ~ "Unknown",
-        TRUE ~ paste("+", covariate_tested)
-      ),
-      status_display = "not_submitted",
-      ofv_display = "pending",
-      delta_display = "-",
-      param_display = dplyr::case_when(
-        covariate_tested == "Base Model" ~ "2",
-        covariate_tested == "Retry Model" ~ "3",
-        !is.na(covariate_tested) ~ "3",
-        TRUE ~ "NA"
-      )
-    ) %>%
-    dplyr::select(model_name, parent_display, model_type, changes,
-                  status = status_display, ofv_display, delta_display, param_display)
+  # Validate required columns exist
+  required_cols <- c("model_name", "step_number", "action", "covariate_tested",
+                     "parent_model", "status", "ofv", "delta_ofv")
+  missing_cols <- setdiff(required_cols, names(db))
+  if (length(missing_cols) > 0) {
+    stop("Missing required database columns: ", paste(missing_cols, collapse = ", "))
+  }
+
+  # Create working copy
+  result_df <- db
+
+  # Ensure we have all rows (defensive programming)
+  if (nrow(result_df) == 0) {
+    return(data.frame(
+      model_name = character(0), parent_display = character(0),
+      model_type = character(0), changes = character(0),
+      status = character(0), ofv_display = character(0),
+      delta_display = character(0), param_display = character(0),
+      stringsAsFactors = FALSE
+    ))
+  }
+
+  # Generate all display columns using vectorized functions
+  tryCatch({
+    # Parent display - handle NA/empty values
+    result_df$parent_display <- ifelse(
+      is.na(result_df$parent_model) | result_df$parent_model == "" | result_df$parent_model == "NA",
+      "-",
+      as.character(result_df$parent_model)
+    )
+
+    # Model type (all development for now)
+    result_df$model_type <- "Development"
+
+    # Changes description using vectorized helper function
+    result_df$changes <- generate_step_description(
+      result_df$step_number,
+      result_df$action,
+      result_df$covariate_tested
+    )
+
+    # Status display with proper handling of all possible values
+    result_df$status_display <- ifelse(
+      is.na(result_df$status), "❓ Unknown",
+      ifelse(result_df$status == "completed", "✅ Complete",
+             ifelse(result_df$status == "failed", "❌ Failed",
+                    ifelse(result_df$status == "in_progress", "🔄 Running",
+                           ifelse(result_df$status == "created", "📝 Created",
+                                  ifelse(result_df$status == "unknown", "❓ Unknown",
+                                         paste0("❓ ", result_df$status))))))
+    )
+
+    # OFV display - handle various NA cases
+    result_df$ofv_display <- ifelse(
+      is.na(result_df$ofv) | is.infinite(result_df$ofv),
+      "pending",
+      sprintf("%.2f", result_df$ofv)
+    )
+
+    # Delta OFV display - handle various NA cases
+    result_df$delta_display <- ifelse(
+      is.na(result_df$delta_ofv) | is.infinite(result_df$delta_ofv),
+      "-",
+      sprintf("%.2f", result_df$delta_ofv)
+    )
+
+    # Parameter count - simplified logic based on action
+    result_df$param_display <- ifelse(
+      is.na(result_df$action), "NA",
+      ifelse(result_df$action == "base_model", "2",
+             ifelse(result_df$action %in% c("add_covariate", "retry"), "3", "NA"))
+    )
+
+  }, error = function(e) {
+    stop("Error generating display columns: ", e$message)
+  })
+
+  # Select and arrange final columns
+  tryCatch({
+    # Order by step number, then model name
+    order_idx <- order(result_df$step_number, result_df$model_name)
+    result_df <- result_df[order_idx, ]
+
+    # Select final columns matching original interface
+    final_cols <- c("model_name", "parent_display", "model_type", "changes",
+                    "status_display", "ofv_display", "delta_display", "param_display")
+
+    # Ensure all columns exist before selecting
+    missing_final_cols <- setdiff(final_cols, names(result_df))
+    if (length(missing_final_cols) > 0) {
+      stop("Missing generated columns: ", paste(missing_final_cols, collapse = ", "))
+    }
+
+    final_df <- result_df[, final_cols, drop = FALSE]
+
+    # Rename columns to match original interface exactly
+    names(final_df) <- c("model_name", "parent_display", "model_type", "changes",
+                         "status", "ofv_display", "delta_display", "param_display")
+
+    return(final_df)
+
+  }, error = function(e) {
+    stop("Error creating final table: ", e$message)
+  })
 }
 
 
 
-#' View Model Summary Table
-#'
+#' View Comprehensive Table (UPDATED FOR SIMPLIFIED SCHEMA)
 #' @param search_state List. Current search state
 #' @export
 view_comprehensive_table <- function(search_state) {
-  comprehensive <- create_comprehensive_table(search_state)
-  if (nrow(comprehensive) == 0) {
-    cat("📊 No models found\n")
+  tryCatch({
+    comprehensive <- create_comprehensive_table(search_state)
+
+    if (nrow(comprehensive) == 0) {
+      cat("📊 No models found\n")
+      return(invisible(NULL))
+    }
+
+    cat(sprintf("📊 Model Table (%d models)\n", nrow(comprehensive)))
+    print(comprehensive)
+    return(invisible(comprehensive))
+
+  }, error = function(e) {
+    cat("❌ Error creating model table:", e$message, "\n")
     return(invisible(NULL))
-  }
-  cat(sprintf("📊 Model Table (%d models)\n", nrow(comprehensive)))
-  print(comprehensive)
-  return(invisible(comprehensive))
+  })
 }
+
+#' Generate Step Description (VECTORIZED VERSION)
+#' @param step_number Integer vector of step numbers
+#' @param action Character vector of action types
+#' @param covariate_tested Character vector of covariate names
+#' @return Character vector of step descriptions
+generate_step_description <- function(step_number, action, covariate_tested) {
+  # Input validation and cleaning
+  step_number <- ifelse(is.na(step_number) | is.null(step_number), 0, step_number)
+  action <- ifelse(is.na(action) | is.null(action), "unknown", action)
+  covariate_tested <- ifelse(is.na(covariate_tested) | is.null(covariate_tested), "unknown", covariate_tested)
+
+  # Vectorized case_when equivalent using ifelse
+  result <- ifelse(
+    action == "base_model", "Base Model",
+    ifelse(action == "add_covariate", sprintf("Step %d: Add %s", step_number, covariate_tested),
+           ifelse(action == "remove_covariate", sprintf("Step %d: Remove %s", step_number, covariate_tested),
+                  ifelse(action == "retry", sprintf("Step %d: Retry %s", step_number, covariate_tested),
+                         sprintf("Step %d: %s", step_number, action))))
+  )
+
+  return(result)
+}
+
+#' Generate Phase (VECTORIZED VERSION)
+#' @param step_number Integer vector of step numbers
+#' @param action Character vector of action types
+#' @return Character vector of phases
+generate_phase <- function(step_number, action) {
+  # Input validation and cleaning
+  step_number <- ifelse(is.na(step_number) | is.null(step_number), 0, step_number)
+  action <- ifelse(is.na(action) | is.null(action), "unknown", action)
+
+  # Vectorized case_when equivalent using ifelse
+  result <- ifelse(
+    action == "base_model", "base",
+    ifelse(action == "retry", "retry",
+           ifelse(step_number == 1, "initial_testing",
+                  ifelse(step_number > 1, "forward_selection", "unknown")))
+  )
+
+  return(result)
+}
+

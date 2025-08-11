@@ -2,7 +2,7 @@
 % Please edit documentation in R/database-management.R
 \name{create_comprehensive_table}
 \alias{create_comprehensive_table}
-\title{Create Model Summary Table}
+\title{Create Comprehensive Table (UPDATED FOR SIMPLIFIED SCHEMA - FIXED)}
 \usage{
 create_comprehensive_table(search_state)
 }
@@ -10,8 +10,8 @@ create_comprehensive_table(search_state)
 \item{search_state}{List. Current search state}
 }
 \value{
-Data frame with model summary
+Data frame with model summary using generated descriptions
 }
 \description{
-Create Model Summary Table
+Create Comprehensive Table (UPDATED FOR SIMPLIFIED SCHEMA - FIXED)
 }

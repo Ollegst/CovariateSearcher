@@ -7,11 +7,7 @@
 
 
 
-#' Run Univariate Step
-#'
-#' @title Run univariate analysis: test each covariate individually from base model
-#' @description Creates individual covariate models for testing in parallel.
-#'   Each covariate is added to the base model separately.
+#' Run Univariate Step (SIMPLIFIED DATABASE VERSION)
 #' @param search_state List containing covariate search state and configuration
 #' @param base_model_id Character. Base model to test from
 #' @param covariates_to_test Character vector. Covariate tags to test
@@ -26,6 +22,9 @@ run_univariate_step <- function(search_state, base_model_id, covariates_to_test,
       step_name = step_name,
       base_model = base_model_id,
       models_created = character(0),
+      attempted_covariates = character(0),
+      successful_covariates = character(0),
+      failed_covariates = character(0),
       status = "no_covariates"
     ))
   }
@@ -33,79 +32,135 @@ run_univariate_step <- function(search_state, base_model_id, covariates_to_test,
   cat(sprintf("\n🔬 %s\n", step_name))
   cat(sprintf("Base model: %s\n", base_model_id))
 
-  # FIX: Pre-compute the covariate names to avoid scoping issues
-  covariate_names <- character(length(covariates_to_test))
-  for (i in seq_along(covariates_to_test)) {
-    covariate_names[i] <- search_state$tags[[covariates_to_test[i]]]
+  # STEP 1: Validate all covariate tags BEFORE starting
+  invalid_tags <- covariates_to_test[!covariates_to_test %in% names(search_state$tags)]
+  if (length(invalid_tags) > 0) {
+    stop("Invalid covariate tags found: ", paste(invalid_tags, collapse = ", "))
   }
+
+  # Pre-compute the covariate names for display
+  covariate_names <- sapply(covariates_to_test, function(tag) search_state$tags[[tag]])
 
   cat(sprintf("Testing %d covariates: %s\n",
               length(covariates_to_test),
               paste(covariate_names, collapse = ", ")))
 
-  # Create models for each covariate
-  created_models <- list()
-  step_start_time <- Sys.time()
-  if (nrow(search_state$search_database) == 0) {
-    step_number <- 1
+  # STEP 2: Calculate the step number for THIS entire step
+  step_number <- if (is.null(search_state$search_database) || nrow(search_state$search_database) == 0) {
+    1L
   } else {
-    step_number <- max(search_state$search_database$step_number, na.rm = TRUE) + 1
+    current_max <- max(search_state$search_database$step_number, na.rm = TRUE)
+    if (is.na(current_max) || is.infinite(current_max)) {
+      1L
+    } else {
+      current_max + 1L
+    }
   }
+
+  cat(sprintf("🔢 Step number for all models in this step: %d\n", step_number))
+
+  # STEP 3: Initialize tracking variables
+  created_models <- character(0)        # model_name vector
+  successful_covariates <- character(0) # covariate_tag vector
+  failed_covariates <- character(0)     # covariate_tag vector
+  failure_reasons <- list()             # detailed error messages
+  step_start_time <- Sys.time()
 
   cat("🔧 Creating test models...\n")
 
+  # STEP 4: Create models for each covariate
   for (i in seq_along(covariates_to_test)) {
     cov_tag <- covariates_to_test[i]
-    cov_name <- search_state$tags[[cov_tag]]
+    cov_name <- covariate_names[i]
 
-    cat(sprintf("  [%d/%d] Testing %s (%s)... ", i, length(covariates_to_test), cov_tag, cov_name))
+    cat(sprintf("  [%d/%d] Testing %s (%s)... ",
+                i, length(covariates_to_test), cov_tag, cov_name))
 
     tryCatch({
-      # Use detailed logging function for comprehensive model creation logs
-      result <- add_covariate_with_detailed_logging(search_state, base_model_id, cov_tag)
+      # Call add_covariate_to_model with the calculated step_number
+      result <- add_covariate_to_model(
+        search_state = search_state,
+        base_model_id = base_model_id,
+        covariate_tag = cov_tag,
+        step_number = step_number
+      )
 
-      # FUNCTIONAL FIX: Use returned search_state
+      # Validate result structure
+      if (is.null(result) || is.null(result$search_state)) {
+        stop("add_covariate_to_model returned invalid result")
+      }
+
+      # Update search_state with the returned state
       search_state <- result$search_state
 
-      if (!is.null(result$model_name)) {
+      if (result$status == "success") {
         model_name <- result$model_name
-        created_models[[cov_tag]] <- model_name
-
-        # Add step-specific information to database
-        db_idx <- which(search_state$search_database$model_name == model_name)
-        if (length(db_idx) > 0) {
-          search_state$search_database$step_description[db_idx] <- step_name
-          search_state$search_database$phase[db_idx] <- "forward_selection"
-          search_state$search_database$step_number[db_idx] <- step_number
-          search_state$search_database$covariate_tested[db_idx] <- cov_name
-          search_state$search_database$action[db_idx] <- "add_single_covariate"
-        }
-
+        created_models <- c(created_models, model_name)
+        successful_covariates <- c(successful_covariates, cov_tag)
         cat("✓\n")
       } else {
+        failed_covariates <- c(failed_covariates, cov_tag)
+        failure_reasons[[cov_tag]] <- result$error_message
         cat("✗ Failed\n")
       }
 
     }, error = function(e) {
       cat(sprintf("✗ Error: %s\n", e$message))
+      failed_covariates <- c(failed_covariates, cov_tag)
+      failure_reasons[[cov_tag]] <- e$message
     })
   }
 
+  # STEP 5: Calculate timing and generate summary
   creation_time <- as.numeric(difftime(Sys.time(), step_start_time, units = "mins"))
-  cat(sprintf("✅ Created %d test models in %.1f minutes\n",
-              length(created_models), creation_time))
+
+  successful_count <- length(successful_covariates)
+  failed_count <- length(failed_covariates)
+
+  cat(sprintf("✅ Step complete: %d models created, %d failed in %.1f minutes\n",
+              successful_count, failed_count, creation_time))
+
+  # Show failures if any
+  if (failed_count > 0) {
+    cat("❌ Failed models:\n")
+    for (tag in failed_covariates) {
+      cat(sprintf("  - %s: %s\n", tag, failure_reasons[[tag]]))
+    }
+  }
+
+  # STEP 6: Validate database consistency (this should NEVER fail if our logic is correct)
+  if (successful_count > 0) {
+    db_step_numbers <- search_state$search_database$step_number[
+      search_state$search_database$model_name %in% created_models
+    ]
+
+    # This is an ASSERTION - if it fails, our code has a bug
+    inconsistent_steps <- db_step_numbers[db_step_numbers != step_number]
+    if (length(inconsistent_steps) > 0) {
+      stop(sprintf("INTERNAL ERROR: Inconsistent step numbers in database. Expected %d, found: %s",
+                   step_number, paste(unique(inconsistent_steps), collapse = ", ")))
+    }
+
+    cat(sprintf("✅ Database consistency verified: All %d models have step_number = %d\n",
+                successful_count, step_number))
+  }
 
   return(list(
     search_state = search_state,
     step_name = step_name,
     base_model = base_model_id,
-    models_created = unlist(created_models),
-    covariate_tags = names(created_models),
-    status = "models_created",
-    creation_time = creation_time
+    step_number = step_number,
+    models_created = created_models,                    # model names
+    attempted_covariates = covariates_to_test,         # all attempted covariate tags
+    successful_covariates = successful_covariates,     # successful covariate tags
+    failed_covariates = failed_covariates,             # failed covariate tags
+    failure_reasons = failure_reasons,                 # detailed error messages
+    creation_time = creation_time,
+    successful_count = successful_count,
+    failed_count = failed_count,
+    status = if (successful_count > 0) "models_created" else "all_failed"
   ))
 }
-
 
 
 #' Submit Models and Wait for Completion with Auto-Updates

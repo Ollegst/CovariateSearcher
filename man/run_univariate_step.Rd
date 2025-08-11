@@ -2,7 +2,7 @@
 % Please edit documentation in R/scm-execution.R
 \name{run_univariate_step}
 \alias{run_univariate_step}
-\title{Run univariate analysis: test each covariate individually from base model}
+\title{Run Univariate Step (SIMPLIFIED DATABASE VERSION)}
 \usage{
 run_univariate_step(search_state, base_model_id, covariates_to_test, step_name)
 }
@@ -19,9 +19,5 @@ run_univariate_step(search_state, base_model_id, covariates_to_test, step_name)
 List with created model information and updated search_state
 }
 \description{
-Creates individual covariate models for testing in parallel.
-Each covariate is added to the base model separately.
-}
-\details{
-Run Univariate Step
+Run Univariate Step (SIMPLIFIED DATABASE VERSION)
 }

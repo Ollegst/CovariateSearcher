@@ -7,20 +7,18 @@
 
 
 
-#' Add Covariate to Model
-#'
-#' @title Creates a new model by adding a single covariate to an existing base model
-#' @description This is the core function for stepwise covariate modeling.
-#'   Enhanced version with detailed logging and error handling.
+#' Add Covariate to Model (SIMPLIFIED DATABASE VERSION)
 #' @param search_state List. Current search state from initialize_covariate_search()
 #' @param base_model_id Character. Base model identifier (e.g., "run1")
 #' @param covariate_tag Character. Covariate tag to add (e.g., "cov_cl_wt")
+#' @param step_number Integer. Optional step number (NULL for auto-calculation)
 #' @return List with updated search_state and new model information
 #' @export
-add_covariate_to_model <- function(search_state, base_model_id, covariate_tag) {
+add_covariate_to_model <- function(search_state, base_model_id, covariate_tag,
+                                   step_number = NULL) {
   cat(sprintf("[+] Adding covariate %s to model %s\n", covariate_tag, base_model_id))
 
-  # Get covariate information
+  # STEP 1: Validate inputs and calculate step number FIRST
   if (!covariate_tag %in% names(search_state$tags)) {
     stop("Covariate tag not found: ", covariate_tag)
   }
@@ -28,47 +26,63 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag) {
   covariate_name <- search_state$tags[[covariate_tag]]
   cat(sprintf("  Covariate: %s\n", covariate_name))
 
-  # Calculate new model name (increment counter FIRST)
-  search_state$model_counter <- search_state$model_counter + 1
-  new_model_name <- sprintf("run%d", search_state$model_counter)
-  cat(sprintf("  New model: %s\n", new_model_name))
+  # Calculate step number BEFORE incrementing counter
+  final_step_number <- if (!is.null(step_number)) {
+    step_number  # Use provided step_number
+  } else {
+    # Auto-calculate for manual additions
+    if (is.null(search_state$search_database) || nrow(search_state$search_database) == 0) {
+      1L
+    } else {
+      current_max <- max(search_state$search_database$step_number, na.rm = TRUE)
+      if (is.na(current_max) || is.infinite(current_max)) 1L else current_max + 1L
+    }
+  }
+  cat(sprintf("  Step number: %d\n", final_step_number))
 
-  # Find covariate definition in search database
+  # Find covariate definition
   matching_cov <- search_state$covariate_search[
     grepl(paste0("_", covariate_name, "$"), search_state$covariate_search$cov_to_test), ]
 
   if (nrow(matching_cov) == 0) {
-    warning("No matching covariate definition found for: ", covariate_name)
-    cov_definition <- "Unknown"
-  } else {
-    cov_definition <- matching_cov$cov_to_test[1]
+    stop("No matching covariate definition found for: ", covariate_name)
   }
 
+  # STEP 2: Calculate model name and prepare for creation
+  original_counter <- search_state$model_counter
+  search_state$model_counter <- search_state$model_counter + 1
+  new_model_name <- sprintf("run%d", search_state$model_counter)
+  cat(sprintf("  New model: %s\n", new_model_name))
+
+  # STEP 3: Comprehensive error handling wrapper
   tryCatch({
-    # Step 1: Create BBR model (creates physical file)
+    # Sub-step 3a: Create BBR model
     cat("  Creating BBR model...\n")
     parent_path <- file.path(search_state$models_folder, base_model_id)
 
+    if (!file.exists(paste0(parent_path, ".ctl")) && !file.exists(paste0(parent_path, ".mod"))) {
+      stop("Parent model file not found: ", parent_path)
+    }
+
+    parent_mod <- bbr::read_model(parent_path)
     new_mod <- bbr::copy_model_from(
-      .parent_mod = bbr::read_model(parent_path),
+      .parent_mod = parent_mod,
       .new_model = new_model_name,
       .inherit_tags = TRUE,
       .overwrite = TRUE
-    ) %>%
-      bbr::add_tags(.tags = search_state$tags[[covariate_tag]]) %>%
-      bbr::add_notes(.notes = paste0("+ ", search_state$tags[[covariate_tag]]))
+    )
+
+    new_mod <- bbr::add_tags(new_mod, .tags = search_state$tags[[covariate_tag]])
+    new_mod <- bbr::add_notes(new_mod, .notes = paste0("+ ", search_state$tags[[covariate_tag]]))
 
     cat("  [OK] BBR model created\n")
-    cat(sprintf("  [OK] Model counter updated to: %d\n", search_state$model_counter))
 
-    # Step 2: Try to add covariate (may fail, but file already exists)
+    # Sub-step 3b: Add covariate to model file
     cat("  Adding covariate to model file...\n")
-
-    # Get covariate information for model modification
     cov_info <- matching_cov[1, ]
-    cov_name <- cov_info$COVARIATE  # e.g., "WT"
-    param_name <- cov_info$PARAMETER # e.g., "CL"
-    cov_on_param <- paste0(cov_name, "_", param_name)  # e.g., "WT_CL"
+    cov_name <- cov_info$COVARIATE
+    param_name <- cov_info$PARAMETER
+    cov_on_param <- paste0(cov_name, "_", param_name)
 
     model_result <- model_add_cov(
       search_state = search_state,
@@ -82,73 +96,67 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag) {
 
     search_state <- model_result$search_state
     technical_log <- model_result$log_entries
-
     cat("  [OK] Covariate added to model file\n")
 
-    # Step 3: Add to database
+    # Sub-step 3c: Add to database (SIMPLIFIED SCHEMA)
     cat("  Adding to database...\n")
 
-    new_row <- data.frame(
-      model_name = new_model_name,
-      step_description = sprintf("Add %s", covariate_name),
-      phase = "forward_selection",
-      step_number = 1L,
-      parent_model = base_model_id,
-      covariate_tested = covariate_name,
-      action = "add_single_covariate",
-      ofv = NA_real_,
-      delta_ofv = NA_real_,
-      rse_max = NA_real_,
-      status = "created",
-      tags = I(list(c(covariate_name))),
-      submission_time = as.POSIXct(NA),
-      completion_time = as.POSIXct(NA),
-      retry_attempt = 0L,
-      original_model = NA_character_,
-      estimation_issue = NA_character_,
-      excluded_from_step = FALSE,
-      stringsAsFactors = FALSE
-    )
+    tryCatch({
+      new_row <- data.frame(
+        model_name = new_model_name,
+        step_number = final_step_number,
+        parent_model = base_model_id,
+        covariate_tested = covariate_name,
+        action = "add_covariate",
+        ofv = NA_real_,
+        delta_ofv = NA_real_,
+        rse_max = NA_real_,
+        status = "created",
+        tags = I(list(c(covariate_name))),
+        submission_time = as.POSIXct(NA),
+        completion_time = as.POSIXct(NA),
+        retry_attempt = 0L,
+        original_model = NA_character_,
+        estimation_issue = NA_character_,
+        excluded_from_step = FALSE,
+        stringsAsFactors = FALSE
+      )
 
-    search_state$search_database <- rbind(search_state$search_database, new_row)
+      search_state$search_database <- rbind(search_state$search_database, new_row)
+      cat("  [OK] Added to database\n")
 
-    cat(sprintf("[OK] Model %s added to database\n", new_model_name))
+    }, error = function(db_error) {
+      cat(sprintf("  [ERROR] Database insertion failed: %s\n", db_error$message))
+      stop("Database insertion failed: ", db_error$message)
+    })
+
+    cat(sprintf("[OK] Model %s created successfully\n", new_model_name))
 
     return(list(
       status = "success",
       model_name = new_model_name,
       covariate_added = covariate_name,
+      step_number = final_step_number,
       search_state = search_state,
-      technical_log = technical_log
+      technical_log = if(exists("technical_log")) technical_log else character(0)
     ))
 
   }, error = function(e) {
     cat(sprintf("[X] Model creation failed: %s\n", e$message))
 
-    # Check if physical model file was created
-    model_file_path <- file.path(search_state$models_folder, paste0(new_model_name, ".ctl"))
-    file_exists <- file.exists(model_file_path)
-
-    if (file_exists) {
-      # File was created but later steps failed
-      cat(sprintf("  [INFO] Physical model file exists: %s\n", basename(model_file_path)))
-    } else {
-      # File creation failed completely - rollback counter
-      search_state$model_counter <- search_state$model_counter - 1
-      cat(sprintf("  [INFO] No physical model file created, counter rolled back\n"))
-    }
+    # Rollback model counter
+    search_state$model_counter <- original_counter
+    cat(sprintf("  [ROLLBACK] Model counter restored to: %d\n", original_counter))
 
     return(list(
       status = "error",
       error_message = e$message,
       attempted_model = new_model_name,
-      file_exists = file_exists,
+      step_number = final_step_number,
       search_state = search_state
     ))
   })
 }
-
-
 
 #' Create Model Info Log File
 #'

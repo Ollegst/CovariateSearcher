@@ -2,9 +2,14 @@
 % Please edit documentation in R/model-modification.R
 \name{add_covariate_to_model}
 \alias{add_covariate_to_model}
-\title{Creates a new model by adding a single covariate to an existing base model}
+\title{Add Covariate to Model (SIMPLIFIED DATABASE VERSION)}
 \usage{
-add_covariate_to_model(search_state, base_model_id, covariate_tag)
+add_covariate_to_model(
+  search_state,
+  base_model_id,
+  covariate_tag,
+  step_number = NULL
+)
 }
 \arguments{
 \item{search_state}{List. Current search state from initialize_covariate_search()}
@@ -12,14 +17,12 @@ add_covariate_to_model(search_state, base_model_id, covariate_tag)
 \item{base_model_id}{Character. Base model identifier (e.g., "run1")}
 
 \item{covariate_tag}{Character. Covariate tag to add (e.g., "cov_cl_wt")}
+
+\item{step_number}{Integer. Optional step number (NULL for auto-calculation)}
 }
 \value{
 List with updated search_state and new model information
 }
 \description{
-This is the core function for stepwise covariate modeling.
-Enhanced version with detailed logging and error handling.
-}
-\details{
-Add Covariate to Model
+Add Covariate to Model (SIMPLIFIED DATABASE VERSION)
 }
