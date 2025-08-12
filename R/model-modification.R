@@ -129,6 +129,7 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag,
         original_model = NA_character_,
         estimation_issue = NA_character_,
         excluded_from_step = FALSE,
+        step_description = sprintf("Add %s", covariate_name),
         stringsAsFactors = FALSE
       )
 

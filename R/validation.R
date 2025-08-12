@@ -162,6 +162,7 @@ update_model_status_from_files <- function(search_state, model_name) {
     return(search_state)
   }
 
+
   # FIXED: Add comprehensive error handling for timestamp extraction
   timestamps <- tryCatch({
     if (exists("extract_nonmem_timestamps") && is.function(extract_nonmem_timestamps)) {
@@ -297,7 +298,9 @@ update_model_status_from_files <- function(search_state, model_name) {
       }
     } else {
       # Base model or no parent
-      search_state$search_database$delta_ofv[db_idx] <- NA_real_
+      search_state$search_database$delta_ofv[db_idx] <- ifelse(
+        model_name == search_state$base_model, 0.0, NA_real_)
+
       if (!is.na(results$ofv) && is.numeric(results$ofv)) {
         cat(sprintf("✅ Model %s (%s) completed: OFV %.2f\n",
                     model_name, display_covariate, results$ofv))
@@ -308,7 +311,7 @@ update_model_status_from_files <- function(search_state, model_name) {
     }
   }
 
-  return(search_state)
+return(search_state)
 }
 
 
