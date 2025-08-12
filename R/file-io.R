@@ -163,30 +163,56 @@ read_nonmem_ext <- function(model_path) {
 
 
 
-#' Read NONMEM LST File with Basic Error Detection
+#' Read NONMEM LST File with Basic Error Detection (FIXED)
 #'
-#' @title Basic LST file reader that detects completion and failures
-#' @description Reads NONMEM .lst files and detects successful completion
-#'   or failures with basic error message extraction
+#' @title Robust LST file reader with comprehensive error handling
+#' @description Enhanced version with comprehensive input validation and error handling
 #' @param model_path Character. Path to model directory or lst file
 #' @return List with status and error information
 #' @export
 read_nonmem_lst <- function(model_path) {
+  # FIXED: Comprehensive input validation
+  if (is.null(model_path) || length(model_path) == 0 ||
+      nchar(as.character(model_path)) == 0 || as.character(model_path) == "") {
+    return(list(
+      found = FALSE,
+      status = "invalid_input",
+      error_message = "Invalid model path",
+      error_excerpt = "",
+      has_issues = TRUE
+    ))
+  }
+
+  # FIXED: Safer file path handling
+  model_path_str <- as.character(model_path)
 
   # Find the .lst file
-  if (file.exists(model_path) && grepl("\\.lst$", model_path)) {
-    lst_file <- model_path
+  if (file.exists(model_path_str) && grepl("\\.lst$", model_path_str)) {
+    lst_file <- model_path_str
   } else {
-    model_name <- basename(model_path)
+    model_name <- basename(model_path_str)
+    # FIXED: Comprehensive model_name validation
+    if (is.null(model_name) || length(model_name) == 0 ||
+        nchar(as.character(model_name)) == 0 || as.character(model_name) == "") {
+      return(list(
+        found = FALSE,
+        status = "invalid_path",
+        error_message = "Cannot determine model name from path",
+        error_excerpt = "",
+        has_issues = TRUE
+      ))
+    }
+
+    model_name_str <- as.character(model_name)
     possible_lst_files <- c(
-      file.path(model_path, paste0(model_name, ".lst")),
-      file.path(dirname(model_path), paste0(model_name, ".lst")),
-      paste0(model_path, ".lst")
+      file.path(model_path_str, paste0(model_name_str, ".lst")),
+      file.path(dirname(model_path_str), paste0(model_name_str, ".lst")),
+      paste0(model_path_str, ".lst")
     )
 
     lst_file <- NULL
     for (path in possible_lst_files) {
-      if (file.exists(path)) {
+      if (!is.null(path) && file.exists(path)) {
         lst_file <- path
         break
       }
@@ -199,13 +225,25 @@ read_nonmem_lst <- function(model_path) {
       status = "not_run",
       error_message = "LST file not found",
       error_excerpt = "",
-      has_issues = FALSE
+      has_issues = FALSE  # FIXED: Not having LST file yet is not an "issue"
     ))
   }
 
-  # Read and analyze .lst file
+  # Read and analyze .lst file with comprehensive error handling
   tryCatch({
     lst_content <- readLines(lst_file, warn = FALSE)
+
+    # FIXED: Handle empty LST file
+    if (is.null(lst_content) || length(lst_content) == 0) {
+      return(list(
+        found = TRUE,
+        file = lst_file,
+        status = "incomplete",
+        error_message = "Empty LST file",
+        error_excerpt = "",
+        has_issues = TRUE
+      ))
+    }
 
     # Initialize result
     result <- list(
@@ -217,70 +255,86 @@ read_nonmem_lst <- function(model_path) {
       has_issues = FALSE
     )
 
+    # FIXED: Safer pattern matching with validation
+    has_successful <- any(grepl("MINIMIZATION SUCCESSFUL", lst_content, ignore.case = FALSE))
+    has_terminated <- any(grepl("MINIMIZATION TERMINATED", lst_content, ignore.case = FALSE))
+    has_obj_terminated <- any(grepl("PROGRAM TERMINATED BY OBJ", lst_content, ignore.case = FALSE))
+
     # Check for successful completion
-    if (any(grepl("MINIMIZATION SUCCESSFUL", lst_content))) {
+    if (has_successful) {
       result$status <- "completed"
       result$has_issues <- FALSE
 
-    } else if (any(grepl("MINIMIZATION TERMINATED", lst_content))) {
+    } else if (has_terminated) {
       result$status <- "failed"
       result$has_issues <- TRUE
 
-      # Extract termination reason
-      term_idx <- grep("MINIMIZATION TERMINATED", lst_content)[1]
-      if (!is.na(term_idx)) {
-        # Get context around termination
-        context_start <- max(1, term_idx - 2)
-        context_end <- min(length(lst_content), term_idx + 10)
-        result$error_excerpt <- paste(lst_content[context_start:context_end], collapse = "\n")
+      # FIXED: Comprehensive error message extraction with validation
+      tryCatch({
+        term_lines <- lst_content[grepl("MINIMIZATION TERMINATED|DUE TO|ERROR=",
+                                        lst_content, ignore.case = FALSE)]
 
-        # Extract error message from the lines following termination
-        error_lines <- lst_content[(term_idx + 1):(term_idx + 5)]
-        error_lines <- error_lines[nchar(trimws(error_lines)) > 0]  # Remove empty lines
+        if (length(term_lines) > 0) {
+          # Extract the most informative line
+          error_lines <- term_lines[grepl("DUE TO|ERROR=", term_lines, ignore.case = FALSE)]
 
-        if (length(error_lines) > 0) {
-          result$error_message <- trimws(error_lines[1])
+          if (length(error_lines) > 0) {
+            error_line <- error_lines[1]
+            # FIXED: Safer string processing with validation
+            if (!is.null(error_line) && nchar(as.character(error_line)) > 0) {
+              clean_error <- tryCatch({
+                error_str <- as.character(error_line)
+                # Remove leading spaces
+                error_str <- gsub("^\\s+", "", error_str)
+                # Normalize spaces
+                error_str <- gsub("\\s+", " ", error_str)
+                # Remove "DUE TO"
+                error_str <- gsub("DUE TO ", "", error_str)
+                # Clean up error format
+                error_str <- gsub("\\(ERROR=", "(Error ", error_str)
+                # Final trim
+                trimws(error_str)
+              }, error = function(e) {
+                "MINIMIZATION TERMINATED"
+              })
+
+              # FIXED: Ensure we have a non-empty error message
+              if (!is.null(clean_error) && nchar(as.character(clean_error)) > 0) {
+                result$error_message <- as.character(clean_error)
+              } else {
+                result$error_message <- "MINIMIZATION TERMINATED"
+              }
+            } else {
+              result$error_message <- "MINIMIZATION TERMINATED"
+            }
+          } else {
+            result$error_message <- "MINIMIZATION TERMINATED"
+          }
         } else {
-          result$error_message <- "NONMEM terminated for unknown reason"
+          result$error_message <- "MINIMIZATION TERMINATED"
         }
-      } else {
-        result$error_message <- "NONMEM terminated for unknown reason"
-      }
+      }, error = function(e) {
+        result$error_message <- "MINIMIZATION TERMINATED (error parsing details)"
+      })
 
-    } else if (any(grepl("PROGRAM TERMINATED BY OBJ", lst_content))) {
+    } else if (has_obj_terminated) {
       result$status <- "failed"
       result$has_issues <- TRUE
-
-      # Find the termination line and extract context
-      term_idx <- grep("PROGRAM TERMINATED BY OBJ", lst_content)[1]
-      if (!is.na(term_idx)) {
-        # Get context around termination
-        context_start <- max(1, term_idx - 2)
-        context_end <- min(length(lst_content), term_idx + 10)
-        result$error_excerpt <- paste(lst_content[context_start:context_end], collapse = "\n")
-
-        # Extract error message from the lines following termination
-        error_lines <- lst_content[(term_idx + 1):(term_idx + 5)]
-        error_lines <- error_lines[nchar(trimws(error_lines)) > 0]  # Remove empty lines
-
-        if (length(error_lines) > 0) {
-          result$error_message <- trimws(error_lines[1])
-        } else {
-          result$error_message <- "Program terminated by objective function error"
-        }
-      } else {
-        result$error_message <- "Program terminated by objective function error"
-      }
+      result$error_message <- "PROGRAM TERMINATED BY OBJ"
 
     } else {
-      result$status <- "incomplete"
-      result$has_issues <- TRUE
-      result$error_message <- "Model run incomplete or in progress"
-    }
+      # FIXED: Better detection of incomplete vs running models
+      has_execution <- any(grepl("NONMEM EXECUTION", lst_content, ignore.case = FALSE))
 
-    # Clean up error message - keep only first part (up to first semicolon)
-    if (grepl(";", result$error_message)) {
-      result$error_message <- trimws(strsplit(result$error_message, ";")[[1]][1])
+      if (has_execution) {
+        result$status <- "incomplete"
+        result$has_issues <- FALSE  # Running is not an "issue"
+        result$error_message <- "Model still running"
+      } else {
+        result$status <- "incomplete"
+        result$has_issues <- TRUE
+        result$error_message <- "Model run incomplete or corrupted"
+      }
     }
 
     return(result)
@@ -289,7 +343,7 @@ read_nonmem_lst <- function(model_path) {
     return(list(
       found = FALSE,
       status = "read_error",
-      error_message = paste("Error reading LST file:", e$message),
+      error_message = paste("Error reading LST file:", as.character(e$message)),
       error_excerpt = "",
       has_issues = TRUE
     ))

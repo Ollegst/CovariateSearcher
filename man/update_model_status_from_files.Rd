@@ -15,8 +15,8 @@ update_model_status_from_files(search_state, model_name)
 List with updated search_state
 }
 \description{
-Enhanced version with detailed error reporting and LST excerpts
+Enhanced version with concise error reporting and comprehensive error handling
 }
 \details{
-Update Model Status from Files with Enhanced Error Detection (SINGLE DEFINITION)
+Update Model Status from Files with Enhanced Error Detection (FIXED)
 }

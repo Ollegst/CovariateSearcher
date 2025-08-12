@@ -2,16 +2,21 @@
 % Please edit documentation in R/validation.R
 \name{update_all_model_statuses}
 \alias{update_all_model_statuses}
-\title{Update All Model Statuses}
+\title{Updates all models with robust error handling and concise progress reporting}
 \usage{
-update_all_model_statuses(search_state)
+update_all_model_statuses(search_state, show_progress = TRUE)
 }
 \arguments{
 \item{search_state}{List. Current search state}
+
+\item{show_progress}{Logical. Whether to show progress summary (default: TRUE)}
 }
 \value{
 List with updated search_state
 }
 \description{
-Updates all models in database from NONMEM output files
+Enhanced version with comprehensive error handling and validation
+}
+\details{
+Update All Model Statuses (FIXED)
 }
