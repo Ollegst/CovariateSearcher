@@ -82,7 +82,7 @@ discover_existing_models <- function(search_state) {
           action <- "manual_modification"
         }
 
-        step_num <- as.numeric(gsub("run", "", model_name))
+
 
       }, error = function(e) {
         # If BBR fails, use simple logic
@@ -90,8 +90,15 @@ discover_existing_models <- function(search_state) {
         step_desc <- "Manual/External"
         phase <- "manual"
         action <- "manual_modification"
-        step_num <- as.numeric(gsub("run", "", model_name))
+
       })
+      step_num <- if (model_name == search_state$base_model) {
+        0L  # Base model
+      } else if (!is.na(parent_model) && parent_model == search_state$base_model) {
+        1L  # Direct children of base model (univariate tests)
+      } else {
+        1L  # Default to step 1 for discovered models
+      }
     }
 
     # Get model information - using functions from other files
