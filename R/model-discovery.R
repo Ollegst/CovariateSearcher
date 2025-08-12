@@ -92,12 +92,22 @@ discover_existing_models <- function(search_state) {
         action <- "manual_modification"
 
       })
+      # FIXED: Proper step number calculation based on parent model
       step_num <- if (model_name == search_state$base_model) {
         0L  # Base model
       } else if (!is.na(parent_model) && parent_model == search_state$base_model) {
         1L  # Direct children of base model (univariate tests)
+      } else if (!is.na(parent_model)) {
+        # For models with other parents, find parent's step + 1
+        parent_idx <- which(search_state$search_database$model_name == parent_model)
+        if (length(parent_idx) > 0) {
+          parent_step <- search_state$search_database$step_number[parent_idx[1]]
+          if (!is.na(parent_step)) parent_step + 1L else 1L
+        } else {
+          1L  # Default if parent not found yet
+        }
       } else {
-        1L  # Default to step 1 for discovered models
+        1L  # Default if no parent
       }
     }
 
