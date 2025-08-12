@@ -114,8 +114,10 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag,
     tryCatch({
       new_row <- data.frame(
         model_name = new_model_name,
-        step_number = final_step_number,
-        parent_model = base_model_id,
+        step_description = sprintf("Add %s", covariate_name),  # ← Move to position 2
+        phase = "forward_selection",                           # ← Position 3
+        step_number = final_step_number,                       # ← Position 4
+        parent_model = base_model_id,                          # ← Position 5
         covariate_tested = covariate_name,
         action = "add_covariate",
         ofv = NA_real_,
@@ -129,11 +131,10 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag,
         original_model = NA_character_,
         estimation_issue = NA_character_,
         excluded_from_step = FALSE,
-        step_description = sprintf("Add %s", covariate_name),
         stringsAsFactors = FALSE
       )
 
-      search_state$search_database <- rbind(search_state$search_database, new_row)
+      search_state$search_database <- dplyr::bind_rows(search_state$search_database, new_row)
       cat("  [OK] Added to database\n")
 
     }, error = function(db_error) {
@@ -778,7 +779,7 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
       stringsAsFactors = FALSE
     )
 
-    search_state$search_database <- rbind(search_state$search_database, new_row)
+    search_state$search_database <- dplyr::bind_rows(search_state$search_database, new_row)
     log_msg(paste("Added", new_model_name, "to database"))
   }
 

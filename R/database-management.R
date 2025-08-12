@@ -128,10 +128,12 @@ ensure_base_model_in_database <- function(search_state) {
     original_model = NA_character_,
     estimation_issue = NA_character_,
     excluded_from_step = FALSE,
+    step_description = "Base Model",  # ← Correct! Single string value (length 1)
+    phase = "base",                  # ← Correct! Single string value (length 1)
     stringsAsFactors = FALSE
   )
 
-  search_state$search_database <- rbind(search_state$search_database, base_row)
+  search_state$search_database <- dplyr::bind_rows(search_state$search_database, base_row)
   cat(sprintf("✅ Base model '%s' added to database\n", search_state$base_model))
 
   return(search_state)
@@ -164,6 +166,8 @@ load_search_state <- function(filename) {
 initialize_search_database_core <- function(search_state) {
   search_state$search_database <- data.frame(
     model_name = character(),
+    step_description = character(),
+    phase = character(),
     step_number = integer(),
     parent_model = character(),
     covariate_tested = character(),
