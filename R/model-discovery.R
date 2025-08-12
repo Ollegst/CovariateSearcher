@@ -129,7 +129,7 @@ discover_existing_models <- function(search_state) {
       stringsAsFactors = FALSE
     )
 
-    search_state$search_database <- dplyr::bind_rows()(search_state$search_database, new_row)
+    search_state$search_database <- dplyr::bind_rows(search_state$search_database, new_row)
   }
 
   cat("Added", length(model_names), "models to search database.\n")
