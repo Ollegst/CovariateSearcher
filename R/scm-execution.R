@@ -354,7 +354,7 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
     # Get current status of submitted models (REQUERIED after each retry model addition)
     current_status <- search_state$search_database %>%
       dplyr::filter(model_name %in% successful_submissions) %>%
-      dplyr::select(model_name, covariate_tested, status, ofv, delta_ofv, estimation_issue) %>%
+      dplyr::select(model_name, covariate_tested, status, ofv, delta_ofv, estimation_issue, step_number) %>%
       dplyr::arrange(model_name)
 
     # Track newly completed/failed models for auto-retry logic
@@ -530,7 +530,9 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
           TRUE ~ "🔄"  # Any other status (in_progress, not_run, etc.)
         )
 
-        cat(sprintf("  %s %s (%s)", status_icon, row$model_name, row$covariate_tested))
+        step_prefix <- if (!is.na(row$step_number)) sprintf("[Step %d] ", row$step_number) else ""
+
+        cat(sprintf("  %s%s %s (%s)", step_prefix, status_icon, row$model_name, row$covariate_tested))
         if (!is.na(row$ofv)) {
           cat(sprintf(" - OFV: %.2f", row$ofv))
           if (!is.na(row$delta_ofv)) {

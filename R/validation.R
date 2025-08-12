@@ -126,7 +126,7 @@ update_model_status_from_files <- function(search_state, model_name) {
   # FIXED: Validate required columns exist with more comprehensive check
   required_cols <- c("model_name", "status", "ofv", "estimation_issue",
                      "covariate_tested", "parent_model", "delta_ofv",
-                     "submission_time", "completion_time")
+                     "submission_time", "completion_time", "step_number")
   missing_cols <- setdiff(required_cols, names(search_state$search_database))
   if (length(missing_cols) > 0) {
     cat(sprintf("❌ Missing database columns: %s\n", paste(missing_cols, collapse = ", ")))
@@ -161,7 +161,6 @@ update_model_status_from_files <- function(search_state, model_name) {
     cat(sprintf("⚠️  Model %s not found in database\n", model_name))
     return(search_state)
   }
-
 
   # FIXED: Add comprehensive error handling for timestamp extraction
   timestamps <- tryCatch({
@@ -200,6 +199,10 @@ update_model_status_from_files <- function(search_state, model_name) {
   covariate <- if (nrow(model_row) > 0) model_row$covariate_tested[1] else NA
   parent_model <- if (nrow(model_row) > 0) model_row$parent_model[1] else NA
 
+  # NEW: Extract step information
+  step_number <- if (nrow(model_row) > 0) model_row$step_number[1] else NA
+  step_prefix <- if (!is.na(step_number)) sprintf("[Step %d] ", step_number) else ""
+
   # FIXED: Robust covariate display logic
   display_covariate <- if (is.na(covariate) || is.null(covariate) ||
                            nchar(as.character(covariate)) == 0 ||
@@ -209,16 +212,16 @@ update_model_status_from_files <- function(search_state, model_name) {
     as.character(covariate)
   }
 
-  # FIXED: Safer status reporting with validation
+  # FIXED: Safer status reporting with validation + STEP INFORMATION
   if (!is.null(lst_info$has_issues) && lst_info$has_issues) {
     error_msg <- if (is.null(lst_info$error_message) || is.na(lst_info$error_message)) {
       "Unknown error"
     } else {
       as.character(lst_info$error_message)
     }
-    cat(sprintf("❌ Model %s (%s) FAILED: %s\n", model_name, display_covariate, error_msg))
+    cat(sprintf("%s❌ Model %s (%s) FAILED: %s\n", step_prefix, model_name, display_covariate, error_msg))
   } else {
-    # FIXED: Comprehensive OFV change calculation with validation
+    # FIXED: Comprehensive OFV change calculation with validation + STEP INFORMATION
     if (!is.na(parent_model) && !is.null(parent_model) &&
         nchar(as.character(parent_model)) > 0 && as.character(parent_model) != "") {
 
@@ -256,19 +259,19 @@ update_model_status_from_files <- function(search_state, model_name) {
 
           search_state$search_database$delta_ofv[db_idx] <- delta_ofv
 
-          cat(sprintf("✅ Model %s (%s) completed: OFV %.2f → %.2f (ΔOFV: %+.2f)\n",
-                      model_name, display_covariate, parent_ofv, current_ofv, delta_ofv))
+          cat(sprintf("%s✅ Model %s (%s) completed: OFV %.2f → %.2f (ΔOFV: %+.2f)\n",
+                      step_prefix, model_name, display_covariate, parent_ofv, current_ofv, delta_ofv))
 
         } else if (!is.na(parent_status) && !is.na(current_status) &&
                    !is.null(parent_status) && !is.null(current_status) &&
                    parent_status == "failed" && current_status == "completed") {
           search_state$search_database$delta_ofv[db_idx] <- 999999
           if (!is.na(current_ofv) && is.numeric(current_ofv)) {
-            cat(sprintf("🎉 Model %s (%s) FIXED failed parent %s! OFV: %.2f\n",
-                        model_name, display_covariate, parent_model, current_ofv))
+            cat(sprintf("%s🎉 Model %s (%s) FIXED failed parent %s! OFV: %.2f\n",
+                        step_prefix, model_name, display_covariate, parent_model, current_ofv))
           } else {
-            cat(sprintf("🎉 Model %s (%s) FIXED failed parent %s!\n",
-                        model_name, display_covariate, parent_model))
+            cat(sprintf("%s🎉 Model %s (%s) FIXED failed parent %s!\n",
+                        step_prefix, model_name, display_covariate, parent_model))
           }
         } else if (!is.na(parent_status) && !is.na(current_status) &&
                    !is.null(parent_status) && !is.null(current_status) &&
@@ -278,22 +281,22 @@ update_model_status_from_files <- function(search_state, model_name) {
         } else {
           search_state$search_database$delta_ofv[db_idx] <- NA_real_
           if (!is.na(current_ofv) && is.numeric(current_ofv)) {
-            cat(sprintf("✅ Model %s (%s) completed: OFV %.2f\n",
-                        model_name, display_covariate, current_ofv))
+            cat(sprintf("%s✅ Model %s (%s) completed: OFV %.2f\n",
+                        step_prefix, model_name, display_covariate, current_ofv))
           } else {
-            cat(sprintf("✅ Model %s (%s) completed: OFV unknown\n",
-                        model_name, display_covariate))
+            cat(sprintf("%s✅ Model %s (%s) completed: OFV unknown\n",
+                        step_prefix, model_name, display_covariate))
           }
         }
       } else {
         # No parent found in database
         search_state$search_database$delta_ofv[db_idx] <- NA_real_
         if (!is.na(results$ofv) && is.numeric(results$ofv)) {
-          cat(sprintf("✅ Model %s (%s) completed: OFV %.2f\n",
-                      model_name, display_covariate, results$ofv))
+          cat(sprintf("%s✅ Model %s (%s) completed: OFV %.2f\n",
+                      step_prefix, model_name, display_covariate, results$ofv))
         } else {
-          cat(sprintf("✅ Model %s (%s) completed: OFV unknown\n",
-                      model_name, display_covariate))
+          cat(sprintf("%s✅ Model %s (%s) completed: OFV unknown\n",
+                      step_prefix, model_name, display_covariate))
         }
       }
     } else {
@@ -302,16 +305,16 @@ update_model_status_from_files <- function(search_state, model_name) {
         model_name == search_state$base_model, 0.0, NA_real_)
 
       if (!is.na(results$ofv) && is.numeric(results$ofv)) {
-        cat(sprintf("✅ Model %s (%s) completed: OFV %.2f\n",
-                    model_name, display_covariate, results$ofv))
+        cat(sprintf("%s✅ Model %s (%s) completed: OFV %.2f\n",
+                    step_prefix, model_name, display_covariate, results$ofv))
       } else {
-        cat(sprintf("✅ Model %s (%s) completed: OFV unknown\n",
-                    model_name, display_covariate))
+        cat(sprintf("%s✅ Model %s (%s) completed: OFV unknown\n",
+                    step_prefix, model_name, display_covariate))
       }
     }
   }
 
-return(search_state)
+  return(search_state)
 }
 
 
