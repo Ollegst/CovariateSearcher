@@ -75,10 +75,7 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
     # Add initial retry note
     # Use original model's step number for retry
     original_step <- original_row$step_number[1]
-    step_info <- sprintf("Step %d Retry + %s", original_step, latest_covariate_name)
-    retry_mod <- bbr::replace_all_notes(retry_mod, .notes = step_info)
 
-    log_msg("✓ BBR YAML metadata updated")
 
     # Step 3: Modify THETA values in the model file
     log_msg("Adjusting THETA values for latest covariate...")
@@ -125,6 +122,10 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
     } else {
       log_msg("⚠️  No parent model info - using original values")
     }
+    step_info <- sprintf("Step %d Retry + %s", original_step, latest_covariate_name)
+    retry_mod <- bbr::replace_all_notes(retry_mod, .notes = step_info)
+
+    log_msg("✓ BBR YAML metadata updated")
 
     # Step 4: Add retry model to database (FIXED - TEMPLATE APPROACH)
     log_msg("Adding to database...")
