@@ -196,11 +196,12 @@ update_model_status_from_files <- function(search_state, model_name) {
   }
 
   # FIXED: Safer model information extraction with validation
-  covariate <- if (length(db_idx) > 0) search_state$search_database$covariate_tested[db_idx] else NA
-  parent_model <- if (length(db_idx) > 0) search_state$search_database$parent_model[db_idx] else NA
+  model_row <- search_state$search_database[db_idx, , drop = FALSE]
+  covariate <- if (nrow(model_row) > 0) model_row$covariate_tested[1] else NA
+  parent_model <- if (nrow(model_row) > 0) model_row$parent_model[1] else NA
 
   # NEW: Extract step information
-  step_number <- if (length(db_idx) > 0) search_state$search_database$step_number[db_idx] else NA
+  step_number <- if (nrow(model_row) > 0) model_row$step_number[1] else NA
   step_prefix <- if (!is.na(step_number)) sprintf("[Step %d] ", step_number) else ""
 
   # FIXED: Robust covariate display logic
