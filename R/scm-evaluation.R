@@ -98,9 +98,12 @@ select_best_model <- function(search_state, model_names, ofv_threshold = NULL, r
   for (i in 1:nrow(evaluation_results)) {
     row <- evaluation_results[i, ]
     status_icon <- if (row$overall_significant) "✅" else "❌"
-    best_icon <- if (length(row$model_name) > 0 &&
-                     !is.na(row$model_name) &&
-                     row$model_name == best_model) " 🏆" else ""
+    best_icon <- if (length(row$model_name) > 0 && !is.na(row$model_name) &&
+                     !is.null(best_model) && !is.na(best_model)) {
+      if (row$model_name == best_model) " 🏆" else ""
+    } else {
+      ""
+    }
 
     cat(sprintf("  %s %s: ΔOFV=%.2f, %s%s\n",
                 status_icon, row$model_name,
