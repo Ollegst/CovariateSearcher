@@ -41,7 +41,6 @@ discover_existing_models <- function(search_state) {
 
   # Add each model to database
   for (model_name in model_names) {
-
     # Simple parent relationship logic
     if (model_name == search_state$base_model) {
       parent_model <- NA_character_
@@ -61,19 +60,31 @@ discover_existing_models <- function(search_state) {
             if (length(mod$notes) > 0) mod$notes[1] else ""
           }, error = function(e) "")
 
-          if (notes != "" && grepl("^[+-]", notes)) {
-            # Parse notes like "+ WT_CL" or "- RACE_CL"
-            action <- if (startsWith(notes, "+")) "Add" else "Remove"
+          if (notes != "" && grepl("^Step \\d+", notes)) {
+            # Parse new format: "Step 4 + COMED_CL" or "Step 4 Retry + COMED_CL"
+            if (grepl("Retry", notes)) {
+              action <- "retry"
+              covariate <- gsub("^Step \\d+ Retry \\+ ", "", notes)
+              step_desc <- sprintf("Retry %s", covariate)
+              phase <- "retry"
+            } else {
+              action <- "add_single_covariate"
+              covariate <- gsub("^Step \\d+ \\+ ", "", notes)
+              step_desc <- sprintf("Add %s", covariate)
+              phase <- "individual_testing"
+            }
+          } else if (notes != "" && grepl("^[+-]", notes)) {
+            # Parse old format: "+ WT_CL" or "- RACE_CL"
+            action <- if (startsWith(notes, "+")) "add_single_covariate" else "remove_single_covariate"
             covariate <- gsub("^[+-]\\s*", "", notes)
-            step_desc <- paste(action, covariate)
-
+            step_desc <- paste(if (startsWith(notes, "+")) "Add" else "Remove", covariate)
+            phase <- "individual_testing"
           } else {
             step_desc <- "Added Covariate"  # fallback for models without notes
-
-
+            phase <- "individual_testing"
+            action <- "add_single_covariate"
           }
-          phase <- "individual_testing"
-          action <- "add_single_covariate"
+
         } else {
           # Fallback logic
           parent_model <- search_state$base_model
@@ -82,19 +93,20 @@ discover_existing_models <- function(search_state) {
           action <- "manual_modification"
         }
 
-
-
       }, error = function(e) {
         # If BBR fails, use simple logic
         parent_model <- search_state$base_model
         step_desc <- "Manual/External"
         phase <- "manual"
         action <- "manual_modification"
-
       })
-      # FIXED: Proper step number calculation based on parent model
+
+      # FIXED: Extract step number from notes first, then fallback to parent calculation
       step_num <- if (model_name == search_state$base_model) {
         0L  # Base model
+      } else if (exists("notes") && notes != "" && grepl("^Step \\d+", notes)) {
+        # Extract step from notes like "Step 4 + COMED_CL"
+        as.numeric(gsub("^Step (\\d+).*", "\\1", notes))
       } else if (!is.na(parent_model) && parent_model == search_state$base_model) {
         1L  # Direct children of base model (univariate tests)
       } else if (!is.na(parent_model)) {

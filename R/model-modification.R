@@ -73,7 +73,8 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag,
     )
 
     new_mod <- bbr::add_tags(new_mod, .tags = search_state$tags[[covariate_tag]])
-    new_mod <- bbr::add_notes(new_mod, .notes = paste0("+ ", search_state$tags[[covariate_tag]]))
+    step_info <- sprintf("Step %d + %s", final_step_number, search_state$tags[[covariate_tag]])
+    new_mod <- bbr::replace_all_notes(new_mod, .notes = step_info)
 
     cat("  [OK] BBR model created\n")
 

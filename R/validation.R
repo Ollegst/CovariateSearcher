@@ -126,7 +126,8 @@ update_model_status_from_files <- function(search_state, model_name) {
   # FIXED: Validate required columns exist with more comprehensive check
   required_cols <- c("model_name", "status", "ofv", "estimation_issue",
                      "covariate_tested", "parent_model", "delta_ofv",
-                     "submission_time", "completion_time", "step_number")
+                     "submission_time", "completion_time", "step_number",
+                     "excluded_from_step", "original_model")
   missing_cols <- setdiff(required_cols, names(search_state$search_database))
   if (length(missing_cols) > 0) {
     cat(sprintf("❌ Missing database columns: %s\n", paste(missing_cols, collapse = ", ")))
@@ -195,12 +196,11 @@ update_model_status_from_files <- function(search_state, model_name) {
   }
 
   # FIXED: Safer model information extraction with validation
-  model_row <- search_state$search_database[db_idx, , drop = FALSE]
-  covariate <- if (nrow(model_row) > 0) model_row$covariate_tested[1] else NA
-  parent_model <- if (nrow(model_row) > 0) model_row$parent_model[1] else NA
+  covariate <- if (length(db_idx) > 0) search_state$search_database$covariate_tested[db_idx] else NA
+  parent_model <- if (length(db_idx) > 0) search_state$search_database$parent_model[db_idx] else NA
 
   # NEW: Extract step information
-  step_number <- if (nrow(model_row) > 0) model_row$step_number[1] else NA
+  step_number <- if (length(db_idx) > 0) search_state$search_database$step_number[db_idx] else NA
   step_prefix <- if (!is.na(step_number)) sprintf("[Step %d] ", step_number) else ""
 
   # FIXED: Robust covariate display logic
@@ -311,6 +311,28 @@ update_model_status_from_files <- function(search_state, model_name) {
         cat(sprintf("%s✅ Model %s (%s) completed: OFV unknown\n",
                     step_prefix, model_name, display_covariate))
       }
+    }
+  }
+
+  # NEW: Set excluded_from_step based on model completion status
+  if (lst_info$status == "completed") {
+    search_state$search_database$excluded_from_step[db_idx] <- FALSE
+  } else if (lst_info$status == "failed") {
+    search_state$search_database$excluded_from_step[db_idx] <- TRUE
+  }
+
+  # NEW: Handle retry model success - reset original model exclusion
+  model_row <- search_state$search_database[db_idx, , drop = FALSE]
+  has_original_model <- !is.na(model_row$original_model) &&
+    nchar(as.character(model_row$original_model)) > 0
+
+  if (has_original_model && lst_info$status == "completed") {
+    original_model_name <- as.character(model_row$original_model)
+    original_idx <- which(search_state$search_database$model_name == original_model_name)
+    if (length(original_idx) > 0) {
+      search_state$search_database$excluded_from_step[original_idx] <- FALSE
+      cat(sprintf("%s🔄 Reset exclusion for original model %s (retry succeeded)\n",
+                  step_prefix, original_model_name))
     }
   }
 
