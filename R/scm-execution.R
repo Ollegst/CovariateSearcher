@@ -530,7 +530,11 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
           TRUE ~ "🔄"  # Any other status (in_progress, not_run, etc.)
         )
 
-        step_prefix <- if (!is.na(row$step_number)) sprintf("[Step %d] ", row$step_number) else ""
+        step_prefix <- if (length(row$step_number) > 0 && !is.na(row$step_number)) {
+          sprintf("[Step %d] ", row$step_number)
+        } else {
+          ""
+        }
 
         cat(sprintf("  %s%s %s (%s)", step_prefix, status_icon, row$model_name, row$covariate_tested))
         if (!is.na(row$ofv)) {
