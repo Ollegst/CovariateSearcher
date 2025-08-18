@@ -179,14 +179,12 @@ update_model_status_from_files <- function(search_state, model_name) {
     "failed"
   } else if (lst_info$status == "failed") {
     "failed"
-  } else if (lst_info$status == "completed" && !is.na(results$ofv)) {
-    "completed"
-  } else if (lst_info$status == "completed" && is.na(results$ofv)) {
-    "in_progress"  # LST shows completed but still extracting OFV
-  } else if (lst_info$status %in% c("incomplete", "not_run", "progressing", "in_progress")) {
-    "in_progress"
+  } else if (lst_info$status == "completed" && !is.na(results$ofv) && is.finite(results$ofv)) {
+    "completed"  # ONLY completed if BOTH LST success AND valid OFV
+  } else if (lst_info$status == "completed" && (is.na(results$ofv) || !is.finite(results$ofv))) {
+    "in_progress"  # LST done but OFV not available yet
   } else {
-    lst_info$status  # Use LST status as fallback
+    "in_progress"
   }
 
   # FIXED: Safer database updates with validation - using actual_status
