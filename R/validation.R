@@ -499,7 +499,9 @@ update_all_model_statuses <- function(search_state, show_progress = TRUE) {
     # FIXED: Safer summary statistics with comprehensive validation
     total_completed <- tryCatch({
       if ("status" %in% names(search_state$search_database)) {
-        sum(search_state$search_database$status == "completed", na.rm = TRUE)
+        sum(search_state$search_database$status == "completed" &
+              !is.na(search_state$search_database$ofv) &
+              is.finite(search_state$search_database$ofv), na.rm = TRUE)
       } else {
         0
       }
