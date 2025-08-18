@@ -609,7 +609,7 @@ run_scm_selective_forward <- function(search_state,
     })
 
     if (length(final_covariates) > 0) {
-      best_covariates <- get_model_covariates_from_db(search_state, best_model)
+      best_covariates <- get_model_covariates_from_db(search_state, absolute_best_model)
       cat(sprintf("\n📋 Final model contains: %s\n",
                   paste(best_covariates, collapse = " + ")))
     }
@@ -791,3 +791,387 @@ get_model_covariates_from_db <- function(search_state, model_name) {
 
   return(unique(covariates))
 }
+
+
+
+
+#' Resume Selective Forward Selection from Checkpoint
+#'
+#' @title Resume SCM selective forward selection workflow from a saved checkpoint
+#' @description Loads a previously saved search state and continues selective forward
+#'   selection from where it left off. Can handle incomplete models, update statuses,
+#'   and determine the appropriate next step (continue forward selection or start
+#'   redemption phase). Provides flexible resumption options for interrupted workflows.
+#' @param checkpoint_file Character. Path to the RDS file containing saved search state
+#'   (e.g., "scm_selective_step_3.rds", "scm_forward_selection_complete.rds")
+#' @param ofv_threshold Numeric. OFV improvement threshold for significance testing.
+#'   If NULL, uses value from search_state$search_config$forward_ofv_threshold (default: 3.84)
+#' @param rse_threshold Numeric. Maximum acceptable RSE threshold as percentage.
+#'   If NULL, uses value from search_state$search_config$max_rse_threshold (default: 50)
+#' @param max_wait_minutes Numeric. Maximum time to wait for model completion per step
+#'   when resubmitting incomplete models (default: 120)
+#' @param auto_submit Logical. Whether to automatically resubmit incomplete models
+#'   found in the last step (default: TRUE)
+#' @param auto_retry Logical. Whether to enable automatic retry creation for failed
+#'   models during resubmission (default: TRUE)
+#' @param continue_forward Logical. Whether to automatically continue forward selection
+#'   if possible, or just load and prepare the state (default: TRUE)
+#' @return List containing:
+#'   \itemize{
+#'     \item \code{search_state} - Updated search state with current model statuses
+#'     \item \code{status} - Resume status: "ready", "ready_to_continue", "forward_complete", "no_completed_models"
+#'     \item \code{best_model} - Current best model across all completed steps
+#'     \item \code{best_model_step} - Step number where best model was found
+#'     \item \code{best_model_ofv} - OFV of the best model
+#'     \item \code{last_step} - Last step number found in database
+#'     \item \code{next_step} - Suggested next step number (if continuing)
+#'     \item \code{redemption_suggested} - Whether redemption phase is recommended
+#'     \item \code{message} - Descriptive message about resume status
+#'   }
+#' @details
+#' This function performs the following operations:
+#' \enumerate{
+#'   \item Loads the checkpoint file and validates search state structure
+#'   \item Determines the last completed step and identifies incomplete models
+#'   \item Updates model statuses from NONMEM output files
+#'   \item Optionally resubmits incomplete models if auto_submit=TRUE
+#'   \item Identifies the current best model (lowest OFV) across all steps
+#'   \item Determines appropriate next action:
+#'     \itemize{
+#'       \item Continue forward selection if significant models exist in last step
+#'       \item Suggest redemption phase if best model is from earlier step
+#'       \item Mark as complete if no significant improvements possible
+#'     }
+#'   \item Provides recommendations for next steps based on current state
+#' }
+#' @section Checkpoint Files:
+#' Common checkpoint files created by selective forward selection:
+#' \itemize{
+#'   \item \code{scm_selective_step_N.rds} - Saved after each completed step
+#'   \item \code{scm_selective_complete.rds} - Final state after completion
+#'   \item \code{scm_redemption_N.rds} - Saved during redemption phase
+#' }
+#' @section Resume Scenarios:
+#' \describe{
+#'   \item{Incomplete Models}{If models from the last step are still running or failed,
+#'     they will be updated and optionally resubmitted}
+#'   \item{Continue Forward}{If significant models exist in last step and best model
+#'     is from that step, forward selection can continue}
+#'   \item{Redemption Phase}{If best model is from an earlier step, redemption
+#'     testing of remaining covariates is suggested}
+#'   \item{Complete}{If no significant models exist in last step and best model
+#'     is from that step, forward selection is complete}
+#' }
+#' @examples
+#' \dontrun{
+#' # Resume from step 3 checkpoint and continue automatically
+#' result <- resume_selective_forward("scm_selective_step_3.rds")
+#' search_state <- result$search_state
+#'
+#' # Resume with custom thresholds, just load state without continuing
+#' result <- resume_selective_forward(
+#'   checkpoint_file = "scm_selective_step_5.rds",
+#'   ofv_threshold = 4.0,
+#'   rse_threshold = 40,
+#'   continue_forward = FALSE
+#' )
+#'
+#' # Resume and resubmit incomplete models without auto-retry
+#' result <- resume_selective_forward(
+#'   checkpoint_file = "scm_selective_step_2.rds",
+#'   auto_submit = TRUE,
+#'   auto_retry = FALSE,
+#'   max_wait_minutes = 180
+#' )
+#'
+#' # Check what would happen next without actually continuing
+#' status <- resume_selective_forward(
+#'   checkpoint_file = "scm_selective_complete.rds",
+#'   continue_forward = FALSE
+#' )
+#' cat("Status:", status$status)
+#' cat("Best model:", status$best_model)
+#' cat("Redemption suggested:", status$redemption_suggested)
+#' }
+#' @seealso
+#' \code{\link{run_scm_selective_forward}} for starting selective forward selection,
+#' \code{\link{save_search_state}} for creating checkpoint files,
+#' \code{\link{get_significant_models_from_step}} for analyzing step results
+#' @export
+
+resume_selective_forward <- function(checkpoint_file,
+                                     ofv_threshold = NULL,
+                                     rse_threshold = NULL,
+                                     max_wait_minutes = 120,
+                                     auto_submit = TRUE,
+                                     auto_retry = TRUE,
+                                     continue_forward = TRUE) {
+
+  # Load saved state
+  cat(sprintf("\n📂 RESUMING FROM CHECKPOINT: %s\n", checkpoint_file))
+  cat(paste(rep("=", 60), collapse=""), "\n")
+
+  # Check if file exists
+  if (!file.exists(checkpoint_file)) {
+    stop(sprintf("Checkpoint file not found: %s", checkpoint_file))
+  }
+
+  # Load the search state
+  search_state <- tryCatch({
+    readRDS(checkpoint_file)
+  }, error = function(e) {
+    stop(sprintf("Error loading checkpoint file: %s", e$message))
+  })
+
+  cat(sprintf("✅ Loaded search state with %d models\n", nrow(search_state$search_database)))
+
+  # Use config defaults if not specified
+  if (is.null(ofv_threshold)) {
+    ofv_threshold <- search_state$search_config$forward_ofv_threshold
+  }
+  if (is.null(rse_threshold)) {
+    rse_threshold <- search_state$search_config$max_rse_threshold
+  }
+
+  cat(sprintf("📊 OFV threshold: %.2f\n", ofv_threshold))
+  cat(sprintf("📊 RSE threshold: %d%%\n", rse_threshold))
+
+  # Determine where we left off
+  last_step <- max(search_state$search_database$step_number, na.rm = TRUE)
+  if (is.na(last_step) || is.infinite(last_step)) {
+    last_step <- 0
+  }
+
+  cat(sprintf("\n📍 Last step in database: %d\n", last_step))
+
+  # Check models in last step
+  if (last_step > 0) {
+    last_step_models <- search_state$search_database %>%
+      dplyr::filter(step_number == last_step)
+
+    incomplete_models <- last_step_models %>%
+      dplyr::filter(status %in% c("in_progress", "created", "submitted", "unknown"))
+
+    completed_models <- last_step_models %>%
+      dplyr::filter(status == "completed")
+
+    failed_models <- last_step_models %>%
+      dplyr::filter(status == "failed")
+
+    cat(sprintf("Step %d status:\n", last_step))
+    cat(sprintf("  ✅ Completed: %d\n", nrow(completed_models)))
+    cat(sprintf("  🔄 Incomplete: %d\n", nrow(incomplete_models)))
+    cat(sprintf("  ❌ Failed: %d\n", nrow(failed_models)))
+
+    # Handle incomplete models if any
+    if (nrow(incomplete_models) > 0) {
+      cat(sprintf("\n⚠️  Step %d has %d incomplete models\n", last_step, nrow(incomplete_models)))
+
+      # Update status from files first
+      cat("📊 Updating model statuses from files...\n")
+      for (i in 1:nrow(incomplete_models)) {
+        model_name <- incomplete_models$model_name[i]
+        cat(sprintf("  Checking %s...\n", model_name))
+        search_state <- update_model_status_from_files(search_state, model_name)
+      }
+
+      # Re-check after update
+      still_incomplete <- search_state$search_database %>%
+        dplyr::filter(model_name %in% incomplete_models$model_name,
+                      status %in% c("in_progress", "created", "submitted", "unknown"))
+
+      if (nrow(still_incomplete) > 0) {
+        cat(sprintf("\n📊 %d models still incomplete. Options:\n", nrow(still_incomplete)))
+        cat("  1. Resubmit these models (if auto_submit = TRUE)\n")
+        cat("  2. Continue without them\n")
+
+        if (auto_submit) {
+          cat("\n🚀 Resubmitting incomplete models...\n")
+
+          step_submission <- submit_and_wait_for_step(
+            search_state = search_state,
+            model_names = still_incomplete$model_name,
+            step_name = sprintf("Step %d Models (Resumed)", last_step),
+            max_wait_minutes = max_wait_minutes,
+            auto_submit = auto_submit,
+            auto_retry = auto_retry
+          )
+          search_state <- step_submission$search_state
+
+          # Save updated state
+          save_search_state(search_state, sprintf("scm_resumed_step_%d.rds", last_step))
+        } else {
+          cat("⏭️  Skipping resubmission (auto_submit = FALSE)\n")
+        }
+      } else {
+        cat("✅ All models from Step %d are now complete\n", last_step)
+      }
+    }
+  }
+
+  # Find the best model across all completed steps
+  all_completed <- search_state$search_database %>%
+    dplyr::filter(status == "completed", !is.na(ofv))
+
+  if (nrow(all_completed) == 0) {
+    cat("\n❌ No completed models found in the database\n")
+    cat("Cannot continue without at least one completed model\n")
+    return(list(
+      search_state = search_state,
+      status = "no_completed_models",
+      message = "No completed models to continue from"
+    ))
+  }
+
+  # Get best model (lowest OFV)
+  best_model_idx <- which.min(all_completed$ofv)
+  best_model <- all_completed$model_name[best_model_idx]
+  best_model_step <- all_completed$step_number[best_model_idx]
+  best_model_ofv <- all_completed$ofv[best_model_idx]
+
+  cat(sprintf("\n🏆 Best model overall: %s\n", best_model))
+  cat(sprintf("   From Step: %d\n", best_model_step))
+  cat(sprintf("   OFV: %.2f\n", best_model_ofv))
+
+  # Get covariates in best model
+  best_model_covariates <- tryCatch({
+    get_model_covariates_from_db(search_state, best_model)
+  }, error = function(e) {
+    character(0)
+  })
+
+  if (length(best_model_covariates) > 0) {
+    cat(sprintf("   Covariates: %s\n", paste(best_model_covariates, collapse = " + ")))
+  }
+
+  # Determine next action
+  cat("\n📋 DETERMINING NEXT ACTION...\n")
+
+  if (!continue_forward) {
+    cat("✅ Resume complete (continue_forward = FALSE)\n")
+    cat("Search state loaded and updated. Ready for manual continuation.\n")
+
+    return(list(
+      search_state = search_state,
+      status = "ready",
+      best_model = best_model,
+      best_model_step = best_model_step,
+      best_model_ofv = best_model_ofv,
+      last_step = last_step,
+      message = "State loaded and ready for manual continuation"
+    ))
+  }
+
+  # Check if we should continue forward selection or start redemption
+  if (last_step > 0) {
+    last_step_significant <- get_significant_models_from_step(
+      search_state = search_state,
+      step_number = last_step,
+      ofv_threshold = ofv_threshold
+    )
+
+    if (length(last_step_significant) == 0) {
+      cat(sprintf("❌ No significant models found in Step %d\n", last_step))
+
+      if (best_model_step < last_step) {
+        cat("📊 Best model is from an earlier step - redemption phase may be needed\n")
+        cat("\n💡 Suggestion: Run redemption testing with:\n")
+        cat("   - All remaining covariates not in best model\n")
+        cat("   - Including previously excluded covariates\n")
+
+        # Get remaining covariates for redemption
+        all_available_tags <- names(search_state$tags)[grepl("^cov_", names(search_state$tags))]
+
+        # Convert best model covariates to tags
+        best_model_tags <- character(0)
+        for (cov_name in best_model_covariates) {
+          matching_tags <- names(search_state$tags)[sapply(search_state$tags, function(x) x == cov_name)]
+          if (length(matching_tags) > 0) {
+            best_model_tags <- c(best_model_tags, matching_tags)
+          }
+        }
+
+        redemption_covariates <- setdiff(all_available_tags, best_model_tags)
+
+        if (length(redemption_covariates) > 0) {
+          redemption_names <- sapply(redemption_covariates, function(tag) {
+            if (tag %in% names(search_state$tags)) search_state$tags[[tag]] else tag
+          })
+          cat(sprintf("\n📋 %d covariates available for redemption:\n", length(redemption_covariates)))
+          cat(sprintf("   %s\n", paste(redemption_names, collapse = ", ")))
+        }
+      } else {
+        cat("✅ Best model is from the last step - forward selection complete\n")
+      }
+
+      return(list(
+        search_state = search_state,
+        status = "forward_complete",
+        best_model = best_model,
+        best_model_step = best_model_step,
+        best_model_ofv = best_model_ofv,
+        last_step = last_step,
+        redemption_suggested = (best_model_step < last_step),
+        message = "Forward selection complete, ready for redemption phase if needed"
+      ))
+    }
+
+    cat(sprintf("✅ Found %d significant models in Step %d\n",
+                length(last_step_significant), last_step))
+    cat("📊 Can continue with forward selection\n")
+  }
+
+  # Prepare to continue forward selection
+  cat("\n🚀 READY TO CONTINUE FORWARD SELECTION\n")
+  cat(sprintf("Next step will be: Step %d\n", last_step + 1))
+  cat(sprintf("Base model: %s\n", best_model))
+
+  # Get covariates from last step's significant models for next step
+  if (last_step > 0) {
+    last_step_significant_models <- get_significant_models_from_step(
+      search_state = search_state,
+      step_number = last_step,
+      ofv_threshold = ofv_threshold
+    )
+
+    if (length(last_step_significant_models) > 0) {
+      next_covariates <- get_covariates_from_models(search_state, last_step_significant_models)
+
+      # Filter out covariates already in best model
+      best_model_tags <- character(0)
+      for (cov_name in best_model_covariates) {
+        matching_tags <- names(search_state$tags)[sapply(search_state$tags, function(x) x == cov_name)]
+        if (length(matching_tags) > 0) {
+          best_model_tags <- c(best_model_tags, matching_tags)
+        }
+      }
+
+      next_covariates <- setdiff(next_covariates, best_model_tags)
+
+      if (length(next_covariates) > 0) {
+        next_names <- sapply(next_covariates, function(tag) {
+          if (tag %in% names(search_state$tags)) search_state$tags[[tag]] else tag
+        })
+        cat(sprintf("\nCovariates for next step: %s\n", paste(next_names, collapse = ", ")))
+      } else {
+        cat("\n⚠️  No new covariates to test in next step\n")
+      }
+    }
+  }
+
+  cat("\n💡 To continue, run:\n")
+  cat("   result <- run_scm_selective_forward(search_state, ...)\n")
+  cat("   Or use the manual step-by-step approach\n")
+
+  return(list(
+    search_state = search_state,
+    status = "ready_to_continue",
+    best_model = best_model,
+    best_model_step = best_model_step,
+    best_model_ofv = best_model_ofv,
+    last_step = last_step,
+    next_step = last_step + 1,
+    message = sprintf("Ready to continue from Step %d with model %s", last_step + 1, best_model)
+  ))
+}
+

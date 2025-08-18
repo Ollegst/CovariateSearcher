@@ -2,7 +2,7 @@
 % Please edit documentation in R/scm-execution.R
 \name{submit_and_wait_for_step}
 \alias{submit_and_wait_for_step}
-\title{Submit models and wait for all to complete with automatic status updates}
+\title{Submit models and wait for all to complete with corrected status tracking}
 \usage{
 submit_and_wait_for_step(
   search_state,
@@ -33,9 +33,8 @@ submit_and_wait_for_step(
 List with completion results and updated search_state
 }
 \description{
-Submits a batch of models in parallel using bbr and monitors
-their completion status with 1-minute updates and timeout protection.
+Fixed version that properly handles retry model creation and status locking
 }
 \details{
-Submit Models and Wait for Completion with Auto-Updates (CORRECTED VERSION)
+Submit Models and Wait for Completion with Auto-Updates (FIXED MONITORING)
 }

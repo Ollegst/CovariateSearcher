@@ -208,11 +208,10 @@ run_univariate_step <- function(search_state, base_model_id, covariates_to_test 
 }
 
 
-#' Submit Models and Wait for Completion with Auto-Updates (CORRECTED VERSION)
+#' Submit Models and Wait for Completion with Auto-Updates (FIXED MONITORING)
 #'
-#' @title Submit models and wait for all to complete with automatic status updates
-#' @description Submits a batch of models in parallel using bbr and monitors
-#'   their completion status with 1-minute updates and timeout protection.
+#' @title Submit models and wait for all to complete with corrected status tracking
+#' @description Fixed version that properly handles retry model creation and status locking
 #' @param search_state List containing covariate search state and configuration
 #' @param model_names Character vector. Model names to submit and monitor
 #' @param step_name Character. Description of current step
@@ -235,7 +234,7 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
   }
 
   if (!auto_submit) {
-    cat("⏭️  Skipping submission (auto_submit = FALSE)\n")
+    cat("⭐️ Skipping submission (auto_submit = FALSE)\n")
     return(list(
       search_state = search_state,
       completed_models = model_names,
@@ -265,16 +264,13 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
     tryCatch({
       model_path <- file.path(search_state$models_folder, model_name)
 
-      # Check if model file exists
       if (!file.exists(paste0(model_path, ".ctl"))) {
         stop(sprintf("Model file %s.ctl not found", model_path))
       }
 
-      # Read and submit model using bbr
       mod <- bbr::read_model(model_path)
       bbr::submit_model(mod, .bbi_args = list(threads = threads), .overwrite = TRUE)
 
-      # Initially set submission time to current time (will be updated with actual start time)
       db_idx <- which(search_state$search_database$model_name == model_name)
       if (length(db_idx) > 0) {
         search_state$search_database$submission_time[db_idx] <- Sys.time()
@@ -289,7 +285,6 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
       submission_results[[model_name]] <- paste("failed:", e$message)
       cat(sprintf("✗ %s\n", e$message))
 
-      # Update database status for failed submission
       db_idx <- which(search_state$search_database$model_name == model_name)
       if (length(db_idx) > 0) {
         search_state$search_database$status[db_idx] <- "submission_failed"
@@ -317,218 +312,223 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
   max_wait_time <- start_time + (max_wait_minutes * 60)
   update_count <- 0
 
-  # Initialize tracking variables - keep for auto-retry logic
-  completed_models <- character(0)
-  failed_models <- character(0)
-  already_processed_for_retry <- character(0)  # Track models we've already created retries for
+  # FIXED: Track models that are definitively completed/failed
+  # This prevents status confusion with retry models
+  definitively_completed <- character(0)
+  definitively_failed <- character(0)
+  already_processed_for_retry <- character(0)
+  active_monitoring_list <- successful_submissions  # Models we're actively monitoring
 
   while (Sys.time() < max_wait_time) {
     update_count <- update_count + 1
 
-    # 1-MINUTE UPDATE CYCLE
     cat(sprintf("\n[Update %d] Checking model statuses...\n", update_count))
 
     # Update all model statuses from NONMEM files
     search_state <- update_all_model_statuses(search_state)
 
     # Update submission and completion times with actual NONMEM timestamps
-    for (model_name in successful_submissions) {
+    for (model_name in active_monitoring_list) {
       db_idx <- which(search_state$search_database$model_name == model_name)
       if (length(db_idx) > 0) {
-
-        # Extract actual timestamps from LST file
         timestamps <- extract_nonmem_timestamps(model_name, search_state$models_folder)
 
-        # Update submission_time with actual start time if available
         if (!is.na(timestamps$start_time)) {
           search_state$search_database$submission_time[db_idx] <- timestamps$start_time
         }
 
-        # Update completion_time with actual stop time if available
         if (!is.na(timestamps$stop_time)) {
           search_state$search_database$completion_time[db_idx] <- timestamps$stop_time
         }
       }
     }
 
-    # Get current status of submitted models (REQUERIED after each retry model addition)
-    current_status <- search_state$search_database %>%
-      dplyr::filter(model_name %in% successful_submissions) %>%
-      dplyr::select(model_name, covariate_tested, status, ofv, delta_ofv, estimation_issue, step_number) %>%
-      dplyr::arrange(model_name)
+    # FIXED: Get current status of ONLY actively monitored models
+    current_status <- tryCatch({
+      search_state$search_database %>%
+        dplyr::filter(model_name %in% active_monitoring_list) %>%
+        dplyr::select(model_name, covariate_tested, status, ofv, delta_ofv, estimation_issue, step_number) %>%
+        dplyr::arrange(model_name)
+    }, error = function(e) {
+      # Fallback to base R if dplyr fails
+      db_subset <- search_state$search_database[search_state$search_database$model_name %in% active_monitoring_list, ]
+      db_subset[order(db_subset$model_name), c("model_name", "covariate_tested", "status", "ofv", "delta_ofv", "estimation_issue", "step_number")]
+    })
 
-    # Track newly completed/failed models for auto-retry logic
+    # FIXED: Identify NEW completions and failures (not previously processed) with safer logic
     newly_completed <- tryCatch({
-      current_status %>%
-        dplyr::filter(status == "completed", !model_name %in% completed_models) %>%
-        dplyr::pull(model_name)
-    }, error = function(e) character(0))
+      completed_models <- current_status$model_name[current_status$status == "completed"]
+      setdiff(completed_models, definitively_completed)
+    }, error = function(e) {
+      character(0)
+    })
 
     newly_failed <- tryCatch({
-      current_status %>%
-        dplyr::filter(status %in% c("failed", "estimation_error"), !model_name %in% failed_models) %>%
-        dplyr::pull(model_name)
-    }, error = function(e) character(0))
-
-    # Ensure they're character vectors (not NULL)
-    if (is.null(newly_completed)) newly_completed <- character(0)
-    if (is.null(newly_failed)) newly_failed <- character(0)
-
-    # Update cumulative tracking for auto-retry logic
-    completed_models <- unique(c(completed_models, newly_completed))
-    failed_models <- unique(c(failed_models, newly_failed))
-
-    # ===================================================================
-    # IMMEDIATE AUTO-RETRY LOGIC
-    # ===================================================================
-    # Define newly_failed_this_cycle outside the if block so it's available later
-    newly_failed_this_cycle <- if (length(newly_failed) > 0) {
-      setdiff(newly_failed, already_processed_for_retry)
-    } else {
+      failed_models <- current_status$model_name[current_status$status %in% c("failed", "estimation_error")]
+      candidates <- setdiff(failed_models, definitively_failed)
+      setdiff(candidates, already_processed_for_retry)
+    }, error = function(e) {
       character(0)
+    })
+
+    # FIXED: Update definitive tracking
+    if (length(newly_completed) > 0) {
+      definitively_completed <- c(definitively_completed, newly_completed)
+      cat(sprintf("✅ NEW completions: %s\n", paste(newly_completed, collapse = ", ")))
     }
 
-    if (auto_retry && length(newly_failed_this_cycle) > 0) {
+    if (length(newly_failed) > 0) {
+      cat(sprintf("❌ NEW failures: %s\n", paste(newly_failed, collapse = ", ")))
 
-      if (length(newly_failed_this_cycle) > 0) {
-        cat(sprintf("🔧 IMMEDIATE RETRY: %d models just failed - creating retries\n",
-                    length(newly_failed_this_cycle)))
-
-        tryCatch({
-          # Create models_with_issues for newly failed models
-          models_with_issues <- list()
-          for (model_name in newly_failed_this_cycle) {
-            # Get the specific error from database
-            model_row <- search_state$search_database[search_state$search_database$model_name == model_name, ]
-            issue_type <- if (nrow(model_row) > 0 && !is.na(model_row$estimation_issue[1]) && model_row$estimation_issue[1] != "") {
-              model_row$estimation_issue[1]
-            } else {
-              "failed_model"
-            }
-
-            models_with_issues[[model_name]] <- list(
-              model_name = model_name,
-              issue_type = issue_type,
-              detection_time = Sys.time()
-            )
-
-            cat(sprintf("  %s: %s\n", model_name, issue_type))
-          }
-
-          # Use new exclusion-based processing instead of unlimited retries
-          recovery_result <- process_estimation_issues(search_state, models_with_issues)
-          search_state <- recovery_result$search_state
-
-          # Handle retry models if created
-          if (length(recovery_result$retry_models_created) > 0) {
-            cat(sprintf("✅ Created %d retry models: %s\n",
-                        length(recovery_result$retry_models_created),
-                        paste(recovery_result$retry_models_created, collapse = ", ")))
-
-            # FIXED: Add retry models to monitoring list AND requery current_status
-            successful_submissions <- c(successful_submissions, recovery_result$retry_models_created)
-
-            # Submit retry models
-            for (retry_model in recovery_result$retry_models_created) {
-              retry_row <- search_state$search_database[search_state$search_database$model_name == retry_model, ]
-
-              # Only submit if status is "created" (not already submitted)
-              if (nrow(retry_row) > 0 && retry_row$status[1] == "created") {
-                cat(sprintf("🚀 Submitting retry model %s... ", retry_model))
-
-                tryCatch({
-                  model_path <- file.path(search_state$models_folder, retry_model)
-                  mod <- bbr::read_model(model_path)
-                  bbr::submit_model(mod, .bbi_args = list(threads = threads), .overwrite = TRUE)
-
-                  # Update database status
-                  db_idx <- which(search_state$search_database$model_name == retry_model)
-                  if (length(db_idx) > 0) {
-                    search_state$search_database$submission_time[db_idx] <- Sys.time()
-                    search_state$search_database$status[db_idx] <- "in_progress"
-                  }
-
-                  cat("✓\n")
-
-                }, error = function(submit_error) {
-                  cat(sprintf("✗ Submission failed: %s\n", submit_error$message))
-
-                  # Update status to reflect submission failure
-                  db_idx <- which(search_state$search_database$model_name == retry_model)
-                  if (length(db_idx) > 0) {
-                    search_state$search_database$status[db_idx] <- "submission_failed"
-                  }
-                })
-              } else {
-                cat(sprintf("ℹ️  Retry model %s already submitted or has status: %s\n",
-                            retry_model, if(nrow(retry_row) > 0) retry_row$status[1] else "unknown"))
-              }
-            }
-
-            # FIXED: Requery current_status to include newly added retry models
-            current_status <- search_state$search_database %>%
-              dplyr::filter(model_name %in% successful_submissions) %>%
-              dplyr::select(model_name, covariate_tested, status, ofv, delta_ofv, estimation_issue) %>%
-              dplyr::arrange(model_name)
-          }
-
-          # Mark these models as processed to avoid re-processing
-          already_processed_for_retry <- c(already_processed_for_retry, newly_failed_this_cycle)
-
-        }, error = function(retry_error) {
-          cat(sprintf("❌ Error in retry processing: %s\n", retry_error$message))
-          cat("Continuing with normal monitoring...\n")
-
-          # Still mark as processed to avoid infinite retry attempts
-          already_processed_for_retry <- c(already_processed_for_retry, newly_failed_this_cycle)
-        })
-      }
-    }
-    # ===================================================================
-    # END IMMEDIATE AUTO-RETRY LOGIC
-    # ===================================================================
-
-    # FIXED: Lock failed models status to prevent file updates from overwriting
-    if (length(newly_failed_this_cycle) > 0) {
-      for (failed_model in newly_failed_this_cycle) {
+      # FIXED: IMMEDIATELY lock failed model status to prevent confusion
+      for (failed_model in newly_failed) {
         db_idx <- which(search_state$search_database$model_name == failed_model)
         if (length(db_idx) > 0) {
           search_state$search_database$status[db_idx] <- "failed"
           cat(sprintf("🔒 Locked %s status as 'failed'\n", failed_model))
         }
       }
+
+      definitively_failed <- c(definitively_failed, newly_failed)
     }
 
-    # FIXED: Use final_status_counts as single source of truth
-    final_status_counts <- current_status %>%
-      dplyr::filter(status %in% c("completed", "failed", "estimation_error")) %>%
-      dplyr::count(status)
+    # ===================================================================
+    # IMMEDIATE AUTO-RETRY LOGIC (FIXED)
+    # ===================================================================
+    if (auto_retry && length(newly_failed) > 0) {
+      cat(sprintf("🔧 IMMEDIATE RETRY: %d models just failed - creating retries\n", length(newly_failed)))
 
-    # Extract counts (handle empty results safely)
-    completed_count <- final_status_counts$n[final_status_counts$status == "completed"]
-    if (length(completed_count) == 0) completed_count <- 0
+      tryCatch({
+        # Create models_with_issues for newly failed models
+        models_with_issues <- list()
+        for (model_name in newly_failed) {
+          model_row <- search_state$search_database[search_state$search_database$model_name == model_name, ]
+          issue_type <- if (nrow(model_row) > 0 && !is.na(model_row$estimation_issue[1]) && model_row$estimation_issue[1] != "") {
+            model_row$estimation_issue[1]
+          } else {
+            "failed_model"
+          }
 
-    failed_count <- sum(final_status_counts$n[final_status_counts$status %in% c("failed", "estimation_error")], na.rm = TRUE)
+          models_with_issues[[model_name]] <- list(
+            model_name = model_name,
+            issue_type = issue_type,
+            detection_time = Sys.time()
+          )
 
-    # Models that haven't reached final status yet
-    models_still_running <- nrow(current_status) - completed_count - failed_count
+          cat(sprintf("  %s: %s\n", model_name, issue_type))
+        }
+
+        # Process estimation issues to create retry models
+        recovery_result <- process_estimation_issues(search_state, models_with_issues)
+        search_state <- recovery_result$search_state
+
+        # FIXED: Handle retry models - add to monitoring list
+        if (length(recovery_result$retry_models_created) > 0) {
+          cat(sprintf("✅ Created %d retry models: %s\n",
+                      length(recovery_result$retry_models_created),
+                      paste(recovery_result$retry_models_created, collapse = ", ")))
+
+          # FIXED: Add retry models to ACTIVE monitoring list
+          active_monitoring_list <- c(active_monitoring_list, recovery_result$retry_models_created)
+
+          # Submit retry models
+          for (retry_model in recovery_result$retry_models_created) {
+            retry_row <- search_state$search_database[search_state$search_database$model_name == retry_model, ]
+
+            if (nrow(retry_row) > 0 && retry_row$status[1] == "created") {
+              cat(sprintf("🚀 Submitting retry model %s... ", retry_model))
+
+              tryCatch({
+                model_path <- file.path(search_state$models_folder, retry_model)
+                mod <- bbr::read_model(model_path)
+                bbr::submit_model(mod, .bbi_args = list(threads = threads), .overwrite = TRUE)
+
+                db_idx <- which(search_state$search_database$model_name == retry_model)
+                if (length(db_idx) > 0) {
+                  search_state$search_database$submission_time[db_idx] <- Sys.time()
+                  search_state$search_database$status[db_idx] <- "in_progress"
+                }
+
+                cat("✓\n")
+
+              }, error = function(submit_error) {
+                cat(sprintf("✗ Submission failed: %s\n", submit_error$message))
+
+                db_idx <- which(search_state$search_database$model_name == retry_model)
+                if (length(db_idx) > 0) {
+                  search_state$search_database$status[db_idx] <- "submission_failed"
+                }
+              })
+            }
+          }
+        }
+
+        # Mark original failed models as processed to avoid re-processing
+        already_processed_for_retry <- c(already_processed_for_retry, newly_failed)
+
+      }, error = function(retry_error) {
+        cat(sprintf("❌ Error in retry processing: %s\n", retry_error$message))
+        already_processed_for_retry <- c(already_processed_for_retry, newly_failed)
+      })
+    }
+
+    # FIXED: Get UPDATED status after retry model creation with safer logic
+    final_current_status <- tryCatch({
+      search_state$search_database %>%
+        dplyr::filter(model_name %in% active_monitoring_list) %>%
+        dplyr::select(model_name, covariate_tested, status, ofv, delta_ofv, estimation_issue, step_number) %>%
+        dplyr::arrange(model_name)
+    }, error = function(e) {
+      # Fallback to base R if dplyr fails
+      db_subset <- search_state$search_database[search_state$search_database$model_name %in% active_monitoring_list, ]
+      db_subset[order(db_subset$model_name), c("model_name", "covariate_tested", "status", "ofv", "delta_ofv", "estimation_issue", "step_number")]
+    })
+
+    # FIXED: Calculate progress based on ACTIVE monitoring list with error handling
+    final_status_counts <- tryCatch({
+      completed_status <- final_current_status$status[final_current_status$status == "completed"]
+      failed_status <- final_current_status$status[final_current_status$status %in% c("failed", "estimation_error")]
+
+      list(
+        completed = length(completed_status),
+        failed = length(failed_status)
+      )
+    }, error = function(e) {
+      list(completed = 0, failed = 0)
+    })
+
+    completed_count <- final_status_counts$completed
+    failed_count <- final_status_counts$failed
+
+    models_still_running <- length(active_monitoring_list) - completed_count - failed_count
 
     # Print progress update
     elapsed_mins <- round(as.numeric(difftime(Sys.time(), start_time, units = "mins")), 1)
     cat(sprintf("[%.1f min] Status: %d completed, %d failed, %d still running\n",
                 elapsed_mins, completed_count, failed_count, models_still_running))
 
-    # Show individual model status (if not too many models)
-    if (nrow(current_status) <= 10) {
-      for (i in 1:nrow(current_status)) {
-        row <- current_status[i, ]
+    # FIXED: Show individual model status (filter out definitively failed models that are locked)
+    display_models <- tryCatch({
+      # Filter out locked failed models
+      display_subset <- final_current_status[!(final_current_status$model_name %in% definitively_failed &
+                                                 final_current_status$status == "failed"), ]
+      display_subset[order(display_subset$model_name), ]
+    }, error = function(e) {
+      final_current_status
+    })
 
-        # FIXED: Use dplyr::case_when properly
-        status_icon <- dplyr::case_when(
-          row$status == "completed" ~ "✅",
-          row$status %in% c("failed", "estimation_error") ~ "❌",
-          TRUE ~ "🔄"  # Any other status (in_progress, not_run, etc.)
-        )
+    if (nrow(display_models) <= 10) {
+      for (i in 1:nrow(display_models)) {
+        row <- display_models[i, ]
+
+        # FIXED: Safe status icon assignment without dplyr::case_when
+        status_icon <- if (row$status == "completed") {
+          "✅"
+        } else if (row$status %in% c("failed", "estimation_error")) {
+          "❌"
+        } else {
+          "🔄"
+        }
 
         step_prefix <- if (length(row$step_number) > 0 && !is.na(row$step_number)) {
           sprintf("[Step %d] ", row$step_number)
@@ -536,7 +536,7 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
           ""
         }
 
-        cat(sprintf("  %s%s %s (%s)", step_prefix, status_icon, row$model_name, row$covariate_tested))
+        cat(sprintf("  %s %s (%s)", status_icon, row$model_name, row$covariate_tested))
         if (!is.na(row$ofv)) {
           cat(sprintf(" - OFV: %.2f", row$ofv))
           if (!is.na(row$delta_ofv)) {
@@ -547,14 +547,14 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
       }
     }
 
-    # FIXED: Simple exit logic - stop only when ALL models have final status
+    # FIXED: Exit condition - all ACTIVE models finished
     if (models_still_running == 0) {
-      cat(sprintf("\n🏁 ALL MODELS FINISHED! (%d completed, %d failed)\n",
+      cat(sprintf("\n🏁 ALL ACTIVE MODELS FINISHED! (%d completed, %d failed)\n",
                   completed_count, failed_count))
       break
     }
 
-    # Save intermediate state every 5 updates
+    # Save intermediate state
     if (update_count %% 5 == 0) {
       save_search_state(search_state, sprintf("monitoring_update_%d.rds", update_count))
       cat("💾 Progress saved\n")
@@ -565,27 +565,37 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
     Sys.sleep(60)
   }
 
-  # Final status - use final_status_counts for consistency
+  # Final status calculation with error handling
   total_time <- as.numeric(difftime(Sys.time(), start_time, units = "mins"))
 
-  # Final recount for return values
-  final_current_status <- search_state$search_database %>%
-    dplyr::filter(model_name %in% successful_submissions) %>%
-    dplyr::select(model_name, status)
+  final_all_status <- tryCatch({
+    search_state$search_database %>%
+      dplyr::filter(model_name %in% active_monitoring_list) %>%
+      dplyr::select(model_name, status)
+  }, error = function(e) {
+    # Fallback to base R
+    subset_db <- search_state$search_database[search_state$search_database$model_name %in% active_monitoring_list, ]
+    subset_db[, c("model_name", "status")]
+  })
 
-  final_completed <- final_current_status %>%
-    dplyr::filter(status == "completed") %>%
-    dplyr::pull(model_name)
+  final_completed <- tryCatch({
+    completed_models <- final_all_status$model_name[final_all_status$status == "completed"]
+    if (is.null(completed_models)) character(0) else completed_models
+  }, error = function(e) {
+    character(0)
+  })
 
-  final_failed <- final_current_status %>%
-    dplyr::filter(status %in% c("failed", "estimation_error")) %>%
-    dplyr::pull(model_name)
+  final_failed <- tryCatch({
+    failed_models <- final_all_status$model_name[final_all_status$status %in% c("failed", "estimation_error")]
+    if (is.null(failed_models)) character(0) else failed_models
+  }, error = function(e) {
+    character(0)
+  })
 
   all_failed <- c(final_failed, failed_submissions)
 
   if (Sys.time() >= max_wait_time) {
-    still_running <- setdiff(successful_submissions, c(final_completed, final_failed))
-
+    still_running <- setdiff(active_monitoring_list, c(final_completed, final_failed))
     cat(sprintf("⏰ Timeout reached after %.1f minutes\n", total_time))
     cat(sprintf("📊 Final Status: %d completed, %d failed, %d still running\n",
                 length(final_completed), length(all_failed), length(still_running)))
@@ -595,14 +605,23 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
                 length(final_completed), length(all_failed)))
   }
 
+  # CRITICAL FIX: Make sure recovery_result exists before accessing it
+  retry_models_created <- if (exists("recovery_result") && !is.null(recovery_result)) {
+    recovery_result$retry_models_created
+  } else {
+    character(0)
+  }
+
   return(list(
     search_state = search_state,
     completed_models = final_completed,
     failed_models = all_failed,
-    still_running = setdiff(successful_submissions, c(final_completed, final_failed)),
+    still_running = setdiff(active_monitoring_list, c(final_completed, final_failed)),
     total_time_minutes = total_time,
     timed_out = Sys.time() >= max_wait_time,
     updates_performed = update_count,
+    retry_models_created = retry_models_created,
     status = "completed"
   ))
 }
+
