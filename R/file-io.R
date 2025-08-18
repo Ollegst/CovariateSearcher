@@ -333,7 +333,7 @@ read_nonmem_lst <- function(model_path) {
       } else {
         result$status <- "incomplete"
         result$has_issues <- TRUE
-        result$error_message <- "Model run incomplete or corrupted"
+        result$error_message <- "Model run incomplete"
       }
     }
 

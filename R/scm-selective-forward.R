@@ -609,7 +609,7 @@ run_scm_selective_forward <- function(search_state,
     })
 
     if (length(final_covariates) > 0) {
-      best_covariates <- get_model_covariates_from_db(search_state, best_model)
+      best_covariates <- get_model_covariates_from_db(search_state, absolute_best_model)
       cat(sprintf("\n📋 Final model contains: %s\n",
                   paste(best_covariates, collapse = " + ")))
     }
@@ -791,3 +791,284 @@ get_model_covariates_from_db <- function(search_state, model_name) {
 
   return(unique(covariates))
 }
+
+
+
+
+
+resume_selective_forward <- function(checkpoint_file,
+                                     ofv_threshold = NULL,
+                                     rse_threshold = NULL,
+                                     max_wait_minutes = 120,
+                                     auto_submit = TRUE,
+                                     auto_retry = TRUE,
+                                     continue_forward = TRUE) {
+
+  # Load saved state
+  cat(sprintf("\n📂 RESUMING FROM CHECKPOINT: %s\n", checkpoint_file))
+  cat(paste(rep("=", 60), collapse=""), "\n")
+
+  # Check if file exists
+  if (!file.exists(checkpoint_file)) {
+    stop(sprintf("Checkpoint file not found: %s", checkpoint_file))
+  }
+
+  # Load the search state
+  search_state <- tryCatch({
+    readRDS(checkpoint_file)
+  }, error = function(e) {
+    stop(sprintf("Error loading checkpoint file: %s", e$message))
+  })
+
+  cat(sprintf("✅ Loaded search state with %d models\n", nrow(search_state$search_database)))
+
+  # Use config defaults if not specified
+  if (is.null(ofv_threshold)) {
+    ofv_threshold <- search_state$search_config$forward_ofv_threshold
+  }
+  if (is.null(rse_threshold)) {
+    rse_threshold <- search_state$search_config$max_rse_threshold
+  }
+
+  cat(sprintf("📊 OFV threshold: %.2f\n", ofv_threshold))
+  cat(sprintf("📊 RSE threshold: %d%%\n", rse_threshold))
+
+  # Determine where we left off
+  last_step <- max(search_state$search_database$step_number, na.rm = TRUE)
+  if (is.na(last_step) || is.infinite(last_step)) {
+    last_step <- 0
+  }
+
+  cat(sprintf("\n📍 Last step in database: %d\n", last_step))
+
+  # Check models in last step
+  if (last_step > 0) {
+    last_step_models <- search_state$search_database %>%
+      dplyr::filter(step_number == last_step)
+
+    incomplete_models <- last_step_models %>%
+      dplyr::filter(status %in% c("in_progress", "created", "submitted", "unknown"))
+
+    completed_models <- last_step_models %>%
+      dplyr::filter(status == "completed")
+
+    failed_models <- last_step_models %>%
+      dplyr::filter(status == "failed")
+
+    cat(sprintf("Step %d status:\n", last_step))
+    cat(sprintf("  ✅ Completed: %d\n", nrow(completed_models)))
+    cat(sprintf("  🔄 Incomplete: %d\n", nrow(incomplete_models)))
+    cat(sprintf("  ❌ Failed: %d\n", nrow(failed_models)))
+
+    # Handle incomplete models if any
+    if (nrow(incomplete_models) > 0) {
+      cat(sprintf("\n⚠️  Step %d has %d incomplete models\n", last_step, nrow(incomplete_models)))
+
+      # Update status from files first
+      cat("📊 Updating model statuses from files...\n")
+      for (i in 1:nrow(incomplete_models)) {
+        model_name <- incomplete_models$model_name[i]
+        cat(sprintf("  Checking %s...\n", model_name))
+        search_state <- update_model_status_from_files(search_state, model_name)
+      }
+
+      # Re-check after update
+      still_incomplete <- search_state$search_database %>%
+        dplyr::filter(model_name %in% incomplete_models$model_name,
+                      status %in% c("in_progress", "created", "submitted", "unknown"))
+
+      if (nrow(still_incomplete) > 0) {
+        cat(sprintf("\n📊 %d models still incomplete. Options:\n", nrow(still_incomplete)))
+        cat("  1. Resubmit these models (if auto_submit = TRUE)\n")
+        cat("  2. Continue without them\n")
+
+        if (auto_submit) {
+          cat("\n🚀 Resubmitting incomplete models...\n")
+
+          step_submission <- submit_and_wait_for_step(
+            search_state = search_state,
+            model_names = still_incomplete$model_name,
+            step_name = sprintf("Step %d Models (Resumed)", last_step),
+            max_wait_minutes = max_wait_minutes,
+            auto_submit = auto_submit,
+            auto_retry = auto_retry
+          )
+          search_state <- step_submission$search_state
+
+          # Save updated state
+          save_search_state(search_state, sprintf("scm_resumed_step_%d.rds", last_step))
+        } else {
+          cat("⏭️  Skipping resubmission (auto_submit = FALSE)\n")
+        }
+      } else {
+        cat("✅ All models from Step %d are now complete\n", last_step)
+      }
+    }
+  }
+
+  # Find the best model across all completed steps
+  all_completed <- search_state$search_database %>%
+    dplyr::filter(status == "completed", !is.na(ofv))
+
+  if (nrow(all_completed) == 0) {
+    cat("\n❌ No completed models found in the database\n")
+    cat("Cannot continue without at least one completed model\n")
+    return(list(
+      search_state = search_state,
+      status = "no_completed_models",
+      message = "No completed models to continue from"
+    ))
+  }
+
+  # Get best model (lowest OFV)
+  best_model_idx <- which.min(all_completed$ofv)
+  best_model <- all_completed$model_name[best_model_idx]
+  best_model_step <- all_completed$step_number[best_model_idx]
+  best_model_ofv <- all_completed$ofv[best_model_idx]
+
+  cat(sprintf("\n🏆 Best model overall: %s\n", best_model))
+  cat(sprintf("   From Step: %d\n", best_model_step))
+  cat(sprintf("   OFV: %.2f\n", best_model_ofv))
+
+  # Get covariates in best model
+  best_model_covariates <- tryCatch({
+    get_model_covariates_from_db(search_state, best_model)
+  }, error = function(e) {
+    character(0)
+  })
+
+  if (length(best_model_covariates) > 0) {
+    cat(sprintf("   Covariates: %s\n", paste(best_model_covariates, collapse = " + ")))
+  }
+
+  # Determine next action
+  cat("\n📋 DETERMINING NEXT ACTION...\n")
+
+  if (!continue_forward) {
+    cat("✅ Resume complete (continue_forward = FALSE)\n")
+    cat("Search state loaded and updated. Ready for manual continuation.\n")
+
+    return(list(
+      search_state = search_state,
+      status = "ready",
+      best_model = best_model,
+      best_model_step = best_model_step,
+      best_model_ofv = best_model_ofv,
+      last_step = last_step,
+      message = "State loaded and ready for manual continuation"
+    ))
+  }
+
+  # Check if we should continue forward selection or start redemption
+  if (last_step > 0) {
+    last_step_significant <- get_significant_models_from_step(
+      search_state = search_state,
+      step_number = last_step,
+      ofv_threshold = ofv_threshold
+    )
+
+    if (length(last_step_significant) == 0) {
+      cat(sprintf("❌ No significant models found in Step %d\n", last_step))
+
+      if (best_model_step < last_step) {
+        cat("📊 Best model is from an earlier step - redemption phase may be needed\n")
+        cat("\n💡 Suggestion: Run redemption testing with:\n")
+        cat("   - All remaining covariates not in best model\n")
+        cat("   - Including previously excluded covariates\n")
+
+        # Get remaining covariates for redemption
+        all_available_tags <- names(search_state$tags)[grepl("^cov_", names(search_state$tags))]
+
+        # Convert best model covariates to tags
+        best_model_tags <- character(0)
+        for (cov_name in best_model_covariates) {
+          matching_tags <- names(search_state$tags)[sapply(search_state$tags, function(x) x == cov_name)]
+          if (length(matching_tags) > 0) {
+            best_model_tags <- c(best_model_tags, matching_tags)
+          }
+        }
+
+        redemption_covariates <- setdiff(all_available_tags, best_model_tags)
+
+        if (length(redemption_covariates) > 0) {
+          redemption_names <- sapply(redemption_covariates, function(tag) {
+            if (tag %in% names(search_state$tags)) search_state$tags[[tag]] else tag
+          })
+          cat(sprintf("\n📋 %d covariates available for redemption:\n", length(redemption_covariates)))
+          cat(sprintf("   %s\n", paste(redemption_names, collapse = ", ")))
+        }
+      } else {
+        cat("✅ Best model is from the last step - forward selection complete\n")
+      }
+
+      return(list(
+        search_state = search_state,
+        status = "forward_complete",
+        best_model = best_model,
+        best_model_step = best_model_step,
+        best_model_ofv = best_model_ofv,
+        last_step = last_step,
+        redemption_suggested = (best_model_step < last_step),
+        message = "Forward selection complete, ready for redemption phase if needed"
+      ))
+    }
+
+    cat(sprintf("✅ Found %d significant models in Step %d\n",
+                length(last_step_significant), last_step))
+    cat("📊 Can continue with forward selection\n")
+  }
+
+  # Prepare to continue forward selection
+  cat("\n🚀 READY TO CONTINUE FORWARD SELECTION\n")
+  cat(sprintf("Next step will be: Step %d\n", last_step + 1))
+  cat(sprintf("Base model: %s\n", best_model))
+
+  # Get covariates from last step's significant models for next step
+  if (last_step > 0) {
+    last_step_significant_models <- get_significant_models_from_step(
+      search_state = search_state,
+      step_number = last_step,
+      ofv_threshold = ofv_threshold
+    )
+
+    if (length(last_step_significant_models) > 0) {
+      next_covariates <- get_covariates_from_models(search_state, last_step_significant_models)
+
+      # Filter out covariates already in best model
+      best_model_tags <- character(0)
+      for (cov_name in best_model_covariates) {
+        matching_tags <- names(search_state$tags)[sapply(search_state$tags, function(x) x == cov_name)]
+        if (length(matching_tags) > 0) {
+          best_model_tags <- c(best_model_tags, matching_tags)
+        }
+      }
+
+      next_covariates <- setdiff(next_covariates, best_model_tags)
+
+      if (length(next_covariates) > 0) {
+        next_names <- sapply(next_covariates, function(tag) {
+          if (tag %in% names(search_state$tags)) search_state$tags[[tag]] else tag
+        })
+        cat(sprintf("\nCovariates for next step: %s\n", paste(next_names, collapse = ", ")))
+      } else {
+        cat("\n⚠️  No new covariates to test in next step\n")
+      }
+    }
+  }
+
+  cat("\n💡 To continue, run:\n")
+  cat("   result <- run_scm_selective_forward(search_state, ...)\n")
+  cat("   Or use the manual step-by-step approach\n")
+
+  return(list(
+    search_state = search_state,
+    status = "ready_to_continue",
+    best_model = best_model,
+    best_model_step = best_model_step,
+    best_model_ofv = best_model_ofv,
+    last_step = last_step,
+    next_step = last_step + 1,
+    message = sprintf("Ready to continue from Step %d with model %s", last_step + 1, best_model)
+  ))
+}
+
