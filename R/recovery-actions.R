@@ -134,8 +134,6 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
       # FIXED: Use template approach to avoid column structure mismatches
       # Take the first row as a template to ensure exact structure match
       template_row <- search_state$search_database[1, , drop = FALSE]
-
-      # Create new row with same structure
       new_row <- template_row
       new_row[1, ] <- NA  # Clear all values but keep structure
 
@@ -145,11 +143,13 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
       new_row$parent_model <- original_row$parent_model[1]
       new_row$covariate_tested <- original_row$covariate_tested[1]
       new_row$action <- "retry"
+      new_row$step_description <- sprintf("Retry %s", original_row$covariate_tested[1])  # FIX: Add this line
+      new_row$phase <- "retry"  # FIX: Add this line
       new_row$ofv <- NA_real_
       new_row$delta_ofv <- NA_real_
       new_row$rse_max <- NA_real_
       new_row$status <- "created"
-      new_row$tags <- original_row$tags[1]  # Copy the list structure
+      new_row$tags <- original_row$tags[1]
       new_row$submission_time <- as.POSIXct(NA)
       new_row$completion_time <- as.POSIXct(NA)
       new_row$retry_attempt <- 1L

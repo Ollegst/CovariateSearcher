@@ -364,6 +364,22 @@ update_model_status_from_files <- function(search_state, model_name) {
                   step_prefix, original_model_name))
     }
   }
+  # NEW: Fix retry models with missing step_description and phase
+  if (grepl("\\d{3}$", model_name)) {  # This is a retry model
+    current_row <- search_state$search_database[db_idx, ]
+
+    # Fix missing step_description and phase
+    if (is.na(current_row$step_description) || is.na(current_row$phase)) {
+      covariate_name <- current_row$covariate_tested[1]
+
+      if (!is.na(covariate_name) && covariate_name != "") {
+        search_state$search_database$step_description[db_idx] <- sprintf("Retry %s", covariate_name)
+        search_state$search_database$phase[db_idx] <- "retry"
+
+        cat(sprintf("  🔧 Fixed retry model metadata for %s\n", model_name))
+      }
+    }
+  }
 
   return(search_state)
 }

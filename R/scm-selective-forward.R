@@ -795,6 +795,109 @@ get_model_covariates_from_db <- function(search_state, model_name) {
 
 
 
+#' Resume Selective Forward Selection from Checkpoint
+#'
+#' @title Resume SCM selective forward selection workflow from a saved checkpoint
+#' @description Loads a previously saved search state and continues selective forward
+#'   selection from where it left off. Can handle incomplete models, update statuses,
+#'   and determine the appropriate next step (continue forward selection or start
+#'   redemption phase). Provides flexible resumption options for interrupted workflows.
+#' @param checkpoint_file Character. Path to the RDS file containing saved search state
+#'   (e.g., "scm_selective_step_3.rds", "scm_forward_selection_complete.rds")
+#' @param ofv_threshold Numeric. OFV improvement threshold for significance testing.
+#'   If NULL, uses value from search_state$search_config$forward_ofv_threshold (default: 3.84)
+#' @param rse_threshold Numeric. Maximum acceptable RSE threshold as percentage.
+#'   If NULL, uses value from search_state$search_config$max_rse_threshold (default: 50)
+#' @param max_wait_minutes Numeric. Maximum time to wait for model completion per step
+#'   when resubmitting incomplete models (default: 120)
+#' @param auto_submit Logical. Whether to automatically resubmit incomplete models
+#'   found in the last step (default: TRUE)
+#' @param auto_retry Logical. Whether to enable automatic retry creation for failed
+#'   models during resubmission (default: TRUE)
+#' @param continue_forward Logical. Whether to automatically continue forward selection
+#'   if possible, or just load and prepare the state (default: TRUE)
+#' @return List containing:
+#'   \itemize{
+#'     \item \code{search_state} - Updated search state with current model statuses
+#'     \item \code{status} - Resume status: "ready", "ready_to_continue", "forward_complete", "no_completed_models"
+#'     \item \code{best_model} - Current best model across all completed steps
+#'     \item \code{best_model_step} - Step number where best model was found
+#'     \item \code{best_model_ofv} - OFV of the best model
+#'     \item \code{last_step} - Last step number found in database
+#'     \item \code{next_step} - Suggested next step number (if continuing)
+#'     \item \code{redemption_suggested} - Whether redemption phase is recommended
+#'     \item \code{message} - Descriptive message about resume status
+#'   }
+#' @details
+#' This function performs the following operations:
+#' \enumerate{
+#'   \item Loads the checkpoint file and validates search state structure
+#'   \item Determines the last completed step and identifies incomplete models
+#'   \item Updates model statuses from NONMEM output files
+#'   \item Optionally resubmits incomplete models if auto_submit=TRUE
+#'   \item Identifies the current best model (lowest OFV) across all steps
+#'   \item Determines appropriate next action:
+#'     \itemize{
+#'       \item Continue forward selection if significant models exist in last step
+#'       \item Suggest redemption phase if best model is from earlier step
+#'       \item Mark as complete if no significant improvements possible
+#'     }
+#'   \item Provides recommendations for next steps based on current state
+#' }
+#' @section Checkpoint Files:
+#' Common checkpoint files created by selective forward selection:
+#' \itemize{
+#'   \item \code{scm_selective_step_N.rds} - Saved after each completed step
+#'   \item \code{scm_selective_complete.rds} - Final state after completion
+#'   \item \code{scm_redemption_N.rds} - Saved during redemption phase
+#' }
+#' @section Resume Scenarios:
+#' \describe{
+#'   \item{Incomplete Models}{If models from the last step are still running or failed,
+#'     they will be updated and optionally resubmitted}
+#'   \item{Continue Forward}{If significant models exist in last step and best model
+#'     is from that step, forward selection can continue}
+#'   \item{Redemption Phase}{If best model is from an earlier step, redemption
+#'     testing of remaining covariates is suggested}
+#'   \item{Complete}{If no significant models exist in last step and best model
+#'     is from that step, forward selection is complete}
+#' }
+#' @examples
+#' \dontrun{
+#' # Resume from step 3 checkpoint and continue automatically
+#' result <- resume_selective_forward("scm_selective_step_3.rds")
+#' search_state <- result$search_state
+#'
+#' # Resume with custom thresholds, just load state without continuing
+#' result <- resume_selective_forward(
+#'   checkpoint_file = "scm_selective_step_5.rds",
+#'   ofv_threshold = 4.0,
+#'   rse_threshold = 40,
+#'   continue_forward = FALSE
+#' )
+#'
+#' # Resume and resubmit incomplete models without auto-retry
+#' result <- resume_selective_forward(
+#'   checkpoint_file = "scm_selective_step_2.rds",
+#'   auto_submit = TRUE,
+#'   auto_retry = FALSE,
+#'   max_wait_minutes = 180
+#' )
+#'
+#' # Check what would happen next without actually continuing
+#' status <- resume_selective_forward(
+#'   checkpoint_file = "scm_selective_complete.rds",
+#'   continue_forward = FALSE
+#' )
+#' cat("Status:", status$status)
+#' cat("Best model:", status$best_model)
+#' cat("Redemption suggested:", status$redemption_suggested)
+#' }
+#' @seealso
+#' \code{\link{run_scm_selective_forward}} for starting selective forward selection,
+#' \code{\link{save_search_state}} for creating checkpoint files,
+#' \code{\link{get_significant_models_from_step}} for analyzing step results
+#' @export
 
 resume_selective_forward <- function(checkpoint_file,
                                      ofv_threshold = NULL,
