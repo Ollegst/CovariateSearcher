@@ -736,61 +736,7 @@ get_covariates_from_models <- function(search_state, model_names) {
   return(unique(covariate_tags))
 }
 
-#' Get Model Covariates from Database (Cumulative)
-#'
-#' @title Get cumulative covariates by tracing model hierarchy
-#' @description Traces model hierarchy to get all covariates in a model
-#' @param search_state List containing search state
-#' @param model_name Character. Model name
-#' @return Character vector. All covariate names in the model
-#' @export
-get_model_covariates_from_db <- function(search_state, model_name) {
 
-  # Handle base model
-  if (model_name == search_state$base_model) {
-    return(character(0))
-  }
-
-  # Trace back through model hierarchy to collect all covariates
-  current_model <- model_name
-  covariates <- character(0)
-
-  # Safety counter to prevent infinite loops
-  max_iterations <- 100
-  iteration <- 0
-
-  while (!is.na(current_model) &&
-         current_model != "" &&
-         current_model != search_state$base_model &&
-         iteration < max_iterations) {
-
-    iteration <- iteration + 1
-
-    # Get model row from database
-    model_row <- search_state$search_database[
-      search_state$search_database$model_name == current_model, ]
-
-    if (nrow(model_row) == 0) {
-      break
-    }
-
-    # Get the first row if multiple matches
-    model_row <- model_row[1, ]
-
-    # Get covariate tested in this model
-    cov_tested <- model_row$covariate_tested
-
-    # Add to covariates if valid
-    if (!is.na(cov_tested) && cov_tested != "" && cov_tested != "Base Model") {
-      covariates <- c(cov_tested, covariates)  # Add to beginning to maintain order
-    }
-
-    # Move to parent model
-    current_model <- model_row$parent_model
-  }
-
-  return(unique(covariates))
-}
 
 
 

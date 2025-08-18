@@ -264,34 +264,57 @@ get_model_covariates <- function(search_state, model_name) {
 
 
 
-#' Get Model Covariates from Database
+#' Get Model Covariates from Database (Cumulative)
 #'
-#' @title Get cumulative covariates by tracing model history
+#' @title Get all covariates in a model by tracing hierarchy
 #' @description Traces model hierarchy to get all covariates in a model
 #' @param search_state List containing search state
 #' @param model_name Character. Model name
 #' @return Character vector. All covariate names in the model
 #' @export
 get_model_covariates_from_db <- function(search_state, model_name) {
-  # Trace back through model hierarchy to collect all covariates
-  current_model <- model_name
-  covariates <- character(0)
 
-  while (!is.na(current_model) && current_model != "" && current_model != search_state$base_model) {
-    model_row <- search_state$search_database[
-      search_state$search_database$model_name == current_model, ]
-
-    if (nrow(model_row) == 0) break
-
-    cov_tested <- model_row$covariate_tested[1]
-    if (!is.na(cov_tested) && cov_tested != "" && cov_tested != "Base Model") {
-      covariates <- c(cov_tested, covariates)
-    }
-
-    current_model <- model_row$parent_model[1]
+  # Handle base model
+  if (model_name == search_state$base_model) {
+    return(character(0))
   }
 
-  return(unique(covariates))
+  tryCatch({
+    # Read BBR model to get tags
+    model_path <- file.path(search_state$models_folder, model_name)
+
+    # Check if model files exist
+    if (!file.exists(paste0(model_path, ".ctl")) && !file.exists(paste0(model_path, ".mod"))) {
+      return(character(0))
+    }
+
+    # Read BBR model
+    mod <- bbr::read_model(model_path)
+
+    # Get tags from BBR model
+    model_tags <- mod$tags
+
+    if (is.null(model_tags) || length(model_tags) == 0) {
+      return(character(0))
+    }
+
+    # Filter for covariate tags (those that exist in search_state$tags)
+    if (is.null(search_state$tags) || length(search_state$tags) == 0) {
+      return(character(0))
+    }
+
+    # Get all covariate tag values from search_state$tags
+    cov_tag_values <- unlist(search_state$tags[grepl("^cov_", names(search_state$tags))])
+
+    # Find which model tags correspond to covariates
+    covariate_names <- intersect(model_tags, cov_tag_values)
+
+    return(covariate_names)
+
+  }, error = function(e) {
+    # Fallback to character(0) if any error occurs
+    return(character(0))
+  })
 }
 
 
