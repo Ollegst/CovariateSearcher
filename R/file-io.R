@@ -399,17 +399,16 @@ get_model_ofv_from_files <- function(search_state, model_name) {
     if (file.exists(lst_file)) {
       lst_content <- readLines(lst_file, warn = FALSE)
 
-      ofv_lines <- grep("OBJECTIVE FUNCTION VALUE", lst_content, value = TRUE)
+      ofv_lines <- grep("OBJECTIVE FUNCTION VALUE WITHOUT CONSTANT", lst_content, value = TRUE)
       if (length(ofv_lines) > 0) {
-        final_ofv_line <- utils::tail(ofv_lines, 1)
-        ofv_match <- regmatches(final_ofv_line,
-                                regexpr("[-+]?[0-9]*\\.?[0-9]+([eE][-+]?[0-9]+)?", final_ofv_line))
+        # Just take the first (and usually only) match
+        ofv_match <- regmatches(ofv_lines[1],
+                                regexpr("[-+]?[0-9]*\\.?[0-9]+([eE][-+]?[0-9]+)?", ofv_lines[1]))
         if (length(ofv_match) > 0) {
           return(as.numeric(ofv_match[1]))
         }
       }
     }
-
     return(NA)
   }, error = function(e) {
     return(NA)

@@ -220,10 +220,30 @@ update_model_status_from_files <- function(search_state, model_name) {
         if (file.exists(ext_file)) {
           ext_lines <- readLines(ext_file, warn = FALSE)
           data_lines <- ext_lines[!grepl("^TABLE|^\\s*$", ext_lines)]
+
           if (length(data_lines) > 0) {
-            last_line <- tail(data_lines, 1)
-            values <- as.numeric(strsplit(trimws(last_line), "\\s+")[[1]])
-            list(ofv = values[2], status = "completed")
+            # Find lines with -1000000000 (final estimates)
+            final_lines_idx <- grep("^\\s*-1000000000", data_lines)
+
+            if (length(final_lines_idx) > 0) {
+              # Get the line BEFORE the last -1000000000 line
+              last_final_idx <- tail(final_lines_idx, 1)
+              if (last_final_idx > 1) {
+                # The line before -1000000000 has the final OBJ
+                ofv_line <- data_lines[last_final_idx - 1]
+                values <- as.numeric(strsplit(trimws(ofv_line), "\\s+")[[1]])
+                # OBJ is the last column
+                ofv_value <- tail(values, 1)
+                list(ofv = ofv_value, status = "completed")
+              } else {
+                list(ofv = NA_real_, status = "completed")
+              }
+            } else {
+              # No -1000000000 line found, use last data line
+              last_line <- tail(data_lines, 1)
+              values <- as.numeric(strsplit(trimws(last_line), "\\s+")[[1]])
+              list(ofv = tail(values, 1), status = "completed")
+            }
           } else {
             list(ofv = NA_real_, status = "completed")
           }
@@ -234,7 +254,6 @@ update_model_status_from_files <- function(search_state, model_name) {
     }, error = function(e) {
       list(ofv = NA_real_, status = actual_status)
     })
-  }
 
   # FIXED: Add comprehensive error handling for timestamp extraction
   timestamps <- tryCatch({
