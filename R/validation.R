@@ -156,19 +156,34 @@ update_model_status_from_files <- function(search_state, model_name) {
     # LST file exists - read it to determine status
     lst_info <- tryCatch({
       if (exists("read_nonmem_lst") && is.function(read_nonmem_lst)) {
-        read_nonmem_lst(model_path)
+        result <- read_nonmem_lst(model_path)
+
+        # IMPORTANT: Check if "Model run incomplete" means still running
+        if (!is.null(result$error_message) &&
+            grepl("Model run incomplete|not yet completed", result$error_message, ignore.case = TRUE)) {
+          # Model is still running, not failed
+          list(status = "running", error_message = NA, has_issues = FALSE)
+        } else {
+          result
+        }
       } else {
         # Fallback: check if LST contains key phrases
         lst_content <- readLines(lst_file, warn = FALSE)
+
+        # Check for completion markers FIRST
         if (any(grepl("MINIMIZATION SUCCESSFUL", lst_content))) {
           list(status = "completed", error_message = NA, has_issues = FALSE)
-        } else if (any(grepl("ERROR|TERMINATED", lst_content))) {
-          error_line <- lst_content[grep("ERROR|TERMINATED", lst_content)[1]]
+        } else if (any(grepl("MINIMIZATION TERMINATED", lst_content)) &&
+                   any(grepl("ERROR", lst_content))) {
+          # Only failed if we have BOTH termination AND error
+          error_line <- lst_content[grep("ERROR", lst_content)[1]]
           list(status = "failed", error_message = error_line, has_issues = TRUE)
-        } else if (any(grepl("ITERATION", lst_content))) {
-          list(status = "running", error_message = NA, has_issues = FALSE)
+        } else if (any(grepl("Stop Time:", lst_content))) {
+          # Has stop time but no success message = failed
+          list(status = "failed", error_message = "Run completed without success", has_issues = TRUE)
         } else {
-          list(status = "unknown", error_message = NA, has_issues = FALSE)
+          # No completion markers = still running
+          list(status = "running", error_message = NA, has_issues = FALSE)
         }
       }
     }, error = function(e) {
@@ -178,12 +193,17 @@ update_model_status_from_files <- function(search_state, model_name) {
     # Determine actual status based on LST content
     if (lst_info$status == "completed") {
       actual_status <- "completed"
-    } else if (lst_info$status == "failed" || lst_info$has_issues) {
+    } else if (lst_info$status == "failed" &&
+               !grepl("incomplete|not yet completed", lst_info$error_message, ignore.case = TRUE)) {
+      # Only mark as failed if it's truly failed, not just incomplete
       actual_status <- "failed"
     } else if (lst_info$status == "running") {
       actual_status <- "running"
+    } else if (lst_info$has_issues &&
+               !grepl("incomplete|not yet completed", lst_info$error_message, ignore.case = TRUE)) {
+      actual_status <- "failed"
     } else {
-      # Unknown status from LST - assume running
+      # Default to running if uncertain
       actual_status <- "running"
     }
   }
