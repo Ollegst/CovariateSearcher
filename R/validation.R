@@ -135,32 +135,85 @@ update_model_status_from_files <- function(search_state, model_name) {
   }
 
   model_path <- file.path(search_state$models_folder, model_name)
-
-  # FIXED: Add comprehensive error handling for all function calls with validation
-  lst_info <- tryCatch({
-    if (exists("read_nonmem_lst") && is.function(read_nonmem_lst)) {
-      read_nonmem_lst(model_path)
-    } else {
-      stop("read_nonmem_lst function not available")
-    }
-  }, error = function(e) {
-    list(status = "read_error", error_message = paste("LST read error:", e$message), has_issues = TRUE)
-  })
-
-  results <- tryCatch({
-    if (exists("extract_model_results") && is.function(extract_model_results)) {
-      extract_model_results(search_state, model_name)
-    } else {
-      stop("extract_model_results function not available")
-    }
-  }, error = function(e) {
-    list(ofv = NA_real_, status = "extraction_error")
-  })
-
   db_idx <- which(search_state$search_database$model_name == model_name)
   if (length(db_idx) == 0) {
     cat(sprintf("⚠️  Model %s not found in database\n", model_name))
     return(search_state)
+  }
+
+  # Get current status from database (removed, not needed)
+
+  # Check if LST file exists
+  lst_file <- file.path(model_path, paste0(model_name, ".lst"))
+  lst_exists <- file.exists(lst_file)
+
+  # Simple status determination
+  if (!lst_exists) {
+    # No LST file = still running
+    actual_status <- "running"
+    lst_info <- list(status = "running", error_message = NA, has_issues = FALSE)
+  } else {
+    # LST file exists - read it to determine status
+    lst_info <- tryCatch({
+      if (exists("read_nonmem_lst") && is.function(read_nonmem_lst)) {
+        read_nonmem_lst(model_path)
+      } else {
+        # Fallback: check if LST contains key phrases
+        lst_content <- readLines(lst_file, warn = FALSE)
+        if (any(grepl("MINIMIZATION SUCCESSFUL", lst_content))) {
+          list(status = "completed", error_message = NA, has_issues = FALSE)
+        } else if (any(grepl("ERROR|TERMINATED", lst_content))) {
+          error_line <- lst_content[grep("ERROR|TERMINATED", lst_content)[1]]
+          list(status = "failed", error_message = error_line, has_issues = TRUE)
+        } else if (any(grepl("ITERATION", lst_content))) {
+          list(status = "running", error_message = NA, has_issues = FALSE)
+        } else {
+          list(status = "unknown", error_message = NA, has_issues = FALSE)
+        }
+      }
+    }, error = function(e) {
+      list(status = "read_error", error_message = paste("LST read error:", e$message), has_issues = TRUE)
+    })
+
+    # Determine actual status based on LST content
+    if (lst_info$status == "completed") {
+      actual_status <- "completed"
+    } else if (lst_info$status == "failed" || lst_info$has_issues) {
+      actual_status <- "failed"
+    } else if (lst_info$status == "running") {
+      actual_status <- "running"
+    } else {
+      # Unknown status from LST - assume running
+      actual_status <- "running"
+    }
+  }
+
+  # Extract results if completed
+  results <- list(ofv = NA_real_, status = actual_status)
+  if (actual_status == "completed") {
+    results <- tryCatch({
+      if (exists("extract_model_results") && is.function(extract_model_results)) {
+        extract_model_results(search_state, model_name)
+      } else {
+        # Fallback: try to read OFV from EXT file
+        ext_file <- file.path(model_path, paste0(model_name, ".ext"))
+        if (file.exists(ext_file)) {
+          ext_lines <- readLines(ext_file, warn = FALSE)
+          data_lines <- ext_lines[!grepl("^TABLE|^\\s*$", ext_lines)]
+          if (length(data_lines) > 0) {
+            last_line <- tail(data_lines, 1)
+            values <- as.numeric(strsplit(trimws(last_line), "\\s+")[[1]])
+            list(ofv = values[2], status = "completed")
+          } else {
+            list(ofv = NA_real_, status = "completed")
+          }
+        } else {
+          list(ofv = NA_real_, status = "completed")
+        }
+      }
+    }, error = function(e) {
+      list(ofv = NA_real_, status = actual_status)
+    })
   }
 
   # FIXED: Add comprehensive error handling for timestamp extraction
@@ -174,24 +227,13 @@ update_model_status_from_files <- function(search_state, model_name) {
     list(start_time = NA, stop_time = NA)
   })
 
-  # NEW FIX: Determine actual status based on LST info and OFV availability
-  actual_status <- if (!is.null(lst_info$has_issues) && lst_info$has_issues) {
-    "failed"
-  } else if (lst_info$status == "failed") {
-    "failed"
-  } else if (lst_info$status == "completed" && !is.na(results$ofv) && is.finite(results$ofv)) {
-    "completed"  # ONLY completed if BOTH LST success AND valid OFV
-  } else if (lst_info$status == "completed" && (is.na(results$ofv) || !is.finite(results$ofv))) {
-    "in_progress"  # LST done but OFV not available yet
-  } else {
-    "in_progress"
-  }
-
-  # FIXED: Safer database updates with validation - using actual_status
+  # Update database
   tryCatch({
-    search_state$search_database$status[db_idx] <- actual_status  # Changed from lst_info$status
+    search_state$search_database$status[db_idx] <- actual_status
     search_state$search_database$ofv[db_idx] <- results$ofv
-    search_state$search_database$estimation_issue[db_idx] <- lst_info$error_message
+    if (!is.null(lst_info$error_message) && !is.na(lst_info$error_message)) {
+      search_state$search_database$estimation_issue[db_idx] <- lst_info$error_message
+    }
   }, error = function(e) {
     cat(sprintf("❌ Error updating database for %s: %s\n", model_name, e$message))
     return(search_state)
@@ -204,7 +246,7 @@ update_model_status_from_files <- function(search_state, model_name) {
 
   if (!is.na(timestamps$stop_time) && !is.null(timestamps$stop_time)) {
     search_state$search_database$completion_time[db_idx] <- timestamps$stop_time
-  } else if (!is.null(actual_status) && actual_status %in% c("completed", "failed")) {  # Changed to actual_status
+  } else if (actual_status %in% c("completed", "failed")) {
     search_state$search_database$completion_time[db_idx] <- Sys.time()
   }
 
@@ -226,7 +268,7 @@ update_model_status_from_files <- function(search_state, model_name) {
     as.character(covariate)
   }
 
-  # FIXED: Safer status reporting with validation + STEP INFORMATION - using actual_status
+  # Status reporting
   if (actual_status == "failed") {
     error_msg <- if (is.null(lst_info$error_message) || is.na(lst_info$error_message)) {
       "Unknown error"
@@ -235,13 +277,12 @@ update_model_status_from_files <- function(search_state, model_name) {
     }
     cat(sprintf("%s❌ Model %s (%s) FAILED: %s\n", step_prefix, model_name, display_covariate, error_msg))
 
-  } else if (actual_status == "in_progress") {
-    # NEW: Show in-progress status instead of false completion
-    cat(sprintf("%s🔄 Model %s (%s) in progress\n", step_prefix, model_name, display_covariate))
+  } else if (actual_status == "running") {
+    # Show running status
+    cat(sprintf("%s🔄 Model %s (%s) running\n", step_prefix, model_name, display_covariate))
 
   } else if (actual_status == "completed") {
     # Only show completed when we truly have results
-    # FIXED: Comprehensive OFV change calculation with validation + STEP INFORMATION
     if (!is.na(parent_model) && !is.null(parent_model) &&
         nchar(as.character(parent_model)) > 0 && as.character(parent_model) != "") {
 
@@ -250,41 +291,19 @@ update_model_status_from_files <- function(search_state, model_name) {
         parent_ofv <- search_state$search_database$ofv[parent_idx[1]]
         parent_status <- search_state$search_database$status[parent_idx[1]]
         current_ofv <- results$ofv
-        current_status <- actual_status  # Use actual_status instead of lst_info$status
 
-        # FIXED: Comprehensive validation for delta OFV calculation
-        if (!is.na(parent_status) && !is.na(current_status) &&
-            !is.null(parent_status) && !is.null(current_status) &&
-            parent_status == "completed" && current_status == "completed" &&
+        if (!is.na(parent_status) && !is.na(actual_status) &&
+            parent_status == "completed" && actual_status == "completed" &&
             !is.na(parent_ofv) && !is.na(current_ofv) &&
-            !is.null(parent_ofv) && !is.null(current_ofv) &&
-            is.numeric(parent_ofv) && is.numeric(current_ofv) &&
             is.finite(parent_ofv) && is.finite(current_ofv)) {
 
-          # FIXED: Safe delta calculation with function validation
-          delta_ofv <- tryCatch({
-            if (exists("calculate_delta_ofv") && is.function(calculate_delta_ofv)) {
-              delta_result <- calculate_delta_ofv(parent_ofv, current_ofv)
-              if (!is.null(delta_result$delta_ofv) && is.numeric(delta_result$delta_ofv)) {
-                delta_result$delta_ofv
-              } else {
-                parent_ofv - current_ofv  # Fallback calculation
-              }
-            } else {
-              parent_ofv - current_ofv  # Direct calculation if function not available
-            }
-          }, error = function(e) {
-            parent_ofv - current_ofv  # Fallback on error
-          })
-
+          delta_ofv <- parent_ofv - current_ofv
           search_state$search_database$delta_ofv[db_idx] <- delta_ofv
 
           cat(sprintf("%s✅ Model %s (%s) completed: OFV %.2f → %.2f (ΔOFV: %+.2f)\n",
                       step_prefix, model_name, display_covariate, parent_ofv, current_ofv, delta_ofv))
 
-        } else if (!is.na(parent_status) && !is.na(current_status) &&
-                   !is.null(parent_status) && !is.null(current_status) &&
-                   parent_status == "failed" && current_status == "completed") {
+        } else if (parent_status == "failed" && actual_status == "completed") {
           search_state$search_database$delta_ofv[db_idx] <- 999999
           if (!is.na(current_ofv) && is.numeric(current_ofv)) {
             cat(sprintf("%s🎉 Model %s (%s) FIXED failed parent %s! OFV: %.2f\n",
@@ -293,19 +312,13 @@ update_model_status_from_files <- function(search_state, model_name) {
             cat(sprintf("%s🎉 Model %s (%s) FIXED failed parent %s!\n",
                         step_prefix, model_name, display_covariate, parent_model))
           }
-        } else if (!is.na(parent_status) && !is.na(current_status) &&
-                   !is.null(parent_status) && !is.null(current_status) &&
-                   parent_status == "completed" && current_status == "failed") {
-          search_state$search_database$delta_ofv[db_idx] <- -999999
-          # Failure already reported above
         } else {
           search_state$search_database$delta_ofv[db_idx] <- NA_real_
           if (!is.na(current_ofv) && is.numeric(current_ofv)) {
             cat(sprintf("%s✅ Model %s (%s) completed: OFV %.2f\n",
                         step_prefix, model_name, display_covariate, current_ofv))
           } else {
-            # This should not happen now due to actual_status logic, but keep as safety
-            cat(sprintf("%s🔄 Model %s (%s) in progress\n",
+            cat(sprintf("%s✅ Model %s (%s) completed\n",
                         step_prefix, model_name, display_covariate))
           }
         }
@@ -316,8 +329,7 @@ update_model_status_from_files <- function(search_state, model_name) {
           cat(sprintf("%s✅ Model %s (%s) completed: OFV %.2f\n",
                       step_prefix, model_name, display_covariate, results$ofv))
         } else {
-          # This should not happen now due to actual_status logic, but keep as safety
-          cat(sprintf("%s🔄 Model %s (%s) in progress\n",
+          cat(sprintf("%s✅ Model %s (%s) completed\n",
                       step_prefix, model_name, display_covariate))
         }
       }
@@ -330,30 +342,28 @@ update_model_status_from_files <- function(search_state, model_name) {
         cat(sprintf("%s✅ Model %s (%s) completed: OFV %.2f\n",
                     step_prefix, model_name, display_covariate, results$ofv))
       } else {
-        # This should not happen now due to actual_status logic, but keep as safety
-        cat(sprintf("%s🔄 Model %s (%s) in progress\n",
+        cat(sprintf("%s✅ Model %s (%s) completed\n",
                     step_prefix, model_name, display_covariate))
       }
     }
   } else {
-    # Any other status - should not normally reach here
+    # Any other status
     cat(sprintf("%s❓ Model %s (%s) status: %s\n",
                 step_prefix, model_name, display_covariate, actual_status))
   }
 
-  # NEW: Set excluded_from_step based on model completion status - using actual_status
+  # Set excluded_from_step based on model completion status
   if (actual_status == "completed") {
     search_state$search_database$excluded_from_step[db_idx] <- FALSE
   } else if (actual_status == "failed") {
     search_state$search_database$excluded_from_step[db_idx] <- TRUE
   }
 
-  # NEW: Handle retry model success - reset original model exclusion
-  model_row <- search_state$search_database[db_idx, , drop = FALSE]
+  # Handle retry model success - reset original model exclusion
   has_original_model <- !is.na(model_row$original_model) &&
     nchar(as.character(model_row$original_model)) > 0
 
-  if (has_original_model && actual_status == "completed") {  # Changed to actual_status
+  if (has_original_model && actual_status == "completed") {
     original_model_name <- as.character(model_row$original_model)
     original_idx <- which(search_state$search_database$model_name == original_model_name)
     if (length(original_idx) > 0) {
@@ -362,11 +372,11 @@ update_model_status_from_files <- function(search_state, model_name) {
                   step_prefix, original_model_name))
     }
   }
-  # NEW: Fix retry models with missing step_description and phase
+
+  # Fix retry models with missing step_description and phase
   if (grepl("\\d{3}$", model_name)) {  # This is a retry model
     current_row <- search_state$search_database[db_idx, ]
 
-    # Fix missing step_description and phase
     if (is.na(current_row$step_description) || is.na(current_row$phase)) {
       covariate_name <- current_row$covariate_tested[1]
 
@@ -381,7 +391,6 @@ update_model_status_from_files <- function(search_state, model_name) {
 
   return(search_state)
 }
-
 
 
 #' Update All Model Statuses (FIXED)
