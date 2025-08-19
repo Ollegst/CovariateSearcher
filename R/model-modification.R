@@ -715,22 +715,34 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
       if (is.na(pk_end)) pk_end <- length(modelcode)
 
       lines_to_remove <- c()
-      in_if_block <- FALSE
 
+      # Find the line that contains our specific beta assignment
       for (i in pk_start:pk_end) {
-        line <- modelcode[i]
+        if (grepl(paste0("\\b", covariate_to_remove, "\\s*="), modelcode[i])) {
+          # Found a line that sets our beta variable
+          # Now find the complete IF-THEN-ELSE block containing this line
 
-        if (grepl(paste0("IF\\s*\\(", cova), line) ||
-            grepl(paste0("\\b", covariate_to_remove, "\\s*="), line)) {
-          in_if_block <- TRUE
-        }
+          # Search backwards for the IF statement (FIXED: proper sequence)
+          block_start <- NULL
+          for (j in seq(from = i, to = pk_start, by = -1)) {
+            if (grepl(paste0("IF\\s*\\(", cova, "\\.EQ\\."), modelcode[j])) {
+              # Found the start of our block
+              block_start <- j
+              break
+            }
+          }
 
-        if (in_if_block) {
-          lines_to_remove <- c(lines_to_remove, i)
-        }
-
-        if (grepl("ENDIF", line) && in_if_block) {
-          in_if_block <- FALSE
+          # Search forwards for ENDIF from the block start
+          if (!is.null(block_start)) {
+            for (k in block_start:pk_end) {
+              lines_to_remove <- c(lines_to_remove, k)
+              if (grepl("ENDIF", modelcode[k])) {
+                # Found the end
+                break
+              }
+            }
+          }
+          break  # We found and processed our block
         }
       }
 
@@ -738,7 +750,7 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
         modelcode <- modelcode[-lines_to_remove]
         # Adjust THETA line indices after removing IF blocks
         theta_lines_to_remove <- theta_lines_to_remove - sapply(theta_lines_to_remove, function(x) sum(lines_to_remove < x))
-        log_msg(paste("Removed", length(lines_to_remove), "lines from IF-THEN-ELSE block"))
+        log_msg(paste("Removed", length(lines_to_remove), "lines from IF-THEN-ELSE block for", covariate_to_remove))
       }
     }
   }
