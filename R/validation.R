@@ -254,6 +254,7 @@ update_model_status_from_files <- function(search_state, model_name) {
     }, error = function(e) {
       list(ofv = NA_real_, status = actual_status)
     })
+  }
 
   # FIXED: Add comprehensive error handling for timestamp extraction
   timestamps <- tryCatch({
@@ -628,4 +629,3 @@ update_all_model_statuses <- function(search_state, show_progress = TRUE) {
 
   return(search_state)
 }
-
