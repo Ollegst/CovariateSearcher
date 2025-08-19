@@ -330,15 +330,24 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
       formule <- paste0(' * ', newvari)
       ifelcode <- paste0('IF(', cova, '.EQ.', temp_cov$REFERENCE,')THEN\n', newvari, ' = 1\n' )
 
-      uniqueval <- data_file %>%
-        dplyr::count(!!rlang::parse_expr(cova)) %>%   # count() instead of group_by + tally
+      uniqueval_with_freq <- data_file %>%
+        dplyr::count(!!rlang::parse_expr(cova)) %>%
         dplyr::arrange(desc(n)) %>%
         dplyr::pull(!!rlang::parse_expr(cova))
 
-      thetanmulti <- tibble(covx = uniqueval[uniqueval != temp_cov$REFERENCE])
-      for(a in 2:length(uniqueval)){
-        ifelcode <- paste0(ifelcode, 'ELSEIF(', cova, '.EQ.', uniqueval[[a]], ')THEN\n',
-                           newvari, ' = 1 + THETA(', newtheta + a -2, ')\n')
+      uniqueval <- uniqueval_with_freq[uniqueval_with_freq != temp_cov$REFERENCE]
+
+      thetanmulti <- tibble(covx = uniqueval)
+      for(a in 1:length(uniqueval)){
+        current_level <- uniqueval[a]
+        theta_num <- newtheta + a - 1
+
+        ifelcode <- paste0(ifelcode,
+                           'ELSEIF(', cova, '.EQ.', current_level, ')THEN\n',
+                           newvari, ' = 1 + THETA(', theta_num, ')\n')
+
+        log_function(paste("Added ELSEIF for", cova, "=", current_level,
+                           "using THETA(", theta_num, ")"))
       }
       ifelcode <- paste0(ifelcode, 'ENDIF\n')
       modelcode[grep('^\\$PK', modelcode)] <- paste0(modelcode[grep('^\\$PK', modelcode)], '\n\n', ifelcode)
@@ -392,8 +401,16 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   # Add THETA line
   newthetaline <- paste0(initialValuethetacov, ' ; ', cov_on_param, ' ;  ; RATIO')
   if(nrow(thetanmulti) > 0){
-    newthetaline <- purrr::map_chr(1:nrow(thetanmulti), ~ paste0('0.1 ; ', paste0(cov_on_param,"_",thetanmulti$covx[[.x]]), ';  ; RATIO')) %>%
-      paste0(collapse = '\n')
+    # Multiple THETAs for categorical with >2 levels (excluding reference)
+    newthetalines <- purrr::map_chr(1:nrow(thetanmulti), ~ {
+      paste0('0.1 ; ', cov_on_param, "_", thetanmulti$covx[[.x]], ' ; RATIO')
+    })
+    newthetaline <- paste0(newthetalines, collapse = '\n')
+
+    log_function(paste("Adding", nrow(thetanmulti), "THETA lines for categorical levels"))
+  } else {
+    # Single THETA for binary or continuous covariates
+    newthetaline <- paste0(initialValuethetacov, ' ; ', cov_on_param, ' ;  ; RATIO')
   }
 
   log_function(paste("New THETA line to add:", newthetaline))
