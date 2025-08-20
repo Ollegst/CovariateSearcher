@@ -12,11 +12,11 @@
 #' @param base_model_id Character. Base model to test from
 #' @param covariates_to_test Character vector. Covariate tags to test (optional)
 #' @param step_name Character. Description for this step
-#' @param include_excluded Logical. Whether to include excluded covariates (default: FALSE for forward, TRUE for final testing)
+#' @param include_excluded Logical. Whether to include excluded covariates (default: TRUE for forward, TRUE for final testing)
 #' @return List with created model information and updated search_state
 #' @export
 run_univariate_step <- function(search_state, base_model_id, covariates_to_test = NULL,
-                                step_name, include_excluded = FALSE) {
+                                step_name, include_excluded = TRUE) {
 
   # If no covariates specified, get remaining ones with exclusion filtering
   if (is.null(covariates_to_test)) {
