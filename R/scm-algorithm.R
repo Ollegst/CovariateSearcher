@@ -14,10 +14,10 @@
 #'   been added to the specified base model yet, with exclusion filtering.
 #' @param search_state List containing covariate search state and configuration
 #' @param base_model_id Character. Model to check current covariates against
-#' @param include_excluded Logical. Whether to include excluded covariates (default: FALSE)
+#' @param include_excluded Logical. Whether to include excluded covariates (default: TRUE)
 #' @return Character vector of covariate tag names that can still be tested
 #' @export
-get_remaining_covariates <- function(search_state, base_model_id, include_excluded = FALSE) {
+get_remaining_covariates <- function(search_state, base_model_id, include_excluded = TRUE) {
   # Get current covariates in the base model
   current_covs <- get_model_covariates(search_state, base_model_id)
 
