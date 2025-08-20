@@ -18,28 +18,51 @@
 #' @return Character vector of covariate tag names that can still be tested
 #' @export
 get_remaining_covariates <- function(search_state, base_model_id, include_excluded = TRUE) {
-  # Get current covariates in the base model
-  current_covs <- get_model_covariates(search_state, base_model_id)
+  # Get current covariates in the base model (these are NAMES like "BBWI_CL")
+  current_cov_names <- get_model_covariates(search_state, base_model_id)
+
+  # Handle NULL or NA results
+  if (is.null(current_cov_names) || all(is.na(current_cov_names))) {
+    current_cov_names <- character(0)
+  }
 
   # Get all available covariate tags
   all_cov_tags <- names(search_state$tags)[grepl("^cov_", names(search_state$tags))]
 
+  # Convert current covariate NAMES to TAGS for comparison
+  current_cov_tags <- character(0)
+  if (length(current_cov_names) > 0) {  # Only convert if there are covariates
+    for (tag in all_cov_tags) {
+      tag_value <- search_state$tags[[tag]]
+      if (!is.null(tag_value) && tag_value %in% current_cov_names) {
+        current_cov_tags <- c(current_cov_tags, tag)
+      }
+    }
+  }
+
   # Get excluded covariates (if not including them)
   if (!include_excluded) {
     excluded_cov_names <- get_excluded_covariates(search_state)
-    excluded_tags <- character(0)
 
-    # Convert excluded names back to tags
-    for (tag in names(search_state$tags)) {
-      if (search_state$tags[[tag]] %in% excluded_cov_names) {
-        excluded_tags <- c(excluded_tags, tag)
+    # Handle NULL or NA
+    if (is.null(excluded_cov_names) || all(is.na(excluded_cov_names))) {
+      excluded_cov_names <- character(0)
+    }
+
+    excluded_tags <- character(0)
+    if (length(excluded_cov_names) > 0) {  # Only convert if there are excluded
+      # Convert excluded names back to tags
+      for (tag in all_cov_tags) {  # Changed from names(search_state$tags) to all_cov_tags
+        tag_value <- search_state$tags[[tag]]
+        if (!is.null(tag_value) && tag_value %in% excluded_cov_names) {
+          excluded_tags <- c(excluded_tags, tag)
+        }
       }
     }
 
     # Remove excluded tags
-    all_cov_tags <- setdiff(all_cov_tags, excluded_tags)
-
     if (length(excluded_tags) > 0) {
+      all_cov_tags <- setdiff(all_cov_tags, excluded_tags)
       cat(sprintf("🚫 Excluding %d covariates from testing: %s\n",
                   length(excluded_tags), paste(excluded_cov_names, collapse = ", ")))
     }
@@ -47,9 +70,8 @@ get_remaining_covariates <- function(search_state, base_model_id, include_exclud
     cat("📋 Including previously excluded covariates for testing\n")
   }
 
-  # Return tags not currently in the model
-  remaining_tags <- setdiff(all_cov_tags, current_covs)
-
+  # NOW compare tags with tags (not tags with names!)
+  remaining_tags <- setdiff(all_cov_tags, current_cov_tags)
   return(remaining_tags)
 }
 
