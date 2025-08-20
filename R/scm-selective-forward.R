@@ -326,8 +326,8 @@ run_scm_selective_forward <- function(search_state,
 
   if (nrow(all_main_models) > 0) {
     # Find model with LOWEST absolute OFV (best fit)
-    final_best_idx <- which.min(all_main_models$ofv)  # MIN not MAX
-    final_best_model <- all_main_models$model_name[final_best_idx]
+    final_best_model <- current_best_model
+    final_best_idx <- which(all_main_models$model_name == final_best_model)
     final_best_step <- all_main_models$step_number[final_best_idx]
     final_best_ofv <- all_main_models$ofv[final_best_idx]
 

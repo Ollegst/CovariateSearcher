@@ -243,8 +243,8 @@ run_scm_covariate_search_forward <- function(search_state,
   if (nrow(all_completed_models) > 0) {
 
     # Find overall best model (highest cumulative improvement)
-    final_best_idx <- which.max(all_completed_models$delta_ofv)
-    final_best_model <- all_completed_models$model_name[final_best_idx]
+    final_best_model <- current_best_model
+    final_best_idx <- which(all_completed_models$model_name == final_best_model)
     final_best_step <- all_completed_models$step_number[final_best_idx]
     final_best_delta <- all_completed_models$delta_ofv[final_best_idx]
     final_best_covariate <- all_completed_models$covariate_tested[final_best_idx]
