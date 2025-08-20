@@ -582,18 +582,17 @@ run_scm_selective_forward <- function(search_state,
   cat(paste(rep("=", 60), collapse=""), "\n")
 
   # Find absolute best model across all steps
-  # Find absolute best model across all steps - use LOWEST OFV
-  all_completed <- search_state$search_database[
-    search_state$search_database$status == "completed" &
-      !is.na(search_state$search_database$ofv), ]  # Changed to ofv
+  absolute_best_model <- current_best_model
+# Get details for the final best model
+  # Get details for the final best model
+  final_model_info <- search_state$search_database[
+    search_state$search_database$model_name == absolute_best_model, ]
 
-  if (nrow(all_completed) > 0) {
-    absolute_best_idx <- which.min(all_completed$ofv)  # MIN not MAX, ofv not delta_ofv
-    absolute_best_model <- all_completed$model_name[absolute_best_idx]
-    absolute_best_step <- all_completed$step_number[absolute_best_idx]
-    absolute_best_ofv <- all_completed$ofv[absolute_best_idx]  # Get the actual OFV
-    absolute_best_delta <- all_completed$delta_ofv[absolute_best_idx]  # Keep delta for display
-    absolute_best_covariate <- all_completed$covariate_tested[absolute_best_idx]
+  if (nrow(final_model_info) > 0) {
+    absolute_best_step <- final_model_info$step_number[1]
+    absolute_best_ofv <- final_model_info$ofv[1]
+    absolute_best_delta <- final_model_info$delta_ofv[1]
+    absolute_best_covariate <- final_model_info$covariate_tested[1]
 
     cat(sprintf("🏆 ABSOLUTE BEST MODEL: %s (Step %d)\n",
                 absolute_best_model, absolute_best_step))
