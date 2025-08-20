@@ -12,7 +12,6 @@
 #' @param search_state List containing covariate search state and configuration
 #' @param starting_model Character. Model to start backward elimination from
 #' @param ofv_threshold Numeric. ΔOFV threshold for removal (default: 10.83)
-#' @param max_wait_minutes Numeric. Maximum wait time per step (default: 120)
 #' @param auto_submit Logical. Whether to automatically submit models (default: TRUE)
 #' @param auto_retry Logical. Whether to enable automatic retry (default: TRUE)
 #' @return List with backward elimination results and updated search_state
@@ -20,7 +19,6 @@
 run_backward_elimination <- function(search_state,
                                      starting_model,
                                      ofv_threshold = 10.83,
-                                     max_wait_minutes = 120,
                                      auto_submit = TRUE,
                                      auto_retry = TRUE) {
 
@@ -169,7 +167,6 @@ run_backward_elimination <- function(search_state,
       search_state = search_state,
       model_names = model_names_to_submit,
       step_name = sprintf("Step %d: Backward Elimination", current_step),
-      max_wait_minutes = max_wait_minutes,
       auto_submit = auto_submit,
       auto_retry = auto_retry
     )

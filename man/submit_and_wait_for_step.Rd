@@ -8,7 +8,7 @@ submit_and_wait_for_step(
   search_state,
   model_names,
   step_name,
-  max_wait_minutes = 120,
+  max_wait_minutes = NULL,
   threads = NULL,
   auto_submit = TRUE,
   auto_retry = TRUE
@@ -21,7 +21,7 @@ submit_and_wait_for_step(
 
 \item{step_name}{Character. Description of current step}
 
-\item{max_wait_minutes}{Numeric. Maximum time to wait for completion (default: 60)}
+\item{max_wait_minutes}{Optional timeout - NULL means no limit}
 
 \item{threads}{Numeric. Number of threads per model (uses config if NULL)}
 

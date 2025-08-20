@@ -170,7 +170,6 @@ get_excluded_covariates <- function(search_state, return_details = FALSE) {
 #' @param search_state List containing covariate search state and configuration
 #' @param base_model_id Character. Starting base model
 #' @param max_forward_steps Numeric. Maximum number of forward steps (default: 10)
-#' @param max_wait_minutes Numeric. Maximum wait time per step (default: 60)
 #' @param auto_submit Logical. Whether to automatically submit models (default: TRUE)
 #' @param ofv_threshold Numeric. OFV improvement threshold (uses config if NULL)
 #' @param rse_threshold Numeric. Maximum RSE threshold (uses config if NULL)
@@ -178,7 +177,6 @@ get_excluded_covariates <- function(search_state, return_details = FALSE) {
 #' @export
 run_stepwise_covariate_modeling <- function(search_state, base_model_id,
                                             max_forward_steps = 10,
-                                            max_wait_minutes = 60,
                                             auto_submit = TRUE,
                                             ofv_threshold = NULL,
                                             rse_threshold = NULL) {
@@ -253,7 +251,6 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id,
     search_state = search_state,
     model_names = step1_creation$models_created,
     step_name = "Step 1 Models",
-    max_wait_minutes = max_wait_minutes,
     auto_submit = auto_submit
   )
 
@@ -361,7 +358,6 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id,
       search_state = search_state,
       model_names = step_creation$models_created,
       step_name = sprintf("Step %d Models", forward_step),
-      max_wait_minutes = max_wait_minutes,
       auto_submit = auto_submit
     )
 
@@ -411,70 +407,6 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id,
     step_count <- forward_step
   }
 
-  # FINAL STEP: Test dropped covariates
-  cat(paste0("\n", "📍 FINAL STEP: TESTING DROPPED COVARIATES\n"))
-
-  dropped_covariates <- get_dropped_covariates(search_state, current_base_model, all_tested_covariates)
-
-  if (length(dropped_covariates) > 0) {
-    cat(sprintf("Found %d previously dropped covariates to retest\n", length(dropped_covariates)))
-
-    # Test dropped covariates
-    final_creation <- run_univariate_step(
-      search_state = search_state,
-      base_model_id = current_base_model,
-      covariates_to_test = dropped_covariates,
-      step_name = "Final Step: Dropped Covariate Testing"
-    )
-
-    # VALIDATION: Check final_creation result
-    if (!is.null(final_creation) && !is.null(final_creation$search_state)) {
-      search_state <- final_creation$search_state
-
-      if (final_creation$status == "models_created") {
-        # Submit and wait
-        final_completion <- submit_and_wait_for_step(
-          search_state = search_state,
-          model_names = final_creation$models_created,
-          step_name = "Final Step Models",
-          max_wait_minutes = max_wait_minutes,
-          auto_submit = auto_submit
-        )
-
-        # VALIDATION: Check final_completion result
-        if (!is.null(final_completion) && !is.null(final_completion$search_state)) {
-          search_state <- final_completion$search_state
-
-          # Select best model
-          final_selection <- select_best_model(
-            search_state = search_state,
-            model_names = final_completion$completed_models,
-            ofv_threshold = ofv_threshold,
-            rse_threshold = rse_threshold
-          )
-
-          # VALIDATION: Check final_selection result
-          if (!is.null(final_selection) && !is.null(final_selection$search_state)) {
-            search_state <- final_selection$search_state
-
-            step_results[["final_step"]] <- list(
-              creation = final_creation,
-              completion = final_completion,
-              selection = final_selection
-            )
-
-            # Update final model if improvement found
-            if (!is.null(final_selection$best_model)) {
-              current_base_model <- final_selection$best_model
-              cat(sprintf("🎯 Final improvement found - final model: %s\n", current_base_model))
-            }
-          }
-        }
-      }
-    }
-  } else {
-    cat("No dropped covariates to retest\n")
-  }
 
   # FINAL SUMMARY
   scm_time <- as.numeric(difftime(Sys.time(), scm_start_time, units = "mins"))
@@ -485,15 +417,64 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id,
   cat(sprintf("📊 Steps completed: %d\n", step_count))
   cat(sprintf("🎯 Final model: %s\n", current_base_model))
 
-  # Show final model covariates
-  final_covariates <- get_model_covariates(search_state, current_base_model)
-  if (length(final_covariates) > 0) {
-    final_cov_names <- sapply(final_covariates, function(x) {
-      if (x %in% names(search_state$tags)) search_state$tags[[x]] else x
-    })
-    cat(sprintf("📋 Final covariates: %s\n", paste(final_cov_names, collapse = ", ")))
+  # Get final model details
+  final_ofv <- get_model_ofv(search_state, current_base_model)
+  base_ofv <- get_model_ofv(search_state, base_model_id)
+  total_improvement <- if (!is.na(final_ofv) && !is.na(base_ofv)) {
+    base_ofv - final_ofv
   } else {
-    cat("📋 Final covariates: None (base model retained)\n")
+    NA
+  }
+
+  if (!is.na(total_improvement)) {
+    cat(sprintf("📈 Total OFV improvement: %.2f\n", total_improvement))
+  }
+
+  # Show final model covariates
+  final_covariates <- get_model_covariates_from_db(search_state, current_base_model)
+  # Get base model covariates for comparison
+  base_covariates <- tryCatch({
+    get_model_covariates_from_db(search_state, base_model_id)
+  }, error = function(e) {
+    character(0)
+  })
+
+  # Display final covariates with proper formatting
+  if (length(final_covariates) > 0) {
+    # The covariates from get_model_covariates_from_db are already covariate names
+    # (e.g., "SEX_V", "DOSE_V", "WT_CL"), not tags
+    cat(sprintf("🧬 Final covariates (%d): %s\n",
+                length(final_covariates),
+                paste(final_covariates, collapse = " + ")))
+
+    # Show what was added during SCM if base model had covariates
+    if (length(base_covariates) > 0) {
+      added_covariates <- setdiff(final_covariates, base_covariates)
+      if (length(added_covariates) > 0) {
+        cat(sprintf("   📈 Added during SCM: %s\n", paste(added_covariates, collapse = " + ")))
+      }
+    }
+  } else {
+    # No covariates in final model
+    if (current_base_model == base_model_id && length(base_covariates) == 0) {
+      cat("🧬 Final covariates: None (base model retained without covariates)\n")
+    } else {
+      # This might indicate an issue with covariate detection
+      cat("🧬 Final covariates: None detected (check model tags)\n")
+
+      # Try to provide more diagnostic information
+      tryCatch({
+        model_path <- file.path(search_state$models_folder, current_base_model)
+        if (file.exists(paste0(model_path, ".yaml"))) {
+          mod_yaml <- yaml::read_yaml(paste0(model_path, ".yaml"))
+          if (!is.null(mod_yaml$tags) && length(mod_yaml$tags) > 0) {
+            cat(sprintf("   📌 BBR tags found: %s\n", paste(mod_yaml$tags, collapse = ", ")))
+          }
+        }
+      }, error = function(e) {
+        # Silently fail if we can't read the YAML
+      })
+    }
   }
   cat(paste0(paste(rep("=", 80), collapse=""), "\n"))
 

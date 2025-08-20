@@ -13,7 +13,6 @@ run_automated_scm_testing(
   forward_ofv_threshold = NULL,
   backward_ofv_threshold = NULL,
   rse_threshold = NULL,
-  max_wait_minutes = 120,
   auto_submit = TRUE,
   auto_retry = TRUE,
   save_checkpoints = TRUE,
@@ -51,8 +50,6 @@ If NULL, uses 6.63 (more stringent than forward). Only used when starting_phase 
 
 \item{rse_threshold}{Numeric. Maximum RSE threshold as percentage.
 If NULL, uses search_state$search_config$max_rse_threshold (default: 50)}
-
-\item{max_wait_minutes}{Numeric. Maximum wait time per step in minutes (default: 120)}
 
 \item{auto_submit}{Logical. Whether to automatically submit models to cluster (default: TRUE)}
 

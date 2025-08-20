@@ -8,7 +8,6 @@ resume_selective_forward(
   checkpoint_file,
   ofv_threshold = NULL,
   rse_threshold = NULL,
-  max_wait_minutes = 120,
   auto_submit = TRUE,
   auto_retry = TRUE,
   continue_forward = TRUE
@@ -23,9 +22,6 @@ If NULL, uses value from search_state$search_config$forward_ofv_threshold (defau
 
 \item{rse_threshold}{Numeric. Maximum acceptable RSE threshold as percentage.
 If NULL, uses value from search_state$search_config$max_rse_threshold (default: 50)}
-
-\item{max_wait_minutes}{Numeric. Maximum time to wait for model completion per step
-when resubmitting incomplete models (default: 120)}
 
 \item{auto_submit}{Logical. Whether to automatically resubmit incomplete models
 found in the last step (default: TRUE)}
@@ -117,8 +113,7 @@ result <- resume_selective_forward(
 result <- resume_selective_forward(
   checkpoint_file = "scm_selective_step_2.rds",
   auto_submit = TRUE,
-  auto_retry = FALSE,
-  max_wait_minutes = 180
+  auto_retry = FALSE
 )
 
 # Check what would happen next without actually continuing

@@ -8,7 +8,6 @@ run_stepwise_covariate_modeling(
   search_state,
   base_model_id,
   max_forward_steps = 10,
-  max_wait_minutes = 60,
   auto_submit = TRUE,
   ofv_threshold = NULL,
   rse_threshold = NULL
@@ -20,8 +19,6 @@ run_stepwise_covariate_modeling(
 \item{base_model_id}{Character. Starting base model}
 
 \item{max_forward_steps}{Numeric. Maximum number of forward steps (default: 10)}
-
-\item{max_wait_minutes}{Numeric. Maximum wait time per step (default: 60)}
 
 \item{auto_submit}{Logical. Whether to automatically submit models (default: TRUE)}
 

@@ -8,7 +8,6 @@
 #' @param base_model_id Character. Starting base model (default: "run1")
 #' @param ofv_threshold Numeric. OFV improvement threshold (uses config if NULL)
 #' @param rse_threshold Numeric. Maximum RSE threshold (uses config if NULL)
-#' @param max_wait_minutes Numeric. Maximum wait time per step (default: 120)
 #' @param auto_submit Logical. Whether to automatically submit models (default: TRUE)
 #' @param auto_retry Logical. Whether to enable automatic retry (default: TRUE)
 #' @return List with updated search_state and forward selection results
@@ -17,7 +16,6 @@ run_scm_selective_forward <- function(search_state,
                                       base_model_id = "run1",
                                       ofv_threshold = NULL,
                                       rse_threshold = NULL,
-                                      max_wait_minutes = 120,
                                       auto_submit = TRUE,
                                       auto_retry = TRUE) {
 
@@ -228,7 +226,6 @@ run_scm_selective_forward <- function(search_state,
       search_state = search_state,
       model_names = step_result$models_created,
       step_name = sprintf("Step %d Models", current_step),
-      max_wait_minutes = max_wait_minutes,
       auto_submit = auto_submit,
       auto_retry = auto_retry
     )
@@ -510,7 +507,6 @@ run_scm_selective_forward <- function(search_state,
           search_state = search_state,
           model_names = redemption_result$models_created,
           step_name = sprintf("Redemption Step %d Models", redemption_step),
-          max_wait_minutes = max_wait_minutes,
           auto_submit = auto_submit,
           auto_retry = auto_retry
         )
@@ -753,8 +749,6 @@ get_covariates_from_models <- function(search_state, model_names) {
 #'   If NULL, uses value from search_state$search_config$forward_ofv_threshold (default: 3.84)
 #' @param rse_threshold Numeric. Maximum acceptable RSE threshold as percentage.
 #'   If NULL, uses value from search_state$search_config$max_rse_threshold (default: 50)
-#' @param max_wait_minutes Numeric. Maximum time to wait for model completion per step
-#'   when resubmitting incomplete models (default: 120)
 #' @param auto_submit Logical. Whether to automatically resubmit incomplete models
 #'   found in the last step (default: TRUE)
 #' @param auto_retry Logical. Whether to enable automatic retry creation for failed
@@ -825,8 +819,7 @@ get_covariates_from_models <- function(search_state, model_names) {
 #' result <- resume_selective_forward(
 #'   checkpoint_file = "scm_selective_step_2.rds",
 #'   auto_submit = TRUE,
-#'   auto_retry = FALSE,
-#'   max_wait_minutes = 180
+#'   auto_retry = FALSE
 #' )
 #'
 #' # Check what would happen next without actually continuing
@@ -847,7 +840,6 @@ get_covariates_from_models <- function(search_state, model_names) {
 resume_selective_forward <- function(checkpoint_file,
                                      ofv_threshold = NULL,
                                      rse_threshold = NULL,
-                                     max_wait_minutes = 120,
                                      auto_submit = TRUE,
                                      auto_retry = TRUE,
                                      continue_forward = TRUE) {
@@ -937,7 +929,6 @@ resume_selective_forward <- function(checkpoint_file,
             search_state = search_state,
             model_names = still_incomplete$model_name,
             step_name = sprintf("Step %d Models (Resumed)", last_step),
-            max_wait_minutes = max_wait_minutes,
             auto_submit = auto_submit,
             auto_retry = auto_retry
           )

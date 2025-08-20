@@ -8,7 +8,6 @@ run_backward_elimination(
   search_state,
   starting_model,
   ofv_threshold = 10.83,
-  max_wait_minutes = 120,
   auto_submit = TRUE,
   auto_retry = TRUE
 )
@@ -19,8 +18,6 @@ run_backward_elimination(
 \item{starting_model}{Character. Model to start backward elimination from}
 
 \item{ofv_threshold}{Numeric. ΔOFV threshold for removal (default: 10.83)}
-
-\item{max_wait_minutes}{Numeric. Maximum wait time per step (default: 120)}
 
 \item{auto_submit}{Logical. Whether to automatically submit models (default: TRUE)}
 

@@ -83,21 +83,44 @@ load_existing_search <- function(base_model_path,
 
 
 
-#' Save Search State to File
+#' Save Search State to Models Folder
 #'
-#' @title Save current search state for later loading
-#' @description Saves the complete search state to an RDS file for backup
-#'   or to resume work later.
-#' @param search_state List. Current search state
-#' @param filename Character. Filename to save to (default: "search_state_backup.rds")
-#' @return Invisible TRUE if successful
+#' @description Wrapper function that saves search state files to the models folder
+#'   instead of project root, keeping all SCM artifacts together
+#' @param search_state Search state object to save
+#' @param filename Name of the file (without path)
+#' @return Invisible path to saved file
 #' @export
-save_search_state <- function(search_state, filename = "search_state_backup.rds") {
-  saveRDS(search_state, file = filename)
-  cat(sprintf("💾 Search state saved to %s\n", filename))
-  cat(sprintf("📊 Saved: %d models, counter: %d\n",
-              nrow(search_state$search_database), search_state$model_counter))
-  return(invisible(TRUE))
+# Check if filename contains path separators (full path provided)
+save_search_state <- function(search_state, filename) {
+
+  # Check if filename contains path separators (full path provided)
+  if (grepl("[/\\\\]", filename)) {
+    # Full path provided, use as-is
+    save_path <- filename
+  } else {
+    # Just filename provided, save to models/scm_rds/
+    scm_rds_dir <- file.path(search_state$models_folder, "scm_rds")
+
+    # Create directory if it doesn't exist
+    if (!dir.exists(scm_rds_dir)) {
+      dir.create(scm_rds_dir, recursive = TRUE)
+    }
+
+    save_path <- file.path(scm_rds_dir, filename)
+  }
+
+  # Save the state
+  saveRDS(search_state, save_path)
+
+  # Don't print full path if it's in the default location (less clutter)
+  if (!grepl("[/\\\\]", filename)) {
+    cat(sprintf("💾 State saved: scm_rds/%s\n", filename))
+  } else {
+    cat(sprintf("💾 State saved: %s\n", save_path))
+  }
+
+  invisible(search_state)
 }
 
 #' Ensure Base Model in Database (FIXED SCHEMA CONSISTENCY)

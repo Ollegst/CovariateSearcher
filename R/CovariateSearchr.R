@@ -42,7 +42,7 @@ utils::globalVariables(c(
   "model_name", "parent_model", "status", "ofv", "delta_ofv", "rse_max",
   "step_description", "step_number", "covariate_tested", "submission_time",
   "completion_time", "runtime_minutes", "cov_to_test", "estimation_issue",
-  "original_model","best_model",
+  "original_model","best_model","get_model_ofv",
 
   # Generated variables in dplyr chains
   "parent_display", "model_type", "changes", "status_display", "ofv_display",

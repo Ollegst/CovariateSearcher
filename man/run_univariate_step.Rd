@@ -9,7 +9,7 @@ run_univariate_step(
   base_model_id,
   covariates_to_test = NULL,
   step_name,
-  include_excluded = FALSE
+  include_excluded = TRUE
 )
 }
 \arguments{
@@ -21,7 +21,7 @@ run_univariate_step(
 
 \item{step_name}{Character. Description for this step}
 
-\item{include_excluded}{Logical. Whether to include excluded covariates (default: FALSE for forward, TRUE for final testing)}
+\item{include_excluded}{Logical. Whether to include excluded covariates (default: TRUE for SCM)}
 }
 \value{
 List with created model information and updated search_state

@@ -2,22 +2,19 @@
 % Please edit documentation in R/database-management.R
 \name{save_search_state}
 \alias{save_search_state}
-\title{Save current search state for later loading}
+\title{Save Search State to Models Folder}
 \usage{
-save_search_state(search_state, filename = "search_state_backup.rds")
+save_search_state(search_state, filename)
 }
 \arguments{
-\item{search_state}{List. Current search state}
+\item{search_state}{Search state object to save}
 
-\item{filename}{Character. Filename to save to (default: "search_state_backup.rds")}
+\item{filename}{Name of the file (without path)}
 }
 \value{
-Invisible TRUE if successful
+Invisible path to saved file
 }
 \description{
-Saves the complete search state to an RDS file for backup
-or to resume work later.
-}
-\details{
-Save Search State to File
+Wrapper function that saves search state files to the models folder
+instead of project root, keeping all SCM artifacts together
 }

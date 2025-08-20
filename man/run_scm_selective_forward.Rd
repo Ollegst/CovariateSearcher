@@ -9,7 +9,6 @@ run_scm_selective_forward(
   base_model_id = "run1",
   ofv_threshold = NULL,
   rse_threshold = NULL,
-  max_wait_minutes = 120,
   auto_submit = TRUE,
   auto_retry = TRUE
 )
@@ -22,8 +21,6 @@ run_scm_selective_forward(
 \item{ofv_threshold}{Numeric. OFV improvement threshold (uses config if NULL)}
 
 \item{rse_threshold}{Numeric. Maximum RSE threshold (uses config if NULL)}
-
-\item{max_wait_minutes}{Numeric. Maximum wait time per step (default: 120)}
 
 \item{auto_submit}{Logical. Whether to automatically submit models (default: TRUE)}
 

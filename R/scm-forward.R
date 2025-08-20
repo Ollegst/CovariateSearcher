@@ -16,17 +16,14 @@
 #' @param max_steps Integer. Maximum steps (NULL = unlimited, bounded by covariates)
 #' @param ofv_threshold Numeric. OFV improvement threshold (uses config if NULL)
 #' @param rse_threshold Numeric. Maximum RSE threshold (uses config if NULL)
-#' @param max_wait_minutes Numeric. Maximum wait time per step (default: 120)
 #' @param auto_submit Logical. Whether to automatically submit models (default: TRUE)
 #' @param auto_retry Logical. Whether to enable automatic retry (default: TRUE)
 #' @return List with updated search_state and forward selection results
-#' @export
 run_scm_covariate_search_forward <- function(search_state,
                                              base_model_id = "run1",
                                              max_steps = NULL,
                                              ofv_threshold = NULL,
                                              rse_threshold = NULL,
-                                             max_wait_minutes = 120,
                                              auto_submit = TRUE,
                                              auto_retry = TRUE) {
 
@@ -43,7 +40,7 @@ run_scm_covariate_search_forward <- function(search_state,
   cat(sprintf("Base model: %s\n", base_model_id))
   cat(sprintf("OFV threshold: %.2f\n", ofv_threshold))
   cat(sprintf("RSE threshold: %d%%\n", rse_threshold))
-  cat(sprintf("Max wait per step: %d minutes\n", max_wait_minutes))
+
 
   # Initialize workflow variables
   forward_start_time <- Sys.time()
@@ -143,7 +140,6 @@ run_scm_covariate_search_forward <- function(search_state,
       search_state = search_state,
       model_names = step_result$models_created,
       step_name = sprintf("Step %d Models", current_step),
-      max_wait_minutes = max_wait_minutes,
       auto_submit = auto_submit,
       auto_retry = auto_retry
     )

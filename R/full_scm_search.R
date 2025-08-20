@@ -27,7 +27,6 @@
 #'   If NULL, uses 6.63 (more stringent than forward). Only used when starting_phase = "backward".
 #' @param rse_threshold Numeric. Maximum RSE threshold as percentage.
 #'   If NULL, uses search_state$search_config$max_rse_threshold (default: 50)
-#' @param max_wait_minutes Numeric. Maximum wait time per step in minutes (default: 120)
 #' @param auto_submit Logical. Whether to automatically submit models to cluster (default: TRUE)
 #' @param auto_retry Logical. Whether to enable automatic retry for failed models (default: TRUE)
 #' @param save_checkpoints Logical. Whether to save state after each major step (default: TRUE)
@@ -43,7 +42,6 @@ run_automated_scm_testing <- function(search_state,
                                       forward_ofv_threshold = NULL,
                                       backward_ofv_threshold = NULL,
                                       rse_threshold = NULL,
-                                      max_wait_minutes = 120,
                                       auto_submit = TRUE,
                                       auto_retry = TRUE,
                                       save_checkpoints = TRUE,
@@ -98,9 +96,7 @@ run_automated_scm_testing <- function(search_state,
   if (!is.null(rse_threshold) && (rse_threshold <= 0 || rse_threshold > 100)) {
     stop("rse_threshold must be between 0 and 100")
   }
-  if (max_wait_minutes <= 0) {
-    stop("max_wait_minutes must be positive")
-  }
+
 
   # Set defaults with proper null coalescing
   if (is.null(forward_ofv_threshold)) {
@@ -129,7 +125,6 @@ run_automated_scm_testing <- function(search_state,
   cat(sprintf("Forward OFV threshold: %.2f\n", forward_ofv_threshold))
   cat(sprintf("Backward OFV threshold: %.2f\n", backward_ofv_threshold))
   cat(sprintf("RSE threshold: %d%%\n", rse_threshold))
-  cat(sprintf("Max wait per step: %d minutes\n", max_wait_minutes))
   cat(sprintf("Auto-retry enabled: %s\n", auto_retry))
   cat(sprintf("Checkpoints enabled: %s\n", save_checkpoints))
   cat(sprintf("Final testing enabled: %s\n", final_testing))
@@ -192,7 +187,6 @@ run_automated_scm_testing <- function(search_state,
         run_stepwise_covariate_modeling(
           search_state = search_state,
           base_model_id = current_model,
-          max_wait_minutes = max_wait_minutes,
           auto_submit = auto_submit,
           ofv_threshold = forward_ofv_threshold,
           rse_threshold = rse_threshold
@@ -205,7 +199,6 @@ run_automated_scm_testing <- function(search_state,
           base_model_id = current_model,
           ofv_threshold = forward_ofv_threshold,
           rse_threshold = rse_threshold,
-          max_wait_minutes = max_wait_minutes,
           auto_submit = auto_submit,
           auto_retry = auto_retry
         )
@@ -287,7 +280,6 @@ run_automated_scm_testing <- function(search_state,
         search_state = search_state,
         starting_model = current_model,
         ofv_threshold = backward_ofv_threshold,
-        max_wait_minutes = max_wait_minutes,
         auto_submit = auto_submit,
         auto_retry = auto_retry
       )
@@ -337,7 +329,6 @@ run_automated_scm_testing <- function(search_state,
         search_state = search_state,
         starting_model = current_model,
         ofv_threshold = backward_ofv_threshold,
-        max_wait_minutes = max_wait_minutes,
         auto_submit = auto_submit,
         auto_retry = auto_retry
       )
@@ -445,7 +436,6 @@ run_automated_scm_testing <- function(search_state,
               search_state = search_state,
               model_names = final_testing_result$models_created,
               step_name = "Final Testing Models",
-              max_wait_minutes = max_wait_minutes,
               auto_submit = auto_submit,
               auto_retry = auto_retry
             )

@@ -4,14 +4,14 @@
 \alias{get_remaining_covariates}
 \title{Get list of covariate tags that haven't been tested from base model}
 \usage{
-get_remaining_covariates(search_state, base_model_id, include_excluded = FALSE)
+get_remaining_covariates(search_state, base_model_id, include_excluded = TRUE)
 }
 \arguments{
 \item{search_state}{List containing covariate search state and configuration}
 
 \item{base_model_id}{Character. Model to check current covariates against}
 
-\item{include_excluded}{Logical. Whether to include excluded covariates (default: FALSE)}
+\item{include_excluded}{Logical. Whether to include excluded covariates (default: TRUE)}
 }
 \value{
 Character vector of covariate tag names that can still be tested

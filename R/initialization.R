@@ -78,7 +78,11 @@ initialize_covariate_search <- function(base_model_path,
 
   # Set model counter based on existing models
   search_state <- update_model_counter(search_state)
-
+  scm_rds_dir <- file.path(search_state$models_folder, "scm_rds")
+  if (!dir.exists(scm_rds_dir)) {
+    dir.create(scm_rds_dir, recursive = TRUE)
+    cat("📁 Created: models/scm_rds/ for interim saves\n")
+  }
   cat("CovariateSearcher (Core) initialized successfully!\n")
   return(search_state)
 }
