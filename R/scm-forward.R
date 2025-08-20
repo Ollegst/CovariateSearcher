@@ -121,7 +121,7 @@ run_scm_covariate_search_forward <- function(search_state,
       base_model_id = current_best_model,
       covariates_to_test = NULL,  # Auto-select all remaining covariates
       step_name = sprintf("Step %d: Forward Selection", current_step),
-      include_excluded = FALSE    # Exclude problematic covariates
+      include_excluded = TRUE    # Exclude problematic covariates
     )
 
     # Update search_state

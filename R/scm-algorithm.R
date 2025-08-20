@@ -305,7 +305,7 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id,
     cat(sprintf("\n📍 STEP %d: FORWARD SELECTION ITERATION\n", forward_step))
 
     # Get remaining covariates (not yet in current model)
-    remaining_covariates <- get_remaining_covariates(search_state, current_base_model)
+    remaining_covariates <- get_remaining_covariates(search_state, current_base_model, include_excluded = TRUE)
 
     if (length(remaining_covariates) == 0) {
       cat("✅ No more covariates to test - forward selection complete\n")
@@ -317,7 +317,8 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id,
       search_state = search_state,
       base_model_id = current_base_model,
       covariates_to_test = remaining_covariates,
-      step_name = sprintf("Step %d: Forward Selection", forward_step)
+      step_name = sprintf("Step %d: Forward Selection", forward_step),
+      include_excluded = TRUE
     )
 
     # VALIDATION: Check step_creation result
