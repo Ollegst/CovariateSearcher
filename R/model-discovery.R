@@ -338,10 +338,10 @@ analyze_existing_models_yaml <- function(search_state) {
           if (!is.na(original_parent)) {
             search_state$search_database$parent_model[db_idx] <- original_parent
           } else {
-            search_state$search_database$parent_model[db_idx] <- "run1"
+            search_state$search_database$parent_model[db_idx] <-  search_state$base_model
           }
         } else {
-          search_state$search_database$parent_model[db_idx] <- "run1"
+          search_state$search_database$parent_model[db_idx] <- search_state$base_model
         }
         cat("Retry Model\n")
 
