@@ -256,7 +256,7 @@ read_nonmem_lst <- function(model_path) {
     )
 
     # FIXED: Safer pattern matching with validation
-    has_successful <- any(grepl("MINIMIZATION SUCCESSFUL", lst_content, ignore.case = FALSE))
+    has_successful <- any(grepl("MINIMIZATION SUCCESSFUL|OPTIMIZATION WAS COMPLETED", lst_content, ignore.case = FALSE))
     has_terminated <- any(grepl("MINIMIZATION TERMINATED", lst_content, ignore.case = FALSE))
     has_obj_terminated <- any(grepl("PROGRAM TERMINATED BY OBJ", lst_content, ignore.case = FALSE))
 
