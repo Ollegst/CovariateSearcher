@@ -6,7 +6,7 @@
 #'   recovery, progress monitoring, and comprehensive reporting. Designed for hands-off
 #'   execution with intelligent decision making.
 #' @param search_state List containing covariate search state and configuration
-#' @param base_model_id Character. Starting base model name (default: "run1")
+#' @param base_model_id Character. Starting base model name
 #' @param scm_type Character. Type of SCM algorithm to use:
 #'   \itemize{
 #'     \item "standard" - Traditional SCM testing all covariates each step
@@ -35,7 +35,7 @@
 #' @return List containing comprehensive SCM results
 #' @export
 run_automated_scm_testing <- function(search_state,
-                                      base_model_id = "run1",
+                                      base_model_id = NULL,
                                       scm_type = c("standard", "selective"),
                                       starting_phase = c("forward", "backward"),
                                       full_scm = TRUE,
@@ -52,7 +52,9 @@ run_automated_scm_testing <- function(search_state,
   if (is.null(search_state) || !is.list(search_state)) {
     stop("search_state must be a valid list")
   }
-
+  if (is.null(base_model_id)) {
+    base_model_id <- search_state$base_model
+  }
   scm_type <- match.arg(scm_type)
   starting_phase <- match.arg(starting_phase)  # FIXED: Added missing match.arg()
 

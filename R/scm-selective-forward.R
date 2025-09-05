@@ -13,11 +13,14 @@
 #' @return List with updated search_state and forward selection results
 #' @export
 run_scm_selective_forward <- function(search_state,
-                                      base_model_id = "run1",
+                                      base_model_id = NULL,
                                       ofv_threshold = NULL,
                                       rse_threshold = NULL,
                                       auto_submit = TRUE,
                                       auto_retry = TRUE) {
+  if (is.null(base_model_id)) {
+    base_model_id <- search_state$base_model
+  }
 
   # Use config defaults if not specified
   if (is.null(ofv_threshold)) {

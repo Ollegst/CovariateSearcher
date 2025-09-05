@@ -175,11 +175,14 @@ get_excluded_covariates <- function(search_state, return_details = FALSE) {
 #' @param rse_threshold Numeric. Maximum RSE threshold (uses config if NULL)
 #' @return List with complete SCM results and updated search_state
 #' @export
-run_stepwise_covariate_modeling <- function(search_state, base_model_id,
+run_stepwise_covariate_modeling <- function(search_state, base_model_id = NULL,
                                             max_forward_steps = 10,
                                             auto_submit = TRUE,
                                             ofv_threshold = NULL,
                                             rse_threshold = NULL) {
+  if (is.null(base_model_id)) {
+    base_model_id <- search_state$base_model
+  }
 
   cat(paste0("\n", paste(rep("=", 80), collapse=""), "\n"))
   cat("🎯 STARTING STEPWISE COVARIATE MODELING (SCM)\n")
