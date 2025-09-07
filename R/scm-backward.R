@@ -139,7 +139,7 @@ run_backward_elimination <- function(search_state,
           search_state$search_database$phase[db_idx] <- "backward_elimination"
           search_state$search_database$action[db_idx] <- "remove_covariate"
           search_state$search_database$step_description[db_idx] <-
-            sprintf("Step %d: Test removing %s", current_step, covariate_name)
+            sprintf("Remove %s", covariate_name)
         }
 
         removal_models[[covariate_name]] <- new_model_name
@@ -231,7 +231,7 @@ run_backward_elimination <- function(search_state,
     db_idx <- which(search_state$search_database$model_name == new_base_model)
     if (length(db_idx) > 0) {
       search_state$search_database$step_description[db_idx] <-
-        sprintf("Step %d: Remove %s", current_step - 1, removed_covariate)
+        sprintf("Remove %s", removed_covariate)
     }
 
     # Save progress

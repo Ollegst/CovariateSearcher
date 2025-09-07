@@ -323,9 +323,9 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   if(FLAG == "1"){
 
     uniqueval <- unique(data_file[[cova]])
-    if(length(uniqueval) == 2 & sum(uniqueval) == 1 ){
-      formule <- paste0(' * (1 + THETA(', newtheta ,') * ',cova ,')')
-    } else {
+    #if(length(uniqueval) == 2 & sum(uniqueval) == 1 ){
+    #  formule <- paste0(' * (1 + THETA(', newtheta ,') * ',cova ,')')
+    #} else {
       newvari <- cov_on_param
       formule <- paste0(' * ', newvari)
       ifelcode <- paste0('IF(', cova, '.EQ.', temp_cov$REFERENCE,')THEN\n', newvari, ' = 1\n' )
@@ -351,7 +351,7 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
       }
       ifelcode <- paste0(ifelcode, 'ENDIF\n')
       modelcode[grep('^\\$PK', modelcode)] <- paste0(modelcode[grep('^\\$PK', modelcode)], '\n\n', ifelcode)
-    }
+    #}
   }
 
   # Generate formula based on FLAG
