@@ -458,21 +458,26 @@ update_all_model_statuses <- function(search_state, show_progress = TRUE) {
         "model_name" %in% names(search_state$search_database) &&
         "status" %in% names(search_state$search_database)) {
 
-      # Filter for models that are still active/need checking
-      active_statuses <- c("in_progress", "created", "submitted", "unknown", NA)
-      active_models <- search_state$search_database[
-        search_state$search_database$status %in% active_statuses |
-          is.na(search_state$search_database$status),
-        "model_name"
-      ]
+      # Get all models
+      all_models <- search_state$search_database$model_name
+      all_statuses <- search_state$search_database$status
 
-      if (show_progress && length(active_models) > 0) {
-        cat(sprintf("📊 Checking %d active models (skipping %d completed/failed)...\n",
-                    length(active_models),
-                    nrow(search_state$search_database) - length(active_models)))
+      # Filter OUT models with terminal statuses
+      terminal_statuses <- c("completed", "failed", "estimation_error")
+      needs_update <- !(all_statuses %in% terminal_statuses)
+
+      # Get models that need updating
+      models_needing_update <- all_models[needs_update]
+
+      if (show_progress && length(all_models) > 0) {
+        skipped_count <- sum(!needs_update)
+        if (skipped_count > 0) {
+          cat(sprintf("  ⏩ Skipping %d finished models, checking %d active models\n",
+                      skipped_count, length(models_needing_update)))
+        }
       }
 
-      active_models
+      models_needing_update
     } else {
       character(0)
     }
@@ -483,7 +488,7 @@ update_all_model_statuses <- function(search_state, show_progress = TRUE) {
   # FIXED: Handle empty database
   if (length(models_to_update) == 0) {
     if (show_progress) {
-      cat("⚠️  No models found in database\n")
+      cat("  ✅ No active models to update\n")
     }
     return(search_state)
   }
