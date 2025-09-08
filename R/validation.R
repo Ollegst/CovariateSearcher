@@ -150,8 +150,8 @@ update_model_status_from_files <- function(search_state, model_name) {
   # Simple status determination
   if (!lst_exists) {
     # No LST file = still running
-    actual_status <- "running"
-    lst_info <- list(status = "running", error_message = NA, has_issues = FALSE)
+    actual_status <- "in_progress"
+    lst_info <- list(status = "in_progress", error_message = NA, has_issues = FALSE)
   } else {
     # LST file exists - read it to determine status
     lst_info <- tryCatch({
@@ -162,7 +162,7 @@ update_model_status_from_files <- function(search_state, model_name) {
         if (!is.null(result$error_message) &&
             grepl("Model run incomplete|not yet completed", result$error_message, ignore.case = TRUE)) {
           # Model is still running, not failed
-          list(status = "running", error_message = NA, has_issues = FALSE)
+          list(status = "in_progress", error_message = NA, has_issues = FALSE)
         } else {
           result
         }
@@ -183,7 +183,7 @@ update_model_status_from_files <- function(search_state, model_name) {
           list(status = "failed", error_message = "Run completed without success", has_issues = TRUE)
         } else {
           # No completion markers = still running
-          list(status = "running", error_message = NA, has_issues = FALSE)
+          list(status = "in_progress", error_message = NA, has_issues = FALSE)
         }
       }
     }, error = function(e) {
@@ -197,14 +197,14 @@ update_model_status_from_files <- function(search_state, model_name) {
                !grepl("incomplete|not yet completed", lst_info$error_message, ignore.case = TRUE)) {
       # Only mark as failed if it's truly failed, not just incomplete
       actual_status <- "failed"
-    } else if (lst_info$status == "running") {
-      actual_status <- "running"
+    } else if (lst_info$status == "in_progress") {
+      actual_status <- "in_progress"
     } else if (lst_info$has_issues &&
                !grepl("incomplete|not yet completed", lst_info$error_message, ignore.case = TRUE)) {
       actual_status <- "failed"
     } else {
       # Default to running if uncertain
-      actual_status <- "running"
+      actual_status <- "in_progress"
     }
   }
 
@@ -317,7 +317,7 @@ update_model_status_from_files <- function(search_state, model_name) {
     }
     cat(sprintf("%s❌ Model %s (%s) FAILED: %s\n", step_prefix, model_name, display_covariate, error_msg))
 
-  } else if (actual_status == "running") {
+  } else if (actual_status == "in_progress") {
     # Show running status
     cat(sprintf("%s🔄 Model %s (%s) running\n", step_prefix, model_name, display_covariate))
 
@@ -455,8 +455,24 @@ update_all_model_statuses <- function(search_state, show_progress = TRUE) {
   # FIXED: Safer extraction with validation
   models_to_update <- tryCatch({
     if (is.data.frame(search_state$search_database) &&
-        "model_name" %in% names(search_state$search_database)) {
-      search_state$search_database$model_name
+        "model_name" %in% names(search_state$search_database) &&
+        "status" %in% names(search_state$search_database)) {
+
+      # Filter for models that are still active/need checking
+      active_statuses <- c("in_progress", "created", "submitted", "unknown", NA)
+      active_models <- search_state$search_database[
+        search_state$search_database$status %in% active_statuses |
+          is.na(search_state$search_database$status),
+        "model_name"
+      ]
+
+      if (show_progress && length(active_models) > 0) {
+        cat(sprintf("📊 Checking %d active models (skipping %d completed/failed)...\n",
+                    length(active_models),
+                    nrow(search_state$search_database) - length(active_models)))
+      }
+
+      active_models
     } else {
       character(0)
     }
