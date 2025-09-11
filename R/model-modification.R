@@ -403,7 +403,7 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   if(nrow(thetanmulti) > 0){
     # Multiple THETAs for categorical with >2 levels (excluding reference)
     newthetalines <- purrr::map_chr(1:nrow(thetanmulti), ~ {
-      paste0('0.1 ; ', cov_on_param, "_", thetanmulti$covx[[.x]], ' ; RATIO')
+      paste0('0.1 ; ', cov_on_param, "_", thetanmulti$covx[[.x]], ';  ; RATIO')
     })
     newthetaline <- paste0(newthetalines, collapse = '\n')
 
