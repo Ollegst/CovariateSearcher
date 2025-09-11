@@ -6,7 +6,7 @@
 \usage{
 run_stepwise_covariate_modeling(
   search_state,
-  base_model_id,
+  base_model_id = NULL,
   max_forward_steps = 10,
   auto_submit = TRUE,
   ofv_threshold = NULL,

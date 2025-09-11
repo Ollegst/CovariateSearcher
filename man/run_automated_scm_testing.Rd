@@ -6,7 +6,7 @@
 \usage{
 run_automated_scm_testing(
   search_state,
-  base_model_id = "run1",
+  base_model_id = NULL,
   scm_type = c("standard", "selective"),
   starting_phase = c("forward", "backward"),
   full_scm = TRUE,
@@ -23,7 +23,7 @@ run_automated_scm_testing(
 \arguments{
 \item{search_state}{List containing covariate search state and configuration}
 
-\item{base_model_id}{Character. Starting base model name (default: "run1")}
+\item{base_model_id}{Character. Starting base model name}
 
 \item{scm_type}{Character. Type of SCM algorithm to use:
 \itemize{

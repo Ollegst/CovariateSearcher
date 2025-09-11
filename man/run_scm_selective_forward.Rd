@@ -6,7 +6,7 @@
 \usage{
 run_scm_selective_forward(
   search_state,
-  base_model_id = "run1",
+  base_model_id = NULL,
   ofv_threshold = NULL,
   rse_threshold = NULL,
   auto_submit = TRUE,
