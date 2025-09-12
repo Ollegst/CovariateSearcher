@@ -241,8 +241,16 @@ create_model_info_log <- function(search_state, model_name, parent_model, covari
 #' @param capture_log Function. Logging function (optional)
 #' @return Updated search_state
 #' @export
-model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
-                          data_file, covariate_search, capture_log = FALSE) {
+model_add_cov <- function(search_state = NULL,  # Make optional
+                          ref_model,
+                          cov_on_param,
+                          id_var = "ID",
+                          data_file,
+                          covariate_search,
+                          capture_log = FALSE,
+                          # New optional parameters for standalone use
+                          models_folder = NULL,
+                          output_path = NULL) {
 
   # Default logging function if none provided
   captured_log <- character(0)
@@ -262,8 +270,21 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   log_function(paste("Model:", ref_model))
   log_function(paste("Covariate parameter:", cov_on_param))
 
-  modelcode <- read_model_file(search_state, ref_model)
-  original_file_path <- attr(modelcode, "file_path")
+
+  if (is.null(models_folder)) {
+    if (!is.null(search_state) && !is.null(search_state$models_folder)) {
+      models_folder <- search_state$models_folder
+    } else {
+      models_folder <- "models"  # Default fallback
+    }
+  }
+  model_file_path <- file.path(models_folder, paste0(ref_model, ".ctl"))
+  if (!file.exists(model_file_path)) {
+    stop(paste("Model file not found:", model_file_path))
+  }
+  modelcode <- readLines(model_file_path)
+  original_file_path <- model_file_path  # Store for later
+
   log_function(paste("Read model file:", basename(original_file_path)))
 
   cov_on_param <- paste0("beta_", cov_on_param)
@@ -464,14 +485,31 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
 
   # Write back
   attr(modelcode, "file_path") <- original_file_path
-  search_state <- write_model_file(search_state, modelcode)
-  log_function(paste("✓ Model file written successfully"))
+  if (is.null(output_path)) {
+    output_path <- original_file_path  # Overwrite original
+  }
+
+  # Write the file
+  writeLines(modelcode, output_path)
+  log_function(paste("✔ Model file written successfully to:", output_path))
 
   log_function(paste("=== Covariate Addition Complete ==="))
+
+  # MINIMAL CHANGE 4: Return appropriate result
   if (capture_log) {
-    return(list(search_state = search_state, log_entries = captured_log))
+    if (!is.null(search_state)) {
+      # If search_state provided, maintain compatibility
+      return(list(search_state = search_state, log_entries = captured_log))
+    } else {
+      # Standalone mode
+      return(list(status = "success", log_entries = captured_log, output_path = output_path))
+    }
   } else {
-    return(search_state)
+    if (!is.null(search_state)) {
+      return(search_state)
+    } else {
+      return(list(status = "success", output_path = output_path))
+    }
   }
 }
 
