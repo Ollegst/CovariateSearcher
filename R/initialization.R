@@ -182,7 +182,8 @@ validate_setup <- function(search_state) {
           "Level mismatch for %s: Specified=%s, Actual=%s. Update covariate_search.csv",
           cov_name,
           paste(expected_levels, collapse=";"),
-          paste(actual_levels, collapse=";")
+          paste(actual_levels, collapse = ";")
+
         ))
       }
     }
