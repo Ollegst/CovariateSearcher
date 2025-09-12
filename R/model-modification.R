@@ -241,16 +241,8 @@ create_model_info_log <- function(search_state, model_name, parent_model, covari
 #' @param capture_log Function. Logging function (optional)
 #' @return Updated search_state
 #' @export
-model_add_cov <- function(search_state = NULL,  # Make optional
-                          ref_model,
-                          cov_on_param,
-                          id_var = "ID",
-                          data_file,
-                          covariate_search,
-                          capture_log = FALSE,
-                          # New optional parameters for standalone use
-                          models_folder = NULL,
-                          output_path = NULL) {
+model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
+                          data_file, covariate_search, capture_log = FALSE) {
 
   # Default logging function if none provided
   captured_log <- character(0)
@@ -270,21 +262,8 @@ model_add_cov <- function(search_state = NULL,  # Make optional
   log_function(paste("Model:", ref_model))
   log_function(paste("Covariate parameter:", cov_on_param))
 
-
-  if (is.null(models_folder)) {
-    if (!is.null(search_state) && !is.null(search_state$models_folder)) {
-      models_folder <- search_state$models_folder
-    } else {
-      models_folder <- "models"  # Default fallback
-    }
-  }
-  model_file_path <- file.path(models_folder, paste0(ref_model, ".ctl"))
-  if (!file.exists(model_file_path)) {
-    stop(paste("Model file not found:", model_file_path))
-  }
-  modelcode <- readLines(model_file_path)
-  original_file_path <- model_file_path  # Store for later
-
+  modelcode <- read_model_file(search_state, ref_model)
+  original_file_path <- attr(modelcode, "file_path")
   log_function(paste("Read model file:", basename(original_file_path)))
 
   cov_on_param <- paste0("beta_", cov_on_param)
@@ -365,48 +344,48 @@ model_add_cov <- function(search_state = NULL,  # Make optional
       })
     }
     uniqueval <- unique(data_file[[cova]])
-      newvari <- cov_on_param
-      formule <- paste0(' * ', newvari)
-      ifelcode <- paste0('IF(', cova, '.EQ.', temp_cov$REFERENCE,')THEN\n', newvari, ' = 1\n' )
+    newvari <- cov_on_param
+    formule <- paste0(' * ', newvari)
+    ifelcode <- paste0('IF(', cova, '.EQ.', temp_cov$REFERENCE,')THEN\n', newvari, ' = 1\n' )
 
-      uniqueval_with_freq <- data_file %>%
-        dplyr::count(!!rlang::parse_expr(cova)) %>%
-        dplyr::arrange(desc(n)) %>%
-        dplyr::pull(!!rlang::parse_expr(cova))
+    uniqueval_with_freq <- data_file %>%
+      dplyr::count(!!rlang::parse_expr(cova)) %>%
+      dplyr::arrange(desc(n)) %>%
+      dplyr::pull(!!rlang::parse_expr(cova))
 
-      uniqueval <- uniqueval_with_freq[uniqueval_with_freq != temp_cov$REFERENCE]
+    uniqueval <- uniqueval_with_freq[uniqueval_with_freq != temp_cov$REFERENCE]
 
-      thetanmulti <- tibble(covx = uniqueval)
-      for(a in 1:length(uniqueval)){
-        current_level <- uniqueval[a]
-        theta_num <- newtheta + a - 1
+    thetanmulti <- tibble(covx = uniqueval)
+    for(a in 1:length(uniqueval)){
+      current_level <- uniqueval[a]
+      theta_num <- newtheta + a - 1
 
-        # Determine the label to use for this level
-        if (!is.null(lookup_values) && as.character(current_level) %in% names(lookup_values)) {
-          # Use lookup value if available
-          category_label <- lookup_values[[as.character(current_level)]]
-          # Clean the label for use in parameter names
-          category_label <- gsub("[^A-Za-z0-9]", "_", category_label)
-          category_label <- gsub("_+", "_", category_label)  # Remove multiple underscores
-          category_label <- gsub("^_|_$", "", category_label)  # Remove leading/trailing underscores
-          category_label <- toupper(category_label)  # Convert to uppercase
-          thetanmulti$label[a] <- category_label
-          log_function(paste("  Using lookup label for category", current_level, ":", category_label))
-        } else {
-          # Fall back to numeric label
-          thetanmulti$label[a] <- as.character(current_level)
-          log_function(paste("  Using numeric label for category", current_level))
-        }
-
-        ifelcode <- paste0(ifelcode,
-                           'ELSEIF(', cova, '.EQ.', current_level, ')THEN\n',
-                           newvari, ' = 1 + THETA(', theta_num, ')\n')
-
-        log_function(paste("Added ELSEIF for", cova, "=", current_level,
-                           "using THETA(", theta_num, ")"))
+      # Determine the label to use for this level
+      if (!is.null(lookup_values) && as.character(current_level) %in% names(lookup_values)) {
+        # Use lookup value if available
+        category_label <- lookup_values[[as.character(current_level)]]
+        # Clean the label for use in parameter names
+        category_label <- gsub("[^A-Za-z0-9]", "_", category_label)
+        category_label <- gsub("_+", "_", category_label)  # Remove multiple underscores
+        category_label <- gsub("^_|_$", "", category_label)  # Remove leading/trailing underscores
+        category_label <- toupper(category_label)  # Convert to uppercase
+        thetanmulti$label[a] <- category_label
+        log_function(paste("  Using lookup label for category", current_level, ":", category_label))
+      } else {
+        # Fall back to numeric label
+        thetanmulti$label[a] <- as.character(current_level)
+        log_function(paste("  Using numeric label for category", current_level))
       }
-      ifelcode <- paste0(ifelcode, 'ENDIF\n')
-      modelcode[grep('^\\$PK', modelcode)] <- paste0(modelcode[grep('^\\$PK', modelcode)], '\n\n', ifelcode)
+
+      ifelcode <- paste0(ifelcode,
+                         'ELSEIF(', cova, '.EQ.', current_level, ')THEN\n',
+                         newvari, ' = 1 + THETA(', theta_num, ')\n')
+
+      log_function(paste("Added ELSEIF for", cova, "=", current_level,
+                         "using THETA(", theta_num, ")"))
+    }
+    ifelcode <- paste0(ifelcode, 'ENDIF\n')
+    modelcode[grep('^\\$PK', modelcode)] <- paste0(modelcode[grep('^\\$PK', modelcode)], '\n\n', ifelcode)
     #}
   }
 
@@ -485,31 +464,14 @@ model_add_cov <- function(search_state = NULL,  # Make optional
 
   # Write back
   attr(modelcode, "file_path") <- original_file_path
-  if (is.null(output_path)) {
-    output_path <- original_file_path  # Overwrite original
-  }
-
-  # Write the file
-  writeLines(modelcode, output_path)
-  log_function(paste("✔ Model file written successfully to:", output_path))
+  search_state <- write_model_file(search_state, modelcode)
+  log_function(paste("✓ Model file written successfully"))
 
   log_function(paste("=== Covariate Addition Complete ==="))
-
-  # MINIMAL CHANGE 4: Return appropriate result
   if (capture_log) {
-    if (!is.null(search_state)) {
-      # If search_state provided, maintain compatibility
-      return(list(search_state = search_state, log_entries = captured_log))
-    } else {
-      # Standalone mode
-      return(list(status = "success", log_entries = captured_log, output_path = output_path))
-    }
+    return(list(search_state = search_state, log_entries = captured_log))
   } else {
-    if (!is.null(search_state)) {
-      return(search_state)
-    } else {
-      return(list(status = "success", output_path = output_path))
-    }
+    return(search_state)
   }
 }
 
@@ -906,273 +868,4 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
 
 
 
-#' Remove Covariate from Model with Detailed Logging
-#'
-#' @title Wrapper for remove_covariate_from_model with comprehensive logging
-#' @description Calls remove_covariate_from_model with detailed timestamped logging
-#'   and saves complete log files for debugging and audit purposes.
-#' @param search_state List containing search state
-#' @param model_name Character. Model name to modify
-#' @param covariate_tag Character. Covariate tag to remove (e.g., "cov_cl_race")
-#' @param save_as_new_model Logical. Whether to create new model (default: TRUE)
-#' @return List with result and log information (search_state updated in result)
-#' @export
-remove_covariate_with_detailed_logging <- function(search_state, model_name, covariate_tag, save_as_new_model = TRUE) {
 
-  # Initialize logging
-  log_entries <- character(0)
-  start_time <- Sys.time()
-
-  # Logging helper function
-  log_msg <- function(message) {
-    timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
-    entry <- paste0(timestamp, " - ", message)
-    log_entries <<- c(log_entries, entry)
-    cat(entry, "\n")
-  }
-
-  # Start logging
-  log_msg("=== Starting Covariate Removal Process ===")
-  log_msg(paste("Parent model:", model_name))
-  log_msg(paste("Covariate tag to remove:", covariate_tag))
-
-  # Get and validate tag value
-  if (covariate_tag %in% names(search_state$tags)) {
-    tag_value <- search_state$tags[[covariate_tag]]
-    log_msg(paste("Tag value found:", tag_value))
-  } else {
-    log_msg(paste("ERROR: Covariate tag not found:", covariate_tag))
-    error_log_filename <- file.path(search_state$models_folder, paste0("ERROR_REMOVE_", covariate_tag, "_", format(Sys.time(), "%Y%m%d_%H%M%S"), "_log.txt"))
-    writeLines(log_entries, error_log_filename)
-    return(list(
-      status = "error",
-      error_message = "Covariate tag not found",
-      log_file = error_log_filename,
-      log_entries = log_entries,
-      search_state = search_state
-    ))
-  }
-
-  # Find matching covariate in search definition
-  matching_cov <- search_state$covariate_search[
-    grepl(paste0("_", tag_value, "$"), search_state$covariate_search$cov_to_test), ]
-
-  if (nrow(matching_cov) > 0) {
-    log_msg(paste("Matching covariate found:", matching_cov$COVARIATE[1]))
-    combined_param <- paste0(matching_cov$COVARIATE[1], "_", matching_cov$PARAMETER[1])
-    log_msg(paste("Combined parameter name:", combined_param))
-  } else {
-    log_msg(paste("ERROR: No matching covariate definition found for:", tag_value))
-    error_log_filename <- file.path(search_state$models_folder, paste0("ERROR_REMOVE_", covariate_tag, "_", format(Sys.time(), "%Y%m%d_%H%M%S"), "_log.txt"))
-    writeLines(log_entries, error_log_filename)
-    return(list(
-      status = "error",
-      error_message = "No matching covariate definition found",
-      log_file = error_log_filename,
-      log_entries = log_entries,
-      search_state = search_state
-    ))
-  }
-
-  # Predict new model name if creating new model
-  if (save_as_new_model) {
-    new_model_number <- search_state$model_counter + 1
-    predicted_model <- paste0("run", new_model_number)
-    log_msg(paste("Predicted model name:", predicted_model))
-  } else {
-    log_msg("Modifying existing model in place")
-  }
-
-  # Call the actual removal function with comprehensive error capture
-  log_msg("Step 1: Removing covariate from model...")
-
-  # Call the remove_covariate_from_model function (returns updated search_state)
-  result <- remove_covariate_from_model(search_state, model_name, covariate_tag, save_as_new_model)
-
-  # Calculate processing time
-  process_time <- round(as.numeric(difftime(Sys.time(), start_time, units = "secs")), 2)
-
-  if (result$status == "success") {
-    log_msg("Covariate removal completed successfully")
-    log_msg("Step 2: Model file modifications completed")
-    log_msg(paste("=== Process completed successfully in", process_time, "seconds ==="))
-    log_msg(paste("Final model:", result$model_name))
-
-    # Save success log file
-    log_filename <- file.path(search_state$models_folder, paste0(result$model_name, "_remove_", tag_value, "_log.txt"))
-    log_msg(paste("Saving log to:", basename(log_filename)))
-
-    writeLines(log_entries, log_filename)
-
-    return(list(
-      status = "success",
-      model_name = result$model_name,
-      covariate_removed = tag_value,
-      log_file = log_filename,
-      log_entries = log_entries,
-      processing_time_seconds = process_time,
-      search_state = result$search_state
-    ))
-
-  } else {
-    # Handle error case
-    log_msg(paste("ERROR occurred:", result$error_message))
-    log_msg(paste("=== Process failed after", process_time, "seconds ==="))
-
-    # Save error log with detailed error information
-    error_log_filename <- file.path(search_state$models_folder, paste0("ERROR_REMOVE_", covariate_tag, "_", format(Sys.time(), "%Y%m%d_%H%M%S"), "_log.txt"))
-    log_msg(paste("Saving error log to:", basename(error_log_filename)))
-
-    writeLines(log_entries, error_log_filename)
-
-    return(list(
-      status = "error",
-      error_message = result$error_message,
-      log_file = error_log_filename,
-      log_entries = log_entries,
-      processing_time_seconds = process_time,
-      search_state = result$search_state
-    ))
-  }
-}
-
-
-
-#' Add Covariate to Model with Detailed Logging
-#'
-#' @title Wrapper for add_covariate_to_model with comprehensive logging
-#' @description Calls add_covariate_to_model with detailed timestamped logging
-#'   and saves complete log files for debugging and audit purposes.
-#' @param search_state List containing search state
-#' @param base_model_id Character. Base model identifier (e.g., "run1")
-#' @param covariate_tag Character. Covariate tag to add (e.g., "cov_cl_wt")
-#' @return List with result and log information (search_state updated in result)
-#' @export
-add_covariate_with_detailed_logging <- function(search_state, base_model_id, covariate_tag) {
-
-  # Initialize logging
-  log_entries <- character(0)
-  start_time <- Sys.time()
-
-  # Logging helper function
-  log_msg <- function(message) {
-    timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
-    entry <- paste0(timestamp, " - ", message)
-    log_entries <<- c(log_entries, entry)
-    cat(entry, "\n")
-  }
-
-  # Start logging
-  log_msg("=== Starting Covariate Addition Process ===")
-  log_msg(paste("Parent model:", base_model_id))
-  log_msg(paste("Covariate tag:", covariate_tag))
-
-  # Get and validate tag value
-  if (covariate_tag %in% names(search_state$tags)) {
-    tag_value <- search_state$tags[[covariate_tag]]
-    log_msg(paste("Tag value found:", tag_value))
-  } else {
-    log_msg(paste("ERROR: Covariate tag not found:", covariate_tag))
-    error_log_filename <- file.path(search_state$models_folder, paste0("ERROR_", covariate_tag, "_", format(Sys.time(), "%Y%m%d_%H%M%S"), "_log.txt"))
-    writeLines(log_entries, error_log_filename)
-    return(list(
-      status = "error",
-      error_message = "Covariate tag not found",
-      log_file = error_log_filename,
-      log_entries = log_entries,
-      search_state = search_state
-    ))
-  }
-
-  # Find matching covariate in search definition
-  matching_cov <- search_state$covariate_search[
-    grepl(paste0("_", tag_value, "$"), search_state$covariate_search$cov_to_test), ]
-
-  if (nrow(matching_cov) > 0) {
-    log_msg(paste("Matching covariate found:", matching_cov$COVARIATE[1]))
-    combined_param <- paste0(matching_cov$COVARIATE[1], "_", matching_cov$PARAMETER[1])
-    log_msg(paste("Combined parameter name:", combined_param))
-  } else {
-    log_msg(paste("ERROR: No matching covariate definition found for:", tag_value))
-    error_log_filename <- file.path(search_state$models_folder, paste0("ERROR_", covariate_tag, "_", format(Sys.time(), "%Y%m%d_%H%M%S"), "_log.txt"))
-    writeLines(log_entries, error_log_filename)
-    return(list(
-      status = "error",
-      error_message = "No matching covariate definition found",
-      log_file = error_log_filename,
-      log_entries = log_entries,
-      search_state = search_state
-    ))
-  }
-
-  # Predict new model name
-  new_model_number <- search_state$model_counter + 1
-  predicted_model <- paste0("run", new_model_number)
-  log_msg(paste("Predicted model name:", predicted_model))
-
-  # Call the actual function with comprehensive error capture
-  log_msg("Creating BBR model and adding covariate...")
-
-  # Call the updated add_covariate_to_model function (returns updated search_state)
-  result <- add_covariate_to_model(search_state, base_model_id, covariate_tag)
-
-  # Calculate processing time
-  process_time <- round(as.numeric(difftime(Sys.time(), start_time, units = "secs")), 2)
-
-  if (result$status == "success") {
-    log_msg("Model creation completed successfully")
-    log_msg(paste("Final model created:", result$model_name))
-
-    # Save technical log file
-    log_filename <- file.path(search_state$models_folder, paste0(result$model_name, "_add_", tag_value, "_log.txt"))
-
-    if (!is.null(result$technical_log)) {
-      # Use the captured technical log from model_add_cov
-      writeLines(result$technical_log, log_filename)
-    } else {
-      # Fallback to basic log
-      writeLines(log_entries, log_filename)
-    }
-
-    cat(sprintf("📝 Model log created: %s\n", basename(log_filename)))
-
-    return(list(
-      status = "success",
-      model_name = result$model_name,
-      covariate_added = tag_value,
-      log_file = log_filename,
-      log_entries = log_entries,
-      processing_time_seconds = process_time,
-      search_state = result$search_state
-    ))
-
-  } else {
-    # Handle error case
-    log_msg(paste("ERROR occurred:", result$error_message))
-    log_msg(paste("=== Process failed after", process_time, "seconds ==="))
-
-    if (!is.null(result$file_exists) && result$file_exists) {
-      log_msg(paste("Physical model file was created:", result$attempted_model))
-      log_msg("Model counter was updated to match existing file")
-    } else {
-      log_msg("No physical model file was created")
-    }
-
-    # Save error log with detailed error information
-    error_log_filename <- file.path(search_state$models_folder, paste0("ERROR_", covariate_tag, "_", format(Sys.time(), "%Y%m%d_%H%M%S"), "_log.txt"))
-    log_msg(paste("Saving error log to:", basename(error_log_filename)))
-
-    writeLines(log_entries, error_log_filename)
-
-    return(list(
-      status = "error",
-      error_message = result$error_message,
-      log_file = error_log_filename,
-      log_entries = log_entries,
-      attempted_model = result$attempted_model,
-      file_exists = result$file_exists,
-      processing_time_seconds = process_time,
-      search_state = result$search_state
-    ))
-  }
-}
