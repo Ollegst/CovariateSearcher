@@ -357,7 +357,7 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
 
     current_status <- tryCatch({
       search_state$search_database %>%
-        dplyr::filter(model_name %in% model_names) %>%  # Changed to model_names to show ALL
+        dplyr::filter(!is.na(model_name)) %>% # Changed to model_names to show ALL
         dplyr::select(model_name, covariate_tested, status, ofv, delta_ofv, estimation_issue, step_number, parent_model) %>%
         dplyr::arrange(status, model_name)  # Group by status for cleaner display
     }, error = function(e) {
