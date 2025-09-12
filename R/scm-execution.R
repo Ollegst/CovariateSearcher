@@ -355,17 +355,12 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
       }
     }
 
-    current_status <- tryCatch({
-      search_state$search_database %>%
-        dplyr::filter(!is.na(model_name)) %>% # Changed to model_names to show ALL
-        dplyr::select(model_name, covariate_tested, status, ofv, delta_ofv, estimation_issue, step_number, parent_model) %>%
-        dplyr::arrange(status, model_name)  # Group by status for cleaner display
-    }, error = function(e) {
-      db_subset <- search_state$search_database[search_state$search_database$model_name %in% model_names, ]
-      db_subset <- db_subset[order(db_subset$status, db_subset$model_name),
-                             c("model_name", "covariate_tested", "status", "ofv", "delta_ofv", "estimation_issue", "step_number", "parent_model")]
-      as.data.frame(db_subset)
-    })
+    current_status <- search_state$search_database %>%
+      dplyr::filter(!is.na(model_name)) %>%  # Get ALL models, not just current step
+      dplyr::select(model_name, covariate_tested, status, ofv, delta_ofv, estimation_issue, step_number, parent_model) %>%
+      dplyr::mutate(model_num = as.numeric(gsub("^run", "", model_name))) %>%  # Extract model number for sorting
+      dplyr::arrange(step_number, model_num) %>%  # Sort by step FIRST, then model number
+      dplyr::select(-model_num)  # Remove the temporary column
 
     # Display ALL models grouped by status
     cat("📊 Model Status Summary:\n")
