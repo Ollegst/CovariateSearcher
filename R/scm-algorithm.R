@@ -27,7 +27,7 @@ get_remaining_covariates <- function(search_state, base_model_id, include_exclud
   }
 
   # Get all available covariate tags
-  all_cov_tags <- names(search_state$tags)[grepl("^cov_", names(search_state$tags))]
+  all_cov_tags <- names(search_state$tags)[grepl("^beta_", names(search_state$tags))]
 
   # Convert current covariate NAMES to TAGS for comparison
   current_cov_tags <- character(0)
