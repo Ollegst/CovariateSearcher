@@ -16,13 +16,20 @@ Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.2.1
 Imports:
     bbr (>= 1.0.0),
-    dplyr (>= 1.0.0),
+    dplyr (>= 1.1.4),
     tibble (>= 3.0.0),
     yaml (>= 2.0.0),
     readr (>= 2.0.0),
     purrr (>= 0.3.0),
     stringr (>= 1.4.0),
-    rlang(>= 1.0.5)
+    stats,
+    utils,
+    data.table,
+    flextable,
+    officer,
+    tidyr,
+    rlang,
+    tidyselect 
 Suggests:
     testthat (>= 3.0.0),
     knitr,

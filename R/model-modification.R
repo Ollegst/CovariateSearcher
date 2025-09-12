@@ -321,11 +321,29 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   # Handle categorical covariates (simplified for core module)
   thetanmulti <- tibble()
   if(FLAG == "1"){
-
+    # Try to load lookup.yaml for categorical labels (optional)
+    lookup_values <- NULL
+    lookup_file <- file.path("data", "spec", "lookup.yaml")
+    if (file.exists(lookup_file)) {
+      tryCatch({
+        lookup_data <- yaml::read_yaml(lookup_file)
+        # Check if this covariate exists in lookup
+        if (cova %in% names(lookup_data)) {
+          lookup_info <- lookup_data[[cova]]
+          # Convert values and decode lists to a named list
+          if (!is.null(lookup_info$values) && !is.null(lookup_info$decode)) {
+            lookup_values <- setNames(
+              as.list(lookup_info$decode),
+              as.character(lookup_info$values)
+            )
+            log_function(paste("Found lookup values for", cova, "in lookup.yaml"))
+          }
+        }
+      }, error = function(e) {
+        log_function(paste("Note: Could not use lookup.yaml:", e$message))
+      })
+    }
     uniqueval <- unique(data_file[[cova]])
-    #if(length(uniqueval) == 2 & sum(uniqueval) == 1 ){
-    #  formule <- paste0(' * (1 + THETA(', newtheta ,') * ',cova ,')')
-    #} else {
       newvari <- cov_on_param
       formule <- paste0(' * ', newvari)
       ifelcode <- paste0('IF(', cova, '.EQ.', temp_cov$REFERENCE,')THEN\n', newvari, ' = 1\n' )
@@ -341,6 +359,23 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
       for(a in 1:length(uniqueval)){
         current_level <- uniqueval[a]
         theta_num <- newtheta + a - 1
+
+        # Determine the label to use for this level
+        if (!is.null(lookup_values) && as.character(current_level) %in% names(lookup_values)) {
+          # Use lookup value if available
+          category_label <- lookup_values[[as.character(current_level)]]
+          # Clean the label for use in parameter names
+          category_label <- gsub("[^A-Za-z0-9]", "_", category_label)
+          category_label <- gsub("_+", "_", category_label)  # Remove multiple underscores
+          category_label <- gsub("^_|_$", "", category_label)  # Remove leading/trailing underscores
+          category_label <- toupper(category_label)  # Convert to uppercase
+          thetanmulti$label[a] <- category_label
+          log_function(paste("  Using lookup label for category", current_level, ":", category_label))
+        } else {
+          # Fall back to numeric label
+          thetanmulti$label[a] <- as.character(current_level)
+          log_function(paste("  Using numeric label for category", current_level))
+        }
 
         ifelcode <- paste0(ifelcode,
                            'ELSEIF(', cova, '.EQ.', current_level, ')THEN\n',
@@ -399,11 +434,11 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   }
 
   # Add THETA line
-  newthetaline <- paste0(initialValuethetacov, ' ; ', cov_on_param, ' ;  ; RATIO')
   if(nrow(thetanmulti) > 0){
     # Multiple THETAs for categorical with >2 levels (excluding reference)
     newthetalines <- purrr::map_chr(1:nrow(thetanmulti), ~ {
-      paste0('0.1 ; ', cov_on_param, "_", thetanmulti$covx[[.x]], ';  ; RATIO')
+      # Use the label from thetanmulti which now contains lookup values or numbers
+      paste0('0.1 ; ', cov_on_param, "_", thetanmulti$label[[.x]], ';  ; RATIO')
     })
     newthetaline <- paste0(newthetalines, collapse = '\n')
 
