@@ -332,6 +332,7 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
     }
   }
 
+  active_monitoring_list <- successful_submissions
   # ADD THE MONITORING LOOP - this was missing!
   while (TRUE) {  # Or use: repeat {
 
