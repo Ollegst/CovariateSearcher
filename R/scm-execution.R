@@ -355,16 +355,112 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
       }
     }
 
-    # Get current status of actively monitored models
     current_status <- tryCatch({
       search_state$search_database %>%
-        dplyr::filter(model_name %in% active_monitoring_list) %>%
-        dplyr::select(model_name, covariate_tested, status, ofv, delta_ofv, estimation_issue, step_number) %>%
-        dplyr::arrange(model_name)
+        dplyr::filter(model_name %in% model_names) %>%  # Changed to model_names to show ALL
+        dplyr::select(model_name, covariate_tested, status, ofv, delta_ofv, estimation_issue, step_number, parent_model) %>%
+        dplyr::arrange(status, model_name)  # Group by status for cleaner display
     }, error = function(e) {
-      db_subset <- search_state$search_database[search_state$search_database$model_name %in% active_monitoring_list, ]
-      db_subset[order(db_subset$model_name), c("model_name", "covariate_tested", "status", "ofv", "delta_ofv", "estimation_issue", "step_number")]
+      db_subset <- search_state$search_database[search_state$search_database$model_name %in% model_names, ]
+      db_subset <- db_subset[order(db_subset$status, db_subset$model_name),
+                             c("model_name", "covariate_tested", "status", "ofv", "delta_ofv", "estimation_issue", "step_number", "parent_model")]
+      as.data.frame(db_subset)
     })
+
+    # Display ALL models grouped by status
+    cat("📊 Model Status Summary:\n")
+
+    # Show completed models
+    completed_display <- current_status[current_status$status == "completed", , drop = FALSE]
+    if (!is.null(completed_display) && nrow(completed_display) > 0) {
+      cat("--- Completed Models ---\n")
+      for (i in seq_len(nrow(completed_display))) {
+        row <- completed_display[i, ]
+        step_prefix <- if (!is.null(row$step_number) && !is.na(row$step_number)) {
+          sprintf("[Step %d] ", row$step_number)
+        } else ""
+
+        # Get parent OFV for better display
+        parent_ofv <- NA
+        if (!is.null(row$parent_model) && !is.na(row$parent_model)) {
+          parent_idx <- which(search_state$search_database$model_name == row$parent_model)
+          if (length(parent_idx) > 0) {
+            parent_ofv <- search_state$search_database$ofv[parent_idx[1]]
+          }
+        }
+
+        delta_display <- if (!is.null(row$delta_ofv) && !is.na(row$delta_ofv)) {
+          if (!is.na(parent_ofv)) {
+            sprintf("OFV %.2f → %.2f (ΔOFV: %+.2f)", parent_ofv, row$ofv, row$delta_ofv)
+          } else {
+            sprintf("ΔOFV: %+.2f", row$delta_ofv)
+          }
+        } else if (!is.null(row$ofv) && !is.na(row$ofv)) {
+          sprintf("OFV: %.2f", row$ofv)
+        } else {
+          "OFV: N/A"
+        }
+
+        cat(sprintf("%s✅ Model %s (%s): %s\n",
+                    step_prefix, row$model_name, row$covariate_tested, delta_display))
+      }
+    }
+
+    # Show failed models
+    failed_display <- current_status[current_status$status %in% c("failed", "estimation_error"), , drop = FALSE]
+    if (!is.null(failed_display) && nrow(failed_display) > 0) {
+      cat("--- Failed Models ---\n")
+      for (i in seq_len(nrow(failed_display))) {
+        row <- failed_display[i, ]
+        step_prefix <- if (!is.null(row$step_number) && !is.na(row$step_number)) {
+          sprintf("[Step %d] ", row$step_number)
+        } else ""
+
+        issue_display <- if (!is.null(row$estimation_issue) && !is.na(row$estimation_issue) && row$estimation_issue != "") {
+          sprintf(" - %s", row$estimation_issue)
+        } else ""
+
+        cat(sprintf("%s❌ Model %s (%s)%s\n",
+                    step_prefix, row$model_name, row$covariate_tested, issue_display))
+      }
+    }
+
+    # Show running models
+    running_display <- current_status[!(current_status$status %in% c("completed", "failed", "estimation_error")), , drop = FALSE]
+    if (!is.null(running_display) && nrow(running_display) > 0) {
+      cat("--- Running Models ---\n")
+      for (i in seq_len(nrow(running_display))) {
+        row <- running_display[i, ]
+        step_prefix <- if (!is.null(row$step_number) && !is.na(row$step_number)) {
+          sprintf("[Step %d] ", row$step_number)
+        } else ""
+
+        # Calculate elapsed time
+        db_idx <- which(search_state$search_database$model_name == row$model_name)
+        elapsed_display <- ""
+        if (length(db_idx) > 0) {
+          submission_time <- search_state$search_database$submission_time[db_idx[1]]
+          if (!is.null(submission_time) && !is.na(submission_time)) {
+            elapsed_mins <- as.numeric(difftime(Sys.time(), submission_time, units = "mins"))
+            if (!is.na(elapsed_mins)) {
+              elapsed_display <- sprintf(" (%.1f min)", elapsed_mins)
+            }
+          }
+        }
+
+        cat(sprintf("%s🔄 Model %s (%s)%s\n",
+                    step_prefix, row$model_name, row$covariate_tested, elapsed_display))
+      }
+    }
+
+    # Calculate summary stats
+    completed_count <- if (!is.null(completed_display)) nrow(completed_display) else 0
+    failed_count <- if (!is.null(failed_display)) nrow(failed_display) else 0
+    running_count <- if (!is.null(running_display)) nrow(running_display) else 0
+
+    cat(sprintf("\n📈 Summary: %d/%d completed, %d failed, %d running\n",
+                completed_count, length(model_names), failed_count, running_count))
+
 
     # Identify NEW completions and failures
     newly_completed <- tryCatch({
