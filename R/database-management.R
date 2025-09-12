@@ -327,7 +327,7 @@ get_model_covariates_from_db <- function(search_state, model_name) {
     }
 
     # Get all covariate tag values from search_state$tags
-    cov_tag_values <- unlist(search_state$tags[grepl("^cov_", names(search_state$tags))])
+    cov_tag_values <- unlist(search_state$tags[grepl("^beta_", names(search_state$tags))])
 
     # Find which model tags correspond to covariates
     covariate_names <- intersect(model_tags, cov_tag_values)

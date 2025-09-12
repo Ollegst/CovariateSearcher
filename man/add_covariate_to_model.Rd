@@ -16,7 +16,7 @@ add_covariate_to_model(
 
 \item{base_model_id}{Character. Base model identifier (e.g., "run1")}
 
-\item{covariate_tag}{Character. Covariate tag to add (e.g., "cov_cl_wt")}
+\item{covariate_tag}{Character. Covariate tag to add (e.g., "beta_cl_wt")}
 
 \item{step_number}{Integer. Optional step number (NULL for auto-calculation)}
 }

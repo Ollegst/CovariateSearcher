@@ -317,10 +317,20 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
   update_count <- 0
 
   # Track models that are definitively completed/failed
-  definitively_completed <- character(0)
-  definitively_failed <- character(0)
+  definitively_completed <- search_state$search_database$model_name[
+    search_state$search_database$status == "completed"
+  ]
+  definitively_failed <- search_state$search_database$model_name[
+    search_state$search_database$status %in% c("failed", "estimation_error")
+  ]
   already_processed_for_retry <- character(0)
-  active_monitoring_list <- successful_submissions
+  for (failed_model in definitively_failed) {
+    # Check if a retry model exists (e.g., run2 -> run2001)
+    retry_model_name <- paste0(failed_model, "001")
+    if (retry_model_name %in% search_state$search_database$model_name) {
+      already_processed_for_retry <- c(already_processed_for_retry, failed_model)
+    }
+  }
 
   # ADD THE MONITORING LOOP - this was missing!
   while (TRUE) {  # Or use: repeat {
@@ -454,7 +464,10 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
     running_count <- if (!is.null(running_display)) nrow(running_display) else 0
 
     cat(sprintf("\n📈 Summary: %d/%d completed, %d failed, %d running\n",
-                completed_count, length(model_names), failed_count, running_count))
+                completed_count,
+                completed_count + failed_count + running_count,  # Total of all models
+                failed_count,
+                running_count))
 
 
     # Identify NEW completions and failures
