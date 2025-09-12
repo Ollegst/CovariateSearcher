@@ -157,6 +157,36 @@ validate_setup <- function(search_state) {
   if (length(missing_covs) > 0) {
     stop("Covariates not found in dataset: ", paste(missing_covs, collapse = ", "))
   }
+  # Check categorical covariate levels
+  cat("Checking categorical covariate levels...\n")
+  categorical_covs <- search_state$covariate_search[search_state$covariate_search$STATUS == "cat", ]
+
+  for (i in seq_len(nrow(categorical_covs))) {
+    cov_name <- categorical_covs$COVARIATE[i]
+    specified_levels <- categorical_covs$LEVELS[i]
+
+    if (cov_name %in% names(search_state$data_file)) {
+      actual_levels <- sort(unique(search_state$data_file[[cov_name]]))
+      actual_levels <- actual_levels[!is.na(actual_levels)]
+
+      # Parse specified levels
+      if (grepl(";", specified_levels)) {
+        expected_levels <- sort(as.numeric(unlist(strsplit(specified_levels, ";"))))
+      } else {
+        next  # Skip if can't parse
+      }
+
+      # Check if they match
+      if (!identical(actual_levels, expected_levels)) {
+        stop(sprintf(
+          "Level mismatch for %s: Specified=%s, Actual=%s. Update covariate_search.csv",
+          cov_name,
+          paste(expected_levels, collapse=";"),
+          paste(actual_levels, collapse=";")
+        ))
+      }
+    }
+  }
 
   cat("All validation checks passed!\n")
   return(search_state)

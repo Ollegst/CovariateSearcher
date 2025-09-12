@@ -355,7 +355,10 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
 
     uniqueval <- uniqueval_with_freq[uniqueval_with_freq != temp_cov$REFERENCE]
 
-    thetanmulti <- tibble(covx = uniqueval)
+    thetanmulti <- tibble(
+      covx = uniqueval,
+      label = character(length(uniqueval))  # Initialize empty
+    )
     for(a in 1:length(uniqueval)){
       current_level <- uniqueval[a]
       theta_num <- newtheta + a - 1
