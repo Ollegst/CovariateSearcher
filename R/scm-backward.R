@@ -477,8 +477,8 @@ get_covariate_tag_from_name <- function(search_state, covariate_name) {
   parts <- strsplit(covariate_name, "_")[[1]]
   if (length(parts) == 2) {
     # Try both possible patterns
-    constructed_tag1 <- paste0("cov_", tolower(parts[2]), "_", tolower(parts[1]))
-    constructed_tag2 <- paste0("cov_", tolower(parts[1]), "_", tolower(parts[2]))
+    constructed_tag1 <- paste0("beta_", tolower(parts[2]), "_", tolower(parts[1]))
+    constructed_tag2 <- paste0("beta_", tolower(parts[1]), "_", tolower(parts[2]))
 
     if (constructed_tag1 %in% names(search_state$tags)) {
       return(constructed_tag1)

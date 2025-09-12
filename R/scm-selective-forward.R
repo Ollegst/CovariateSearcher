@@ -343,7 +343,7 @@ run_scm_selective_forward <- function(search_state,
     redemption_covariates <- character(0)
 
     # Get all available covariates including excluded
-    all_available_tags <- names(search_state$tags)[grepl("^cov_", names(search_state$tags))]
+    all_available_tags <- names(search_state$tags)[grepl("^beta_", names(search_state$tags))]
 
     # Get covariates in best model with error handling
     best_model_covariates <- tryCatch({
@@ -1019,7 +1019,7 @@ resume_selective_forward <- function(checkpoint_file,
         cat("   - Including previously excluded covariates\n")
 
         # Get remaining covariates for redemption
-        all_available_tags <- names(search_state$tags)[grepl("^cov_", names(search_state$tags))]
+        all_available_tags <- names(search_state$tags)[grepl("^beta_", names(search_state$tags))]
 
         # Convert best model covariates to tags
         best_model_tags <- character(0)

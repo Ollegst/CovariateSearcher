@@ -10,7 +10,7 @@
 #' Add Covariate to Model (FIXED - WITH PROPER LOG FILE SAVING)
 #' @param search_state List. Current search state from initialize_covariate_search()
 #' @param base_model_id Character. Base model identifier (e.g., "run1")
-#' @param covariate_tag Character. Covariate tag to add (e.g., "cov_cl_wt")
+#' @param covariate_tag Character. Covariate tag to add (e.g., "beta_cl_wt")
 #' @param step_number Integer. Optional step number (NULL for auto-calculation)
 #' @return List with updated search_state and new model information
 #' @export

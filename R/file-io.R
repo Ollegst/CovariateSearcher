@@ -431,7 +431,7 @@ get_model_covariates_from_files <- function(search_state, model_name) {
     model_path <- file.path(search_state$models_folder, model_name)
     mod <- bbr::read_model(model_path)
     mod_tags <- mod$tags
-    cov_tags <- names(search_state$tags)[grepl("^cov_", names(search_state$tags))]
+    cov_tags <- names(search_state$tags)[grepl("^beta_", names(search_state$tags))]
     cov_tag_values <- unlist(search_state$tags[cov_tags])
     present_cov_values <- intersect(cov_tag_values, mod_tags)
     present_cov_names <- names(search_state$tags)[search_state$tags %in% present_cov_values]
