@@ -171,9 +171,9 @@ update_model_status_from_files <- function(search_state, model_name) {
         lst_content <- readLines(lst_file, warn = FALSE)
 
         # Check for completion markers FIRST
-        if (any(grepl("MINIMIZATION SUCCESSFUL", lst_content))) {
+        if (any(grepl("COMPLETED|SUCCESSFUL", lst_content))) {
           list(status = "completed", error_message = NA, has_issues = FALSE)
-        } else if (any(grepl("MINIMIZATION TERMINATED", lst_content)) &&
+        } else if (any(grepl("TERMINATED", lst_content)) &&
                    any(grepl("ERROR", lst_content))) {
           # Only failed if we have BOTH termination AND error
           error_line <- lst_content[grep("ERROR", lst_content)[1]]

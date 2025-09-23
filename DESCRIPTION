@@ -29,7 +29,8 @@ Imports:
     officer,
     tidyr,
     rlang,
-    tidyselect 
+    tidyselect,
+    ggplot2
 Suggests:
     testthat (>= 3.0.0),
     knitr,

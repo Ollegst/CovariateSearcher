@@ -111,6 +111,13 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag,
 
     # Sub-step 3c: Add to database (SIMPLIFIED SCHEMA)
     cat("  Adding to database...\n")
+    yaml_path <- file.path(search_state$models_folder, new_model_name, paste0(new_model_name, ".yaml"))
+    yaml_data <- yaml::read_yaml(yaml_path)
+    actual_tags <- if (!is.null(yaml_data$tags)) {
+      yaml_data$tags
+    } else {
+      character(0)
+    }
 
     tryCatch({
       new_row <- data.frame(
@@ -125,7 +132,7 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag,
         delta_ofv = NA_real_,
         rse_max = NA_real_,
         status = "created",
-        tags = I(list(c(covariate_name))),
+        tags = I(list(actual_tags)),
         submission_time = as.POSIXct(NA),
         completion_time = as.POSIXct(NA),
         retry_attempt = 0L,
