@@ -177,6 +177,7 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag,
       search_state = search_state
     ))
   })
+  return(result)
 }
 #' Create Model Info Log File
 #'
