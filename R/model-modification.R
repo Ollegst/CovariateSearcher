@@ -111,7 +111,7 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag,
 
     # Sub-step 3c: Add to database (SIMPLIFIED SCHEMA)
     cat("  Adding to database...\n")
-    yaml_path <- file.path(search_state$models_folder, new_model_name, paste0(new_model_name, ".yaml"))
+    yaml_path <- file.path(search_state$models_folder,  paste0(new_model_name, ".yaml"))
     yaml_data <- yaml::read_yaml(yaml_path)
     actual_tags <- if (!is.null(yaml_data$tags)) {
       yaml_data$tags
