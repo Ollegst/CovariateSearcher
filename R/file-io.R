@@ -259,11 +259,29 @@ read_nonmem_lst <- function(model_path) {
     has_successful <- any(grepl("MINIMIZATION SUCCESSFUL|OPTIMIZATION WAS COMPLETED", lst_content, ignore.case = FALSE))
     has_terminated <- any(grepl("MINIMIZATION TERMINATED", lst_content, ignore.case = FALSE))
     has_obj_terminated <- any(grepl("PROGRAM TERMINATED BY OBJ", lst_content, ignore.case = FALSE))
+    has_problem_ended <- any(grepl("PROBLEM ENDED", lst_content, ignore.case = FALSE))
+    has_stop_time <- any(grepl("Stop Time:", lst_content, ignore.case = FALSE))
 
     # Check for successful completion
     if (has_successful) {
       result$status <- "completed"
       result$has_issues <- FALSE
+
+    } else if (has_problem_ended) {
+      # NEW: PROBLEM ENDED indicates failure
+      result$status <- "failed"
+      result$has_issues <- TRUE
+      result$error_message <- "PROBLEM ENDED - Abnormal termination"
+
+      # Try to extract more context around PROBLEM ENDED
+      problem_lines <- which(grepl("PROBLEM ENDED", lst_content))
+      if (length(problem_lines) > 0) {
+        # Get lines around the PROBLEM ENDED message
+        context_start <- max(1, problem_lines[1] - 2)
+        context_end <- min(length(lst_content), problem_lines[1] + 2)
+        context_lines <- lst_content[context_start:context_end]
+        result$error_excerpt <- paste(context_lines, collapse = "\n")
+      }
 
     } else if (has_terminated) {
       result$status <- "failed"
@@ -321,6 +339,32 @@ read_nonmem_lst <- function(model_path) {
       result$status <- "failed"
       result$has_issues <- TRUE
       result$error_message <- "PROGRAM TERMINATED BY OBJ"
+    } else if (has_stop_time) {
+      # NEW: If we have Stop Time but no success/failure markers
+      # This means the run finished but we need to determine if it succeeded
+
+      # Check for other failure indicators
+      has_error <- any(grepl("ERROR|ABORT", lst_content, ignore.case = TRUE))
+      has_warning_severe <- any(grepl("WARNING.*SEVERE", lst_content, ignore.case = TRUE))
+
+      if (has_error || has_warning_severe) {
+        result$status <- "failed"
+        result$has_issues <- TRUE
+
+        # Try to find the error message
+        if (has_error) {
+          error_lines <- lst_content[grepl("ERROR", lst_content, ignore.case = TRUE)]
+          result$error_message <- if (length(error_lines) > 0) error_lines[1] else "Unknown error"
+        } else {
+          warning_lines <- lst_content[grepl("WARNING.*SEVERE", lst_content, ignore.case = TRUE)]
+          result$error_message <- if (length(warning_lines) > 0) warning_lines[1] else "Severe warning"
+        }
+      } else {
+        # Has Stop Time but no clear success/failure - likely completed with issues
+        result$status <- "completed_with_issues"
+        result$has_issues <- TRUE
+        result$error_message <- "Run completed without clear success message"
+      }
 
     } else {
       # FIXED: Better detection of incomplete vs running models
@@ -336,6 +380,13 @@ read_nonmem_lst <- function(model_path) {
         result$error_message <- "Model run incomplete"
       }
     }
+    # ADDITIONAL CHECK: If status is still unknown but Stop Time exists
+    if (result$status == "unknown" && has_stop_time) {
+      result$status <- "completed_with_issues"
+      result$error_message <- "Run finished with unknown status"
+      result$has_issues <- TRUE
+    }
+
 
     return(result)
 
