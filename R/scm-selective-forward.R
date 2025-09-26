@@ -637,18 +637,22 @@ run_scm_selective_forward <- function(search_state,
 #' @param ofv_threshold Numeric. OFV threshold for significance
 #' @return Character vector of significant model names
 #' @export
-get_significant_models_from_step <- function(search_state, step_number, ofv_threshold) {
-
+get_significant_models_from_step <- function(search_state, step_number, ofv_threshold, rse_threshold = NULL) {
   # Validate inputs
   if (is.null(search_state$search_database) || nrow(search_state$search_database) == 0) {
     return(character(0))
   }
 
   # Check required columns exist
-  required_cols <- c("step_number", "status", "delta_ofv", "model_name")
+  required_cols <- c("step_number", "status", "delta_ofv", "rse_max", "model_name")
   if (!all(required_cols %in% names(search_state$search_database))) {
     warning("Missing required columns in search database")
     return(character(0))
+  }
+
+  # Use config default if RSE threshold not specified
+  if (is.null(rse_threshold)) {
+    rse_threshold <- search_state$search_config$max_rse_threshold %||% 50
   }
 
   # Get models from specified step
@@ -661,8 +665,10 @@ get_significant_models_from_step <- function(search_state, step_number, ofv_thre
     return(character(0))
   }
 
-  # Filter for significant models
-  significant_models <- step_models[step_models$delta_ofv > ofv_threshold, ]
+  # Filter for significant models - check BOTH ΔOFV and RSE
+  significant_models <- step_models[
+    step_models$delta_ofv > ofv_threshold &
+      (is.na(step_models$rse_max) | step_models$rse_max < rse_threshold), ]
 
   if (nrow(significant_models) == 0) {
     return(character(0))
