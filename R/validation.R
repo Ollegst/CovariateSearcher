@@ -7,99 +7,8 @@
 
 
 
-#' Validate Model Quality
-#'
-#' Comprehensive model quality assessment
-#'
-#' @param search_state List containing search state
-#' @param model_name Character. Model name
-#' @param rse_threshold Numeric. RSE threshold (default 50)
-#' @param ofv_threshold Numeric. OFV significance threshold (default 3.84)
-#' @return List with validation results
-#' @export
-validate_model_quality <- function(search_state, model_name, rse_threshold = 50, ofv_threshold = 3.84) {
-
-  model_path <- file.path(search_state, model_name)
-
-  # Extract basic results - CORRECTED ARGUMENTS
-  results <- extract_model_results(search_state, model_name)
-
-  validation <- list(
-    model_path = model_path,
-    overall_status = "unknown",
-    converged = FALSE,
-    acceptable_rse = FALSE,
-    significant_ofv = FALSE,
-    issues = character(0),
-    recommendations = character(0)
-  )
 
 
-  # Check convergence
-  if (results$status == "completed") {
-    validation$converged <- TRUE
-  } else if (results$status == "completed_with_issues") {
-    validation$converged <- TRUE
-    validation$issues <- c(validation$issues, "has_estimation_issues")
-  } else {
-    validation$converged <- FALSE
-    validation$issues <- c(validation$issues, "did_not_converge")
-    validation$recommendations <- c(validation$recommendations, "retry_with_different_initial_estimates")
-  }
-
-  # Check OFV availability
-  if (!is.na(results$ofv)) {
-    validation$ofv <- results$ofv
-  } else {
-    validation$issues <- c(validation$issues, "no_ofv_available")
-  }
-
-  # Overall assessment
-  if (validation$converged && length(validation$issues) == 0) {
-    validation$overall_status <- "acceptable"
-  } else if (validation$converged && length(validation$issues) <= 2) {
-    validation$overall_status <- "acceptable_with_warnings"
-  } else {
-    validation$overall_status <- "not_acceptable"
-  }
-
-  return(validation)
-}
-
-
-#' Calculate Delta OFV
-#'
-#' Calculate OFV difference between models
-#'
-#' @param base_ofv Numeric. Base model OFV
-#' @param test_ofv Numeric. Test model OFV
-#' @param significance_threshold Numeric. Significance threshold (default 3.84)
-#' @return List with delta OFV and significance
-#' @export
-calculate_delta_ofv <- function(base_ofv, test_ofv, significance_threshold = 3.84) {
-
-  if (is.na(base_ofv) || is.na(test_ofv)) {
-    return(list(
-      delta_ofv = NA_real_,
-      significant = FALSE,
-      direction = NA_character_,
-      error = "Missing OFV values"
-    ))
-  }
-
-  delta_ofv <- base_ofv - test_ofv
-  significant <- abs(delta_ofv) > significance_threshold
-
-  direction <- if (delta_ofv > 0) "improvement" else "worse"
-
-  return(list(
-    delta_ofv = delta_ofv,
-    significant = significant,
-    direction = direction,
-    threshold = significance_threshold,
-    meets_threshold = significant && direction == "improvement"
-  ))
-}
 
 
 #' Update Model Status from Files with Enhanced Error Detection (FIXED)
@@ -209,50 +118,81 @@ update_model_status_from_files <- function(search_state, model_name) {
   }
 
   # Extract results if completed
-  results <- list(ofv = NA_real_, status = actual_status)
+  results <- list(ofv = NA_real_, rse_max = NA_real_, status = actual_status)
   if (actual_status == "completed") {
     results <- tryCatch({
-      if (exists("extract_model_results") && is.function(extract_model_results)) {
-        extract_model_results(search_state, model_name)
-      } else {
-        # Fallback: try to read OFV from EXT file
-        ext_file <- file.path(model_path, paste0(model_name, ".ext"))
-        if (file.exists(ext_file)) {
-          ext_lines <- readLines(ext_file, warn = FALSE)
-          data_lines <- ext_lines[!grepl("^TABLE|^\\s*$", ext_lines)]
+      # Primary path: use extract_model_results
+      base_results <- extract_model_results(search_state, model_name)
 
-          if (length(data_lines) > 0) {
-            # Find lines with -1000000000 (final estimates)
-            final_lines_idx <- grep("^\\s*-1000000000", data_lines)
+      # Extract RSE using get_param2
+      rse_max <- tryCatch({
+        params <- get_param2(
+          model_number = model_name,
+          count_model = 1,
+          models_folder = search_state$models_folder
+        )
 
-            if (length(final_lines_idx) > 0) {
-              # Get the line BEFORE the last -1000000000 line
-              last_final_idx <- tail(final_lines_idx, 1)
-              if (last_final_idx > 1) {
-                # The line before -1000000000 has the final OBJ
-                ofv_line <- data_lines[last_final_idx - 1]
-                values <- as.numeric(strsplit(trimws(ofv_line), "\\s+")[[1]])
-                # OBJ is the last column
-                ofv_value <- tail(values, 1)
-                list(ofv = ofv_value, status = "completed")
-              } else {
-                list(ofv = NA_real_, status = "completed")
-              }
-            } else {
-              # No -1000000000 line found, use last data line
-              last_line <- tail(data_lines, 1)
-              values <- as.numeric(strsplit(trimws(last_line), "\\s+")[[1]])
-              list(ofv = tail(values, 1), status = "completed")
+        # Get maximum RSE from the params
+        rse_values <- params$RSE[!is.na(params$RSE) & is.finite(params$RSE)]
+        if (length(rse_values) > 0) {
+          max(rse_values)
+        } else {
+          NA_real_
+        }
+      }, error = function(e) {
+        # RSE extraction failed, keep as NA
+        NA_real_
+      })
+
+      # Add RSE to results
+      base_results$rse_max <- rse_max
+      base_results
+
+    }, error = function(e) {
+      # If extract_model_results fails, fall back to reading EXT file directly
+      ext_file <- file.path(model_path, paste0(model_name, ".ext"))
+      if (file.exists(ext_file)) {
+        ext_lines <- readLines(ext_file, warn = FALSE)
+        data_lines <- ext_lines[!grepl("^TABLE|^\\s*$", ext_lines)]
+
+        # Extract OFV
+        ofv_value <- NA_real_
+        if (length(data_lines) > 0) {
+          # Find lines with -1000000000 (final estimates)
+          final_lines_idx <- grep("^\\s*-1000000000", data_lines)
+          if (length(final_lines_idx) > 0) {
+            # Get the line BEFORE the last -1000000000 line
+            last_final_idx <- tail(final_lines_idx, 1)
+            if (last_final_idx > 1) {
+              ofv_line <- data_lines[last_final_idx - 1]
+              values <- as.numeric(strsplit(trimws(ofv_line), "\\s+")[[1]])
+              ofv_value <- tail(values, 1)
             }
           } else {
-            list(ofv = NA_real_, status = "completed")
+            # No -1000000000 line found, use last data line
+            last_line <- tail(data_lines, 1)
+            values <- as.numeric(strsplit(trimws(last_line), "\\s+")[[1]])
+            ofv_value <- tail(values, 1)
           }
-        } else {
-          list(ofv = NA_real_, status = "completed")
         }
+
+        # Extract RSE
+        rse_max <- tryCatch({
+          params <- get_param2(
+            model_number = model_name,
+            count_model = 1,
+            models_folder = search_state$models_folder
+          )
+          rse_values <- params$RSE[!is.na(params$RSE) & is.finite(params$RSE)]
+          if (length(rse_values) > 0) max(rse_values) else NA_real_
+        }, error = function(e) {
+          NA_real_
+        })
+
+        list(ofv = ofv_value, rse_max = rse_max, status = "completed")
+      } else {
+        list(ofv = NA_real_, rse_max = NA_real_, status = "completed")
       }
-    }, error = function(e) {
-      list(ofv = NA_real_, status = actual_status)
     })
   }
 
@@ -271,6 +211,12 @@ update_model_status_from_files <- function(search_state, model_name) {
   tryCatch({
     search_state$search_database$status[db_idx] <- actual_status
     search_state$search_database$ofv[db_idx] <- results$ofv
+
+    # Add RSE to database if available
+    if (!is.null(results$rse_max) && !is.na(results$rse_max)) {
+      search_state$search_database$rse_max[db_idx] <- results$rse_max
+    }
+
     if (!is.null(lst_info$error_message) && !is.na(lst_info$error_message)) {
       search_state$search_database$estimation_issue[db_idx] <- lst_info$error_message
     }
@@ -649,4 +595,34 @@ update_all_model_statuses <- function(search_state, show_progress = TRUE) {
   }
 
   return(search_state)
+}
+
+#' Get Maximum RSE Using Existing get_param2
+#'
+#' @title Extract maximum RSE from model using existing functionality
+#' @description Wrapper around get_param2 to extract max RSE value
+#' @param search_state List containing search state
+#' @param model_name Character. Model name
+#' @return Numeric. Maximum RSE value or NA
+#' @export
+get_model_max_rse <- function(search_state, model_name) {
+  tryCatch({
+    # Use existing get_param2 function
+    params <- get_param2(
+      model_number = model_name,
+      count_model = 1,
+      models_folder = search_state$models_folder
+    )
+
+    # Extract RSE values
+    rse_values <- params$RSE[!is.na(params$RSE) & is.finite(params$RSE)]
+
+    if (length(rse_values) > 0) {
+      return(max(rse_values))
+    } else {
+      return(NA_real_)
+    }
+  }, error = function(e) {
+    return(NA_real_)
+  })
 }
