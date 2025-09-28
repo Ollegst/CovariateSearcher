@@ -421,8 +421,8 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id = NULL,
   cat(sprintf("🎯 Final model: %s\n", current_base_model))
 
   # Get final model details
-  final_ofv <- get_model_ofv_from_files(search_state, current_base_model)
-  base_ofv <- get_model_ofv_from_files(search_state, base_model_id)
+  final_ofv <- read_nonmem_ext(file.path(search_state$models_folder, current_base_model))$ofv
+   base_ofv <- read_nonmem_ext(file.path(search_state$models_folder, base_model_id))$ofv
   total_improvement <- if (!is.na(final_ofv) && !is.na(base_ofv)) {
     base_ofv - final_ofv
   } else {

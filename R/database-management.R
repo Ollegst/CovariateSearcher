@@ -242,7 +242,6 @@ get_model_status <- function(search_state, model_name) {
 #' @param search_state Search state object
 #' @param model_name Model name
 #' @return Numeric OFV or NA if not found
-#' @note For authoritative values, use get_model_ofv_from_files()
 #' @export
 get_model_ofv_from_database  <- function(search_state, model_name) {
 

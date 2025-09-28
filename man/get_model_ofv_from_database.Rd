@@ -20,6 +20,3 @@ Fast lookup of cached OFV value from search database
 \details{
 Get Model OFV from Database
 }
-\note{
-For authoritative values, use get_model_ofv_from_files()
-}

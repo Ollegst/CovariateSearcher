@@ -431,46 +431,6 @@ get_model_status_from_files <- function(model_path) {
 
 
 
-#' Get Model OFV from Files
-#'
-#' @title Extract OFV from model output files
-#' @description Extracts OFV value from NONMEM output files
-#' @param search_state List containing search state
-#' @param model_name Character. Model name
-#' @return Numeric. OFV value or NA
-#' @export
-get_model_ofv_from_files <- function(search_state, model_name) {
-
-  model_path <- file.path(search_state$models_folder, model_name)
-  status <- get_model_status_from_files(model_path)
-  if (status != "completed") {
-    return(NA)
-  }
-
-  tryCatch({
-    # Try .lst file parsing first
-    lst_file <- file.path(search_state$models_folder, model_name, paste0(model_name, ".lst"))
-    if (file.exists(lst_file)) {
-      lst_content <- readLines(lst_file, warn = FALSE)
-
-      ofv_lines <- grep("OBJECTIVE FUNCTION VALUE WITHOUT CONSTANT", lst_content, value = TRUE)
-      if (length(ofv_lines) > 0) {
-        # Just take the first (and usually only) match
-        ofv_match <- regmatches(ofv_lines[1],
-                                regexpr("[-+]?[0-9]*\\.?[0-9]+([eE][-+]?[0-9]+)?", ofv_lines[1]))
-        if (length(ofv_match) > 0) {
-          return(as.numeric(ofv_match[1]))
-        }
-      }
-    }
-    return(NA)
-  }, error = function(e) {
-    return(NA)
-  })
-}
-
-
-
 #' Get Model Covariates from Files
 #'
 #' @title Extract covariates from model using BBR tags
