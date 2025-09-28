@@ -127,7 +127,14 @@ discover_existing_models <- function(search_state) {
     model_path <- file.path(search_state$models_folder, model_name)
 
     status <- get_model_status_from_files(model_path)
-    ofv <- if (status == "completed") return(read_nonmem_ext(model_path)$ofv) else NA
+    ofv <- if (status == "completed") {
+      tryCatch({
+        ext_data <- read_nonmem_ext(model_path)
+        ext_data$ofv
+      }, error = function(e) NA_real_)
+    } else {
+      NA_real_
+    }
     covariates <- get_model_covariates_from_files(search_state, model_name)
     model_tags <- tryCatch({
       mod <- bbr::read_model(model_path)
