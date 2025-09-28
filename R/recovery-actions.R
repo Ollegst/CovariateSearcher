@@ -250,7 +250,7 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
 #' @export
 adjust_theta_for_covariate <- function(search_state, model_name, covariate_tag) {
   tryCatch({
-    # FIXED: Correct file path construction
+
     model_file_path <- file.path(search_state$models_folder, paste0(model_name, ".ctl"))
 
     if (!file.exists(model_file_path)) {
@@ -284,22 +284,46 @@ adjust_theta_for_covariate <- function(search_state, model_name, covariate_tag) 
     for (i in 1:length(modelcode)) {
       line <- modelcode[i]
 
-      # Check if this line contains the covariate reference and starts with 0.1
-      if (grepl(paste0("\\b", cov_to_test, "\\b"), line) && grepl("^\\s*0\\.1", line)) {
+      if (grepl(paste0("\\b", cov_to_test, "\\b"), line) ||
+          grepl(paste0("\\b", cov_to_test, "_[^\\s;]+"), line)) {
 
         original_line <- line
 
-        # Replace 0.1 with -0.1 at the beginning of the line
-        modified_line <- gsub("^(\\s*)0\\.1", "\\1-0.1", line)
+        # Pattern to match a number at the beginning of the line (with optional spaces)
+        # This will match: 0.1, -0.1, 0.5, 1, -2.5, 1 FIX, 0.75 FIX, etc.
+        if (grepl("^\\s*-?[0-9]+(\\.[0-9]+)?", line)) {
+          # Extract the current value (handle both regular and FIXED values)
+          current_value_match <- regmatches(line, regexpr("^\\s*-?[0-9]+(\\.[0-9]+)?", line))
+          current_value_str <- trimws(current_value_match)
+          current_value <- as.numeric(current_value_str)
 
-        # Only update if something actually changed
-        if (modified_line != original_line) {
-          modelcode[i] <- modified_line
-          theta_lines_modified <- theta_lines_modified + 1
+          # Change the sign
+          new_value <- -current_value
 
-          cat(sprintf("    THETA line %d modified:\n", i))
-          cat(sprintf("      Before: %s\n", trimws(original_line)))
-          cat(sprintf("      After:  %s\n", trimws(modified_line)))
+          # Format the new value to match original precision
+          if (grepl("\\.", current_value_str)) {
+            # Has decimal point - preserve decimal places
+            decimal_places <- nchar(sub(".*\\.", "", current_value_str))
+            new_value_str <- format(new_value, nsmall = decimal_places)
+          } else {
+            # No decimal point - keep as integer
+            new_value_str <- as.character(as.integer(new_value))
+          }
+
+          # Replace the value in the line
+          modified_line <- sub("^(\\s*)(-?[0-9]+(\\.[0-9]+)?)",
+                               paste0("\\1", new_value_str),
+                               line)
+
+          # Only update if something actually changed
+          if (modified_line != original_line) {
+            modelcode[i] <- modified_line
+            theta_lines_modified <- theta_lines_modified + 1
+
+            cat(sprintf("    THETA line %d modified:\n", i))
+            cat(sprintf("      Before: %s\n", trimws(original_line)))
+            cat(sprintf("      After:  %s\n", trimws(modified_line)))
+          }
         }
       }
     }
