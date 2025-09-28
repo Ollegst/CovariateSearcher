@@ -1,18 +1,11 @@
-# =============================================================================
-# SCM RESULTS
-# File: R/scm-results.R
-# Part of CovariateSearcher Package
-# Statistical model evaluation and selection
-# =============================================================================
-
-
-#' Create SCM Results Table with Full Model Covariates
+#' Create Enhanced SCM Results Table with RSE Evaluation Comments
 #'
-#' @title Generate comprehensive SCM results table with all covariates in each model
+#' @title Generate comprehensive SCM results table with evaluation comments
 #' @description Creates a detailed table showing phase/step, model name, all covariates
-#'   currently in the model, OFV, delta OFV, and selection status
+#'   currently in the model, OFV, delta OFV, RSE, selection status, and comments
+#'   explaining why models were or weren't selected
 #' @param search_state List containing search state with database and tags
-#' @return Data frame with comprehensive SCM results
+#' @return Data frame with comprehensive SCM results including evaluation comments
 #' @export
 create_scm_results_table <- function(search_state) {
 
@@ -26,7 +19,7 @@ create_scm_results_table <- function(search_state) {
   cat(sprintf("Using thresholds - Forward: %.2f, Backward: %.2f, RSE: %d%%\n",
               forward_threshold, backward_threshold, rse_threshold))
 
-  # Initialize results data frame
+  # Initialize results data frame with new columns
   results <- data.frame(
     Phase_Step = character(),
     Model = character(),
@@ -36,156 +29,208 @@ create_scm_results_table <- function(search_state) {
     Covariates_in_Model = character(),
     OFV = numeric(),
     Delta_OFV = numeric(),
+    RSE_Max = numeric(),
     Selected = character(),
+    Comment = character(),
     stringsAsFactors = FALSE
   )
 
   # Helper function to get covariates for a model from YAML tags
   get_model_covariates_display <- function(model_name) {
     yaml_file <- file.path(search_state$models_folder, paste0(model_name, ".yaml"))
-    yaml_data <- yaml::read_yaml(yaml_file)
-
-    if (length(yaml_data$tags) == 0) {
-      return(character())
+    if (!file.exists(yaml_file)) {
+      return("Unknown")
     }
 
-    # Convert tags to display format
-    covariates_display <- character()
+    tryCatch({
+      yaml_data <- yaml::read_yaml(yaml_file)
 
-    for (tag in yaml_data$tags) {
-      # Find matching covariate in search definition
-      matching_rows <- search_state$covariate_search[
-        grepl(paste0("_", tag, "$"), search_state$covariate_search$cov_to_test),
-      ]
-
-      if (nrow(matching_rows) > 0) {
-        # Format as COVARIATE_on_PARAMETER
-        cov <- matching_rows$COVARIATE[1]
-        param <- matching_rows$PARAMETER[1]
-        cov_display <- paste0(cov, "_on_", param)
-        covariates_display <- c(covariates_display, cov_display)
+      if (length(yaml_data$tags) == 0) {
+        return("Base")
       }
-    }
 
-    return(unique(covariates_display))
+      # Convert tags to display format
+      covariates_display <- character()
+
+      for (tag in yaml_data$tags) {
+        # Find matching covariate in search definition
+        matching_rows <- search_state$covariate_search[
+          grepl(paste0("_", tag, "$"), search_state$covariate_search$cov_to_test),
+        ]
+
+        if (nrow(matching_rows) > 0) {
+          cov_name <- matching_rows$COVARIATE[1]
+          param_name <- matching_rows$PARAMETER[1]
+          covariates_display <- c(covariates_display, paste0(cov_name, "_on_", param_name))
+        }
+      }
+
+      if (length(covariates_display) == 0) {
+        return("Base")
+      } else {
+        return(paste(covariates_display, collapse = " + "))
+      }
+    }, error = function(e) {
+      return("Error reading tags")
+    })
   }
 
-  # Process each model
-  for (i in 1:nrow(db)) {
-    row <- db[i, ]
+  # Helper function to determine selection status and comment
+  get_selection_info <- function(row, step_models, threshold_ofv, threshold_rse, phase) {
+    delta_ofv <- row$delta_ofv
+    rse_max <- row$rse_max
 
-    # Get Phase_Step
-    phase <- as.character(row$phase)
-    step <- as.numeric(row$step_number)
-
-    # Determine phase display name
-    if (phase %in% c("base", "base_model")) {
-      phase_display <- "Base"
-    } else if (phase %in% c("forward_selection", "forward", "univariate", "Development")) {
-      phase_display <- "Forward"
-    } else if (phase %in% c("backward_elimination", "backward", "removal")) {
-      phase_display <- "Backward"
-    } else if (phase == "retry") {
-      phase_display <- "Retry"
-    } else {
-      phase_display <- "Unknown"
+    # Check if this is base model
+    if (row$action == "base_model") {
+      return(list(selected = "-", comment = "Base model"))
     }
 
-    # Create Phase_Step label
-    if (phase_display == "Base") {
-      phase_step <- "Base"
-    } else {
-      phase_step <- paste0(phase_display, "_Step", step)
+    # Check completion status
+    if (row$status != "completed") {
+      return(list(selected = "NO", comment = paste("Model", row$status)))
     }
 
-    # Model name
-    model_name <- as.character(row$model_name)
-
-    # Parent model
-    parent_model <- ifelse(is.na(row$parent_model), "-", as.character(row$parent_model))
-
-    # Description
-    description <- as.character(row$step_description)
-    if (is.na(row$step_description) || row$step_description == "") {
-      description <- as.character(row$covariate_tested)
-    }
-
-    # Status
-    status <- as.character(row$status)
-    status_display <- ifelse(status %in% c("completed", "successful", "complete"),
-                             "Successful", "Failed")
-
-    # Get covariates in model
-    model_covariates <- get_model_covariates_display(model_name)
-    covariates_str <- ifelse(length(model_covariates) == 0, "Base",
-                             paste(model_covariates, collapse = " + "))
-
-    # OFV and Delta OFV
-    ofv <- round(as.numeric(row$ofv), 2)
-    delta_ofv <- round(as.numeric(row$delta_ofv), 2)
-
-    # Determine SELECTED status
-    selected <- "NO"
-
-    # For base model
-    if (phase_display == "Base") {
-      selected <- "-"
-    }
-    # For forward selection phases
-    else if (phase_display == "Forward") {
-      # Check if meets threshold
-      if (!is.na(delta_ofv) && delta_ofv > forward_threshold) {
-        selected <- "YES"
-
-        # Find all models in this step that meet threshold
-        step_models <- db[db$step_number == step, ]
-        qualified_models <- step_models[!is.na(step_models$delta_ofv) &
-                                          step_models$delta_ofv > forward_threshold, ]
-
-        if (nrow(qualified_models) > 0) {
-          best_ofv <- min(qualified_models$ofv, na.rm = TRUE)
-          if (abs(ofv - best_ofv) < 0.01) {
-            selected <- "BEST"
-          }
-        }
+    # For backward elimination
+    if (grepl("backward|remove", phase, ignore.case = TRUE)) {
+      if (is.na(delta_ofv)) {
+        return(list(selected = "NO", comment = "Delta OFV not available"))
+      }
+      # Backward: negative delta_ofv means worsening when removing
+      # We keep the covariate if removal causes large negative delta_ofv
+      if (abs(delta_ofv) > threshold_ofv) {
+        return(list(selected = "KEPT", comment = sprintf("Removal would worsen OFV by %.2f", abs(delta_ofv))))
+      } else {
+        return(list(selected = "REMOVED", comment = sprintf("Removal acceptable (ΔOFV=%.2f < %.2f)", abs(delta_ofv), threshold_ofv)))
       }
     }
-    # For backward elimination phases
-    else if (phase_display == "Backward") {
-      if (!is.na(delta_ofv)) {
-        # Accept if improvement or within threshold
-        if (delta_ofv < 0 || delta_ofv < backward_threshold) {
-          selected <- "YES"
 
-          # Find all accepted removals in this step
-          step_models <- db[db$step_number == step, ]
-          accepted_models <- step_models[!is.na(step_models$delta_ofv) &
-                                           (step_models$delta_ofv < 0 |
-                                              step_models$delta_ofv < backward_threshold), ]
+    # For forward selection - evaluate based on both OFV and RSE
+    if (is.na(delta_ofv)) {
+      return(list(selected = "NO", comment = "Delta OFV not available"))
+    }
 
-          if (nrow(accepted_models) > 0) {
-            best_ofv <- min(accepted_models$ofv, na.rm = TRUE)
-            if (abs(ofv - best_ofv) < 0.01) {
-              selected <- "BEST"
-            }
-          }
+    # Check OFV improvement
+    ofv_good <- delta_ofv > threshold_ofv
+
+    # Check RSE
+    rse_good <- is.na(rse_max) || rse_max < threshold_rse
+
+    # Generate appropriate comment
+    if (!ofv_good && !rse_good) {
+      comment <- sprintf("Poor OFV (%.2f ≤ %.2f) and high RSE (%.1f%% > %d%%)",
+                         delta_ofv, threshold_ofv, rse_max, threshold_rse)
+      return(list(selected = "NO", comment = comment))
+    } else if (!ofv_good) {
+      comment <- sprintf("Insufficient OFV improvement (%.2f ≤ %.2f)",
+                         delta_ofv, threshold_ofv)
+      return(list(selected = "NO", comment = comment))
+    } else if (!rse_good) {
+      comment <- sprintf("RSE too high (%.1f%% > %d%%)",
+                         rse_max, threshold_rse)
+      return(list(selected = "NO", comment = comment))
+    } else {
+      # Both criteria met - check if this is the best in the step
+      step_best <- step_models[step_models$delta_ofv > threshold_ofv &
+                                 (is.na(step_models$rse_max) | step_models$rse_max < threshold_rse), ]
+
+      if (nrow(step_best) > 0) {
+        best_ofv <- max(step_best$delta_ofv, na.rm = TRUE)
+        if (abs(delta_ofv - best_ofv) < 0.01) {  # Account for rounding
+          return(list(selected = "BEST",
+                      comment = sprintf("Best model (ΔOFV=%.2f, RSE=%.1f%%)", delta_ofv, rse_max)))
+        } else {
+          return(list(selected = "YES",
+                      comment = sprintf("Meets criteria (ΔOFV=%.2f, RSE=%.1f%%)", delta_ofv, rse_max)))
         }
       }
     }
 
-    # Add row to results
-    results <- rbind(results, data.frame(
-      Phase_Step = phase_step,
-      Model = model_name,
-      Parent_Model = parent_model,
-      Description = description,
-      Status = status_display,
-      Covariates_in_Model = covariates_str,
-      OFV = ofv,
-      Delta_OFV = delta_ofv,
-      Selected = selected,
-      stringsAsFactors = FALSE
-    ))
+    return(list(selected = "NO", comment = "Unknown"))
+  }
+
+  # Process each unique step
+  unique_steps <- unique(db$step_number)
+  unique_steps <- unique_steps[!is.na(unique_steps)]
+
+  for (step in sort(unique_steps)) {
+    step_models <- db[db$step_number == step & !is.na(db$step_number), ]
+
+    if (nrow(step_models) == 0) next
+
+    # Determine phase and threshold
+    phase <- unique(step_models$phase)[1]
+    is_backward <- grepl("backward", phase, ignore.case = TRUE)
+    threshold_ofv <- if (is_backward) backward_threshold else forward_threshold
+
+    # Process each model in the step
+    for (i in 1:nrow(step_models)) {
+      row <- step_models[i, ]
+
+      # Get selection info
+      selection_info <- get_selection_info(row, step_models, threshold_ofv, rse_threshold, phase)
+
+      # Determine phase/step display
+      if (row$action == "base_model") {
+        phase_step <- "Base"
+      } else if (is_backward) {
+        phase_step <- sprintf("Backward_Step%d", step)
+      } else {
+        phase_step <- sprintf("Forward_Step%d", step)
+      }
+
+      # Get covariates display
+      covariates_str <- get_model_covariates_display(row$model_name)
+
+      # Determine status display
+      status_display <- ifelse(row$status == "completed", "Successful",
+                               ifelse(row$status == "failed", "Failed", "In Progress"))
+
+      # Get description
+      description <- row$step_description %||%
+        ifelse(row$action == "add_covariate",
+               paste("Add", row$covariate_tested),
+               ifelse(row$action == "remove_covariate",
+                      paste("Remove", row$covariate_tested),
+                      row$action))
+
+      # Add to results
+      results <- rbind(results, data.frame(
+        Phase_Step = phase_step,
+        Model = row$model_name,
+        Parent_Model = row$parent_model %||% "-",
+        Description = description,
+        Status = status_display,
+        Covariates_in_Model = covariates_str,
+        OFV = row$ofv %||% NA,
+        Delta_OFV = row$delta_ofv %||% NA,
+        RSE_Max = row$rse_max %||% NA,
+        Selected = selection_info$selected,
+        Comment = selection_info$comment,
+        stringsAsFactors = FALSE
+      ))
+    }
+  }
+
+  # Add base model if present and not already added
+  base_models <- db[db$action == "base_model", ]
+  if (nrow(base_models) > 0 && !any(results$Model %in% base_models$model_name)) {
+    for (i in 1:nrow(base_models)) {
+      row <- base_models[i, ]
+      results <- rbind(results, data.frame(
+        Phase_Step = "Base",
+        Model = row$model_name,
+        Parent_Model = "-",
+        Description = "Base Model",
+        Status = "Successful",
+        Covariates_in_Model = "Base",
+        OFV = row$ofv %||% NA,
+        Delta_OFV = NA,
+        RSE_Max = row$rse_max %||% NA,
+        Selected = "-",
+        Comment = "Base model",
+        stringsAsFactors = FALSE
+      ))
+    }
   }
 
   # Sort by model number
@@ -195,12 +240,14 @@ create_scm_results_table <- function(search_state) {
   return(results)
 }
 
-#' Print SCM Results Table
+#' Print Enhanced SCM Results Table
 #'
-#' @title Display SCM results table with formatting
+#' @title Display SCM results table with RSE and evaluation comments
 #' @param search_state List containing search state
+#' @param show_rse Logical. Whether to show RSE column (default: TRUE)
+#' @param truncate_covariates Integer. Max characters for covariate column (default: 35)
 #' @export
-print_scm_results_table <- function(search_state) {
+print_scm_results_table <- function(search_state, show_rse = TRUE, truncate_covariates = 35) {
 
   results <- create_scm_results_table(search_state)
 
@@ -211,81 +258,147 @@ print_scm_results_table <- function(search_state) {
 
   cat("\n================== SCM RESULTS TABLE ==================\n\n")
 
-  # Display the table - force it to show
+  # Prepare formatted output
   for (i in seq_len(nrow(results))) {
     if (i == 1) {
-      # Print header
-      cat(sprintf("%-15s %-6s %-12s %-40s %-10s %-40s %8s %10s %8s\n",
-                  "Phase_Step", "Model", "Parent_Model", "Description", "Status",
-                  "Covariates_in_Model", "OFV", "Delta_OFV", "Selected"))
-      cat(paste(rep("-", 160), collapse = ""), "\n")
+      # Print header based on whether RSE is shown
+      if (show_rse) {
+        cat(sprintf("%-15s %-6s %-12s %-30s %-10s %-35s %8s %10s %6s %8s %s\n",
+                    "Phase_Step", "Model", "Parent_Model", "Description", "Status",
+                    "Covariates_in_Model", "OFV", "Delta_OFV", "RSE%", "Selected", "Comment"))
+        cat(paste(rep("-", 180), collapse = ""), "\n")
+      } else {
+        cat(sprintf("%-15s %-6s %-12s %-30s %-10s %-35s %8s %10s %8s %s\n",
+                    "Phase_Step", "Model", "Parent_Model", "Description", "Status",
+                    "Covariates_in_Model", "OFV", "Delta_OFV", "Selected", "Comment"))
+        cat(paste(rep("-", 165), collapse = ""), "\n")
+      }
     }
-    cat(sprintf("%-15s %-6s %-12s %-40s %-10s %-40s %8.2f %10.2f %8s\n",
-                results$Phase_Step[i],
-                results$Model[i],
-                results$Parent_Model[i],
-                substr(results$Description[i], 1, 40),
-                results$Status[i],
-                substr(results$Covariates_in_Model[i], 1, 40),
-                results$OFV[i],
-                results$Delta_OFV[i],
-                results$Selected[i]))
+
+    # Truncate covariates if needed
+    cov_display <- results$Covariates_in_Model[i]
+    if (nchar(cov_display) > truncate_covariates) {
+      cov_display <- paste0(substr(cov_display, 1, truncate_covariates - 3), "...")
+    }
+
+    # Format RSE
+    rse_display <- if (!is.na(results$RSE_Max[i])) {
+      sprintf("%.1f", results$RSE_Max[i])
+    } else {
+      "-"
+    }
+
+    # Print row
+    if (show_rse) {
+      cat(sprintf("%-15s %-6s %-12s %-30s %-10s %-35s %8.2f %10s %6s %8s %s\n",
+                  results$Phase_Step[i],
+                  results$Model[i],
+                  results$Parent_Model[i],
+                  substr(results$Description[i], 1, 30),
+                  results$Status[i],
+                  cov_display,
+                  if (!is.na(results$OFV[i])) results$OFV[i] else NA,
+                  if (!is.na(results$Delta_OFV[i])) sprintf("%.2f", results$Delta_OFV[i]) else "-",
+                  rse_display,
+                  results$Selected[i],
+                  results$Comment[i]))
+    } else {
+      cat(sprintf("%-15s %-6s %-12s %-30s %-10s %-35s %8.2f %10s %8s %s\n",
+                  results$Phase_Step[i],
+                  results$Model[i],
+                  results$Parent_Model[i],
+                  substr(results$Description[i], 1, 30),
+                  results$Status[i],
+                  cov_display,
+                  if (!is.na(results$OFV[i])) results$OFV[i] else NA,
+                  if (!is.na(results$Delta_OFV[i])) sprintf("%.2f", results$Delta_OFV[i]) else "-",
+                  results$Selected[i],
+                  results$Comment[i]))
+    }
   }
 
   # Summary
   cat("\n================== SUMMARY ==================\n")
 
-  # Find final model (last BEST)
-  best_models <- results[results$Selected == "BEST", ]
+  # Find final selected model (last BEST that isn't backward elimination)
+  forward_best <- results[results$Selected == "BEST" & !grepl("Backward", results$Phase_Step), ]
 
-  if (nrow(best_models) > 0) {
-    final_model <- best_models[nrow(best_models), ]
+  if (nrow(forward_best) > 0) {
+    final_model <- forward_best[nrow(forward_best), ]
+    base_model <- results[results$Phase_Step == "Base", ]
+
     cat(sprintf("Final Model: %s\n", final_model$Model))
     cat(sprintf("Final Covariates: %s\n", final_model$Covariates_in_Model))
     cat(sprintf("Final OFV: %.2f\n", final_model$OFV))
 
-    # Calculate total OFV improvement from base
-    base_model <- results[results$Phase_Step == "Base", ]
-    if (nrow(base_model) > 0) {
+    if (nrow(base_model) > 0 && !is.na(base_model$OFV[1])) {
       total_improvement <- final_model$OFV - base_model$OFV[1]
       cat(sprintf("Total OFV Improvement: %.2f\n", total_improvement))
     }
-  }
 
-  # Show selection summary
-  cat("\n================== SELECTION SUMMARY ==================\n")
+    # Count models by selection status
+    cat(sprintf("\nModel Statistics:\n"))
+    cat(sprintf("  Total models tested: %d\n", nrow(results) - sum(results$Phase_Step == "Base")))
+    cat(sprintf("  Models meeting criteria: %d\n", sum(results$Selected == "YES", na.rm = TRUE)))
+    cat(sprintf("  Models with high RSE: %d\n", sum(grepl("RSE too high", results$Comment))))
+    cat(sprintf("  Models with poor OFV: %d\n", sum(grepl("Insufficient OFV", results$Comment))))
 
-  # Forward selection summary
-  forward_steps <- unique(results$Phase_Step[grepl("^Forward", results$Phase_Step)])
-  for (step in forward_steps) {
-    step_data <- results[results$Phase_Step == step, ]
-    selected_data <- step_data[step_data$Selected %in% c("YES", "BEST"), ]
-
-    if (nrow(selected_data) > 0) {
-      best_model <- selected_data$Model[selected_data$Selected == "BEST"][1]
-      cat(sprintf("%s: %d models tested, %d met criteria, best: %s\n",
-                  step, nrow(step_data), nrow(selected_data), best_model))
-    } else {
-      cat(sprintf("%s: %d models tested, none met criteria\n",
-                  step, nrow(step_data)))
-    }
-  }
-
-  # Backward elimination summary
-  backward_steps <- unique(results$Phase_Step[grepl("^Backward", results$Phase_Step)])
-  for (step in backward_steps) {
-    step_data <- results[results$Phase_Step == step, ]
-    accepted_data <- step_data[step_data$Selected %in% c("YES", "BEST"), ]
-
-    if (nrow(accepted_data) > 0) {
-      best_model <- accepted_data$Model[accepted_data$Selected == "BEST"][1]
-      cat(sprintf("%s: %d removals tested, %d accepted, best: %s\n",
-                  step, nrow(step_data), nrow(accepted_data), best_model))
-    } else {
-      cat(sprintf("%s: %d removals tested, none accepted\n",
-                  step, nrow(step_data)))
-    }
+  } else {
+    cat("No significant improvements found - base model retained\n")
   }
 
   return(invisible(results))
+}
+
+# Add a helper function for generating a compact summary
+#' Generate Compact SCM Summary
+#'
+#' @title Create a brief summary of SCM results focusing on key findings
+#' @param search_state List containing search state
+#' @return Character vector with summary lines
+#' @export
+generate_scm_summary <- function(search_state) {
+  results <- create_scm_results_table(search_state)
+
+  summary_lines <- character()
+
+  # Get key models
+  base_model <- results[results$Phase_Step == "Base", ]
+  best_models <- results[results$Selected == "BEST", ]
+
+  # Basic stats
+  n_forward <- sum(grepl("Forward", results$Phase_Step))
+  n_backward <- sum(grepl("Backward", results$Phase_Step))
+  n_high_rse <- sum(grepl("RSE too high", results$Comment))
+  n_poor_ofv <- sum(grepl("Poor OFV|Insufficient OFV", results$Comment))
+
+  summary_lines <- c(
+    "===== SCM ANALYSIS SUMMARY =====",
+    sprintf("Base Model: %s (OFV: %.2f)", base_model$Model[1], base_model$OFV[1]),
+    sprintf("Models Tested: %d forward, %d backward", n_forward, n_backward),
+    sprintf("Failed Criteria: %d high RSE, %d poor OFV", n_high_rse, n_poor_ofv),
+    ""
+  )
+
+  if (nrow(best_models) > 0) {
+    for (i in 1:nrow(best_models)) {
+      summary_lines <- c(summary_lines,
+                         sprintf("Step %d Winner: %s (ΔOFV=%.2f, RSE=%.1f%%)",
+                                 i, best_models$Model[i],
+                                 best_models$Delta_OFV[i],
+                                 ifelse(is.na(best_models$RSE_Max[i]), 0, best_models$RSE_Max[i])))
+    }
+
+    final_model <- best_models[nrow(best_models), ]
+    summary_lines <- c(summary_lines,
+                       "",
+                       sprintf("FINAL MODEL: %s", final_model$Model),
+                       sprintf("COVARIATES: %s", final_model$Covariates_in_Model),
+                       sprintf("IMPROVEMENT: %.2f points", final_model$OFV - base_model$OFV[1]))
+  } else {
+    summary_lines <- c(summary_lines,
+                       "RESULT: No significant improvements - base model retained")
+  }
+
+  return(summary_lines)
 }

@@ -161,13 +161,11 @@ update_model_status_from_files <- function(search_state, model_name) {
           # Find lines with -1000000000 (final estimates)
           final_lines_idx <- grep("^\\s*-1000000000", data_lines)
           if (length(final_lines_idx) > 0) {
-            # Get the line BEFORE the last -1000000000 line
+            # Get the LAST -1000000000 line itself (for the last estimation method)
             last_final_idx <- tail(final_lines_idx, 1)
-            if (last_final_idx > 1) {
-              ofv_line <- data_lines[last_final_idx - 1]
-              values <- as.numeric(strsplit(trimws(ofv_line), "\\s+")[[1]])
-              ofv_value <- tail(values, 1)
-            }
+            ofv_line <- data_lines[last_final_idx]
+            values <- as.numeric(strsplit(trimws(ofv_line), "\\s+")[[1]])
+            ofv_value <- tail(values, 1)  # Last column is OFV
           } else {
             # No -1000000000 line found, use last data line
             last_line <- tail(data_lines, 1)
