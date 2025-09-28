@@ -151,6 +151,26 @@ update_model_status_from_files <- function(search_state, model_name, force = FAL
         # SIMPLE STATUS DETERMINATION: Valid OFV = success, Invalid OFV = failed
         is_valid_ofv <- !is.na(ofv_value) && is.finite(ofv_value) && abs(ofv_value) <= 1e10
 
+        # NEW: Check for parameters at boundary limits
+        if (is_valid_ofv && !is.null(ext_results$parameters)) {
+          # Check if any parameter is at boundary (±8.99990E+05)
+          boundary_limit <- 8.99990e5
+          param_values <- ext_results$parameters
+
+          if (any(abs(param_values) >= boundary_limit, na.rm = TRUE)) {
+            is_valid_ofv <- FALSE
+
+            # Find which parameters are at boundary
+            problem_indices <- which(abs(param_values) >= boundary_limit)
+            if (length(problem_indices) > 0) {
+              results$error_message <- paste("Parameters at boundary limits (positions:",
+                                             paste(problem_indices, collapse = ", "), ")")
+            } else {
+              results$error_message <- "Parameters at boundary limits"
+            }
+          }
+        }
+
         results$status <- if (is_valid_ofv) "completed" else "failed"
 
         # Set error message for failed runs
