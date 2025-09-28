@@ -2,7 +2,7 @@
 % Please edit documentation in R/file-io.R
 \name{read_nonmem_ext}
 \alias{read_nonmem_ext}
-\title{Read NONMEM EXT File}
+\title{Extract OFV and parameters from NONMEM .ext file}
 \usage{
 read_nonmem_ext(model_path)
 }
@@ -13,5 +13,9 @@ read_nonmem_ext(model_path)
 List with OFV, parameters, and metadata
 }
 \description{
-Reads NONMEM .ext file to extract parameter estimates and OFV
+Reads NONMEM .ext file to extract parameter estimates and OFV.
+Handles multiple estimation methods by using the last -1000000000 line.
+}
+\details{
+Read NONMEM EXT File
 }

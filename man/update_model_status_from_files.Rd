@@ -2,21 +2,24 @@
 % Please edit documentation in R/validation.R
 \name{update_model_status_from_files}
 \alias{update_model_status_from_files}
-\title{Updates search database with enhanced results from NONMEM output}
+\title{Updates search database with results from NONMEM output files}
 \usage{
-update_model_status_from_files(search_state, model_name)
+update_model_status_from_files(search_state, model_name, force = FALSE)
 }
 \arguments{
-\item{search_state}{List. Current search state}
+\item{search_state}{List. Current search state with database and configuration}
 
-\item{model_name}{Character. Model name to update}
+\item{model_name}{Character. Model name to update (e.g., "run11")}
+
+\item{force}{Logical. If TRUE, forces re-reading even for completed models (default: FALSE)}
 }
 \value{
 List with updated search_state
 }
 \description{
-Enhanced version with concise error reporting and comprehensive error handling
+Reads NONMEM output files and updates database. Includes force flag
+to control re-reading of completed models for efficiency.
 }
 \details{
-Update Model Status from Files with Enhanced Error Detection (FIXED)
+Update Model Status from Files with Enhanced Error Detection and Force Flag
 }

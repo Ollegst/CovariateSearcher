@@ -635,6 +635,7 @@ run_scm_selective_forward <- function(search_state,
 #' @param search_state List containing search state
 #' @param step_number Integer. Step number to check
 #' @param ofv_threshold Numeric. OFV threshold for significance
+#' @param rse_threshold Numeeric. RSE threshold for significance
 #' @return Character vector of significant model names
 #' @export
 get_significant_models_from_step <- function(search_state, step_number, ofv_threshold, rse_threshold = NULL) {

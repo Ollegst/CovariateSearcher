@@ -6,376 +6,324 @@
 # =============================================================================
 
 
-
-
-
-
-
-#' Update Model Status from Files with Enhanced Error Detection (FIXED)
+#' Update Model Status from Files with Enhanced Error Detection and Force Flag
 #'
-#' @title Updates search database with enhanced results from NONMEM output
-#' @description Enhanced version with concise error reporting and comprehensive error handling
-#' @param search_state List. Current search state
-#' @param model_name Character. Model name to update
+#' @title Updates search database with results from NONMEM output files
+#' @description Reads NONMEM output files and updates database. Includes force flag
+#'   to control re-reading of completed models for efficiency.
+#' @param search_state List. Current search state with database and configuration
+#' @param model_name Character. Model name to update (e.g., "run11")
+#' @param force Logical. If TRUE, forces re-reading even for completed models (default: FALSE)
 #' @return List with updated search_state
 #' @export
-update_model_status_from_files <- function(search_state, model_name) {
-  # FIXED: Add comprehensive input validation
+update_model_status_from_files <- function(search_state, model_name, force = FALSE) {
+
+  # ===== SECTION 1: INPUT VALIDATION =====
   if (is.null(search_state) || is.null(model_name) || length(model_name) == 0) {
     cat("❌ Invalid input parameters\n")
     return(search_state)
   }
 
-  # FIXED: Validate search_state structure
+  # Validate search_state structure
   if (is.null(search_state$search_database) || is.null(search_state$models_folder)) {
     cat("❌ Invalid search_state structure\n")
     return(search_state)
   }
 
-  # FIXED: Validate required columns exist with more comprehensive check
+  # Validate required columns exist
   required_cols <- c("model_name", "status", "ofv", "estimation_issue",
                      "covariate_tested", "parent_model", "delta_ofv",
                      "submission_time", "completion_time", "step_number",
-                     "excluded_from_step", "original_model")
+                     "excluded_from_step", "original_model", "rse_max")
+
   missing_cols <- setdiff(required_cols, names(search_state$search_database))
   if (length(missing_cols) > 0) {
-    cat(sprintf("❌ Missing database columns: %s\n", paste(missing_cols, collapse = ", ")))
-    return(search_state)
+    # Add missing columns with appropriate defaults using case_when logic
+    for (col in missing_cols) {
+      search_state$search_database[[col]] <- dplyr::case_when(
+        col %in% c("ofv", "delta_ofv", "rse_max", "step_number") ~ NA_real_,
+        col == "excluded_from_step" ~ FALSE,
+        TRUE ~ NA_character_
+      )
+    }
   }
 
-  model_path <- file.path(search_state$models_folder, model_name)
+  # Find model in database
   db_idx <- which(search_state$search_database$model_name == model_name)
   if (length(db_idx) == 0) {
     cat(sprintf("⚠️  Model %s not found in database\n", model_name))
     return(search_state)
   }
 
-  # Get current status from database (removed, not needed)
+  # ===== SECTION 2: CHECK IF UPDATE NEEDED =====
+  current_status <- search_state$search_database$status[db_idx]
+  current_ofv <- search_state$search_database$ofv[db_idx]
 
-  # Check if LST file exists
-  lst_file <- file.path(model_path, paste0(model_name, ".lst"))
-  lst_exists <- file.exists(lst_file)
-
-  # Simple status determination
-  if (!lst_exists) {
-    # No LST file = still running
-    actual_status <- "in_progress"
-    lst_info <- list(status = "in_progress", error_message = NA, has_issues = FALSE)
-  } else {
-    # LST file exists - read it to determine status
-    lst_info <- tryCatch({
-      if (exists("read_nonmem_lst") && is.function(read_nonmem_lst)) {
-        result <- read_nonmem_lst(model_path)
-
-        # IMPORTANT: Check if "Model run incomplete" means still running
-        if (!is.null(result$error_message) &&
-            grepl("Model run incomplete|not yet completed", result$error_message, ignore.case = TRUE)) {
-          # Model is still running, not failed
-          list(status = "in_progress", error_message = NA, has_issues = FALSE)
-        } else {
-          result
-        }
-      } else {
-        # Fallback: check if LST contains key phrases
-        lst_content <- readLines(lst_file, warn = FALSE)
-
-        # Check for completion markers FIRST
-        if (any(grepl("COMPLETED|SUCCESSFUL", lst_content))) {
-          list(status = "completed", error_message = NA, has_issues = FALSE)
-        } else if (any(grepl("TERMINATED", lst_content)) &&
-                   any(grepl("ERROR", lst_content))) {
-          # Only failed if we have BOTH termination AND error
-          error_line <- lst_content[grep("ERROR", lst_content)[1]]
-          list(status = "failed", error_message = error_line, has_issues = TRUE)
-        } else if (any(grepl("Stop Time:", lst_content))) {
-          # Has stop time but no success message = failed
-          list(status = "failed", error_message = "Run completed without success", has_issues = TRUE)
-        } else {
-          # No completion markers = still running
-          list(status = "in_progress", error_message = NA, has_issues = FALSE)
-        }
-      }
-    }, error = function(e) {
-      list(status = "read_error", error_message = paste("LST read error:", e$message), has_issues = TRUE)
-    })
-
-    # Determine actual status based on LST content
-    if (lst_info$status == "completed") {
-      actual_status <- "completed"
-    } else if (lst_info$status == "failed" &&
-               !grepl("incomplete|not yet completed", lst_info$error_message, ignore.case = TRUE)) {
-      # Only mark as failed if it's truly failed, not just incomplete
-      actual_status <- "failed"
-    } else if (lst_info$status == "in_progress") {
-      actual_status <- "in_progress"
-    } else if (lst_info$has_issues &&
-               !grepl("incomplete|not yet completed", lst_info$error_message, ignore.case = TRUE)) {
-      actual_status <- "failed"
-    } else {
-      # Default to running if uncertain
-      actual_status <- "in_progress"
-    }
+  # Skip re-reading if model is completed with OFV and force=FALSE
+  if (!force &&
+      !is.na(current_status) &&
+      current_status == "completed" &&
+      !is.na(current_ofv)) {
+    # Model already complete with OFV, skip re-reading large files
+    return(search_state)
   }
 
-  # Extract results if completed
-  results <- list(ofv = NA_real_, rse_max = NA_real_, status = actual_status)
-  if (actual_status == "completed") {
-    results <- tryCatch({
-      # Primary path: use extract_model_results
-      base_results <- extract_model_results(search_state, model_name)
+  # ===== SECTION 3: READ FILES AND EXTRACT INFORMATION =====
+  model_path <- file.path(search_state$models_folder, model_name)
 
-      # Extract RSE using get_param2
-      rse_max <- tryCatch({
+  # Helper function to read all files once
+  read_all_model_files <- function() {
+    results <- list(
+      status = "unknown",
+      ofv = NA_real_,
+      rse_max = NA_real_,
+      error_message = NA_character_,
+      completion_time = NA
+    )
+
+    # Check LST file existence
+    lst_file <- file.path(model_path, paste0(model_name, ".lst"))
+
+    if (!file.exists(lst_file)) {
+      # No LST file = still running
+      results$status <- "in_progress"
+      return(results)
+    }
+
+    # Read LST file - SIMPLIFIED: Only check Stop Time
+    lst_info <- tryCatch({
+      lst_content <- readLines(lst_file, warn = FALSE)
+
+      # ONLY check if run has finished (Stop Time is standard NONMEM output)
+      has_stop_time <- any(grepl("Stop Time:", lst_content))
+
+      list(
+        status = if (has_stop_time) "stopped" else "in_progress",
+        lst_content = lst_content  # Keep for potential #TERM extraction
+      )
+    }, error = function(e) {
+      list(status = "read_error", lst_content = NULL)
+    })
+
+    # If still running, return early
+    if (lst_info$status == "in_progress") {
+      results$status <- "in_progress"
+      return(results)
+    }
+
+    # If LST read error, return early
+    if (lst_info$status == "read_error") {
+      results$status <- "failed"
+      results$error_message <- "Cannot read LST file"
+      return(results)
+    }
+
+    # Extract completion time (only if stopped)
+    timestamps <- tryCatch({
+      extract_nonmem_timestamps(model_name, search_state$models_folder)
+    }, error = function(e) {
+      list(stop_time = NA)
+    })
+    results$completion_time <- timestamps$stop_time
+
+    # Extract OFV from EXT file - THIS DETERMINES FINAL STATUS
+    ext_file <- file.path(model_path, paste0(model_name, ".ext"))
+
+    if (!file.exists(ext_file)) {
+      # No EXT file = failed
+      results$status <- "failed"
+      results$error_message <- "No EXT file found"
+      results$ofv <- NA_real_
+    } else {
+      # Use read_nonmem_ext() instead of duplicating logic
+      ext_results <- read_nonmem_ext(model_path)
+
+      if (!ext_results$found) {
+        # EXT file exists but couldn't be read
+        results$status <- "failed"
+        results$error_message <- ext_results$error
+        results$ofv <- NA_real_
+      } else {
+        # Successfully read OFV
+        ofv_value <- ext_results$ofv
+        results$ofv <- ofv_value
+
+        # SIMPLE STATUS DETERMINATION: Valid OFV = success, Invalid OFV = failed
+        is_valid_ofv <- !is.na(ofv_value) && is.finite(ofv_value) && abs(ofv_value) <= 1e10
+
+        results$status <- if (is_valid_ofv) "completed" else "failed"
+
+        # Set error message for failed runs
+        if (!is_valid_ofv) {
+          results$error_message <- dplyr::case_when(
+            is.na(ofv_value) ~ "No OFV found in EXT file",
+            is.infinite(ofv_value) ~ "Infinite OFV",
+            is.nan(ofv_value) ~ "NaN OFV",
+            abs(ofv_value) > 1e10 ~ sprintf("OFV > 10^10: %.2e", ofv_value),
+            TRUE ~ "Invalid OFV"
+          )
+        }
+      }
+    }
+
+    # For failed runs, extract #TERM message for diagnostics
+    if (results$status == "failed" && !is.null(lst_info$lst_content)) {
+      term_idx <- grep("#TERM:", lst_info$lst_content)
+      if (length(term_idx) > 0) {
+        # Get up to 3 lines after #TERM:
+        term_start <- term_idx[1]
+        term_end <- min(term_start + 3, length(lst_info$lst_content))
+        if (term_end > term_start) {
+          term_lines <- lst_info$lst_content[(term_start + 1):term_end]
+          term_lines <- term_lines[nchar(trimws(term_lines)) > 0]
+          if (length(term_lines) > 0) {
+            term_message <- paste(term_lines, collapse = "; ")
+            results$error_message <- paste(results$error_message,
+                                           paste0("[#TERM: ", term_message, "]"),
+                                           sep = " ")
+          }
+        }
+      }
+    }
+
+    # Extract RSE (only for successful runs)
+    if (results$status == "completed") {
+      results$rse_max <- tryCatch({
         params <- get_param2(
           model_number = model_name,
           count_model = 1,
           models_folder = search_state$models_folder
         )
 
-        # Get maximum RSE from the params
         rse_values <- params$RSE[!is.na(params$RSE) & is.finite(params$RSE)]
-        if (length(rse_values) > 0) {
-          max(rse_values)
-        } else {
-          NA_real_
-        }
+        if (length(rse_values) > 0) max(rse_values) else NA_real_
       }, error = function(e) {
-        # RSE extraction failed, keep as NA
         NA_real_
       })
-
-      # Add RSE to results
-      base_results$rse_max <- rse_max
-      base_results
-
-    }, error = function(e) {
-      # If extract_model_results fails, fall back to reading EXT file directly
-      ext_file <- file.path(model_path, paste0(model_name, ".ext"))
-      if (file.exists(ext_file)) {
-        ext_lines <- readLines(ext_file, warn = FALSE)
-        data_lines <- ext_lines[!grepl("^TABLE|^\\s*$", ext_lines)]
-
-        # Extract OFV
-        ofv_value <- NA_real_
-        if (length(data_lines) > 0) {
-          # Find lines with -1000000000 (final estimates)
-          final_lines_idx <- grep("^\\s*-1000000000", data_lines)
-          if (length(final_lines_idx) > 0) {
-            # Get the LAST -1000000000 line itself (for the last estimation method)
-            last_final_idx <- tail(final_lines_idx, 1)
-            ofv_line <- data_lines[last_final_idx]
-            values <- as.numeric(strsplit(trimws(ofv_line), "\\s+")[[1]])
-            ofv_value <- tail(values, 1)  # Last column is OFV
-          } else {
-            # No -1000000000 line found, use last data line
-            last_line <- tail(data_lines, 1)
-            values <- as.numeric(strsplit(trimws(last_line), "\\s+")[[1]])
-            ofv_value <- tail(values, 1)
-          }
-        }
-
-        # Extract RSE
-        rse_max <- tryCatch({
-          params <- get_param2(
-            model_number = model_name,
-            count_model = 1,
-            models_folder = search_state$models_folder
-          )
-          rse_values <- params$RSE[!is.na(params$RSE) & is.finite(params$RSE)]
-          if (length(rse_values) > 0) max(rse_values) else NA_real_
-        }, error = function(e) {
-          NA_real_
-        })
-
-        list(ofv = ofv_value, rse_max = rse_max, status = "completed")
-      } else {
-        list(ofv = NA_real_, rse_max = NA_real_, status = "completed")
-      }
-    })
-  }
-
-  # FIXED: Add comprehensive error handling for timestamp extraction
-  timestamps <- tryCatch({
-    if (exists("extract_nonmem_timestamps") && is.function(extract_nonmem_timestamps)) {
-      extract_nonmem_timestamps(model_name, search_state$models_folder)
-    } else {
-      list(start_time = NA, stop_time = NA)
-    }
-  }, error = function(e) {
-    list(start_time = NA, stop_time = NA)
-  })
-
-  # Update database
-  tryCatch({
-    search_state$search_database$status[db_idx] <- actual_status
-    search_state$search_database$ofv[db_idx] <- results$ofv
-
-    # Add RSE to database if available
-    if (!is.null(results$rse_max) && !is.na(results$rse_max)) {
-      search_state$search_database$rse_max[db_idx] <- results$rse_max
     }
 
-    if (!is.null(lst_info$error_message) && !is.na(lst_info$error_message)) {
-      search_state$search_database$estimation_issue[db_idx] <- lst_info$error_message
+    return(results)
+  }
+
+  # Read all files once
+  file_results <- read_all_model_files()
+
+  # ===== SECTION 4: UPDATE DATABASE =====
+  # ALWAYS update when force=TRUE or when new information is available
+  if (force ||
+      is.na(current_status) ||
+      current_status != file_results$status ||
+      (file_results$status == "completed" && is.na(current_ofv))) {
+
+    # Update all fields
+    search_state$search_database$status[db_idx] <- file_results$status
+    search_state$search_database$ofv[db_idx] <- file_results$ofv
+    search_state$search_database$rse_max[db_idx] <- file_results$rse_max
+    search_state$search_database$estimation_issue[db_idx] <- file_results$error_message
+
+    if (!is.na(file_results$completion_time)) {
+      search_state$search_database$completion_time[db_idx] <- file_results$completion_time
     }
-  }, error = function(e) {
-    cat(sprintf("❌ Error updating database for %s: %s\n", model_name, e$message))
-    return(search_state)
-  })
-
-  # Update timestamps with validation
-  if (!is.na(timestamps$start_time) && !is.null(timestamps$start_time)) {
-    search_state$search_database$submission_time[db_idx] <- timestamps$start_time
   }
 
-  if (!is.na(timestamps$stop_time) && !is.null(timestamps$stop_time)) {
-    search_state$search_database$completion_time[db_idx] <- timestamps$stop_time
-  } else if (actual_status %in% c("completed", "failed")) {
-    search_state$search_database$completion_time[db_idx] <- Sys.time()
-  }
+  # ===== SECTION 5: CALCULATE DELTA OFV =====
+  if (file_results$status == "completed" && !is.na(file_results$ofv)) {
+    parent_model <- search_state$search_database$parent_model[db_idx]
 
-  # FIXED: Safer model information extraction with validation
-  model_row <- search_state$search_database[db_idx, , drop = FALSE]
-  covariate <- if (nrow(model_row) > 0) model_row$covariate_tested[1] else NA
-  parent_model <- if (nrow(model_row) > 0) model_row$parent_model[1] else NA
-
-  # NEW: Extract step information
-  step_number <- if (nrow(model_row) > 0) model_row$step_number[1] else NA
-  step_prefix <- if (!is.na(step_number)) sprintf("[Step %d] ", step_number) else ""
-
-  # FIXED: Robust covariate display logic
-  display_covariate <- if (is.na(covariate) || is.null(covariate) ||
-                           nchar(as.character(covariate)) == 0 ||
-                           as.character(covariate) == "") {
-    "Unknown"
-  } else {
-    as.character(covariate)
-  }
-
-  # Status reporting
-  if (actual_status == "failed") {
-    error_msg <- if (is.null(lst_info$error_message) || is.na(lst_info$error_message)) {
-      "Unknown error"
-    } else {
-      as.character(lst_info$error_message)
-    }
-    cat(sprintf("%s❌ Model %s (%s) FAILED: %s\n", step_prefix, model_name, display_covariate, error_msg))
-
-  } else if (actual_status == "in_progress") {
-    # Show running status
-    cat(sprintf("%s🔄 Model %s (%s) running\n", step_prefix, model_name, display_covariate))
-
-  } else if (actual_status == "completed") {
-    # Only show completed when we truly have results
-    if (!is.na(parent_model) && !is.null(parent_model) &&
-        nchar(as.character(parent_model)) > 0 && as.character(parent_model) != "") {
-
+    if (!is.na(parent_model) && nchar(parent_model) > 0) {
       parent_idx <- which(search_state$search_database$model_name == parent_model)
+
       if (length(parent_idx) > 0) {
         parent_ofv <- search_state$search_database$ofv[parent_idx[1]]
-        parent_status <- search_state$search_database$status[parent_idx[1]]
-        current_ofv <- results$ofv
 
-        if (!is.na(parent_status) && !is.na(actual_status) &&
-            parent_status == "completed" && actual_status == "completed" &&
-            !is.na(parent_ofv) && !is.na(current_ofv) &&
-            is.finite(parent_ofv) && is.finite(current_ofv)) {
-
-          delta_ofv <- parent_ofv - current_ofv
+        if (!is.na(parent_ofv)) {
+          # Calculate delta OFV (parent - child, positive = improvement)
+          delta_ofv <- parent_ofv - file_results$ofv
           search_state$search_database$delta_ofv[db_idx] <- delta_ofv
-
-          cat(sprintf("%s✅ Model %s (%s) completed: OFV %.2f → %.2f (ΔOFV: %+.2f)\n",
-                      step_prefix, model_name, display_covariate, parent_ofv, current_ofv, delta_ofv))
-
-        } else if (parent_status == "failed" && actual_status == "completed") {
-          search_state$search_database$delta_ofv[db_idx] <- 999999
-          if (!is.na(current_ofv) && is.numeric(current_ofv)) {
-            cat(sprintf("%s🎉 Model %s (%s) FIXED failed parent %s! OFV: %.2f\n",
-                        step_prefix, model_name, display_covariate, parent_model, current_ofv))
-          } else {
-            cat(sprintf("%s🎉 Model %s (%s) FIXED failed parent %s!\n",
-                        step_prefix, model_name, display_covariate, parent_model))
-          }
-        } else {
-          search_state$search_database$delta_ofv[db_idx] <- NA_real_
-          if (!is.na(current_ofv) && is.numeric(current_ofv)) {
-            cat(sprintf("%s✅ Model %s (%s) completed: OFV %.2f\n",
-                        step_prefix, model_name, display_covariate, current_ofv))
-          } else {
-            cat(sprintf("%s✅ Model %s (%s) completed\n",
-                        step_prefix, model_name, display_covariate))
-          }
         }
-      } else {
-        # No parent found in database
-        search_state$search_database$delta_ofv[db_idx] <- NA_real_
-        if (!is.na(results$ofv) && is.numeric(results$ofv)) {
-          cat(sprintf("%s✅ Model %s (%s) completed: OFV %.2f\n",
-                      step_prefix, model_name, display_covariate, results$ofv))
-        } else {
-          cat(sprintf("%s✅ Model %s (%s) completed\n",
-                      step_prefix, model_name, display_covariate))
-        }
+      }
+    }
+  }
+
+  # ===== SECTION 6: CONSOLE OUTPUT =====
+  # Get step and covariate info for display
+  step_num <- search_state$search_database$step_number[db_idx]
+  covariate <- search_state$search_database$covariate_tested[db_idx]
+  parent_model <- search_state$search_database$parent_model[db_idx]
+  delta_ofv <- search_state$search_database$delta_ofv[db_idx]
+
+  # Format step display
+  step_display <- if (!is.na(step_num)) sprintf("[Step %d]", step_num) else ""
+
+  # Format covariate display
+  cov_display <- if (!is.na(covariate) && nchar(covariate) > 0) {
+    sprintf(" (%s)", covariate)
+  } else {
+    ""
+  }
+
+  # Status icon using case_when
+  status_icon <- dplyr::case_when(
+    file_results$status == "completed" ~ "✅",
+    file_results$status == "failed" ~ "❌",
+    file_results$status == "in_progress" ~ "⏳",
+    TRUE ~ "⚠️"
+  )
+
+  # Build status message
+  if (file_results$status == "completed" && !is.na(file_results$ofv)) {
+    if (!is.na(parent_model) && !is.na(delta_ofv)) {
+      parent_ofv <- search_state$search_database$ofv[search_state$search_database$model_name == parent_model][1]
+
+      cat(sprintf("%s %s Model %s%s completed: OFV %.2f → %.2f (ΔOFV: %.2f)\n",
+                  step_display, status_icon, model_name, cov_display,
+                  parent_ofv, file_results$ofv, delta_ofv))
+
+      # Add RSE warning if high
+      if (!is.na(file_results$rse_max) && file_results$rse_max > 50) {
+        cat(sprintf("    ⚠️  High RSE detected: %.1f%%\n", file_results$rse_max))
       }
     } else {
-      # Base model or no parent
-      search_state$search_database$delta_ofv[db_idx] <- ifelse(
-        model_name == search_state$base_model, 0.0, NA_real_)
-
-      if (!is.na(results$ofv) && is.numeric(results$ofv)) {
-        cat(sprintf("%s✅ Model %s (%s) completed: OFV %.2f\n",
-                    step_prefix, model_name, display_covariate, results$ofv))
-      } else {
-        cat(sprintf("%s✅ Model %s (%s) completed\n",
-                    step_prefix, model_name, display_covariate))
-      }
+      cat(sprintf("%s %s Model %s%s completed: OFV = %.2f\n",
+                  step_display, status_icon, model_name, cov_display, file_results$ofv))
     }
-  } else {
-    # Any other status
-    cat(sprintf("%s❓ Model %s (%s) status: %s\n",
-                step_prefix, model_name, display_covariate, actual_status))
-  }
-
-  # Set excluded_from_step based on model completion status
-  if (actual_status == "completed") {
-    search_state$search_database$excluded_from_step[db_idx] <- FALSE
-  } else if (actual_status == "failed") {
-    search_state$search_database$excluded_from_step[db_idx] <- TRUE
-  }
-
-  # Handle retry model success - reset original model exclusion
-  has_original_model <- !is.na(model_row$original_model) &&
-    nchar(as.character(model_row$original_model)) > 0
-
-  if (has_original_model && actual_status == "completed") {
-    original_model_name <- as.character(model_row$original_model)
-    original_idx <- which(search_state$search_database$model_name == original_model_name)
-    if (length(original_idx) > 0) {
-      search_state$search_database$excluded_from_step[original_idx] <- FALSE
-      cat(sprintf("%s🔄 Reset exclusion for original model %s (retry succeeded)\n",
-                  step_prefix, original_model_name))
-    }
-  }
-
-  # Fix retry models with missing step_description and phase
-  if (grepl("\\d{3}$", model_name)) {  # This is a retry model
-    current_row <- search_state$search_database[db_idx, ]
-
-    if (is.na(current_row$step_description) || is.na(current_row$phase)) {
-      covariate_name <- current_row$covariate_tested[1]
-
-      if (!is.na(covariate_name) && covariate_name != "") {
-        search_state$search_database$step_description[db_idx] <- sprintf("Retry %s", covariate_name)
-        search_state$search_database$phase[db_idx] <- "retry"
-
-        cat(sprintf("  🔧 Fixed retry model metadata for %s\n", model_name))
-      }
-    }
+  } else if (file_results$status == "failed") {
+    cat(sprintf("%s %s Model %s%s failed: %s\n",
+                step_display, status_icon, model_name, cov_display,
+                file_results$error_message))
+  } else if (file_results$status == "in_progress") {
+    cat(sprintf("%s %s Model %s%s still running...\n",
+                step_display, status_icon, model_name, cov_display))
   }
 
   return(search_state)
 }
 
+#' Force Update Models with Fresh File Read
+#'
+#' @title Force update one or more models with fresh file reads
+#' @description Forces a complete re-read of model files and updates database.
+#'   Useful for correcting database values that may be incorrect.
+#' @param search_state List containing search state
+#' @param model_names Character vector. Model(s) to force update (can be single or multiple)
+#' @return Updated search_state
+#' @export
+force_update_models <- function(search_state, model_names) {
+  n_models <- length(model_names)
+
+  if (n_models == 1) {
+    cat(sprintf("\n🔄 Force updating %s from files...\n", model_names))
+  } else {
+    cat(sprintf("\n🔄 Force updating %d models from files...\n", n_models))
+  }
+
+  for (model_name in model_names) {
+    search_state <- update_model_status_from_files(search_state, model_name, force = TRUE)
+  }
+
+  cat("✅ Force update complete\n")
+  return(search_state)
+}
 
 #' Update All Model Statuses (FIXED)
 #'

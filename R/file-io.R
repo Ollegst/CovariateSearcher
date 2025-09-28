@@ -5,41 +5,6 @@
 # NONMEM file I/O operations
 # =============================================================================
 
-
-#' Extract Model Results
-#'
-#' @title Extract comprehensive model results from output files
-#' @description Extracts OFV, parameters, and other results from NONMEM output
-#' @param search_state List containing search state
-#' @param model_name Character. Model name
-#' @return List with extracted results
-#' @export
-extract_model_results <- function(search_state, model_name) {
-  # Get status and OFV from actual NONMEM files, not database
-  model_path <- file.path(search_state$models_folder, model_name)
-  status <- get_model_status_from_files(model_path)  # ✅ From files
-  ofv <- get_model_ofv_from_files(search_state, model_name)  # ✅ From files
-
-  # Extract timestamps from LST file
-  timestamps <- extract_nonmem_timestamps(model_name, search_state$models_folder)
-
-  results <- list(
-    model_name = model_name,
-    status = status,
-    ofv = ofv,
-    parameters = NULL,
-    rse_values = NULL,
-    extraction_time = timestamps$stop_time %||% Sys.time()  # Use actual completion time
-  )
-
-  # TODO: Add parameter and RSE extraction when .ext parsing is implemented
-  # For now, return basic results
-
-  return(results)
-}
-
-
-
 #' Read Model File
 #'
 #' @title Read NONMEM control file with proper path handling
@@ -86,8 +51,9 @@ write_model_file <- function(search_state, lines) {
 
 #' Read NONMEM EXT File
 #'
-#' Reads NONMEM .ext file to extract parameter estimates and OFV
-#'
+#' @title Extract OFV and parameters from NONMEM .ext file
+#' @description Reads NONMEM .ext file to extract parameter estimates and OFV.
+#'   Handles multiple estimation methods by using the last -1000000000 line.
 #' @param model_path Character. Path to model directory or ext file
 #' @return List with OFV, parameters, and metadata
 #' @export
@@ -127,22 +93,58 @@ read_nonmem_ext <- function(model_path) {
   tryCatch({
     ext_lines <- readLines(ext_file, warn = FALSE)
 
-    # Find the final estimates (last non-comment line)
-    data_lines <- ext_lines[!grepl("^\\s*;|^\\s*TABLE|^\\s*$", ext_lines)]
+    # Remove TABLE headers and empty lines
+    data_lines <- ext_lines[!grepl("^TABLE|^\\s*$", ext_lines)]
 
     if (length(data_lines) == 0) {
-      return(list(found = FALSE, error = "No data lines in EXT file"))
+      return(list(
+        found = FALSE,
+        error = "No data lines in EXT file",
+        ofv = NA_real_,
+        parameters = NULL
+      ))
     }
 
-    # Get the last line (final estimates)
-    final_line <- data_lines[length(data_lines)]
-    values <- as.numeric(strsplit(trimws(final_line), "\\s+")[[1]])
+    # Find lines with -1000000000 (final estimates)
+    # These lines contain the final parameter estimates and OFV
+    final_lines_idx <- grep("^\\s*-1000000000", data_lines)
 
-    # First column is usually iteration, second is OFV
-    ofv <- if (length(values) >= 2) values[2] else NA_real_
+    if (length(final_lines_idx) > 0) {
+      final_line <- data_lines[tail(final_lines_idx, 1)]
 
-    # Extract parameter estimates (remaining columns)
-    parameters <- if (length(values) > 2) values[3:length(values)] else numeric(0)
+      # Parse the line into numeric values
+      values <- as.numeric(strsplit(trimws(final_line), "\\s+")[[1]])
+
+      # The last value is typically OFV
+      ofv <- tail(values, 1)
+
+      # Extract parameter estimates (excluding iteration number and OFV)
+      # First value is iteration (-1000000000), last is OFV
+      # Parameters are in between
+      if (length(values) > 2) {
+        parameters <- values[2:(length(values)-1)]
+      } else {
+        parameters <- numeric(0)
+      }
+
+    } else {
+      # Fallback: No -1000000000 line found, try using last data line
+      # This might happen with incomplete or non-standard files
+      warning("No -1000000000 line found in EXT file, using last data line")
+
+      last_line <- tail(data_lines, 1)
+      values <- as.numeric(strsplit(trimws(last_line), "\\s+")[[1]])
+
+      # Assume last value is OFV
+      ofv <- tail(values, 1)
+
+      # Extract parameters
+      if (length(values) > 2) {
+        parameters <- values[2:(length(values)-1)]
+      } else {
+        parameters <- numeric(0)
+      }
+    }
 
     return(list(
       found = TRUE,
@@ -156,7 +158,8 @@ read_nonmem_ext <- function(model_path) {
     return(list(
       found = FALSE,
       error = paste("Error reading EXT file:", e$message),
-      ofv = NA_real_
+      ofv = NA_real_,
+      parameters = NULL
     ))
   })
 }

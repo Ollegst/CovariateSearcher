@@ -4,7 +4,12 @@
 \alias{get_significant_models_from_step}
 \title{Extract models that showed significant improvement in a specific step}
 \usage{
-get_significant_models_from_step(search_state, step_number, ofv_threshold)
+get_significant_models_from_step(
+  search_state,
+  step_number,
+  ofv_threshold,
+  rse_threshold = NULL
+)
 }
 \arguments{
 \item{search_state}{List containing search state}
@@ -12,6 +17,8 @@ get_significant_models_from_step(search_state, step_number, ofv_threshold)
 \item{step_number}{Integer. Step number to check}
 
 \item{ofv_threshold}{Numeric. OFV threshold for significance}
+
+\item{rse_threshold}{Numeeric. RSE threshold for significance}
 }
 \value{
 Character vector of significant model names
