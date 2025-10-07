@@ -117,7 +117,7 @@ create_scm_results_table <- function(search_state) {
 
     # Generate appropriate comment
     if (!ofv_good && !rse_good) {
-      comment <- sprintf("Poor OFV (%.2f ≤ %.2f) and high RSE (%.1f%% > %d%%)",
+      comment <- sprintf("OFV (%.2f ≤ %.2f) and high RSE (%.1f%% > %d%%)",
                          delta_ofv, threshold_ofv, rse_max, threshold_rse)
       return(list(selected = "NO", comment = comment))
     } else if (!ofv_good) {
