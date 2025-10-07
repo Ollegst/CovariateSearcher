@@ -365,28 +365,21 @@ print_scm_results_table <- function(search_state, show_rse = TRUE, truncate_cova
 
   # Find final selected model (last BEST from forward selection)
   forward_best <- results[results$Selected == "BEST" & grepl("^Forward", results$Phase_Step), ]
-  backward_kept <- results[results$Selected == "KEPT" & grepl("^Backward", results$Phase_Step), ]
+  backward_removed <- results[results$Selected == "REMOVED" & grepl("^Backward", results$Phase_Step), ]
 
   if (nrow(forward_best) > 0) {
     # Get the last BEST model from forward selection
     final_forward <- forward_best[nrow(forward_best), ]
 
-    # Check if any backward elimination happened and covariates were kept
-    if (nrow(backward_kept) > 0) {
+    # Check if backward elimination happened and covariates were removed
+    if (nrow(backward_removed) > 0) {
+      cat("Forward selection completed, backward elimination removed some covariates.\n")
+      # The final model is the one after backward removal
+      final_model <- backward_removed[nrow(backward_removed), ]
+    } else if (nrow(results[grepl("^Backward", results$Phase_Step), ]) > 0) {
+      # Backward elimination happened but covariates were kept
       cat("Forward selection completed, backward elimination tested but covariates were kept.\n")
       final_model <- final_forward
-    } else if (nrow(results[grepl("^Backward", results$Phase_Step), ]) > 0) {
-      # Backward elimination happened and some covariates were removed
-      backward_models <- results[grepl("^Backward", results$Phase_Step), ]
-      removed_models <- backward_models[backward_models$Selected == "REMOVED", ]
-
-      if (nrow(removed_models) > 0) {
-        cat("Forward selection completed, backward elimination removed some covariates.\n")
-        # The final model after backward elimination would be the parent with covariates removed
-        final_model <- removed_models[nrow(removed_models), ]
-      } else {
-        final_model <- final_forward
-      }
     } else {
       final_model <- final_forward
     }
@@ -420,16 +413,34 @@ print_scm_results_table <- function(search_state, show_rse = TRUE, truncate_cova
 
     for (step in unique_steps) {
       step_data <- results[results$Phase_Step == step, ]
-      best_in_step <- step_data[step_data$Selected == "BEST", ]
 
-      if (nrow(best_in_step) > 0) {
-        cat(sprintf("  %s: %s selected (ΔOFV=%.2f, RSE=%.1f%%)\n",
-                    step, best_in_step$Model[1],
-                    best_in_step$Delta_OFV[1], best_in_step$RSE_Max[1]))
+      # For backward elimination, check for REMOVED (successful removal)
+      if (grepl("^Backward", step)) {
+        removed_in_step <- step_data[step_data$Selected == "REMOVED", ]
+        kept_in_step <- step_data[step_data$Selected == "KEPT", ]
+
+        if (nrow(removed_in_step) > 0) {
+          cat(sprintf("  %s: Covariate removed - %s (ΔOFV=%.2f, RSE=%.1f%%)\n",
+                      step, removed_in_step$Model[1],
+                      abs(removed_in_step$Delta_OFV[1]), removed_in_step$RSE_Max[1]))
+        } else if (nrow(kept_in_step) > 0) {
+          cat(sprintf("  %s: Covariate kept - removal would worsen model\n", step))
+        } else {
+          cat(sprintf("  %s: %d tested, none removed\n", step, nrow(step_data)))
+        }
       } else {
-        meets_criteria <- sum(step_data$Selected %in% c("YES", "BEST"))
-        cat(sprintf("  %s: No model selected (%d tested, %d met criteria)\n",
-                    step, nrow(step_data), meets_criteria))
+        # For forward selection, check for BEST
+        best_in_step <- step_data[step_data$Selected == "BEST", ]
+
+        if (nrow(best_in_step) > 0) {
+          cat(sprintf("  %s: %s selected (ΔOFV=%.2f, RSE=%.1f%%)\n",
+                      step, best_in_step$Model[1],
+                      best_in_step$Delta_OFV[1], best_in_step$RSE_Max[1]))
+        } else {
+          meets_criteria <- sum(step_data$Selected %in% c("YES", "BEST"))
+          cat(sprintf("  %s: No model selected (%d tested, %d met criteria)\n",
+                      step, nrow(step_data), meets_criteria))
+        }
       }
     }
 
