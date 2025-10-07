@@ -19,7 +19,7 @@ create_scm_results_table <- function(search_state) {
   cat(sprintf("Using thresholds - Forward: %.2f, Backward: %.2f, RSE: %d%%\n",
               forward_threshold, backward_threshold, rse_threshold))
 
-  # Initialize results data frame with new columns
+  # Initialize results data frame
   results <- data.frame(
     Phase_Step = character(),
     Model = character(),
@@ -211,18 +211,26 @@ create_scm_results_table <- function(search_state) {
     }
   }
 
-  # Add base model if present and not already added
-  base_models <- db[db$action == "base_model", ]
-  if (nrow(base_models) > 0 && !any(results$Model %in% base_models$model_name)) {
+  # Handle base model separately (don't process in the step loop)
+  # Base models should not go through the step loop above
+  base_models <- db[db$action == "base_model" | is.na(db$step_number), ]
+  if (nrow(base_models) > 0) {
     for (i in 1:nrow(base_models)) {
       row <- base_models[i, ]
+
+      # Skip if already added
+      if (row$model_name %in% results$Model) next
+
+      # Get covariates display
+      covariates_str <- get_model_covariates_display(row$model_name)
+
       results <- rbind(results, data.frame(
         Phase_Step = "Base",
         Model = row$model_name,
         Parent_Model = "-",
         Description = "Base Model",
         Status = "Successful",
-        Covariates_in_Model = "Base",
+        Covariates_in_Model = covariates_str,
         OFV = row$ofv %||% NA,
         Delta_OFV = NA,
         RSE_Max = row$rse_max %||% NA,
@@ -233,12 +241,27 @@ create_scm_results_table <- function(search_state) {
     }
   }
 
-  # Sort by model number
-  model_numbers <- as.numeric(gsub("^run", "", results$Model))
-  results <- results[order(model_numbers), ]
+  # Sort by Phase_Step first, then by model number
+  if (nrow(results) > 0) {
+    # Extract model numbers for sorting
+    model_numbers <- as.numeric(gsub("^run", "", results$Model))
+
+    # Create sort order for Phase_Step: Base < Forward < Backward
+    phase_order <- ifelse(results$Phase_Step == "Base", 0,
+                          ifelse(grepl("^Forward", results$Phase_Step), 1, 2))
+
+    # Extract step numbers for proper ordering within Forward and Backward
+    step_numbers <- as.numeric(gsub(".*Step", "", results$Phase_Step))
+    step_numbers[is.na(step_numbers)] <- 0  # For Base
+
+    # Sort by: phase_order, then step_numbers, then model_numbers
+    results <- results[order(phase_order, step_numbers, model_numbers), ]
+  }
 
   return(results)
 }
+
+
 
 #' Print Enhanced SCM Results Table
 #'
@@ -263,12 +286,12 @@ print_scm_results_table <- function(search_state, show_rse = TRUE, truncate_cova
     if (i == 1) {
       # Print header based on whether RSE is shown
       if (show_rse) {
-        cat(sprintf("%-15s %-6s %-12s %-30s %-10s %-35s %8s %10s %6s %8s %s\n",
+        cat(sprintf("%-15s %-9s %-12s %-30s %-10s %-35s %8s %10s %6s %8s %s\n",
                     "Phase_Step", "Model", "Parent_Model", "Description", "Status",
                     "Covariates_in_Model", "OFV", "Delta_OFV", "RSE%", "Selected", "Comment"))
         cat(paste(rep("-", 180), collapse = ""), "\n")
       } else {
-        cat(sprintf("%-15s %-6s %-12s %-30s %-10s %-35s %8s %10s %8s %s\n",
+        cat(sprintf("%-15s %-9s %-12s %-30s %-10s %-35s %8s %10s %8s %s\n",
                     "Phase_Step", "Model", "Parent_Model", "Description", "Status",
                     "Covariates_in_Model", "OFV", "Delta_OFV", "Selected", "Comment"))
         cat(paste(rep("-", 165), collapse = ""), "\n")
@@ -288,9 +311,29 @@ print_scm_results_table <- function(search_state, show_rse = TRUE, truncate_cova
       "-"
     }
 
+    # Format OFV
+    ofv_display <- if (!is.na(results$OFV[i])) {
+      sprintf("%.2f", results$OFV[i])
+    } else {
+      "-"
+    }
+
+    # Format Delta OFV
+    delta_ofv_display <- if (!is.na(results$Delta_OFV[i])) {
+      sprintf("%.2f", results$Delta_OFV[i])
+    } else {
+      "-"
+    }
+
+    # Truncate comment if needed
+    comment_display <- results$Comment[i]
+    if (nchar(comment_display) > 50) {
+      comment_display <- paste0(substr(comment_display, 1, 47), "...")
+    }
+
     # Print row
     if (show_rse) {
-      cat(sprintf("%-15s %-6s %-12s %-30s %-10s %-35s %8.2f %10s %6s %8s %s\n",
+      cat(sprintf("%-15s %-9s %-12s %-30s %-10s %-35s %8.2f %10s %6s %8s %s\n",
                   results$Phase_Step[i],
                   results$Model[i],
                   results$Parent_Model[i],
@@ -298,12 +341,12 @@ print_scm_results_table <- function(search_state, show_rse = TRUE, truncate_cova
                   results$Status[i],
                   cov_display,
                   if (!is.na(results$OFV[i])) results$OFV[i] else NA,
-                  if (!is.na(results$Delta_OFV[i])) sprintf("%.2f", results$Delta_OFV[i]) else "-",
+                  delta_ofv_display,
                   rse_display,
                   results$Selected[i],
-                  results$Comment[i]))
+                  comment_display))
     } else {
-      cat(sprintf("%-15s %-6s %-12s %-30s %-10s %-35s %8.2f %10s %8s %s\n",
+      cat(sprintf("%-15s %-9s %-12s %-30s %-10s %-35s %8.2f %10s %8s %s\n",
                   results$Phase_Step[i],
                   results$Model[i],
                   results$Parent_Model[i],
@@ -311,94 +354,94 @@ print_scm_results_table <- function(search_state, show_rse = TRUE, truncate_cova
                   results$Status[i],
                   cov_display,
                   if (!is.na(results$OFV[i])) results$OFV[i] else NA,
-                  if (!is.na(results$Delta_OFV[i])) sprintf("%.2f", results$Delta_OFV[i]) else "-",
+                  delta_ofv_display,
                   results$Selected[i],
-                  results$Comment[i]))
+                  comment_display))
     }
   }
 
   # Summary
   cat("\n================== SUMMARY ==================\n")
 
-  # Find final selected model (last BEST that isn't backward elimination)
-  forward_best <- results[results$Selected == "BEST" & !grepl("Backward", results$Phase_Step), ]
+  # Find final selected model (last BEST from forward selection)
+  forward_best <- results[results$Selected == "BEST" & grepl("^Forward", results$Phase_Step), ]
+  backward_kept <- results[results$Selected == "KEPT" & grepl("^Backward", results$Phase_Step), ]
 
   if (nrow(forward_best) > 0) {
-    final_model <- forward_best[nrow(forward_best), ]
+    # Get the last BEST model from forward selection
+    final_forward <- forward_best[nrow(forward_best), ]
+
+    # Check if any backward elimination happened and covariates were kept
+    if (nrow(backward_kept) > 0) {
+      cat("Forward selection completed, backward elimination tested but covariates were kept.\n")
+      final_model <- final_forward
+    } else if (nrow(results[grepl("^Backward", results$Phase_Step), ]) > 0) {
+      # Backward elimination happened and some covariates were removed
+      backward_models <- results[grepl("^Backward", results$Phase_Step), ]
+      removed_models <- backward_models[backward_models$Selected == "REMOVED", ]
+
+      if (nrow(removed_models) > 0) {
+        cat("Forward selection completed, backward elimination removed some covariates.\n")
+        # The final model after backward elimination would be the parent with covariates removed
+        final_model <- removed_models[nrow(removed_models), ]
+      } else {
+        final_model <- final_forward
+      }
+    } else {
+      final_model <- final_forward
+    }
+
     base_model <- results[results$Phase_Step == "Base", ]
 
-    cat(sprintf("Final Model: %s\n", final_model$Model))
+    cat(sprintf("\nFinal Model: %s\n", final_model$Model))
     cat(sprintf("Final Covariates: %s\n", final_model$Covariates_in_Model))
     cat(sprintf("Final OFV: %.2f\n", final_model$OFV))
 
-    if (nrow(base_model) > 0 && !is.na(base_model$OFV[1])) {
+    if (nrow(base_model) > 0 && !is.na(base_model$OFV[1]) && !is.na(final_model$OFV)) {
       total_improvement <- final_model$OFV - base_model$OFV[1]
-      cat(sprintf("Total OFV Improvement: %.2f\n", total_improvement))
+      cat(sprintf("Total OFV Improvement from Base: %.2f\n", total_improvement))
     }
 
     # Count models by selection status
     cat(sprintf("\nModel Statistics:\n"))
     cat(sprintf("  Total models tested: %d\n", nrow(results) - sum(results$Phase_Step == "Base")))
-    cat(sprintf("  Models meeting criteria: %d\n", sum(results$Selected == "YES", na.rm = TRUE)))
-    cat(sprintf("  Models with high RSE: %d\n", sum(grepl("RSE too high", results$Comment))))
-    cat(sprintf("  Models with poor OFV: %d\n", sum(grepl("Insufficient OFV", results$Comment))))
+    cat(sprintf("  Models meeting criteria (YES/BEST): %d\n",
+                sum(results$Selected %in% c("YES", "BEST"), na.rm = TRUE)))
+    cat(sprintf("  Models failed: %d\n", sum(results$Status == "Failed")))
+    cat(sprintf("  Models with high RSE: %d\n", sum(grepl("RSE", results$Comment, ignore.case = TRUE) &
+                                                      grepl("high|>", results$Comment))))
+    cat(sprintf("  Models with insufficient OFV: %d\n",
+                sum(grepl("Insufficient OFV|OFV \\(.*≤", results$Comment))))
+
+    # Step-by-step summary
+    cat("\nStep-by-Step Summary:\n")
+    unique_steps <- unique(results$Phase_Step)
+    unique_steps <- unique_steps[unique_steps != "Base"]
+
+    for (step in unique_steps) {
+      step_data <- results[results$Phase_Step == step, ]
+      best_in_step <- step_data[step_data$Selected == "BEST", ]
+
+      if (nrow(best_in_step) > 0) {
+        cat(sprintf("  %s: %s selected (ΔOFV=%.2f, RSE=%.1f%%)\n",
+                    step, best_in_step$Model[1],
+                    best_in_step$Delta_OFV[1], best_in_step$RSE_Max[1]))
+      } else {
+        meets_criteria <- sum(step_data$Selected %in% c("YES", "BEST"))
+        cat(sprintf("  %s: No model selected (%d tested, %d met criteria)\n",
+                    step, nrow(step_data), meets_criteria))
+      }
+    }
 
   } else {
-    cat("No significant improvements found - base model retained\n")
+    cat("No significant improvements found during forward selection.\n")
+    base_model <- results[results$Phase_Step == "Base", ]
+    if (nrow(base_model) > 0) {
+      cat(sprintf("Base model retained: %s (OFV=%.2f)\n",
+                  base_model$Model[1], base_model$OFV[1]))
+    }
   }
 
   return(invisible(results))
 }
 
-# Add a helper function for generating a compact summary
-#' Generate Compact SCM Summary
-#'
-#' @title Create a brief summary of SCM results focusing on key findings
-#' @param search_state List containing search state
-#' @return Character vector with summary lines
-#' @export
-generate_scm_summary <- function(search_state) {
-  results <- create_scm_results_table(search_state)
-
-  summary_lines <- character()
-
-  # Get key models
-  base_model <- results[results$Phase_Step == "Base", ]
-  best_models <- results[results$Selected == "BEST", ]
-
-  # Basic stats
-  n_forward <- sum(grepl("Forward", results$Phase_Step))
-  n_backward <- sum(grepl("Backward", results$Phase_Step))
-  n_high_rse <- sum(grepl("RSE too high", results$Comment))
-  n_poor_ofv <- sum(grepl("Poor OFV|Insufficient OFV", results$Comment))
-
-  summary_lines <- c(
-    "===== SCM ANALYSIS SUMMARY =====",
-    sprintf("Base Model: %s (OFV: %.2f)", base_model$Model[1], base_model$OFV[1]),
-    sprintf("Models Tested: %d forward, %d backward", n_forward, n_backward),
-    sprintf("Failed Criteria: %d high RSE, %d poor OFV", n_high_rse, n_poor_ofv),
-    ""
-  )
-
-  if (nrow(best_models) > 0) {
-    for (i in 1:nrow(best_models)) {
-      summary_lines <- c(summary_lines,
-                         sprintf("Step %d Winner: %s (ΔOFV=%.2f, RSE=%.1f%%)",
-                                 i, best_models$Model[i],
-                                 best_models$Delta_OFV[i],
-                                 ifelse(is.na(best_models$RSE_Max[i]), 0, best_models$RSE_Max[i])))
-    }
-
-    final_model <- best_models[nrow(best_models), ]
-    summary_lines <- c(summary_lines,
-                       "",
-                       sprintf("FINAL MODEL: %s", final_model$Model),
-                       sprintf("COVARIATES: %s", final_model$Covariates_in_Model),
-                       sprintf("IMPROVEMENT: %.2f points", final_model$OFV - base_model$OFV[1]))
-  } else {
-    summary_lines <- c(summary_lines,
-                       "RESULT: No significant improvements - base model retained")
-  }
-
-  return(summary_lines)
-}
