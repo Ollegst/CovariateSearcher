@@ -257,7 +257,10 @@ create_scm_results_table <- function(search_state) {
     # Sort by: phase_order, then step_numbers, then model_numbers
     results <- results[order(phase_order, step_numbers, model_numbers), ]
   }
-
+  if (nrow(results) > 0) {
+    results$OFV <- round(results$OFV, 2)
+    results$Delta_OFV <- round(results$Delta_OFV, 2)
+  }
   return(results)
 }
 

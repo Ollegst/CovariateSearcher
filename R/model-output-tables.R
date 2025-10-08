@@ -11,6 +11,7 @@
 #' @param x A flextable object
 #' @return A formatted flextable object with PPS theme applied
 #' @keywords internal
+#' @export
 theme_pps_table <- function(x) {
   # Set global defaults
   flextable::set_flextable_defaults(big.mark = "")
