@@ -188,6 +188,7 @@ run_scm_selective_forward <- function(search_state,
     last_step <- 0
   }
   current_step <- last_step + 1
+  forward_iteration <- 1
   current_best_model <- base_model_id
   forward_selection_active <- TRUE
   step_results <- list()
@@ -203,10 +204,10 @@ run_scm_selective_forward <- function(search_state,
     significant_models <- NULL
 
     # Determine covariates to test for this step
-    if (current_step == 1) {
-      # Step 1: Test ALL available covariates
+    if (forward_iteration == 1) {
+      # First iteration: Test ALL available covariates
       current_best_model <- base_model_id
-      cat(sprintf("Step 1: Starting from base model %s\n", current_best_model))
+      cat(sprintf("First selective forward iteration: Starting from base model %s\n", current_best_model))
       cat("Strategy: Test ALL available covariates\n")
 
       covariates_to_test <- get_remaining_covariates(
@@ -218,9 +219,9 @@ run_scm_selective_forward <- function(search_state,
       step_base_model <- current_best_model
 
     } else {
-      # Step 2+: Test only covariates from significant models in previous step
-      cat(sprintf("Step %d: Selective testing from significant Step %d models\n",
-                  current_step, current_step - 1))
+      # Subsequent iterations: Test only covariates from significant models in previous step
+      cat(sprintf("Iteration %d: Selective testing from significant Step %d models\n",
+                  forward_iteration, current_step - 1))
 
       # This prevents infinite loops and duplicate models
       previous_step_results <- step_results[[sprintf("step_%d", current_step - 1)]]
