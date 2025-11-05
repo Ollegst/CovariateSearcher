@@ -257,8 +257,25 @@ update_model_status_from_files <- function(search_state, model_name, force = FAL
         parent_ofv <- search_state$search_database$ofv[parent_idx[1]]
 
         if (!is.na(parent_ofv)) {
-          # Calculate delta OFV (parent - child, positive = improvement)
-          delta_ofv <- parent_ofv - file_results$ofv
+          # Get the action type to determine delta OFV sign convention
+          action_type <- search_state$search_database$action[db_idx]
+
+          # Calculate delta OFV with correct sign convention:
+          # - For FORWARD (add_covariate): delta = parent - child
+          #   Positive delta = child OFV is lower (improvement)
+          # - For BACKWARD (remove_covariate): delta = child - parent
+          #   Positive delta = child OFV is higher (removal worsened model = keep covariate)
+          if (!is.na(action_type) &&
+              (action_type == "remove_single_covariate" ||
+               action_type == "remove_covariate" ||
+               grepl("remove", action_type, ignore.case = TRUE))) {
+            # BACKWARD: child - parent (positive = OFV increased = bad removal)
+            delta_ofv <- file_results$ofv - parent_ofv
+          } else {
+            # FORWARD: parent - child (positive = OFV decreased = good addition)
+            delta_ofv <- parent_ofv - file_results$ofv
+          }
+
           search_state$search_database$delta_ofv[db_idx] <- delta_ofv
         }
       }

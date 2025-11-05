@@ -200,6 +200,9 @@ run_automated_scm_testing <- function(search_state,
     cat(sprintf("\n📊 PHASE %s: FORWARD SELECTION\n", phase_num))
     cat(paste(rep("-", 50), collapse=""), "\n")
 
+    # Track model before forward selection to detect changes
+    model_before_forward <- current_model
+
     forward_error <- NULL
 
     forward_results <- tryCatch({
@@ -283,63 +286,24 @@ run_automated_scm_testing <- function(search_state,
     cat(sprintf("Best forward model: %s\n", current_model))
   }
 
-  # ===================================================================
-  # PHASE: INITIAL BACKWARD ELIMINATION (if starting with backward)
-  # ===================================================================
-
-  if (run_initial_backward) {
-    cat("\n📉 INITIAL BACKWARD ELIMINATION PHASE\n")
-    cat(paste(rep("-", 50), collapse=""), "\n")
-
-    cat(sprintf("Starting backward elimination from: %s\n", current_model))
-     backward_ofv_threshold_display <- pvalue_to_threshold(backward_p_value, df = 1)
-    cat(sprintf("Using backward OFV threshold: %.2f\n", backward_ofv_threshold_display))
-
-    initial_backward_error <- NULL
-
-    initial_backward_results <- tryCatch({
-      run_backward_elimination(
-        search_state = search_state,
-        starting_model = current_model,
-        backward_p_value = backward_p_value,
-        auto_submit = auto_submit,
-        auto_retry = auto_retry
-      )
-    }, error = function(e) {
-      initial_backward_error <<- e$message
-      cat(sprintf("❌ Initial backward elimination failed: %s\n", e$message))
-      NULL
-    })
-
-    if (!is.null(initial_backward_results)) {
-      search_state <- initial_backward_results$search_state
-
-      # Update current model from backward elimination results
-      current_model <- initial_backward_results$final_model %||%
-        initial_backward_results$best_model %||%
-        current_model
-
-      cat(sprintf("✅ Initial backward elimination completed\n"))
-      cat(sprintf("🎯 Model after backward elimination: %s\n", current_model))
-
-      if (save_checkpoints) {
-        checkpoint_file <- paste0(checkpoint_prefix, "_initial_backward_complete.rds")
-        save_search_state(search_state, checkpoint_file)
-        checkpoint_files <- c(checkpoint_files, checkpoint_file)
-      }
-    } else {
-      cat("❌ Initial backward elimination failed - continuing with current model\n")
-    }
-  }
 
   # ===================================================================
   # PHASE: FINAL BACKWARD ELIMINATION (for full SCM)
   # ===================================================================
 
   if (run_final_backward) {
-    phase_num <- if (run_initial_backward) "FINAL" else ""
-    cat(sprintf("\n📉 %s BACKWARD ELIMINATION PHASE\n", phase_num))
-    cat(paste(rep("-", 50), collapse=""), "\n")
+    # Check if model changed during forward selection (only if forward was run)
+    if (run_forward && exists("model_before_forward") &&
+        !is.null(model_before_forward) && model_before_forward == current_model) {
+      cat("\n*** SKIPPING FINAL BACKWARD ELIMINATION\n")
+      cat(paste(rep("-", 50), collapse=""), "\n")
+      cat(sprintf("Model unchanged after forward selection (%s)\n", current_model))
+      cat("Final backward elimination would be identical to initial backward - skipping\n")
+    } else {
+      # Proceed with final backward elimination
+      phase_num <- if (run_initial_backward) "FINAL" else ""
+      cat(sprintf("\nðŸ“‰ %s BACKWARD ELIMINATION PHASE\n", phase_num))
+      cat(paste(rep("-", 50), collapse=""), "\n")
 
     cat(sprintf("Starting final backward elimination from: %s\n", current_model))
     backward_ofv_threshold_display <- pvalue_to_threshold(backward_p_value, df = 1)
@@ -378,6 +342,7 @@ run_automated_scm_testing <- function(search_state,
       }
     } else {
       cat("❌ Final backward elimination failed - using model from forward selection\n")
+    }
     }
   }
 
