@@ -455,7 +455,7 @@ run_scm_selective_forward <- function(search_state,
 
     # Update for next iteration
     current_step <- current_step + 1
-
+    forward_iteration <- forward_iteration + 1
     # Save progress after each step
     save_search_state(search_state, sprintf("scm_selective_step_%d.rds", current_step - 1))
   }
