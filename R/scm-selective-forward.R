@@ -90,12 +90,16 @@ get_significant_models_from_step <- function(search_state, step_number, p_value,
 #' @export
 get_covariates_from_models <- function(search_state, model_names) {
 
+  cat(paste("  Models requested:", paste(model_names, collapse=", "), "\n"))
+
   if (length(model_names) == 0) {
+    cat("  ❌ No models provided\n")
     return(character(0))
   }
 
   # Validate search_state and database
   if (is.null(search_state$search_database) || nrow(search_state$search_database) == 0) {
+    cat("  ❌ Database is null or empty\n")
     return(character(0))
   }
 
@@ -109,38 +113,32 @@ get_covariates_from_models <- function(search_state, model_names) {
   model_rows <- search_state$search_database[
     search_state$search_database$model_name %in% model_names, ]
 
+  cat(paste("  Found", nrow(model_rows), "rows in database\n"))
+
   if (nrow(model_rows) == 0) {
+    cat("  ❌ No rows found for these models\n")
     return(character(0))
   }
 
-  # Extract covariate names and convert back to tags
-  covariate_names <- unique(model_rows$covariate_tested)
-  covariate_names <- covariate_names[!is.na(covariate_names) & covariate_names != ""]
+  # Extract covariate tags (covariate_tested column already contains tags like "beta_BALB_CL")
+  covariate_tags <- unique(model_rows$covariate_tested)
+  cat(paste("  Extracted tags:", paste(covariate_tags, collapse=", "), "\n"))
 
-  if (length(covariate_names) == 0) {
-    return(character(0))
+  covariate_tags <- covariate_tags[!is.na(covariate_tags) & covariate_tags != ""]
+  cat(paste("  After filtering NA/empty:", paste(covariate_tags, collapse=", "), "\n"))
+
+  # Filter to only valid tags that exist in search_state$tags
+  if (!is.null(search_state$tags) && length(search_state$tags) > 0) {
+    valid_tags <- names(search_state$tags)[grepl("^beta_", names(search_state$tags))]
+    cat(paste("  Valid tags count:", length(valid_tags), "\n"))
+    cat(paste("  First 5 valid tags:", paste(head(valid_tags, 5), collapse=", "), "\n"))
+
+    covariate_tags <- intersect(covariate_tags, valid_tags)
+    cat(paste("  After intersect:", paste(covariate_tags, collapse=", "), "\n"))
   }
 
-  # Validate tags exist
-  if (is.null(search_state$tags) || length(search_state$tags) == 0) {
-    warning("No tags found in search_state")
-    return(character(0))
-  }
-
-  # Convert covariate names back to tags
-  covariate_tags <- character(0)
-  for (cov_name in covariate_names) {
-    # Safe comparison with validation
-    matching_tags <- names(search_state$tags)[sapply(search_state$tags, function(x) {
-      identical(as.character(x), as.character(cov_name))
-    })]
-
-    if (length(matching_tags) > 0) {
-      covariate_tags <- c(covariate_tags, matching_tags[1])
-    }
-  }
-
-  return(unique(covariate_tags))
+  cat(paste("  ✅ Returning:", length(covariate_tags), "tags\n"))
+  return(covariate_tags)
 }
 
 
