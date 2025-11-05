@@ -296,11 +296,6 @@ get_model_covariates <- function(search_state, model_name) {
 #' @export
 get_model_covariates_from_db <- function(search_state, model_name) {
 
-  # Handle base model
-  if (model_name == search_state$base_model) {
-    return(character(0))
-  }
-
   tryCatch({
     # Read BBR model to get tags
     model_path <- file.path(search_state$models_folder, model_name)

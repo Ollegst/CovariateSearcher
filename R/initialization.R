@@ -218,6 +218,7 @@ initialize_search_config <- function(search_state) {
   cat(sprintf("  Forward p-value: %.3f\n", search_state$search_config$forward_p_value))
   cat(sprintf("  Backward p-value: %.3f\n", search_state$search_config$backward_p_value))
   cat(sprintf("  RSE threshold: %d%%\n", search_state$search_config$max_rse_threshold))
+  return(search_state)
 }
 
 #' Generate or Update tags.yaml File from Covariate Search Table

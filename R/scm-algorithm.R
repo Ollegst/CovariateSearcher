@@ -19,7 +19,7 @@
 #' @export
 get_remaining_covariates <- function(search_state, base_model_id, include_excluded = TRUE) {
   # Get current covariates in the base model (these are NAMES like "BBWI_CL")
-  current_cov_names <- get_model_covariates(search_state, base_model_id)
+  current_cov_names <- get_model_covariates_from_db(search_state, base_model_id)
 
   # Handle NULL or NA results
   if (is.null(current_cov_names) || all(is.na(current_cov_names))) {
