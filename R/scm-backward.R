@@ -224,9 +224,11 @@ run_backward_elimination <- function(search_state,
     removed_covariate <- removal_evaluation$covariate_to_remove
     new_base_model <- removal_evaluation$new_base_model
     delta_ofv <- removal_evaluation$delta_ofv
+    actual_threshold <- removal_evaluation$ofv_threshold
+    actual_df <- removal_evaluation$covariate_df
 
     cat(sprintf("\n✂️  REMOVING: %s\n", removed_covariate))
-    cat(sprintf("📊 ΔOFV: %.2f (below threshold of %.2f)\n", delta_ofv, ofv_threshold_display))
+    cat(sprintf("📊 ΔOFV: %.2f (below threshold of %.2f for df=%d)\n", delta_ofv, actual_threshold, actual_df))
     cat(sprintf("🎯 New base model: %s\n", new_base_model))
 
     # Update tracking
@@ -433,6 +435,8 @@ evaluate_removal_impacts <- function(search_state, base_model, removal_models,
     covariate_to_remove = covariate_to_remove,
     new_base_model = new_base_model,
     delta_ofv = selected_delta_ofv,
+    ofv_threshold = if (nrow(removable) > 0) removable$ofv_threshold[1] else NA_real_,
+    covariate_df = if (nrow(removable) > 0) removable$covariate_df[1] else NA_integer_,
     removable_count = nrow(removable)
   ))
 }

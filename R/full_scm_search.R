@@ -155,17 +155,31 @@ run_automated_scm_testing <- function(search_state,
     cat(sprintf("Starting backward elimination from: %s\n", current_model))
     backward_ofv_threshold_display <- pvalue_to_threshold(backward_p_value, df = 1)
     cat(sprintf("Using backward OFV threshold: %.2f\n", backward_ofv_threshold_display))
+    cat(sprintf("Starting backward elimination from: %s\n", current_model))
 
-    # Note: Backward elimination function would be implemented here
-    cat("⚠️ Backward elimination not yet implemented\n")
+    initial_backward_error <- NULL
 
-    # Placeholder for future backward elimination implementation
-    initial_backward_results <- list(
-      status = "not_implemented",
-      message = "Backward elimination will be implemented in future versions",
-      starting_model = current_model,
-      final_model = current_model
-    )
+    initial_backward_results <- tryCatch({
+      run_backward_elimination(
+        search_state = search_state,
+        starting_model = current_model,
+        backward_p_value = backward_p_value,
+        auto_submit = auto_submit,
+        auto_retry = auto_retry
+      )
+    }, error = function(e) {
+      initial_backward_error <<- e$message
+      cat(sprintf("❌ Initial backward error: %s\n", e$message))
+      list(status = "error", message = e$message, search_state = search_state)
+    })
+
+    if (is.null(initial_backward_error)) {
+      search_state <- initial_backward_results$search_state
+      current_model <- initial_backward_results$final_model
+      cat(sprintf("✅ Initial backward complete. Final model: %s\n", current_model))
+    } else {
+      cat("⚠️ Continuing with current model due to error\n")
+    }
 
     # For now, no change to current_model since backward not implemented
     # current_model would be updated to the result of backward elimination
