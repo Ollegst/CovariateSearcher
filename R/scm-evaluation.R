@@ -11,24 +11,29 @@
 #'
 #' @title Evaluate models and select the best one based on statistical criteria
 #' @description Evaluates completed models using delta OFV and RSE thresholds
-#'   to identify the best performing model.
+#'   to identify the best performing model. ΔOFV threshold is calculated based
+#'   on p-value and covariate degrees of freedom (df=1 for continuous,
+#'   df=n_levels-1 for categorical).
 #' @param search_state List containing covariate search state and configuration
 #' @param model_names Character vector. Model names to evaluate
-#' @param ofv_threshold Numeric. OFV improvement threshold (uses config if NULL)
+#' @param p_value Numeric. P-value for forward selection (uses config if NULL)
 #' @param rse_threshold Numeric. Maximum RSE threshold (uses config if NULL)
 #' @return List with best model, evaluation details, and updated search_state
 #' @export
-select_best_model <- function(search_state, model_names, ofv_threshold = NULL, rse_threshold = NULL) {
+select_best_model <- function(search_state, model_names, p_value = NULL, rse_threshold = NULL) {
   # Use config defaults if not specified
-  if (is.null(ofv_threshold)) {
-    ofv_threshold <- search_state$search_config$forward_ofv_threshold
+  if (is.null(p_value)) {
+    p_value <- search_state$search_config$forward_p_value %||% 0.05
   }
   if (is.null(rse_threshold)) {
-    rse_threshold <- search_state$search_config$max_rse_threshold
+    rse_threshold <- search_state$search_config$max_rse_threshold %||% 50
   }
 
-  cat(sprintf("\n📊 EVALUATING MODELS (ΔOFV > %.2f, RSE < %d%%)\n",
-              ofv_threshold, rse_threshold))
+  # Calculate display threshold for df=1 (most common case)
+  ofv_threshold_display <- pvalue_to_threshold(p_value, df = 1)
+
+  cat(sprintf("\n📊 EVALUATING MODELS (Forward OFV threshold: %.2f for df=1, RSE < %d%%)\n",
+              ofv_threshold_display, rse_threshold))
 
   # Update all model information first
   search_state <- update_all_model_statuses(search_state)
@@ -66,7 +71,35 @@ select_best_model <- function(search_state, model_names, ofv_threshold = NULL, r
     }
   }
 
-  # Evaluate each model
+  # CRITICAL: Calculate threshold per model based on covariate df
+  model_data$ofv_threshold <- NA_real_
+  model_data$covariate_df <- NA_integer_
+
+  for (i in 1:nrow(model_data)) {
+    # Extract covariate name from tag
+    cov_tag <- model_data$covariate_tested[i]
+
+    if (!is.na(cov_tag) && nchar(cov_tag) > 0) {
+      cov_name <- extract_covariate_name_from_tag(cov_tag)
+
+      if (!is.na(cov_name)) {
+        # Calculate df for this covariate
+        df <- calculate_covariate_df(cov_name, search_state$covariate_search)
+        model_data$covariate_df[i] <- df
+
+        # Calculate threshold for this specific covariate
+        model_data$ofv_threshold[i] <- pvalue_to_threshold(p_value, df)
+      }
+    }
+
+    # Default to df=1 if couldn't determine
+    if (is.na(model_data$ofv_threshold[i])) {
+      model_data$covariate_df[i] <- 1L
+      model_data$ofv_threshold[i] <- pvalue_to_threshold(p_value, df = 1)
+    }
+  }
+
+  # Evaluate each model using its specific threshold
   evaluation_results <- model_data %>%
     dplyr::mutate(
       delta_ofv_significant = !is.na(delta_ofv) & delta_ofv > ofv_threshold,
@@ -74,10 +107,10 @@ select_best_model <- function(search_state, model_names, ofv_threshold = NULL, r
       overall_significant = delta_ofv_significant & rse_acceptable,
       evaluation_notes = dplyr::case_when(
         is.na(delta_ofv) ~ "Delta OFV not available",
-        !delta_ofv_significant & !rse_acceptable ~ "Poor OFV and high RSE",
-        !delta_ofv_significant ~ "Insufficient OFV improvement",
-        !rse_acceptable ~ "RSE too high",
-        overall_significant ~ "Meets all criteria",
+        !delta_ofv_significant & !rse_acceptable ~ sprintf("Poor OFV (need >%.2f) and high RSE", ofv_threshold),
+        !delta_ofv_significant ~ sprintf("Insufficient OFV (%.2f, need >%.2f for df=%d)", delta_ofv, ofv_threshold, covariate_df),
+        !rse_acceptable ~ sprintf("RSE too high (%.1f%%, limit %d%%)", rse_max, rse_threshold),
+        overall_significant ~ sprintf("Meets all criteria (OFV=%.2f>%.2f, RSE=%.1f%%)", delta_ofv, ofv_threshold, rse_max),
         TRUE ~ "Unknown issue"
       )
     ) %>%
@@ -105,16 +138,22 @@ select_best_model <- function(search_state, model_names, ofv_threshold = NULL, r
       ""
     }
 
-    cat(sprintf("  %s %s: ΔOFV=%.2f, %s%s\n",
-                status_icon, row$model_name,
+    # Show threshold used for this model
+    cat(sprintf("  %s %s: OFV=%.2f (threshold=%.2f for df=%d), RSE=%.1f%% - %s%s\n",
+                status_icon,
+                row$model_name,
                 ifelse(is.na(row$delta_ofv), 0, row$delta_ofv),
-                row$evaluation_notes, best_icon))
+                row$ofv_threshold,
+                row$covariate_df,
+                ifelse(is.na(row$rse_max), 0, row$rse_max),
+                row$evaluation_notes,
+                best_icon))
   }
 
   cat(sprintf("\n🎯 Summary: %d significant models found\n", length(significant_models)))
   if (!is.null(best_model)) {
     best_delta <- evaluation_results$delta_ofv[evaluation_results$model_name == best_model]
-    cat(sprintf("🏆 Best model selected: %s (ΔOFV = %.2f)\n", best_model, best_delta))
+    cat(sprintf("🏆 Best model selected: %s (OFV = %.2f)\n", best_model, best_delta))
   } else {
     cat("❌ No significant improvement found - keeping current base model\n")
   }
@@ -125,7 +164,7 @@ select_best_model <- function(search_state, model_names, ofv_threshold = NULL, r
     significant_models = significant_models,
     evaluation_results = evaluation_results,
     criteria_used = list(
-      ofv_threshold = ofv_threshold,
+      forward_p_value = p_value,
       rse_threshold = rse_threshold
     ),
     status = if (!is.null(best_model)) "best_model_found" else "no_improvement"

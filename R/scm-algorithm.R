@@ -171,25 +171,32 @@ get_excluded_covariates <- function(search_state, return_details = FALSE) {
 #' @param base_model_id Character. Starting base model
 #' @param max_forward_steps Numeric. Maximum number of forward steps (default: 10)
 #' @param auto_submit Logical. Whether to automatically submit models (default: TRUE)
-#' @param ofv_threshold Numeric. OFV improvement threshold (uses config if NULL)
+#' @param forward_p_value Numeric. P-value for forward selection (uses config if NULL)
 #' @param rse_threshold Numeric. Maximum RSE threshold (uses config if NULL)
 #' @return List with complete SCM results and updated search_state
 #' @export
 run_stepwise_covariate_modeling <- function(search_state, base_model_id = NULL,
                                             max_forward_steps = 10,
                                             auto_submit = TRUE,
-                                            ofv_threshold = NULL,
+                                            forward_p_value = NULL,
                                             rse_threshold = NULL) {
   if (is.null(base_model_id)) {
     base_model_id <- search_state$base_model
   }
 
+  # Set default p-value if not provided
+  if (is.null(forward_p_value)) {
+    forward_p_value <- search_state$search_config$forward_p_value %||% 0.05
+  }
+
+  # Calculate display threshold (df=1 for typical case)
+  ofv_threshold_display <- pvalue_to_threshold(forward_p_value, df = 1)
+
   cat(paste0("\n", paste(rep("=", 80), collapse=""), "\n"))
   cat("🎯 STARTING STEPWISE COVARIATE MODELING (SCM)\n")
   cat(sprintf("Base model: %s\n", base_model_id))
   cat(sprintf("Max forward steps: %d\n", max_forward_steps))
-  cat(sprintf("OFV threshold: %.2f\n",
-              ofv_threshold %||% search_state$search_config$forward_ofv_threshold))
+  cat(sprintf("Forward ΔOFV threshold: %.2f\n", ofv_threshold_display))
   cat(paste0(paste(rep("=", 80), collapse=""), "\n"))
 
   scm_start_time <- Sys.time()
@@ -275,10 +282,9 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id = NULL,
   step1_selection <- select_best_model(
     search_state = search_state,
     model_names = step1_completion$completed_models,
-    ofv_threshold = ofv_threshold,
+    p_value = forward_p_value,
     rse_threshold = rse_threshold
   )
-
   # VALIDATION: Check that step1_selection is valid
   if (is.null(step1_selection) || is.null(step1_selection$search_state)) {
     cat("❌ Failed in step1 selection - invalid result from select_best_model\n")
@@ -376,7 +382,7 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id = NULL,
     step_selection <- select_best_model(
       search_state = search_state,
       model_names = step_completion$completed_models,
-      ofv_threshold = ofv_threshold,
+      p_value = forward_p_value,
       rse_threshold = rse_threshold
     )
 

@@ -6,7 +6,7 @@
 \usage{
 resume_selective_forward(
   checkpoint_file,
-  ofv_threshold = NULL,
+  forward_p_value = NULL,
   rse_threshold = NULL,
   auto_submit = TRUE,
   auto_retry = TRUE,
@@ -17,8 +17,8 @@ resume_selective_forward(
 \item{checkpoint_file}{Character. Path to the RDS file containing saved search state
 (e.g., "scm_selective_step_3.rds", "scm_forward_selection_complete.rds")}
 
-\item{ofv_threshold}{Numeric. OFV improvement threshold for significance testing.
-If NULL, uses value from search_state$search_config$forward_ofv_threshold (default: 3.84)}
+\item{forward_p_value}{Numeric. P-value for forward selection significance testing.
+If NULL, uses value from search_state$search_config$forward_p_value (default: 0.05)}
 
 \item{rse_threshold}{Numeric. Maximum acceptable RSE threshold as percentage.
 If NULL, uses value from search_state$search_config$max_rse_threshold (default: 50)}
@@ -104,7 +104,7 @@ search_state <- result$search_state
 # Resume with custom thresholds, just load state without continuing
 result <- resume_selective_forward(
   checkpoint_file = "scm_selective_step_5.rds",
-  ofv_threshold = 4.0,
+  forward_p_value = 0.01,
   rse_threshold = 40,
   continue_forward = FALSE
 )

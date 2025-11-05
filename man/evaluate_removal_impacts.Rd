@@ -9,7 +9,7 @@ evaluate_removal_impacts(
   base_model,
   removal_models,
   completed_models,
-  ofv_threshold
+  backward_p_value
 )
 }
 \arguments{
@@ -21,7 +21,7 @@ evaluate_removal_impacts(
 
 \item{completed_models}{Character vector. Successfully completed models}
 
-\item{ofv_threshold}{Numeric. ΔOFV threshold for removal}
+\item{backward_p_value}{Numeric. P-value for backward elimination}
 }
 \value{
 List with evaluation results and covariate to remove

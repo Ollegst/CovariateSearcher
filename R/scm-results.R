@@ -12,8 +12,10 @@ create_scm_results_table <- function(search_state) {
   db <- search_state$search_database
 
   # Get thresholds from search_state config
-  forward_threshold <- search_state$search_config$forward_ofv_threshold %||% 3.84
-  backward_threshold <- search_state$search_config$backward_ofv_threshold %||% 6.63
+  forward_p_value <- search_state$search_config$forward_p_value %||% 0.05
+  backward_p_value <- search_state$search_config$backward_p_value %||% 0.01
+  forward_threshold <- pvalue_to_threshold(forward_p_value, df = 1)
+  backward_threshold <- pvalue_to_threshold(backward_p_value, df = 1)
   rse_threshold <- search_state$search_config$max_rse_threshold %||% 50
 
   cat(sprintf("Using thresholds - Forward: %.2f, Backward: %.2f, RSE: %d%%\n",

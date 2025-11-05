@@ -7,7 +7,7 @@
 get_significant_models_from_step(
   search_state,
   step_number,
-  ofv_threshold,
+  p_value,
   rse_threshold = NULL
 )
 }
@@ -16,16 +16,19 @@ get_significant_models_from_step(
 
 \item{step_number}{Integer. Step number to check}
 
-\item{ofv_threshold}{Numeric. OFV threshold for significance}
+\item{p_value}{Numeric. P-value for significance testing (e.g., 0.05 for forward, 0.01 for backward)}
 
-\item{rse_threshold}{Numeeric. RSE threshold for significance}
+\item{rse_threshold}{Numeric. RSE threshold for significance}
 }
 \value{
 Character vector of significant model names
 }
 \description{
-Returns model names from a step that have ΔOFV above threshold
+Returns model names from a step that have ΔOFV above threshold.
+Threshold is calculated per model based on covariate degrees of freedom.
 }
 \details{
+Run SCM Forward Selection (CORRECTED VERSION)
+
 Get Significant Models from Step
 }

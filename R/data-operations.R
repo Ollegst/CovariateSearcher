@@ -26,7 +26,7 @@ load_search_data <- function(data_file_path, covariate_search_path) {
 #' @return List with configuration
 #' @export
 load_search_config <- function() {
-  list(forward_ofv_threshold = 3.84, max_rse_threshold = 50, threads = 4)
+  list(forward_p_value = 0.05, backward_p_value = 0.01, max_rse_threshold = 50, threads = 4)
 }
 
 

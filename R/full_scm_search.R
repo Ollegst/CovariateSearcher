@@ -21,10 +21,10 @@
 #'   If TRUE: Always runs Forward selection → Backward elimination (regardless of starting_phase)
 #'   If FALSE: Runs only the specified starting_phase
 #'   Note: True SCM should always include both forward and backward phases (default: TRUE)
-#' @param forward_ofv_threshold Numeric. OFV improvement threshold for forward selection.
-#'   If NULL, uses search_state$search_config$forward_ofv_threshold (default: 3.84)
-#' @param backward_ofv_threshold Numeric. OFV threshold for backward elimination.
-#'   If NULL, uses 6.63 (more stringent than forward). Only used when starting_phase = "backward".
+#' @param forward_p_value Numeric. P-value for forward selection significance testing.
+#'   If NULL, uses search_state$search_config$forward_p_value (default: 0.05)
+#' @param backward_p_value Numeric. P-value for backward elimination significance testing.
+#'   If NULL, uses search_state$search_config$backward_p_value (default: 0.01, more stringent)
 #' @param rse_threshold Numeric. Maximum RSE threshold as percentage.
 #'   If NULL, uses search_state$search_config$max_rse_threshold (default: 50)
 #' @param auto_submit Logical. Whether to automatically submit models to cluster (default: TRUE)
@@ -39,8 +39,8 @@ run_automated_scm_testing <- function(search_state,
                                       scm_type = c("standard", "selective"),
                                       starting_phase = c("forward", "backward"),
                                       full_scm = TRUE,
-                                      forward_ofv_threshold = NULL,
-                                      backward_ofv_threshold = NULL,
+                                      forward_p_value = NULL,
+                                      backward_p_value = NULL,
                                       rse_threshold = NULL,
                                       auto_submit = TRUE,
                                       auto_retry = TRUE,
@@ -89,11 +89,11 @@ run_automated_scm_testing <- function(search_state,
   }
 
   # FIXED: Enhanced input validation
-  if (!is.null(forward_ofv_threshold) && (forward_ofv_threshold <= 0)) {
-    stop("forward_ofv_threshold must be positive")
+  if (!is.null(forward_p_value) && (forward_p_value <= 0 || forward_p_value >= 1)) {
+    stop("forward_p_value must be between 0 and 1")
   }
-  if (!is.null(backward_ofv_threshold) && (backward_ofv_threshold <= 0)) {
-    stop("backward_ofv_threshold must be positive")
+  if (!is.null(backward_p_value) && (backward_p_value <= 0 || backward_p_value >= 1)) {
+    stop("backward_p_value must be between 0 and 1")
   }
   if (!is.null(rse_threshold) && (rse_threshold <= 0 || rse_threshold > 100)) {
     stop("rse_threshold must be between 0 and 100")
@@ -101,15 +101,19 @@ run_automated_scm_testing <- function(search_state,
 
 
   # Set defaults with proper null coalescing
-  if (is.null(forward_ofv_threshold)) {
-    forward_ofv_threshold <- search_state$search_config$forward_ofv_threshold %||% 3.84
+  if (is.null(forward_p_value)) {
+    forward_p_value <- search_state$search_config$forward_p_value %||% 0.05
   }
-  if (is.null(backward_ofv_threshold)) {
-    backward_ofv_threshold <- 6.63  # More stringent than forward
+  if (is.null(backward_p_value)) {
+    backward_p_value <- search_state$search_config$backward_p_value %||% 0.01
   }
   if (is.null(rse_threshold)) {
     rse_threshold <- search_state$search_config$max_rse_threshold %||% 50
   }
+
+  # Calculate ΔOFV thresholds for display (df=1 for typical single parameter)
+  forward_ofv_threshold_display <- pvalue_to_threshold(forward_p_value, df = 1)
+  backward_ofv_threshold_display <- pvalue_to_threshold(backward_p_value, df = 1)
 
   cat("🚀 STARTING AUTOMATED SCM TESTING\n")
   cat(paste(rep("=", 80), collapse=""), "\n")
@@ -124,8 +128,8 @@ run_automated_scm_testing <- function(search_state,
     cat(sprintf("Single phase: %s only\n", starting_phase))
   }
   cat(sprintf("Base model: %s\n", base_model_id))
-  cat(sprintf("Forward OFV threshold: %.2f\n", forward_ofv_threshold))
-  cat(sprintf("Backward OFV threshold: %.2f\n", backward_ofv_threshold))
+  cat(sprintf("Forward ΔOFV threshold: %.2f\n", forward_ofv_threshold_display))
+  cat(sprintf("Backward ΔOFV threshold: %.2f\n", backward_ofv_threshold_display))
   cat(sprintf("RSE threshold: %d%%\n", rse_threshold))
   cat(sprintf("Auto-retry enabled: %s\n", auto_retry))
   cat(sprintf("Checkpoints enabled: %s\n", save_checkpoints))
@@ -149,7 +153,8 @@ run_automated_scm_testing <- function(search_state,
     cat(paste(rep("-", 50), collapse=""), "\n")
 
     cat(sprintf("Starting backward elimination from: %s\n", current_model))
-    cat(sprintf("Using backward OFV threshold: %.2f\n", backward_ofv_threshold))
+    backward_ofv_threshold_display <- pvalue_to_threshold(backward_p_value, df = 1)
+    cat(sprintf("Using backward OFV threshold: %.2f\n", backward_ofv_threshold_display))
 
     # Note: Backward elimination function would be implemented here
     cat("⚠️ Backward elimination not yet implemented\n")
@@ -190,7 +195,7 @@ run_automated_scm_testing <- function(search_state,
           search_state = search_state,
           base_model_id = current_model,
           auto_submit = auto_submit,
-          ofv_threshold = forward_ofv_threshold,
+          forward_p_value = forward_p_value,
           rse_threshold = rse_threshold
         )
 
@@ -199,7 +204,7 @@ run_automated_scm_testing <- function(search_state,
         run_scm_selective_forward(
           search_state = search_state,
           base_model_id = current_model,
-          ofv_threshold = forward_ofv_threshold,
+          forward_p_value = forward_p_value,
           rse_threshold = rse_threshold,
           auto_submit = auto_submit,
           auto_retry = auto_retry
@@ -273,7 +278,8 @@ run_automated_scm_testing <- function(search_state,
     cat(paste(rep("-", 50), collapse=""), "\n")
 
     cat(sprintf("Starting backward elimination from: %s\n", current_model))
-    cat(sprintf("Using backward OFV threshold: %.2f\n", backward_ofv_threshold))
+     backward_ofv_threshold_display <- pvalue_to_threshold(backward_p_value, df = 1)
+    cat(sprintf("Using backward OFV threshold: %.2f\n", backward_ofv_threshold_display))
 
     initial_backward_error <- NULL
 
@@ -281,7 +287,7 @@ run_automated_scm_testing <- function(search_state,
       run_backward_elimination(
         search_state = search_state,
         starting_model = current_model,
-        ofv_threshold = backward_ofv_threshold,
+        backward_p_value = backward_p_value,
         auto_submit = auto_submit,
         auto_retry = auto_retry
       )
@@ -322,15 +328,15 @@ run_automated_scm_testing <- function(search_state,
     cat(paste(rep("-", 50), collapse=""), "\n")
 
     cat(sprintf("Starting final backward elimination from: %s\n", current_model))
-    cat(sprintf("Using backward OFV threshold: %.2f\n", backward_ofv_threshold))
-
+    backward_ofv_threshold_display <- pvalue_to_threshold(backward_p_value, df = 1)
+    cat(sprintf("Using backward OFV threshold: %.2f\n", backward_ofv_threshold_display))
     final_backward_error <- NULL
 
     final_backward_results <- tryCatch({
       run_backward_elimination(
         search_state = search_state,
         starting_model = current_model,
-        ofv_threshold = backward_ofv_threshold,
+        backward_p_value = backward_p_value,
         auto_submit = auto_submit,
         auto_retry = auto_retry
       )
@@ -455,7 +461,7 @@ run_automated_scm_testing <- function(search_state,
                 select_best_model(
                   search_state = search_state,
                   model_names = final_submission$completed_models,
-                  ofv_threshold = forward_ofv_threshold,
+                  p_value = forward_p_value,
                   rse_threshold = rse_threshold
                 )
               }, error = function(e) {
@@ -582,8 +588,8 @@ run_automated_scm_testing <- function(search_state,
     final_backward_results = final_backward_results,
     final_covariates = final_covariates,
     excluded_covariates = excluded_covariates,
-    forward_ofv_threshold = forward_ofv_threshold,
-    backward_ofv_threshold = backward_ofv_threshold,
+    forward_p_value = forward_p_value,
+    backward_p_value = backward_p_value,
     rse_threshold = rse_threshold,
     total_models_created = total_models,
     total_time_minutes = total_time,

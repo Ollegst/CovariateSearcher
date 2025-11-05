@@ -11,22 +11,29 @@
 #'   Removes the covariate with smallest ΔOFV increase if below threshold.
 #' @param search_state List containing covariate search state and configuration
 #' @param starting_model Character. Model to start backward elimination from
-#' @param ofv_threshold Numeric. ΔOFV threshold for removal (default: 10.83)
+#' @param backward_p_value Numeric. p-value threshold for removal (default: 0.001)
 #' @param auto_submit Logical. Whether to automatically submit models (default: TRUE)
 #' @param auto_retry Logical. Whether to enable automatic retry (default: TRUE)
 #' @return List with backward elimination results and updated search_state
 #' @export
 run_backward_elimination <- function(search_state,
                                      starting_model,
-                                     ofv_threshold = 10.83,
+                                     backward_p_value = NULL,
                                      auto_submit = TRUE,
                                      auto_retry = TRUE) {
+  # Set default p-value if not provided
+  if (is.null(backward_p_value)) {
+    backward_p_value <- search_state$search_config$backward_p_value %||% 0.001
+  }
+
+  # Calculate display threshold (df=1 for typical case)
+  ofv_threshold_display <- pvalue_to_threshold(backward_p_value, df = 1)
 
   cat("\n🔙 STARTING BACKWARD ELIMINATION\n")
   cat(paste(rep("=", 60), collapse=""), "\n")
   cat(sprintf("Starting model: %s\n", starting_model))
-  cat(sprintf("ΔOFV threshold: %.2f (for keeping covariate)\n", ofv_threshold))
-  cat(sprintf("Strategy: Remove covariate with smallest impact if ΔOFV < %.2f\n", ofv_threshold))
+  cat(sprintf("ΔOFV threshold: %.2f (for keeping covariate)\n", ofv_threshold_display))
+  cat(sprintf("Strategy: Remove covariate with smallest impact if ΔOFV < %.2f\n", ofv_threshold_display))
   cat(paste(rep("=", 60), collapse=""), "\n")
 
   # Initialize tracking variables
@@ -191,7 +198,7 @@ run_backward_elimination <- function(search_state,
       base_model = current_base_model,
       removal_models = removal_models,
       completed_models = step_submission$completed_models,
-      ofv_threshold = ofv_threshold
+      backward_p_value = backward_p_value
     )
 
     search_state <- removal_evaluation$search_state
@@ -208,7 +215,7 @@ run_backward_elimination <- function(search_state,
     # Check if any covariate can be removed
     if (is.null(removal_evaluation$covariate_to_remove)) {
       cat("\n🏁 No covariate can be removed without exceeding threshold\n")
-      cat(sprintf("All removal attempts had ΔOFV > %.2f\n", ofv_threshold))
+      cat(sprintf("All removal attempts had ΔOFV > %.2f\n", ofv_threshold_display))
       backward_active <- FALSE
       break
     }
@@ -219,7 +226,7 @@ run_backward_elimination <- function(search_state,
     delta_ofv <- removal_evaluation$delta_ofv
 
     cat(sprintf("\n✂️  REMOVING: %s\n", removed_covariate))
-    cat(sprintf("📊 ΔOFV: %.2f (below threshold of %.2f)\n", delta_ofv, ofv_threshold))
+    cat(sprintf("📊 ΔOFV: %.2f (below threshold of %.2f)\n", delta_ofv, ofv_threshold_display))
     cat(sprintf("🎯 New base model: %s\n", new_base_model))
 
     # Update tracking
@@ -309,11 +316,11 @@ run_backward_elimination <- function(search_state,
 #' @param base_model Character. Current base model name
 #' @param removal_models List. Named list of removal test models
 #' @param completed_models Character vector. Successfully completed models
-#' @param ofv_threshold Numeric. ΔOFV threshold for removal
+#' @param backward_p_value Numeric. P-value for backward elimination
 #' @return List with evaluation results and covariate to remove
 #' @export
 evaluate_removal_impacts <- function(search_state, base_model, removal_models,
-                                     completed_models, ofv_threshold) {
+                                     completed_models, backward_p_value) {
 
   # Get base model OFV
   base_row <- search_state$search_database[
@@ -358,6 +365,22 @@ evaluate_removal_impacts <- function(search_state, base_model, removal_models,
     model_ofv <- model_row$ofv[1]
     delta_ofv <- model_ofv - base_ofv  # Positive means OFV increased (model got worse)
 
+    # Calculate threshold based on covariate df
+    cov_tag <- model_row$covariate_tested[1]
+    if (!is.na(cov_tag) && nchar(cov_tag) > 0) {
+      cov_name_from_tag <- extract_covariate_name_from_tag(cov_tag)
+      if (!is.na(cov_name_from_tag)) {
+        df <- calculate_covariate_df(cov_name_from_tag, search_state$covariate_search)
+      } else {
+        df <- 1L
+      }
+    } else {
+      df <- 1L
+    }
+
+    # Calculate threshold for this specific covariate
+    ofv_threshold <- pvalue_to_threshold(backward_p_value, df)
+
     # Update database with delta_ofv
     db_idx <- which(search_state$search_database$model_name == model_name)
     if (length(db_idx) > 0) {
@@ -371,16 +394,17 @@ evaluate_removal_impacts <- function(search_state, base_model, removal_models,
       model_name = model_name,
       ofv = model_ofv,
       delta_ofv = delta_ofv,
+      ofv_threshold = ofv_threshold,
+      covariate_df = df,
       meets_threshold = meets_threshold,
       stringsAsFactors = FALSE
     ))
 
     status_icon <- if (meets_threshold) "✅" else "❌"
-    cat(sprintf("  %s %s removed → OFV: %.2f (ΔOFV: %+.2f) %s\n",
-                status_icon, covariate_name, model_ofv, delta_ofv,
+    cat(sprintf("  %s %s removed → OFV: %.2f (ΔOFV: %+.2f, threshold: %.2f for df=%d) %s\n",
+                status_icon, covariate_name, model_ofv, delta_ofv, ofv_threshold, df,
                 if (meets_threshold) "< threshold" else "> threshold"))
   }
-
   # Find covariate with smallest ΔOFV that meets threshold
   removable <- removal_impacts[removal_impacts$meets_threshold == TRUE, ]
 
@@ -399,7 +423,8 @@ evaluate_removal_impacts <- function(search_state, base_model, removal_models,
     cat(sprintf("\n🎯 Selected for removal: %s (ΔOFV = %.2f)\n",
                 covariate_to_remove, selected_delta_ofv))
   } else {
-    cat(sprintf("\n⚠️  No removals meet threshold (all ΔOFV > %.2f)\n", ofv_threshold))
+    ofv_threshold_display <- pvalue_to_threshold(backward_p_value, df = 1)
+    cat(sprintf("\n⚠️  No removals meet threshold (all ΔOFV > %.2f)\n", ofv_threshold_display))
   }
 
   return(list(

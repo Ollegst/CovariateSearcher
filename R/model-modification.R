@@ -126,7 +126,7 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag,
         phase = "forward_selection",                           # ← Position 3
         step_number = final_step_number,                       # ← Position 4
         parent_model = base_model_id,                          # ← Position 5
-        covariate_tested = covariate_name,
+        covariate_tested = matching_cov$cov_to_test[1],
         action = "add_covariate",
         ofv = NA_real_,
         delta_ofv = NA_real_,
@@ -839,7 +839,7 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
       phase = "covariate_removal",
       step_number = max(search_state$search_database$step_number, na.rm = TRUE) + 1,
       parent_model = model_name,
-      covariate_tested = covariate_value,
+      covariate_tested = covariate_to_remove,
       action = "remove_single_covariate",
       ofv = NA_real_,
       delta_ofv = NA_real_,

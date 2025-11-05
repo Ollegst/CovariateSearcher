@@ -104,8 +104,10 @@ generate_scm_report <- function(search_state,
 
     if (nrow(completed) > 0) {
       # Get thresholds from search_state config
-      forward_threshold <- search_state$search_config$forward_ofv_threshold %||% 3.84
-      backward_threshold <- search_state$search_config$backward_ofv_threshold %||% 10.83
+      forward_p_value <- search_state$search_config$forward_p_value %||% 0.05
+      backward_p_value <- search_state$search_config$backward_p_value %||% 0.01
+      forward_threshold <- pvalue_to_threshold(forward_p_value, df = 1)
+      backward_threshold <- pvalue_to_threshold(backward_p_value, df = 1)
 
       if (is_backward) {
         # Backward elimination format

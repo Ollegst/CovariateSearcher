@@ -1,12 +1,156 @@
+# =============================================================================
+# SCM forward
+# File: R/scm-selective-forward.R
+# Part of CovariateSearcher Package
+# =============================================================================
 #' Run SCM Forward Selection (CORRECTED VERSION)
 #'
+#' Get Significant Models from Step
+#'
+#' @title Extract models that showed significant improvement in a specific step
+#' @description Returns model names from a step that have ΔOFV above threshold.
+#'   Threshold is calculated per model based on covariate degrees of freedom.
+#' @param search_state List containing search state
+#' @param step_number Integer. Step number to check
+#' @param p_value Numeric. P-value for significance testing (e.g., 0.05 for forward, 0.01 for backward)
+#' @param rse_threshold Numeric. RSE threshold for significance
+#' @return Character vector of significant model names
+#' @export
+get_significant_models_from_step <- function(search_state, step_number, p_value, rse_threshold = NULL) {
+  # Validate inputs
+  if (is.null(search_state$search_database) || nrow(search_state$search_database) == 0) {
+    return(character(0))
+  }
+
+  # Check required columns exist
+  required_cols <- c("step_number", "status", "delta_ofv", "rse_max", "model_name", "covariate_tested")
+  if (!all(required_cols %in% names(search_state$search_database))) {
+    warning("Missing required columns in search database")
+    return(character(0))
+  }
+
+  # Use config default if RSE threshold not specified
+  if (is.null(rse_threshold)) {
+    rse_threshold <- search_state$search_config$max_rse_threshold %||% 50
+  }
+
+  # Get models from specified step
+  step_models <- search_state$search_database[
+    search_state$search_database$step_number == step_number &
+      search_state$search_database$status == "completed" &
+      !is.na(search_state$search_database$delta_ofv), ]
+
+  if (nrow(step_models) == 0) {
+    return(character(0))
+  }
+
+  # Calculate threshold per model based on covariate df
+  significant_model_names <- character(0)
+
+  for (i in 1:nrow(step_models)) {
+    # Extract covariate name from tag
+    cov_tag <- step_models$covariate_tested[i]
+
+    # Calculate df for this covariate
+    if (!is.na(cov_tag) && nchar(cov_tag) > 0) {
+      cov_name <- extract_covariate_name_from_tag(cov_tag)
+      if (!is.na(cov_name)) {
+        df <- calculate_covariate_df(cov_name, search_state$covariate_search)
+      } else {
+        df <- 1L
+      }
+    } else {
+      df <- 1L
+    }
+
+    # Calculate threshold for this specific covariate
+    ofv_threshold <- pvalue_to_threshold(p_value, df)
+
+    # Check if model meets both criteria
+    delta_ofv <- step_models$delta_ofv[i]
+    rse_max <- step_models$rse_max[i]
+
+    meets_ofv <- !is.na(delta_ofv) && delta_ofv > ofv_threshold
+    meets_rse <- is.na(rse_max) || rse_max < rse_threshold
+
+    if (meets_ofv && meets_rse) {
+      significant_model_names <- c(significant_model_names, step_models$model_name[i])
+    }
+  }
+
+  return(significant_model_names)
+}
+#' Get Covariates from Models
+#'
+#' @title Extract covariate names from specific models
+#' @description Returns unique covariate names that were tested in the specified models
+#' @param search_state List containing search state
+#' @param model_names Character vector. Model names to extract covariates from
+#' @return Character vector of unique covariate tag names
+#' @export
+get_covariates_from_models <- function(search_state, model_names) {
+
+  if (length(model_names) == 0) {
+    return(character(0))
+  }
+
+  # Validate search_state and database
+  if (is.null(search_state$search_database) || nrow(search_state$search_database) == 0) {
+    return(character(0))
+  }
+
+  # Check required columns exist
+  if (!"covariate_tested" %in% names(search_state$search_database)) {
+    warning("covariate_tested column missing from search database")
+    return(character(0))
+  }
+
+  # Get rows for specified models
+  model_rows <- search_state$search_database[
+    search_state$search_database$model_name %in% model_names, ]
+
+  if (nrow(model_rows) == 0) {
+    return(character(0))
+  }
+
+  # Extract covariate names and convert back to tags
+  covariate_names <- unique(model_rows$covariate_tested)
+  covariate_names <- covariate_names[!is.na(covariate_names) & covariate_names != ""]
+
+  if (length(covariate_names) == 0) {
+    return(character(0))
+  }
+
+  # Validate tags exist
+  if (is.null(search_state$tags) || length(search_state$tags) == 0) {
+    warning("No tags found in search_state")
+    return(character(0))
+  }
+
+  # Convert covariate names back to tags
+  covariate_tags <- character(0)
+  for (cov_name in covariate_names) {
+    # Safe comparison with validation
+    matching_tags <- names(search_state$tags)[sapply(search_state$tags, function(x) {
+      identical(as.character(x), as.character(cov_name))
+    })]
+
+    if (length(matching_tags) > 0) {
+      covariate_tags <- c(covariate_tags, matching_tags[1])
+    }
+  }
+
+  return(unique(covariate_tags))
+}
+
+
 #' @title Execute proper stepwise forward selection with cumulative model building
 #' @description Runs true forward selection where each step builds from the best model
 #'   of the previous step, testing only remaining (untested) covariates. Implements
 #'   standard pharmacometrics SCM methodology.
 #' @param search_state List containing covariate search state and configuration
 #' @param base_model_id Character. Starting base model (default: "run1")
-#' @param ofv_threshold Numeric. OFV improvement threshold (uses config if NULL)
+#' @param forward_p_value Numeric. P-value for forward selection (uses config if NULL)
 #' @param rse_threshold Numeric. Maximum RSE threshold (uses config if NULL)
 #' @param auto_submit Logical. Whether to automatically submit models (default: TRUE)
 #' @param auto_retry Logical. Whether to enable automatic retry (default: TRUE)
@@ -14,7 +158,7 @@
 #' @export
 run_scm_selective_forward <- function(search_state,
                                       base_model_id = NULL,
-                                      ofv_threshold = NULL,
+                                      forward_p_value = NULL,
                                       rse_threshold = NULL,
                                       auto_submit = TRUE,
                                       auto_retry = TRUE) {
@@ -22,9 +166,8 @@ run_scm_selective_forward <- function(search_state,
     base_model_id <- search_state$base_model
   }
 
-  # Use config defaults if not specified
-  if (is.null(ofv_threshold)) {
-    ofv_threshold <- search_state$search_config$forward_ofv_threshold
+  if (is.null(forward_p_value)) {
+    forward_p_value <- search_state$search_config$forward_p_value %||% 0.05
   }
   if (is.null(rse_threshold)) {
     rse_threshold <- search_state$search_config$max_rse_threshold
@@ -33,7 +176,8 @@ run_scm_selective_forward <- function(search_state,
   cat("🚀 STARTING SCM SELECTIVE FORWARD SELECTION WORKFLOW\n")
   cat(paste(rep("=", 60), collapse=""), "\n")
   cat(sprintf("Base model: %s\n", base_model_id))
-  cat(sprintf("OFV threshold: %.2f (for significance)\n", ofv_threshold))
+  ofv_threshold_display <- pvalue_to_threshold(forward_p_value, df = 1)
+  cat(sprintf("📊 Forward OFV threshold: %.2f\n", ofv_threshold_display))
   cat(sprintf("RSE threshold: %d%%\n", rse_threshold))
   cat(sprintf("Strategy: Test only covariates from significant models\n"))
 
@@ -74,7 +218,6 @@ run_scm_selective_forward <- function(search_state,
       cat(sprintf("Step %d: Selective testing from significant Step %d models\n",
                   current_step, current_step - 1))
 
-      # CRITICAL FIX: Use the best model from the PREVIOUS step, not overall best
       # This prevents infinite loops and duplicate models
       previous_step_results <- step_results[[sprintf("step_%d", current_step - 1)]]
 
@@ -105,10 +248,11 @@ run_scm_selective_forward <- function(search_state,
       }
 
       # Get significant models from previous step only
+
       significant_models <- get_significant_models_from_step(
         search_state = search_state,
         step_number = current_step - 1,
-        ofv_threshold = ofv_threshold
+        p_value = forward_p_value
       )
 
       if (length(significant_models) == 0) {
@@ -252,7 +396,7 @@ run_scm_selective_forward <- function(search_state,
     step_selection <- select_best_model(
       search_state = search_state,
       model_names = step_submission$completed_models,
-      ofv_threshold = ofv_threshold,
+      p_value = forward_p_value,
       rse_threshold = rse_threshold
     )
 
@@ -272,10 +416,11 @@ run_scm_selective_forward <- function(search_state,
     )
 
     # Check for significant models in this step
+
     step_significant_models <- get_significant_models_from_step(
       search_state = search_state,
       step_number = current_step,
-      ofv_threshold = ofv_threshold
+      p_value = forward_p_value
     )
 
     if (length(step_significant_models) == 0) {
@@ -287,7 +432,7 @@ run_scm_selective_forward <- function(search_state,
 
     cat(sprintf("✅ Step %d: Found %d significant models\n", current_step, length(step_significant_models)))
 
-    # CRITICAL FIX: Update current_best_model if this step found a better model
+
     if (!is.null(step_selection$best_model)) {
       cat(sprintf("🏆 Step %d winner: %s\n", current_step, step_selection$best_model))
 
@@ -434,10 +579,11 @@ run_scm_selective_forward <- function(search_state,
           }
 
           # Get significant models from previous redemption step
+
           prev_step_significant <- get_significant_models_from_step(
             search_state = search_state,
             step_number = current_step_number - 1,
-            ofv_threshold = ofv_threshold
+            p_value = forward_p_value
           )
 
           if (length(prev_step_significant) == 0) {
@@ -523,10 +669,11 @@ run_scm_selective_forward <- function(search_state,
         }
 
         # Evaluate redemption models
+
         redemption_selection <- select_best_model(
           search_state = search_state,
           model_names = redemption_submission$completed_models,
-          ofv_threshold = ofv_threshold,
+          p_value = forward_p_value,
           rse_threshold = rse_threshold
         )
 
@@ -536,7 +683,8 @@ run_scm_selective_forward <- function(search_state,
         redemption_significant <- get_significant_models_from_step(
           search_state = search_state,
           step_number = current_step_number,
-          ofv_threshold = ofv_threshold
+          p_value = forward_p_value,
+          rse_threshold = rse_threshold
         )
 
         if (length(redemption_significant) == 0) {
@@ -628,118 +776,6 @@ run_scm_selective_forward <- function(search_state,
   ))
 }
 
-#' Get Significant Models from Step
-#'
-#' @title Extract models that showed significant improvement in a specific step
-#' @description Returns model names from a step that have ΔOFV above threshold
-#' @param search_state List containing search state
-#' @param step_number Integer. Step number to check
-#' @param ofv_threshold Numeric. OFV threshold for significance
-#' @param rse_threshold Numeeric. RSE threshold for significance
-#' @return Character vector of significant model names
-#' @export
-get_significant_models_from_step <- function(search_state, step_number, ofv_threshold, rse_threshold = NULL) {
-  # Validate inputs
-  if (is.null(search_state$search_database) || nrow(search_state$search_database) == 0) {
-    return(character(0))
-  }
-
-  # Check required columns exist
-  required_cols <- c("step_number", "status", "delta_ofv", "rse_max", "model_name")
-  if (!all(required_cols %in% names(search_state$search_database))) {
-    warning("Missing required columns in search database")
-    return(character(0))
-  }
-
-  # Use config default if RSE threshold not specified
-  if (is.null(rse_threshold)) {
-    rse_threshold <- search_state$search_config$max_rse_threshold %||% 50
-  }
-
-  # Get models from specified step
-  step_models <- search_state$search_database[
-    search_state$search_database$step_number == step_number &
-      search_state$search_database$status == "completed" &
-      !is.na(search_state$search_database$delta_ofv), ]
-
-  if (nrow(step_models) == 0) {
-    return(character(0))
-  }
-
-  # Filter for significant models - check BOTH ΔOFV and RSE
-  significant_models <- step_models[
-    step_models$delta_ofv > ofv_threshold &
-      (is.na(step_models$rse_max) | step_models$rse_max < rse_threshold), ]
-
-  if (nrow(significant_models) == 0) {
-    return(character(0))
-  }
-
-  return(significant_models$model_name)
-}
-
-#' Get Covariates from Models
-#'
-#' @title Extract covariate names from specific models
-#' @description Returns unique covariate names that were tested in the specified models
-#' @param search_state List containing search state
-#' @param model_names Character vector. Model names to extract covariates from
-#' @return Character vector of unique covariate tag names
-#' @export
-get_covariates_from_models <- function(search_state, model_names) {
-
-  if (length(model_names) == 0) {
-    return(character(0))
-  }
-
-  # Validate search_state and database
-  if (is.null(search_state$search_database) || nrow(search_state$search_database) == 0) {
-    return(character(0))
-  }
-
-  # Check required columns exist
-  if (!"covariate_tested" %in% names(search_state$search_database)) {
-    warning("covariate_tested column missing from search database")
-    return(character(0))
-  }
-
-  # Get rows for specified models
-  model_rows <- search_state$search_database[
-    search_state$search_database$model_name %in% model_names, ]
-
-  if (nrow(model_rows) == 0) {
-    return(character(0))
-  }
-
-  # Extract covariate names and convert back to tags
-  covariate_names <- unique(model_rows$covariate_tested)
-  covariate_names <- covariate_names[!is.na(covariate_names) & covariate_names != ""]
-
-  if (length(covariate_names) == 0) {
-    return(character(0))
-  }
-
-  # Validate tags exist
-  if (is.null(search_state$tags) || length(search_state$tags) == 0) {
-    warning("No tags found in search_state")
-    return(character(0))
-  }
-
-  # Convert covariate names back to tags
-  covariate_tags <- character(0)
-  for (cov_name in covariate_names) {
-    # Safe comparison with validation
-    matching_tags <- names(search_state$tags)[sapply(search_state$tags, function(x) {
-      identical(as.character(x), as.character(cov_name))
-    })]
-
-    if (length(matching_tags) > 0) {
-      covariate_tags <- c(covariate_tags, matching_tags[1])
-    }
-  }
-
-  return(unique(covariate_tags))
-}
 
 
 
@@ -755,8 +791,8 @@ get_covariates_from_models <- function(search_state, model_names) {
 #'   redemption phase). Provides flexible resumption options for interrupted workflows.
 #' @param checkpoint_file Character. Path to the RDS file containing saved search state
 #'   (e.g., "scm_selective_step_3.rds", "scm_forward_selection_complete.rds")
-#' @param ofv_threshold Numeric. OFV improvement threshold for significance testing.
-#'   If NULL, uses value from search_state$search_config$forward_ofv_threshold (default: 3.84)
+#' @param forward_p_value Numeric. P-value for forward selection significance testing.
+#'   If NULL, uses value from search_state$search_config$forward_p_value (default: 0.05)
 #' @param rse_threshold Numeric. Maximum acceptable RSE threshold as percentage.
 #'   If NULL, uses value from search_state$search_config$max_rse_threshold (default: 50)
 #' @param auto_submit Logical. Whether to automatically resubmit incomplete models
@@ -820,7 +856,7 @@ get_covariates_from_models <- function(search_state, model_names) {
 #' # Resume with custom thresholds, just load state without continuing
 #' result <- resume_selective_forward(
 #'   checkpoint_file = "scm_selective_step_5.rds",
-#'   ofv_threshold = 4.0,
+#'   forward_p_value = 0.01,
 #'   rse_threshold = 40,
 #'   continue_forward = FALSE
 #' )
@@ -848,7 +884,7 @@ get_covariates_from_models <- function(search_state, model_names) {
 #' @export
 
 resume_selective_forward <- function(checkpoint_file,
-                                     ofv_threshold = NULL,
+                                     forward_p_value = NULL,
                                      rse_threshold = NULL,
                                      auto_submit = TRUE,
                                      auto_retry = TRUE,
@@ -873,14 +909,15 @@ resume_selective_forward <- function(checkpoint_file,
   cat(sprintf("✅ Loaded search state with %d models\n", nrow(search_state$search_database)))
 
   # Use config defaults if not specified
-  if (is.null(ofv_threshold)) {
-    ofv_threshold <- search_state$search_config$forward_ofv_threshold
+  if (is.null(forward_p_value)) {
+    forward_p_value <- search_state$search_config$forward_p_value %||% 0.05
   }
   if (is.null(rse_threshold)) {
     rse_threshold <- search_state$search_config$max_rse_threshold
   }
 
-  cat(sprintf("📊 OFV threshold: %.2f\n", ofv_threshold))
+  ofv_threshold_display <- pvalue_to_threshold(forward_p_value, df = 1)
+  cat(sprintf("📊 Forward OFV threshold: %.2f\n", ofv_threshold_display))
   cat(sprintf("📊 RSE threshold: %d%%\n", rse_threshold))
 
   # Determine where we left off
@@ -994,7 +1031,6 @@ resume_selective_forward <- function(checkpoint_file,
   cat("\n📋 DETERMINING NEXT ACTION...\n")
 
   if (!continue_forward) {
-    cat("✅ Resume complete (continue_forward = FALSE)\n")
     cat("Search state loaded and updated. Ready for manual continuation.\n")
 
     return(list(
@@ -1009,11 +1045,12 @@ resume_selective_forward <- function(checkpoint_file,
   }
 
   # Check if we should continue forward selection or start redemption
+
   if (last_step > 0) {
     last_step_significant <- get_significant_models_from_step(
       search_state = search_state,
       step_number = last_step,
-      ofv_threshold = ofv_threshold
+      p_value = ofv_threshold
     )
 
     if (length(last_step_significant) == 0) {
@@ -1074,10 +1111,11 @@ resume_selective_forward <- function(checkpoint_file,
 
   # Get covariates from last step's significant models for next step
   if (last_step > 0) {
+    ofv_threshold <- pvalue_to_threshold(forward_p_value, df = 1)
     last_step_significant_models <- get_significant_models_from_step(
       search_state = search_state,
       step_number = last_step,
-      ofv_threshold = ofv_threshold
+      p_value = forward_p_value,
     )
 
     if (length(last_step_significant_models) > 0) {

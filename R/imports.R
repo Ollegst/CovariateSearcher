@@ -15,5 +15,7 @@
 #' @return x if not NULL, otherwise y
 #' @export
 `%||%` <- function(x, y) if (is.null(x)) y else x
+#' @importFrom stats qchisq
+NULL
 
 

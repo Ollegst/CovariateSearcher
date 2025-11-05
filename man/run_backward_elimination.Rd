@@ -7,7 +7,7 @@
 run_backward_elimination(
   search_state,
   starting_model,
-  ofv_threshold = 10.83,
+  backward_p_value = NULL,
   auto_submit = TRUE,
   auto_retry = TRUE
 )
@@ -17,7 +17,7 @@ run_backward_elimination(
 
 \item{starting_model}{Character. Model to start backward elimination from}
 
-\item{ofv_threshold}{Numeric. ΔOFV threshold for removal (default: 10.83)}
+\item{backward_p_value}{Numeric. p-value threshold for removal (default: 0.001)}
 
 \item{auto_submit}{Logical. Whether to automatically submit models (default: TRUE)}
 

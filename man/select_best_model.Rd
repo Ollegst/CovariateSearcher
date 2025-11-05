@@ -7,7 +7,7 @@
 select_best_model(
   search_state,
   model_names,
-  ofv_threshold = NULL,
+  p_value = NULL,
   rse_threshold = NULL
 )
 }
@@ -16,7 +16,7 @@ select_best_model(
 
 \item{model_names}{Character vector. Model names to evaluate}
 
-\item{ofv_threshold}{Numeric. OFV improvement threshold (uses config if NULL)}
+\item{p_value}{Numeric. P-value for forward selection (uses config if NULL)}
 
 \item{rse_threshold}{Numeric. Maximum RSE threshold (uses config if NULL)}
 }
@@ -25,7 +25,9 @@ List with best model, evaluation details, and updated search_state
 }
 \description{
 Evaluates completed models using delta OFV and RSE thresholds
-to identify the best performing model.
+to identify the best performing model. ΔOFV threshold is calculated based
+on p-value and covariate degrees of freedom (df=1 for continuous,
+df=n_levels-1 for categorical).
 }
 \details{
 Select Best Model from Statistical Evaluation

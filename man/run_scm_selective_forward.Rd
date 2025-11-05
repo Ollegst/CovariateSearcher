@@ -7,7 +7,7 @@
 run_scm_selective_forward(
   search_state,
   base_model_id = NULL,
-  ofv_threshold = NULL,
+  forward_p_value = NULL,
   rse_threshold = NULL,
   auto_submit = TRUE,
   auto_retry = TRUE
@@ -18,7 +18,7 @@ run_scm_selective_forward(
 
 \item{base_model_id}{Character. Starting base model (default: "run1")}
 
-\item{ofv_threshold}{Numeric. OFV improvement threshold (uses config if NULL)}
+\item{forward_p_value}{Numeric. P-value for forward selection (uses config if NULL)}
 
 \item{rse_threshold}{Numeric. Maximum RSE threshold (uses config if NULL)}
 
@@ -33,7 +33,4 @@ List with updated search_state and forward selection results
 Runs true forward selection where each step builds from the best model
 of the previous step, testing only remaining (untested) covariates. Implements
 standard pharmacometrics SCM methodology.
-}
-\details{
-Run SCM Forward Selection (CORRECTED VERSION)
 }

@@ -10,8 +10,8 @@ run_automated_scm_testing(
   scm_type = c("standard", "selective"),
   starting_phase = c("forward", "backward"),
   full_scm = TRUE,
-  forward_ofv_threshold = NULL,
-  backward_ofv_threshold = NULL,
+  forward_p_value = NULL,
+  backward_p_value = NULL,
   rse_threshold = NULL,
   auto_submit = TRUE,
   auto_retry = TRUE,
@@ -42,11 +42,11 @@ If TRUE: Always runs Forward selection → Backward elimination (regardless of s
 If FALSE: Runs only the specified starting_phase
 Note: True SCM should always include both forward and backward phases (default: TRUE)}
 
-\item{forward_ofv_threshold}{Numeric. OFV improvement threshold for forward selection.
-If NULL, uses search_state$search_config$forward_ofv_threshold (default: 3.84)}
+\item{forward_p_value}{Numeric. P-value for forward selection significance testing.
+If NULL, uses search_state$search_config$forward_p_value (default: 0.05)}
 
-\item{backward_ofv_threshold}{Numeric. OFV threshold for backward elimination.
-If NULL, uses 6.63 (more stringent than forward). Only used when starting_phase = "backward".}
+\item{backward_p_value}{Numeric. P-value for backward elimination significance testing.
+If NULL, uses search_state$search_config$backward_p_value (default: 0.01, more stringent)}
 
 \item{rse_threshold}{Numeric. Maximum RSE threshold as percentage.
 If NULL, uses search_state$search_config$max_rse_threshold (default: 50)}

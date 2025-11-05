@@ -9,7 +9,7 @@ run_stepwise_covariate_modeling(
   base_model_id = NULL,
   max_forward_steps = 10,
   auto_submit = TRUE,
-  ofv_threshold = NULL,
+  forward_p_value = NULL,
   rse_threshold = NULL
 )
 }
@@ -22,7 +22,7 @@ run_stepwise_covariate_modeling(
 
 \item{auto_submit}{Logical. Whether to automatically submit models (default: TRUE)}
 
-\item{ofv_threshold}{Numeric. OFV improvement threshold (uses config if NULL)}
+\item{forward_p_value}{Numeric. P-value for forward selection (uses config if NULL)}
 
 \item{rse_threshold}{Numeric. Maximum RSE threshold (uses config if NULL)}
 }

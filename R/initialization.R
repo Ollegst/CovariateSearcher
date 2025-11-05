@@ -204,8 +204,8 @@ validate_setup <- function(search_state) {
 #' @export
 initialize_search_config <- function(search_state) {
   search_state$search_config <- list(
-    forward_ofv_threshold = 3.84,
-    backward_ofv_threshold = 6.63,
+    forward_p_value = 0.05,        # p-value for forward selection
+    backward_p_value = 0.01,       # p-value for backward elimination (more stringent)
     max_rse_threshold = 50,
     max_forward_steps = 10,
     max_backward_steps = 10,
@@ -214,10 +214,11 @@ initialize_search_config <- function(search_state) {
     current_phase = "initialization",
     current_step = 0
   )
-  cat("Search configuration initialized\n")
-  return(search_state)
+  cat("Search configuration initialized with p-values:\n")
+  cat(sprintf("  Forward p-value: %.3f\n", search_state$search_config$forward_p_value))
+  cat(sprintf("  Backward p-value: %.3f\n", search_state$search_config$backward_p_value))
+  cat(sprintf("  RSE threshold: %d%%\n", search_state$search_config$max_rse_threshold))
 }
-
 
 #' Generate or Update tags.yaml File from Covariate Search Table
 #'
