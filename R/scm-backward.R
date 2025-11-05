@@ -68,7 +68,7 @@ run_backward_elimination <- function(search_state,
   # Main backward elimination loop
   while (backward_active) {
 
-    cat(sprintf("\n🎯 STEP %d: BACKWARD ELIMINATION\n", current_step))
+    cat(sprintf("\n🎯 BACKWARD ELIMINATION - Step %d\n", current_step))
     cat(paste(rep("-", 40), collapse=""), "\n")
 
     # Get current model's covariates

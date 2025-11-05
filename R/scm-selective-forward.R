@@ -183,7 +183,11 @@ run_scm_selective_forward <- function(search_state,
 
   # Initialize workflow variables
   forward_start_time <- Sys.time()
-  current_step <- 1
+  last_step <- max(search_state$search_database$step_number, na.rm = TRUE)
+  if (is.na(last_step) || is.infinite(last_step)) {
+    last_step <- 0
+  }
+  current_step <- last_step + 1
   current_best_model <- base_model_id
   forward_selection_active <- TRUE
   step_results <- list()
@@ -192,7 +196,7 @@ run_scm_selective_forward <- function(search_state,
   # Main selective forward selection loop
   while (forward_selection_active) {
 
-    cat(sprintf("\n🎯 STEP %d: SELECTIVE FORWARD SELECTION\n", current_step))
+    cat(sprintf("\n🎯 SELECTIVE FORWARD - Step %d\n", current_step))
     cat(paste(rep("-", 40), collapse=""), "\n")
 
     # Initialize significant_models outside if/else

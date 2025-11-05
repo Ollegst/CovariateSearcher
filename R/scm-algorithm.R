@@ -203,13 +203,18 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id = NULL,
 
   # Initialize tracking variables
   current_base_model <- base_model_id
-  step_count <- 0
   all_tested_covariates <- character(0)
   step_results <- list()
 
+  # Get starting step number from database
+  last_step <- max(search_state$search_database$step_number, na.rm = TRUE)
+  if (is.na(last_step) || is.infinite(last_step)) {
+    last_step <- 0
+  }
+  current_step_number <- last_step + 1
+
   # STEP 1: Initial univariate analysis on base model
-  cat(paste0("\n", "📍 STEP 1: INITIAL UNIVARIATE ANALYSIS\n"))
-  step_count <- step_count + 1
+  cat(sprintf("\n🎯 FORWARD SELECTION - Step %d\n", current_step_number))
 
   remaining_covariates <- get_remaining_covariates(search_state, current_base_model)
 
@@ -228,7 +233,7 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id = NULL,
     search_state = search_state,
     base_model_id = current_base_model,
     covariates_to_test = remaining_covariates,
-    step_name = "Step 1: Initial Univariate Analysis"
+    step_name = sprintf("Forward Selection - Step %d", current_step_number)
   )
 
   # VALIDATION: Check that step1_creation is valid
@@ -260,7 +265,7 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id = NULL,
   step1_completion <- submit_and_wait_for_step(
     search_state = search_state,
     model_names = step1_creation$models_created,
-    step_name = "Step 1 Models",
+    step_name = sprintf("Step %d Models", current_step_number),
     auto_submit = auto_submit
   )
 
@@ -285,6 +290,7 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id = NULL,
     p_value = forward_p_value,
     rse_threshold = rse_threshold
   )
+
   # VALIDATION: Check that step1_selection is valid
   if (is.null(step1_selection) || is.null(step1_selection$search_state)) {
     cat("❌ Failed in step1 selection - invalid result from select_best_model\n")
@@ -309,15 +315,19 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id = NULL,
   all_tested_covariates <- c(all_tested_covariates, step1_creation$successful_covariates)
 
   if (is.null(step1_selection$best_model)) {
-    cat("🏁 No significant improvement found in initial analysis\n")
+    cat("🛑 No significant improvement found in initial analysis\n")
     cat(sprintf("Final model: %s (no covariates added)\n", current_base_model))
 
     scm_time <- as.numeric(difftime(Sys.time(), scm_start_time, units = "mins"))
+
+    # Calculate final step
+    final_step <- max(search_state$search_database$step_number, na.rm = TRUE)
+
     return(list(
       search_state = search_state,
       status = "no_improvement_step1",
       final_model = current_base_model,
-      steps_completed = 1,
+      steps_completed = final_step - last_step,
       step_results = step_results,
       total_time_minutes = scm_time
     ))
@@ -325,12 +335,17 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id = NULL,
 
   # Update current base model
   current_base_model <- step1_selection$best_model
-  cat(sprintf("🎯 Step 1 complete - new base model: %s\n", current_base_model))
+  cat(sprintf("🎯 Step %d complete - new base model: %s\n", current_step_number, current_base_model))
 
-  # ITERATIVE FORWARD STEPS (Steps 2, 3, 4, ...)
-  for (forward_step in 2:max_forward_steps) {
+  # ITERATIVE FORWARD STEPS (continue from current step)
+  max_iterations <- max_forward_steps - 1  # -1 because we already did step 1
 
-    cat(sprintf("\n📍 STEP %d: FORWARD SELECTION ITERATION\n", forward_step))
+  for (iteration in 1:max_iterations) {
+
+    # Get current step number from database
+    current_step_number <- max(search_state$search_database$step_number, na.rm = TRUE) + 1
+
+    cat(sprintf("\n🎯 FORWARD SELECTION - Step %d\n", current_step_number))
 
     # Get remaining covariates (not yet in current model)
     remaining_covariates <- get_remaining_covariates(search_state, current_base_model, include_excluded = TRUE)
@@ -345,20 +360,20 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id = NULL,
       search_state = search_state,
       base_model_id = current_base_model,
       covariates_to_test = remaining_covariates,
-      step_name = sprintf("Step %d: Forward Selection", forward_step),
+      step_name = sprintf("Forward Selection - Step %d", current_step_number),
       include_excluded = TRUE
     )
 
     # VALIDATION: Check step_creation result
     if (is.null(step_creation) || is.null(step_creation$search_state)) {
-      cat(sprintf("❌ Failed to create Step %d models - invalid result\n", forward_step))
+      cat(sprintf("❌ Failed to create Step %d models - invalid result\n", current_step_number))
       break
     }
 
     search_state <- step_creation$search_state
 
     if (step_creation$status != "models_created") {
-      cat(sprintf("❌ Failed to create Step %d models\n", forward_step))
+      cat(sprintf("❌ Failed to create Step %d models\n", current_step_number))
       break
     }
 
@@ -366,13 +381,13 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id = NULL,
     step_completion <- submit_and_wait_for_step(
       search_state = search_state,
       model_names = step_creation$models_created,
-      step_name = sprintf("Step %d Models", forward_step),
+      step_name = sprintf("Step %d Models", current_step_number),
       auto_submit = auto_submit
     )
 
     # VALIDATION: Check step_completion result
     if (is.null(step_completion) || is.null(step_completion$search_state)) {
-      cat(sprintf("❌ Failed in Step %d completion - invalid result\n", forward_step))
+      cat(sprintf("❌ Failed in Step %d completion - invalid result\n", current_step_number))
       break
     }
 
@@ -388,14 +403,14 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id = NULL,
 
     # VALIDATION: Check step_selection result
     if (is.null(step_selection) || is.null(step_selection$search_state)) {
-      cat(sprintf("❌ Failed in Step %d selection - invalid result\n", forward_step))
+      cat(sprintf("❌ Failed in Step %d selection - invalid result\n", current_step_number))
       break
     }
 
     search_state <- step_selection$search_state
 
     # Store results
-    step_results[[sprintf("step_%d", forward_step)]] <- list(
+    step_results[[sprintf("step_%d", current_step_number)]] <- list(
       creation = step_creation,
       completion = step_completion,
       selection = step_selection
@@ -406,14 +421,13 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id = NULL,
 
     # Check if we found improvement
     if (is.null(step_selection$best_model)) {
-      cat(sprintf("🏁 No significant improvement found in Step %d\n", forward_step))
+      cat(sprintf("🛑 No significant improvement found in Step %d\n", current_step_number))
       break
     }
 
     # Update current base model
     current_base_model <- step_selection$best_model
-    cat(sprintf("🎯 Step %d complete - new base model: %s\n", forward_step, current_base_model))
-    step_count <- forward_step
+    cat(sprintf("🎯 Step %d complete - new base model: %s\n", current_step_number, current_base_model))
   }
 
 
@@ -423,12 +437,15 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id = NULL,
   cat(paste0("\n", paste(rep("=", 80), collapse=""), "\n"))
   cat("🏁 STEPWISE COVARIATE MODELING COMPLETE\n")
   cat(sprintf("⏱️  Total time: %.1f minutes\n", scm_time))
-  cat(sprintf("📊 Steps completed: %d\n", step_count))
+
+  # Calculate final step
+  final_step <- max(search_state$search_database$step_number, na.rm = TRUE)
+  cat(sprintf("📊 Steps completed: %d\n", final_step - last_step))
   cat(sprintf("🎯 Final model: %s\n", current_base_model))
 
   # Get final model details
   final_ofv <- read_nonmem_ext(file.path(search_state$models_folder, current_base_model))$ofv
-   base_ofv <- read_nonmem_ext(file.path(search_state$models_folder, base_model_id))$ofv
+  base_ofv <- read_nonmem_ext(file.path(search_state$models_folder, base_model_id))$ofv
   total_improvement <- if (!is.na(final_ofv) && !is.na(base_ofv)) {
     base_ofv - final_ofv
   } else {
@@ -490,10 +507,9 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id = NULL,
   return(list(
     search_state = search_state,
     status = "completed",
-    final_model = current_base_model,
     base_model = base_model_id,
     final_model = current_base_model,
-    steps_completed = step_count,
+    steps_completed = final_step - last_step,
     step_results = step_results,
     total_time_minutes = scm_time,
     final_covariates = final_covariates
