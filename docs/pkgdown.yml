@@ -1,0 +1,13 @@
+pandoc: 2.17.1.1
+pkgdown: 2.0.6
+pkgdown_sha: ~
+articles:
+  complete-workflow: complete-workflow.html
+  recovery-system: recovery-system.html
+  troubleshooting: troubleshooting.html
+  quick-start: quick-start.html
+last_built: 2025-11-06T13:04Z
+urls:
+  reference: https://ollegst.github.io/CovariateSearcher/reference
+  article: https://ollegst.github.io/CovariateSearcher/articles
+
