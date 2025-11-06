@@ -6,6 +6,9 @@ CovariateSearcher Package
 ## 🚀 Minimal Working Example
 
 ``` r
+# Install from GitHub
+devtools::install_github("Ollegst/CovariateSearcher")
+
 library(CovariateSearcher)
 
 # 1. Initialize
