@@ -12,7 +12,8 @@ initialize_covariate_search(
   timecol = "TIME",
   idcol = "ID",
   threads = 60,
-  discover_existing = TRUE
+  discover_existing = TRUE,
+  validate_parameters = TRUE
 )
 }
 \arguments{
@@ -31,6 +32,8 @@ initialize_covariate_search(
 \item{threads}{Integer. Number of threads for execution (default: 60)}
 
 \item{discover_existing}{Logical. Discover existing models (default: TRUE)}
+
+\item{validate_parameters}{Logical. Validate parameter block formatting (default: TRUE)}
 }
 \value{
 List containing complete search state configuration

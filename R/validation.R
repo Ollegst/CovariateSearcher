@@ -609,3 +609,420 @@ get_model_max_rse <- function(search_state, model_name) {
     return(NA_real_)
   })
 }
+
+
+#' Validate NONMEM Parameter Block Formatting
+#'
+#' @title Check THETA, OMEGA, and SIGMA block formatting for SCM compatibility
+#' @description Validates that parameter blocks follow the required format:
+#'   - OMEGA BLOCK: One value per line
+#'   - All blocks: Proper comment structure (value ; name ; units ; transform)
+#'
+#'   Required format for all parameter lines:
+#'   number ; PARAM_NAME ; [units] ; RATIO|LOG
+#'
+#'   Examples:
+#'   $THETA
+#'   0.5 ; CL ; L/h ; LOG
+#'   10  ; V  ; L   ; LOG
+#'
+#'   $OMEGA BLOCK(3)
+#'   0.1 ; IIV_CL    ; ; RATIO
+#'   0.1 ; IIV_CL_V2 ; ; RATIO
+#'   0.1 ; IIV_V2    ; ; RATIO
+#'
+#'   $SIGMA
+#'   0.1 ; RUV_PROP ; ; RATIO
+#'
+#' @param model_file Character. Path to .ctl or .mod file
+#' @param check_omega_structure Logical. Check OMEGA BLOCK has one value per line (default: TRUE)
+#' @param check_comments Logical. Require proper comment structure (default: TRUE)
+#' @param allow_empty_units Logical. Allow empty units field (default: TRUE)
+#' @return List with validation results
+#' @export
+validate_parameter_blocks <- function(model_file,
+                                      check_omega_structure = TRUE,
+                                      check_comments = TRUE,
+                                      allow_empty_units = TRUE) {
+
+  # ===================================================================
+  # SECTION 1: READ MODEL FILE
+  # ===================================================================
+
+  if (!file.exists(model_file)) {
+    return(list(
+      valid = FALSE,
+      issues = paste("Model file not found:", model_file),
+      model_file = model_file
+    ))
+  }
+
+  model_lines <- tryCatch({
+    readLines(model_file, warn = FALSE)
+  }, error = function(e) {
+    return(NULL)
+  })
+
+  if (is.null(model_lines)) {
+    return(list(
+      valid = FALSE,
+      issues = "Cannot read model file",
+      model_file = model_file
+    ))
+  }
+
+  # ===================================================================
+  # SECTION 2: IDENTIFY PARAMETER BLOCKS
+  # ===================================================================
+
+  issues <- character(0)
+  warnings <- character(0)
+
+  # Find all parameter block starts
+  theta_lines <- grep("^\\s*\\$THETA", model_lines, ignore.case = TRUE)
+  omega_lines <- grep("^\\s*\\$OMEGA", model_lines, ignore.case = TRUE)
+  sigma_lines <- grep("^\\s*\\$SIGMA", model_lines, ignore.case = TRUE)
+
+  all_blocks <- list(
+    THETA = theta_lines,
+    OMEGA = omega_lines,
+    SIGMA = sigma_lines
+  )
+
+  # ===================================================================
+  # SECTION 3: VALIDATE EACH PARAMETER BLOCK
+  # ===================================================================
+
+  for (block_type in names(all_blocks)) {
+    block_starts <- all_blocks[[block_type]]
+
+    if (length(block_starts) == 0) next
+
+    for (start_line in block_starts) {
+      block_header <- model_lines[start_line]
+
+      # Check if this is an OMEGA BLOCK
+      is_omega_block <- grepl("BLOCK\\s*\\(", block_header, ignore.case = TRUE)
+
+      # Extract block size for OMEGA BLOCK
+      block_size <- NA
+      if (is_omega_block) {
+        block_size_match <- regmatches(block_header,
+                                       regexec("BLOCK\\s*\\(\\s*(\\d+)\\s*\\)",
+                                               block_header, ignore.case = TRUE))
+        if (length(block_size_match[[1]]) > 1) {
+          block_size <- as.integer(block_size_match[[1]][2])
+        }
+      }
+
+      # Find end of this block (next $ section)
+      next_section_idx <- grep("^\\s*\\$",
+                               model_lines[(start_line + 1):length(model_lines)])
+      if (length(next_section_idx) > 0) {
+        end_line <- start_line + next_section_idx[1] - 1
+      } else {
+        end_line <- length(model_lines)
+      }
+
+      # Get block content (skip header)
+      block_lines <- model_lines[(start_line + 1):end_line]
+
+      # Remove empty lines and pure comment lines
+      block_lines_idx <- (start_line + 1):end_line
+      valid_idx <- !grepl("^\\s*$", block_lines) & !grepl("^\\s*;", block_lines)
+      block_lines <- block_lines[valid_idx]
+      block_line_numbers <- block_lines_idx[valid_idx]
+
+      if (length(block_lines) == 0) next
+
+      # ===================================================================
+      # SECTION 4: VALIDATE OMEGA BLOCK STRUCTURE
+      # ===================================================================
+
+      if (check_omega_structure && is_omega_block && !is.na(block_size)) {
+        # Check: Should have exactly block_size lines (one per parameter)
+        if (length(block_lines) != block_size) {
+          issues <- c(issues, sprintf(
+            "%s BLOCK(%d) at line %d: Expected %d lines, found %d lines",
+            block_type, block_size, start_line, block_size, length(block_lines)
+          ))
+        }
+
+        # Check: Each line should have only ONE numeric value
+        for (i in seq_along(block_lines)) {
+          line <- block_lines[i]
+          line_num <- block_line_numbers[i]
+
+          # Split by semicolon
+          parts <- strsplit(line, ";")[[1]]
+
+          if (length(parts) >= 1) {
+            value_part <- trimws(parts[1])
+
+            # Count numeric values (exclude FIX keyword)
+            value_part_clean <- gsub("FIX", "", value_part, ignore.case = TRUE)
+            numbers <- gregexpr("-?\\d+\\.?\\d*([eE][+-]?\\d+)?", value_part_clean)
+            num_values <- length(unlist(regmatches(value_part_clean, numbers)))
+
+            if (num_values > 1) {
+              issues <- c(issues, sprintf(
+                "Line %d (%s BLOCK line %d): Multiple values (%d) on one line - should have ONE value per line",
+                line_num, block_type, i, num_values
+              ))
+            } else if (num_values == 0) {
+              issues <- c(issues, sprintf(
+                "Line %d (%s BLOCK line %d): No numeric value found",
+                line_num, block_type, i
+              ))
+            }
+          }
+        }
+      }
+
+      # ===================================================================
+      # SECTION 5: VALIDATE COMMENT STRUCTURE
+      # ===================================================================
+
+      if (check_comments) {
+        for (i in seq_along(block_lines)) {
+          line <- block_lines[i]
+          line_num <- block_line_numbers[i]
+
+          # Expected format: number ; NAME ; units ; RATIO|LOG
+          # Split by semicolon
+          parts <- strsplit(line, ";")[[1]]
+          parts <- trimws(parts)
+
+          # Should have at least 4 parts (value, name, units, transform)
+          if (length(parts) < 4) {
+            issues <- c(issues, sprintf(
+              "Line %d (%s): Incorrect comment format - expected 'value ; NAME ; units ; RATIO|LOG', found %d field(s)",
+              line_num, block_type, length(parts)
+            ))
+            next
+          }
+
+          value_part <- parts[1]
+          name_part <- parts[2]
+          units_part <- parts[3]
+          transform_part <- parts[4]
+
+          # Check 1: Value part should have a number
+          has_number <- grepl("\\d", value_part)
+          if (!has_number) {
+            issues <- c(issues, sprintf(
+              "Line %d (%s): No numeric value found in first field",
+              line_num, block_type
+            ))
+          }
+
+          # Check 2: Name should not be empty
+          if (nchar(name_part) == 0) {
+            issues <- c(issues, sprintf(
+              "Line %d (%s): Parameter name (field 2) is empty",
+              line_num, block_type
+            ))
+          }
+
+          # Check 3: Units can be empty if allowed
+          if (!allow_empty_units && nchar(units_part) == 0) {
+            warnings <- c(warnings, sprintf(
+              "Line %d (%s): Units field (field 3) is empty",
+              line_num, block_type
+            ))
+          }
+
+          # Check 4: Transform should be RATIO or LOG
+          transform_upper <- toupper(trimws(transform_part))
+          valid_transforms <- c("RATIO", "LOG")
+          if (!(transform_upper %in% valid_transforms)) {
+            issues <- c(issues, sprintf(
+              "Line %d (%s): Transform (field 4) should be 'RATIO' or 'LOG', found '%s'",
+              line_num, block_type, transform_part
+            ))
+          }
+
+          # Check 5: For THETA and SIGMA, should not have multiple values per line
+          if (block_type %in% c("THETA", "SIGMA")) {
+            value_part_clean <- gsub("FIX", "", value_part, ignore.case = TRUE)
+            # Remove bounds syntax like (0, x, 100)
+            value_part_clean <- gsub("\\([^)]+\\)", "", value_part_clean)
+            numbers <- gregexpr("-?\\d+\\.?\\d*([eE][+-]?\\d+)?", value_part_clean)
+            num_values <- length(unlist(regmatches(value_part_clean, numbers)))
+
+            if (num_values > 1) {
+              issues <- c(issues, sprintf(
+                "Line %d (%s): Multiple values (%d) on one line - should have ONE value per line",
+                line_num, block_type, num_values
+              ))
+            }
+          }
+        }
+      }
+    }
+  }
+
+  # ===================================================================
+  # SECTION 6: GENERATE RESULTS
+  # ===================================================================
+
+  valid <- length(issues) == 0
+
+  result <- list(
+    valid = valid,
+    issues = issues,
+    warnings = warnings,
+    model_file = model_file,
+    blocks_checked = list(
+      THETA = length(all_blocks$THETA) > 0,
+      OMEGA = length(all_blocks$OMEGA) > 0,
+      SIGMA = length(all_blocks$SIGMA) > 0
+    )
+  )
+
+  return(result)
+}
+
+
+#' Print Parameter Block Validation Results
+#'
+#' @title Display parameter validation results in readable format
+#' @param validation_result List. Output from validate_parameter_blocks()
+#' @param verbose Logical. Show detailed information (default: TRUE)
+#' @export
+print_parameter_validation <- function(validation_result, verbose = TRUE) {
+
+  cat("\n")
+  cat(paste(rep("=", 70), collapse = ""), "\n")
+  cat("PARAMETER BLOCK VALIDATION RESULTS\n")
+  cat(paste(rep("=", 70), collapse = ""), "\n\n")
+
+  cat(sprintf("Model file: %s\n\n", validation_result$model_file))
+
+  # Show which blocks were found
+  blocks_found <- names(validation_result$blocks_checked)[
+    unlist(validation_result$blocks_checked)]
+  if (length(blocks_found) > 0) {
+    cat(sprintf("Blocks found: %s\n\n", paste(blocks_found, collapse = ", ")))
+  } else {
+    cat("No parameter blocks found\n\n")
+  }
+
+  # Validation status
+  if (validation_result$valid) {
+    cat("✅ VALIDATION PASSED\n")
+    cat("All parameter blocks are correctly formatted.\n")
+
+    if (length(validation_result$warnings) > 0 && verbose) {
+      cat(sprintf("\n⚠️  %d warning(s):\n", length(validation_result$warnings)))
+      for (warning in validation_result$warnings) {
+        cat(sprintf("  • %s\n", warning))
+      }
+    }
+
+  } else {
+    cat("❌ VALIDATION FAILED\n\n")
+    cat(sprintf("Found %d issue(s):\n\n", length(validation_result$issues)))
+
+    for (issue in validation_result$issues) {
+      cat(sprintf("  ❌ %s\n", issue))
+    }
+
+    if (length(validation_result$warnings) > 0 && verbose) {
+      cat(sprintf("\n⚠️  %d warning(s):\n", length(validation_result$warnings)))
+      for (warning in validation_result$warnings) {
+        cat(sprintf("  • %s\n", warning))
+      }
+    }
+
+    # Provide fix guidance
+    cat("\n")
+    cat(paste(rep("-", 70), collapse = ""), "\n")
+    cat("REQUIRED FORMAT:\n")
+    cat(paste(rep("-", 70), collapse = ""), "\n")
+    cat("Each parameter line must follow this structure:\n")
+    cat("  value ; PARAM_NAME ; units ; RATIO|LOG\n\n")
+    cat("Examples:\n")
+    cat("  $THETA\n")
+    cat("  0.5 ; TVCL ; L/h ; LOG\n")
+    cat("  10  ; TVV  ; L   ; LOG\n\n")
+    cat("  $OMEGA BLOCK(3)\n")
+    cat("  0.1 ; IIV_CL    ; ; RATIO\n")
+    cat("  0.1 ; IIV_CL_V2 ; ; RATIO\n")
+    cat("  0.1 ; IIV_V2    ; ; RATIO\n\n")
+    cat("  $SIGMA\n")
+    cat("  0.1 ; RUV_PROP ; ; RATIO\n")
+  }
+
+  cat(paste(rep("=", 70), collapse = ""), "\n\n")
+
+  invisible(validation_result)
+}
+
+
+#' Validate Base Model Parameter Structure (For Initialization)
+#'
+#' @title Check base model parameter formatting during SCM initialization
+#' @description Called during initialize_covariate_search() to ensure base model
+#'   has properly formatted THETA, OMEGA, and SIGMA blocks for SCM operations.
+#'   This prevents issues during covariate addition/removal.
+#'
+#' @param base_model_path Character. Path to base model directory or .ctl file
+#' @param strict Logical. If TRUE, stops on validation failure (default: TRUE)
+#' @param check_omega_structure Logical. Validate OMEGA BLOCK structure (default: TRUE)
+#' @param check_comments Logical. Validate comment structure (default: TRUE)
+#' @return List with validation results. Stops execution if strict=TRUE and validation fails.
+#' @export
+validate_base_model_parameters <- function(base_model_path,
+                                           strict = TRUE,
+                                           check_omega_structure = TRUE,
+                                           check_comments = TRUE) {
+
+  cat("\n")
+  cat(paste(rep("=", 70), collapse = ""), "\n")
+  cat("VALIDATING BASE MODEL PARAMETER STRUCTURE\n")
+  cat(paste(rep("=", 70), collapse = ""), "\n")
+
+  # Find model file
+  if (dir.exists(base_model_path)) {
+    ctl_files <- list.files(base_model_path, pattern = "\\.(ctl|mod)$",
+                            full.names = TRUE, ignore.case = TRUE)
+    if (length(ctl_files) == 0) {
+      stop("No .ctl or .mod file found in directory: ", base_model_path)
+    }
+    model_file <- ctl_files[1]
+  } else if (file.exists(base_model_path)) {
+    model_file <- base_model_path
+  } else {
+    stop("Base model path not found: ", base_model_path)
+  }
+
+  cat(sprintf("\nChecking: %s\n", model_file))
+
+  # Run validation
+  validation <- validate_parameter_blocks(
+    model_file = model_file,
+    check_omega_structure = check_omega_structure,
+    check_comments = check_comments,
+    allow_empty_units = TRUE
+  )
+
+  # Print results
+  print_parameter_validation(validation, verbose = TRUE)
+
+  # Handle validation failure
+  if (!validation$valid) {
+    if (strict) {
+      stop("\n❌ Base model validation FAILED. Please fix parameter block formatting before initializing SCM.")
+    } else {
+      warning("\n⚠️  Base model has formatting issues. SCM may encounter problems.")
+    }
+  } else {
+    cat("✅ Base model parameter structure is valid for SCM\n\n")
+  }
+
+  return(validation)
+}
+
+
+

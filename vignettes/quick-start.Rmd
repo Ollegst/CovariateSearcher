@@ -1,0 +1,52 @@
+---
+title: "Quick Start Guide"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Quick Start Guide}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE
+)
+```
+
+# CovariateSearcher Quick Start
+
+This is a minimal vignette included in the package installation.
+
+For complete documentation, see the [online documentation](https://ollegst.github.io/CovariateSearcher/).
+
+## Basic Usage
+
+```{r basic}
+library(CovariateSearcher)
+
+# Initialize a new search
+search_state <- initialize_new_search(
+  base_model_path = "models/run1",
+  data_file_path = "data/analysis.csv",
+  covariate_search_path = "data/covariates.csv"
+)
+
+# Run stepwise covariate modeling
+result <- run_stepwise_covariate_modeling(
+  search_state = search_state,
+  forward_threshold = 3.84,
+  max_steps = 10
+)
+```
+
+## Next Steps
+
+Visit the [online documentation](https://ollegst.github.io/CovariateSearcher/) for:
+
+- Complete workflow examples
+- Advanced features
+- Troubleshooting guide
+- Case studies
+

@@ -1,0 +1,70 @@
+
+url: https://ollegst.github.io/CovariateSearcher/
+
+template:
+  bootstrap: 5
+  bootswatch: flatly
+
+navbar:
+  structure:
+    left:  [intro, reference, articles, tutorials, news]
+    right: [search, github]
+  components:
+    articles:
+      text: Articles
+      menu:
+      - text: Quick Start (in package)
+        href: articles/quick-start.html
+    tutorials:
+      text: Extended Docs
+      menu:
+      - text: Complete Workflow
+        href: articles/complete-workflow.html
+      - text: Troubleshooting Guide
+        href: articles/troubleshooting.html
+      - text: Recovery System
+        href: articles/recovery-system.html
+
+articles:
+- title: Getting Started
+  navbar: ~
+  contents:
+  - quick-start
+
+- title: Extended Documentation
+  navbar: Extended Docs
+  contents:
+  - articles/complete-workflow
+  - articles/troubleshooting
+  - articles/recovery-system
+
+reference:
+- title: Main Workflow Functions
+  desc: Core functions for running SCM
+  contents:
+  - initialize_new_search
+  - run_stepwise_covariate_modeling
+  - run_scm_selective_forward
+  - run_backward_elimination
+
+- title: Model Operations
+  desc: Functions for model creation and modification
+  contents:
+  - add_covariate_to_model
+  - remove_covariate_from_model
+  - create_retry_model
+
+- title: Evaluation and Selection
+  desc: Functions for model evaluation
+  contents:
+  - select_best_model
+  - update_model_status_from_files
+  - get_param2
+  - get_significant_models_from_step
+
+- title: Monitoring and Reporting
+  desc: Functions for tracking progress
+  contents:
+  - get_model_status_from_files
+  - get_model_info
+

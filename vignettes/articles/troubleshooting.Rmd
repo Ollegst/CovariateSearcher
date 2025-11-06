@@ -1,0 +1,156 @@
+---
+title: "Troubleshooting Guide"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE
+)
+```
+
+# Troubleshooting Guide
+
+Common issues and solutions when using CovariateSearcher.
+
+## Model Failures
+
+### Issue: Models fail with "MINIMIZATION NOT SUCCESSFUL"
+
+**Solution**: The recovery system should handle this automatically. Check:
+
+```{r check-recovery}
+# Check if retry models were created
+retries <- search_state$search_database %>%
+  filter(phase == "retry")
+
+print(retries)
+```
+
+If retries also failed, you may need to:
+1. Adjust initial estimates in base model
+2. Simplify the covariate relationship
+3. Check for collinearity between covariates
+
+### Issue: "Error 134" or Singular Matrix
+
+**Solution**: This indicates numerical issues. The recovery system will:
+1. Create retry model with different THETA sign
+2. Try alternative parameterization
+
+### Issue: OFV > 10^10 (Infinite OFV)
+
+**Solution**: Automatically detected and model marked as failed.
+
+```{r check-failed}
+# View failed models
+failed <- search_state$search_database %>%
+  filter(status == "failed")
+
+print(failed$estimation_issue)
+```
+
+## Selection Issues
+
+### Issue: No models selected in Step 2+
+
+**Cause**: Models may not meet BOTH criteria (ΔOFV AND RSE)
+
+**Solution**: Check which criterion is failing:
+
+```{r diagnose}
+step2_models <- search_state$search_database %>%
+  filter(step_number == 2, phase == "forward_selection")
+
+# Check ΔOFV
+step2_models %>%
+  select(model_name, covariate_tested, delta_ofv, rse_max) %>%
+  mutate(
+    passes_ofv = delta_ofv > 3.84,
+    passes_rse = rse_max < 50
+  )
+```
+
+Consider:
+- Lowering RSE threshold if needed
+- Checking if covariates are too correlated
+
+### Issue: Backward elimination removes all covariates
+
+**Cause**: Threshold too low or covariates not truly significant
+
+**Solution**: Use more stringent backward threshold (6.63 vs 3.84)
+
+## Data Issues
+
+### Issue: "Covariate not found in dataset"
+
+**Solution**: Check column names match exactly:
+
+```{r check-names}
+# Check dataset columns
+names(read.csv(search_state$data_file_path))
+
+# Check covariate config
+read.csv(search_state$covariate_search_path) %>%
+  pull(COVARIATE) %>%
+  unique()
+```
+
+### Issue: Missing values in covariates
+
+**Solution**: NONMEM requires complete data. Either:
+1. Impute missing values before SCM
+2. Exclude subjects with missing covariates
+
+```{r check-missing}
+data <- read.csv(search_state$data_file_path)
+
+# Check for missing
+sapply(data, function(x) sum(is.na(x)))
+```
+
+## Performance Issues
+
+### Issue: Models running slowly
+
+**Solution**: 
+1. Check cluster configuration
+2. Reduce number of simultaneous submissions
+3. Use selective forward search instead of full search
+
+```{r selective-search}
+# Test only significant covariates from step 1
+result <- run_scm_selective_forward(
+  search_state = search_state,
+  forward_threshold = 3.84
+)
+```
+
+## Database Issues
+
+### Issue: Database out of sync with model files
+
+**Solution**: Force database update:
+
+```{r force-update}
+# Update all model statuses from files
+for (model_name in search_state$search_database$model_name) {
+  update_model_status_from_files(search_state, model_name)
+}
+```
+
+### Issue: Tags not showing all covariates
+
+**Solution**: This was a bug fixed in recent version. Update to latest version.
+
+## Getting Help
+
+If issues persist:
+
+1. Check model .lst files for NONMEM errors
+2. Verify base model runs successfully
+3. Review database for error messages
+4. Open issue on GitHub with reproducible example
+

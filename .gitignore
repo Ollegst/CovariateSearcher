@@ -24,3 +24,5 @@ Thumbs.db
 R_backup/
 migration.R
 scripts/
+inst/doc
+docs

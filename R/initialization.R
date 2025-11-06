@@ -20,6 +20,7 @@
 #' @param idcol Character. ID column name (default: "ID")
 #' @param threads Integer. Number of threads for execution (default: 60)
 #' @param discover_existing Logical. Discover existing models (default: TRUE)
+#' @param validate_parameters Logical. Validate parameter block formatting (default: TRUE)
 #' @return List containing complete search state configuration
 #' @export
 initialize_covariate_search <- function(base_model_path,
@@ -29,7 +30,8 @@ initialize_covariate_search <- function(base_model_path,
                                         timecol = "TIME",
                                         idcol = "ID",
                                         threads = 60,
-                                        discover_existing = TRUE) {
+                                        discover_existing = TRUE,
+                                        validate_parameters = TRUE) {
 
   cat("Initializing CovariateSearcher (Core Module)...\n")
 
@@ -104,6 +106,12 @@ initialize_covariate_search <- function(base_model_path,
   if (!dir.exists(scm_rds_dir)) {
     dir.create(scm_rds_dir, recursive = TRUE)
     cat("📁 Created: models/scm_rds/ for interim saves\n")
+  }
+  if (validate_parameters) {
+    validate_base_model_parameters(
+      base_model_path = base_model_path,
+      strict = TRUE  # Stops if issues found
+    )
   }
   cat("CovariateSearcher (Core) initialized successfully!\n")
   return(search_state)

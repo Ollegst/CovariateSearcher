@@ -3,7 +3,7 @@ Type: Package
 Title: Stepwise Covariate Modeling with NONMEM/bbi Integration
 Version: 0.1.0
 Authors@R: 
-    person("Oleg", "Stepanov", , "oleg.stepanov@astrazeneca.com", role = c("aut", "cre"),
+    person("Oleg", "Stepanov", email ="oleg.stepanov@astrazeneca.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0001-6129-6499"))
 Description: Functional R package for automated stepwise covariate modeling (SCM) 
     with NONMEM integration via bbi/bbr. Provides complete SCM workflow automation,

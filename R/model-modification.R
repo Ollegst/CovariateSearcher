@@ -416,13 +416,22 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
 
   log_function(paste("Time-varying check:", time_varying, "(max levels:", max_levels, ")"))
 
-  if(time_varying == FALSE){
+  if(time_varying == FALSE) {
+    # First try to find TV_ prefixed parameter (typical values)
     linetu <- grep(paste0('^\\s*TV_', param), modelcode)
     search_pattern <- paste0('^\\s*TV_', param)
+
+    # If not found, try parameter without TV_ prefix (e.g., Km, Vmax, etc.)
+    if (length(linetu) == 0) {
+      linetu <- grep(paste0('^\\s*', param, '\\s*='), modelcode)
+      search_pattern <- paste0('^\\s*', param, '\\s*=')
+     }
   } else {
+    # Time-varying: search for parameter as-is
     linetu <- grep(paste0('^\\s*', param), modelcode)
     search_pattern <- paste0('^\\s*', param)
   }
+
 
   log_function(paste("Looking for parameter line with pattern:", search_pattern))
   log_function(paste("Found parameter line at index:", linetu))

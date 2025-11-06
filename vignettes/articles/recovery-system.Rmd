@@ -1,0 +1,201 @@
+---
+title: "Understanding the Recovery System"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE
+)
+```
+
+# Understanding the Recovery System
+
+CovariateSearcher includes an intelligent recovery system that automatically handles model estimation failures.
+
+## How Recovery Works
+
+### Detection Phase
+
+The system monitors for several failure indicators:
+
+1. **Infinite OFV**: OFV > 10^10
+2. **Singular Matrix**: "SINGULAR CONVERGENCE CRITERIA"
+3. **Error 134**: Numerical errors
+4. **Minimization Failure**: "MINIMIZATION NOT SUCCESSFUL"
+
+### Automatic Retry
+
+When a failure is detected, the system:
+
+```r
+# 1. Marks original model as failed
+model$status <- "failed"
+
+# 2. Creates retry model with adjusted parameters
+retry_model <- create_retry_model(
+  original_model = "run11",
+  retry_number = 1  # Creates run11001
+)
+
+# 3. Adjusts THETA initial estimate
+# Original: THETA(1) = 0.1
+# Retry:    THETA(1) = -0.1
+
+# 4. Submits retry automatically if auto_retry = TRUE
+```
+
+## Example Recovery Workflow
+
+### Scenario: AGE on CL fails
+
+```{r example}
+# Step 1: Original model (run11) fails
+search_state$search_database %>%
+  filter(model_name == "run11")
+#   model_name  status  estimation_issue
+#   run11       failed  OFV > 10^10
+
+# Step 2: Retry created automatically (run11001)
+search_state$search_database %>%
+  filter(model_name == "run11001")
+#   model_name  status       phase
+#   run11001    in_progress  retry
+
+# Step 3: If retry succeeds
+search_state$search_database %>%
+  filter(model_name == "run11001")
+#   model_name  status     ofv      delta_ofv
+#   run11001    completed  1234.5   -5.2
+```
+
+## Retry Strategies
+
+### THETA Sign Adjustment
+
+The most common issue is poor initial estimates. Changing the sign often helps:
+
+```
+Original THETA:
+$THETA
+0.1  ; AGE on CL
+
+Retry THETA:
+$THETA
+-0.1  ; AGE on CL
+```
+
+### When Retries Fail
+
+If retry also fails, the covariate relationship may be:
+
+1. **Too complex**: Try simpler relationship (linear instead of power)
+2. **Collinear**: Covariate correlated with another in model
+3. **Wrong functional form**: Try different relationship type
+
+## Monitoring Recovery
+
+### Check Recovery Status
+
+```{r monitor-recovery}
+# View all retry models
+retries <- search_state$search_database %>%
+  filter(phase == "retry") %>%
+  arrange(parent_model, model_name)
+
+print(retries)
+```
+
+### Success Rate
+
+```{r success-rate}
+# Calculate recovery success rate
+recovery_stats <- search_state$search_database %>%
+  filter(phase == "retry") %>%
+  count(status) %>%
+  mutate(rate = n / sum(n))
+
+print(recovery_stats)
+```
+
+## Disabling Auto-Retry
+
+If you prefer manual control:
+
+```{r manual}
+search_state <- initialize_new_search(
+  base_model_path = "models/run1",
+  data_file_path = "data/data.csv",
+  covariate_search_path = "data/covariates.csv",
+  auto_retry = FALSE  # Disable automatic retry
+)
+
+# Then manually create retries when needed
+retry_model <- create_retry_model(
+  search_state = search_state,
+  model_name = "run11",
+  retry_number = 1
+)
+```
+
+## Advanced: Custom Recovery
+
+For complex cases, you can implement custom recovery:
+
+```{r custom}
+# 1. Identify problematic models
+failed <- search_state$search_database %>%
+  filter(status == "failed", phase != "retry")
+
+# 2. For each failure, create custom retry
+for (model in failed$model_name) {
+  # Read original model
+  model_path <- file.path(search_state$models_folder, model)
+  
+  # Custom modifications beyond THETA sign
+  # - Adjust initial estimates
+  # - Change estimation method
+  # - Simplify covariate relationship
+  
+  # Create modified model
+  # (custom code here)
+}
+```
+
+## Best Practices
+
+1. **Let auto-retry work first**: Usually fixes 60-80% of failures
+2. **Check .lst files**: Understand why models failed
+3. **Review base model**: Ensure it's stable before SCM
+4. **Monitor RSE**: High RSE indicates estimation issues
+5. **Use appropriate thresholds**: ΔOFV=3.84, RSE<50% are reasonable
+
+## Recovery Statistics
+
+Track recovery performance across your search:
+
+```{r stats}
+# Summary of all models
+summary_stats <- search_state$search_database %>%
+  group_by(phase, status) %>%
+  summarize(
+    count = n(),
+    .groups = "drop"
+  )
+
+print(summary_stats)
+
+# Successful recovery rate
+successful_retries <- search_state$search_database %>%
+  filter(phase == "retry", status == "completed") %>%
+  nrow()
+
+total_retries <- search_state$search_database %>%
+  filter(phase == "retry") %>%
+  nrow()
+
+cat("Recovery success rate:", 
+    round(100 * successful_retries / total_retries, 1), "%\n")
+```
+
