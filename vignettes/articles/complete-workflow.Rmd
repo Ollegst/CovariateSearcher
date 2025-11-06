@@ -64,17 +64,17 @@ covariate_config <- tribble(
   "V",        "WT",        "test",  "power",  NA,      NA
 )
 
-write.csv(covariate_config, "data/covariate_search.csv", row.names = FALSE)
+write.csv(covariate_config, "data/derived/covariate_search.csv", row.names = FALSE)
 ```
 
 ## Step 2: Initialize Search
 
 ```{r initialize}
 search_state <- initialize_new_search(
-  base_model_path = "models/run1",              # Your base model
-  data_file_path = "data/nonmem_data.csv",      # NONMEM dataset
+  base_model_path = "run1",                             # Your base model
+  data_file_path = "data/derived/nonmem_data.csv",      # NONMEM dataset
   covariate_search_path = "data/covariate_search.csv",
-  models_folder = "models",                     # Where to save models
+  models_folder = "models/",                     # Where to save models
   output_folder = "output",                     # Where to save results
   auto_submit = TRUE,                           # Submit models automatically
   auto_retry = TRUE                             # Retry failed models
@@ -177,15 +177,11 @@ print(retries)
 ## Exporting Results
 
 ```{r export}
-# Save complete state
-saveRDS(search_state, "output/search_state.rds")
-
-# Export database to CSV
-write.csv(
-  search_state$search_database,
-  "output/scm_results.csv",
-  row.names = FALSE
-)
+#read results from final step
+search_state <- readRDS("./models/scm_rds/scm_auto_final_complete.rds")
+# create table with results
+results_table <- create_scm_results_table(search_state)
+print_scm_results_table(search_state)
 ```
 
 ## Next Steps

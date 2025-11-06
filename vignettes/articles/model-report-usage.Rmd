@@ -1,0 +1,476 @@
+---
+title: "Generating Parameter Tables with model_report()"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE
+)
+```
+
+# Generating Formatted Parameter Tables
+
+The `model_report()` function creates professional parameter tables from NONMEM model outputs. It formats estimates, RSE values, and shrinkage in a publication-ready table.
+
+## 📋 Overview
+
+**Purpose:** Generate formatted parameter comparison tables for one or more models
+
+**Key Features:**
+- ✅ Formatted parameter names and labels from YAML specs
+- ✅ Automatic grouping (typical parameters, IIV, residual error, covariates)
+- ✅ Side-by-side comparison of multiple models
+- ✅ Handles failed models gracefully
+- ✅ Publication-ready flextable output
+
+---
+
+## 🚀 Basic Usage
+
+### Step 1: Load YAML Specification File
+
+The `model_report()` function uses a YAML specification file (`pk-extend.yml`) to format parameter names and labels.
+
+```{r load_spec}
+library(CovariateSearcher)
+library(yspec)
+library(here)
+
+# Load parameter specification file
+spec_pk <- read_yaml(here("data", "spec", "pk-extend.yml"))
+```
+
+**What's in pk-extend.yml?**
+This file defines how parameters should be displayed:
+
+```yaml
+CL:
+  short: CL/F
+  label: Apparent clearance
+  unit: L/h
+V:
+  short: Vc/F
+  label: Apparent central volume
+  unit: L
+IIV_CL:
+  short: CL CV%
+  label: Inter-individual variability on clearance
+```
+
+See the [YAML Specification Files](yaml-specification-files.html) article for complete details.
+
+---
+
+### Step 2: Generate Report for Single Model
+
+```{r single_model}
+# Generate table for one model
+pk_res <- model_report(
+  model_names = "run28",
+  spec_pk = spec_pk
+)
+
+# Display table
+pk_res
+```
+
+**Output Example:**
+
+| parameter_names         | label                      | Estimate | RSE (%) | Shrinkage (%) |
+|-------------------------|----------------------------|----------|---------|---------------|
+| **Typical parameters**                                                                    |
+| Ka (1/hr)               | Absorption rate constant   | 4.91     | 20.35   |               |
+| CL/F (L/h)              | Apparent clearance         | 121.85   | 4.76    |               |
+| Vc/F (L)                | Apparent central volume    | 479.42   | 6.29    |               |
+| **Inter-individual variability**                                                          |    
+| KA CV%                  | IIV on absorption          | 615.49   | 49.21   | 10.16         |
+| CL/F CV%                | IIV on clearance           | 52.22    | 4.48    | 2.82          |
+| **Parameter-Covariate relationships**                                                     |
+| AGE~CL/F                | Effect of AGE on clearance | -0.06    | 39.26   |               |
+| **Residual variability**                                                                  |
+| prop error              | Proportional error         | 34.39    | 0.51    | 12.10         |
+
+---
+
+### Step 3: Generate Report for Multiple Models
+
+Compare parameters across multiple models:
+
+```{r multiple_models}
+# Compare 3 models side-by-side
+pk_res <- model_report(
+  model_names = c("run10", "run28", "run45"),
+  spec_pk = spec_pk
+)
+
+pk_res
+```
+
+**Output shows:**
+- Side-by-side comparison
+- Each model in separate column
+- Format: `Estimate (RSE%) [Shrinkage%]`
+
+---
+
+## 📊 Function Parameters
+
+```{r function_signature}
+model_report(
+  model_names,              # Character vector of model names
+  shrinkage = "etasd",     # Type of shrinkage ("etasd", "etavr", "ebvsd", "ebvvr")
+  models_folder = "models", # Path to models folder
+  spec_pk = NULL           # yspec object for formatting (optional but recommended)
+)
+```
+
+### Parameters Explained
+
+| Parameter       | Description                          | Default    | Required    |
+|-----------------|--------------------------------------|------------|-------------|
+| `model_names`   | Model name(s) without file extension | -          | ✅ Yes |    | 
+| `shrinkage`     | Type of shrinkage to report          | `"etasd"`  | No          |
+| `models_folder` | Directory containing models          | `"models"` | No          |
+| `spec_pk`       | YAML specification for formatting    | `NULL`     | Recommended |
+
+### Shrinkage Options
+
+- `"etasd"` - ETA-based SD (default, most common)
+- `"etavr"` - ETA-based variance
+- `"ebvsd"` - EBV-based SD
+- `"ebvvr"` - EBV-based variance
+
+---
+
+## 🎯 Complete Example
+
+```{r complete_example}
+library(CovariateSearcher)
+library(yspec)
+library(here)
+
+# 1. Load YAML specification
+spec_pk <- read_yaml(here("data", "spec", "pk-extend.yml"))
+
+# 2. Generate report for final models
+final_models <- c("run85", "run90", "run95")
+
+pk_res <- model_report(
+  model_names = final_models,
+  spec_pk = spec_pk
+)
+
+# 3. Display table
+pk_res
+
+# 4. Save to Word document (optional)
+flextable::save_as_docx(
+  pk_res, 
+  path = "output/parameter_table.docx"
+)
+
+# 5. Save to PowerPoint (optional)
+flextable::save_as_pptx(
+  pk_res,
+  path = "output/parameter_table.pptx"
+)
+```
+
+---
+
+## 🛡️ Error Handling
+
+The function gracefully handles models that fail to load or process.
+
+### Example: Some Models Fail
+
+```{r error_handling}
+# run1 doesn't exist, but others do
+pk_res <- model_report(
+  model_names = c("run1", "run28", "run45"),
+  spec_pk = spec_pk
+)
+```
+
+**Output:**
+```
+📊 Generating report for 3 model(s)...
+  Processing run1... ✗
+    ⚠️  Error: File does not exist: 'models/run1.yaml'
+  Processing run28... ✓
+  Processing run45... ✓
+
+⚠️  WARNING: The following models failed and were excluded:
+  • run1
+
+✅ Successfully processed 2/3 model(s)
+
+[Table shows run28 and run45 only]
+Note: 1 model(s) excluded due to errors: run1
+```
+
+**Key Points:**
+- ✅ Failed models are automatically skipped
+- ✅ Clear indication which models failed
+- ✅ Detailed error message for each failure
+- ✅ Report generated for successful models only
+- ✅ Footer note shows excluded models
+
+---
+
+## 📝 Parameter Formatting
+
+### Without spec_pk (Basic)
+
+```{r without_spec}
+# No YAML specification
+pk_res <- model_report(
+  model_names = "run28",
+  spec_pk = NULL  # or just omit this parameter
+)
+```
+
+**Output shows:**
+- Parameter names as they appear in NONMEM (e.g., `THETA1`, `OMEGA(1,1)`)
+- No formatted labels
+- No units
+
+### With spec_pk (Formatted)
+
+```{r with_spec}
+# With YAML specification
+spec_pk <- read_yaml(here("data", "spec", "pk-extend.yml"))
+
+pk_res <- model_report(
+  model_names = "run28",
+  spec_pk = spec_pk
+)
+```
+
+**Output shows:**
+- Formatted names: `CL/F (L/h)` instead of `THETA1`
+- Descriptive labels: "Apparent clearance"
+- Proper units from YAML file
+- Covariate effects formatted nicely
+
+**Recommendation:** Always use `spec_pk` for professional output!
+
+---
+
+## 🎨 Customizing Output
+
+### Modify Table Appearance
+
+The output is a `flextable` object, so you can customize it:
+
+```{r customize}
+pk_res <- model_report(
+  model_names = c("run28", "run45"),
+  spec_pk = spec_pk
+)
+
+# Customize the table
+pk_res <- pk_res %>%
+  flextable::fontsize(size = 10, part = "all") %>%
+  flextable::color(color = "darkblue", part = "header") %>%
+  flextable::add_header_lines(
+    values = "Population PK Parameter Estimates"
+  )
+
+pk_res
+```
+
+### Export Options
+
+```{r export}
+# To Word
+flextable::save_as_docx(
+  pk_res, 
+  path = "tables/parameters.docx"
+)
+
+# To PowerPoint
+flextable::save_as_pptx(
+  pk_res,
+  path = "tables/parameters.pptx"
+)
+
+# To HTML
+flextable::save_as_html(
+  pk_res,
+  path = "tables/parameters.html"
+)
+
+# To image
+flextable::save_as_image(
+  pk_res,
+  path = "tables/parameters.png"
+)
+```
+
+---
+
+## 🔍 Understanding the Output
+
+### Table Sections
+
+The table is automatically organized into sections:
+
+1. **Typical parameters** - Population (fixed effects) parameters
+2. **Inter-individual variability** - Random effects (ETAs/OMEGAs)
+3. **Correlation of random effects** - Off-diagonal OMEGAs
+4. **Parameter-Covariate relationships** - Covariate effects (betas)
+5. **Residual variability** - Residual error (SIGMAs)
+
+### Column Meanings
+
+**Single Model:**
+- `parameter_names`: Formatted parameter name
+- `label`: Full description
+- `Estimate`: Parameter value
+- `RSE (%)`: Relative standard error
+- `Shrinkage (%)`: ETA shrinkage (for random effects)
+
+**Multiple Models:**
+- `parameter_names`: Formatted parameter name
+- `label`: Full description
+- `Model X`: Combined as `Estimate (RSE%) [Shrinkage%]`
+
+### Special Notations
+
+- `FIX` - Parameter was fixed in estimation
+- Empty shrinkage - Not applicable (e.g., for THETAs)
+- `NA` - Could not be calculated
+
+---
+
+## 💡 Tips and Best Practices
+
+### 1. Always Use YAML Specification
+
+```{r tip1}
+# ✅ Good - formatted output
+spec_pk <- read_yaml(here("data", "spec", "pk-extend.yml"))
+pk_res <- model_report(model_names = "run28", spec_pk = spec_pk)
+
+# ❌ Less ideal - raw parameter names
+pk_res <- model_report(model_names = "run28")
+```
+
+### 2. Check Models Exist First
+
+```{r tip2}
+# Check which models exist
+available_models <- list.files("models", pattern = "^run.*\\.yaml$")
+available_models <- gsub("\\.yaml$", "", available_models)
+
+# Only report on existing models
+pk_res <- model_report(
+  model_names = available_models,
+  spec_pk = spec_pk
+)
+```
+
+### 3. Compare Similar Models
+
+```{r tip3}
+# Good - compare base model with covariate models
+pk_res <- model_report(
+  model_names = c("run10", "run11", "run12"),  # Base, +WT, +AGE
+  spec_pk = spec_pk
+)
+
+# Less useful - compare very different models
+# (different structures, different parameters)
+```
+
+### 4. Save Intermediate Results
+
+```{r tip4}
+# Save for later use
+pk_res <- model_report(
+  model_names = c("run85", "run90"),
+  spec_pk = spec_pk
+)
+
+# Save as RDS
+saveRDS(pk_res, "output/parameter_table.rds")
+
+# Load later
+pk_res <- readRDS("output/parameter_table.rds")
+```
+
+---
+
+## 🐛 Troubleshooting
+
+### Issue: "File does not exist: 'models/runX.yaml'"
+
+**Cause:** Model files not found
+
+**Solution:**
+```{r troubleshoot1}
+# Check if model exists
+file.exists("models/run28.yaml")
+file.exists("models/run28.ctl")
+file.exists("models/run28.ext")
+
+# Check models folder path
+list.files("models")
+```
+
+### Issue: "Assertion on 'yaml_path' failed"
+
+**Cause:** BBR YAML file missing
+
+**Solution:**
+Model must be created/copied with BBR functions to have YAML metadata.
+
+### Issue: Parameters show as THETA1, OMEGA(1,1)
+
+**Cause:** Missing or incorrect `spec_pk`
+
+**Solution:**
+```{r troubleshoot2}
+# Load correct specification file
+spec_pk <- read_yaml(here("data", "spec", "pk-extend.yml"))
+
+# Check it loaded correctly
+names(spec_pk)  # Should show parameter names
+
+# Use in function
+pk_res <- model_report(model_names = "run28", spec_pk = spec_pk)
+```
+
+
+---
+
+## 📚 See Also
+
+- [YAML Specification Files](yaml-specification-files.html) - How to create pk-extend.yml
+- [Complete Workflow](complete-workflow.html) - Full SCM example
+- [Troubleshooting](troubleshooting.html) - Common issues and solutions
+
+---
+
+## 🎯 Quick Reference
+
+```r
+# Minimal example
+library(CovariateSearcher)
+spec_pk <- read_yaml(here("data", "spec", "pk-extend.yml"))
+
+# Single model
+model_report("run28", spec_pk = spec_pk)
+
+# Multiple models
+model_report(c("run10", "run28", "run45"), spec_pk = spec_pk)
+
+# Save output
+pk_res <- model_report(c("run85", "run90"), spec_pk = spec_pk)
+flextable::save_as_docx(pk_res, path = "tables/parameters.docx")
+```
+
+**That's it!** You now have professional parameter tables for your NONMEM models.

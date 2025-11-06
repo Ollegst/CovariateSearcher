@@ -48,6 +48,7 @@
   <a href="#" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" role="button" aria-expanded="false" aria-haspopup="true" id="dropdown-extended-docs">Extended Docs</a>
   <div class="dropdown-menu" aria-labelledby="dropdown-extended-docs">
     <a class="dropdown-item" href="../articles/complete-workflow.html">Complete Workflow</a>
+    <a class="dropdown-item" href="../articles/yaml-specification-files.html">YAML Specification Files</a>
     <a class="dropdown-item" href="../articles/troubleshooting.html">Troubleshooting Guide</a>
     <a class="dropdown-item" href="../articles/recovery-system.html">Recovery System</a>
   </div>
@@ -91,37 +92,377 @@
 <p>This is a minimal vignette included in the package installation.</p>
 <p>For complete documentation, see the <a href="https://ollegst.github.io/CovariateSearcher/">online
 documentation</a>.</p>
+<hr>
 <div class="section level3">
-<h3 id="basic-usage">Basic Usage<a class="anchor" aria-label="anchor" href="#basic-usage"></a>
+<h3 id="what-you-need">📋 What You Need<a class="anchor" aria-label="anchor" href="#what-you-need"></a>
 </h3>
-<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<div class="section level4">
+<h4 id="base-model">1. Base Model<a class="anchor" aria-label="anchor" href="#base-model"></a>
+</h4>
+<p>NONMEM control file with properly formatted parameters:</p>
+<pre><code>$THETA
+; Simple names (NO TV_ prefix in THETA block!)
+0.5 ; CL ; L/h ; RATIO
+10  ; V  ; L   ; RATIO
+
+$PK
+; Use TV_ prefix HERE in PK block
+TV_CL = THETA(1)
+TV_V  = THETA(2)
+
+CL = TV_CL * EXP(ETA(1))
+V  = TV_V  * EXP(ETA(2))
+
+$OMEGA BLOCK(2)
+0.1 ; IIV_CL   ; ; LOG
+0.1 ; IIV_CL_V ; ; LOG
+0.1 ; IIV_V    ; ; LOG
+
+$SIGMA
+0.1 ; RUV_PROP ; ; LOG</code></pre>
+<p><strong>Parameter Format</strong>:
+<code>value ; NAME ; units ; RATIO|LOG</code></p>
+<p><strong>Important</strong>: - In <code>$THETA</code> block: Use
+<code>CL</code>, <code>V</code> (simple names) OR <code>1_CL</code>,
+<code>2_V</code> (numbered) - In <code>$PK/$PRED</code> block: Use
+<code>TV_CL</code>, <code>TV_V</code> (with TV_ prefix) - <strong>OMEGA
+BLOCK</strong>: One value per line (not multiple values on same line) -
+<strong>Four fields required</strong>:
+<code>value ; name ; units ; transform</code></p>
+<p><strong>❌ Wrong OMEGA format:</strong></p>
+<pre><code>$OMEGA BLOCK(2)
+0.1     ; IIV_CL   
+0.1 0.1 ; IIV_V   ← Don't put multiple values per line!</code></pre>
+<p><strong>✅ Correct OMEGA format:</strong></p>
+<pre><code>$OMEGA BLOCK(2)
+0.1 ; IIV_CL   ; ; LOG
+0.1 ; IIV_CL_V ; ; LOG
+0.1 ; IIV_V    ; ; LOG</code></pre>
+</div>
+<div class="section level4">
+<h4 id="analysis-dataset">2. Analysis Dataset<a class="anchor" aria-label="anchor" href="#analysis-dataset"></a>
+</h4>
+<p>NONMEM dataset with covariates (CSV format)</p>
+</div>
+<div class="section level4">
+<h4 id="covariate-search-configuration">3. Covariate Search Configuration<a class="anchor" aria-label="anchor" href="#covariate-search-configuration"></a>
+</h4>
+<p>CSV file defining which covariates to test: link :
+data/derived/covariate_search.csv (optional)</p>
+<table style="width:100%;" class="table">
+<colgroup>
+<col width="13%">
+<col width="13%">
+<col width="16%">
+<col width="11%">
+<col width="10%">
+<col width="13%">
+<col width="20%">
+</colgroup>
+<thead><tr class="header">
+<th>PARAMETER</th>
+<th>COVARIATE</th>
+<th>STATUS</th>
+<th>FORMULA</th>
+<th>LEVELS</th>
+<th>REFERENCE</th>
+<th>TIME_DEPENDENT</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td>CL</td>
+<td>WT</td>
+<td>continuous</td>
+<td>power</td>
+<td>NA</td>
+<td>NA</td>
+<td>FALSE</td>
+</tr>
+<tr class="even">
+<td>CL</td>
+<td>AGE</td>
+<td>continuous</td>
+<td>linear</td>
+<td>NA</td>
+<td>NA</td>
+<td>FALSE</td>
+</tr>
+<tr class="odd">
+<td>CL</td>
+<td>SEX</td>
+<td>categorical</td>
+<td>linear</td>
+<td>0;1</td>
+<td>1</td>
+<td>FALSE</td>
+</tr>
+<tr class="even">
+<td>V</td>
+<td>WT</td>
+<td>continuous</td>
+<td>linear</td>
+<td>NA</td>
+<td>NA</td>
+<td>FALSE</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Column Descriptions:</strong> - <code>PARAMETER</code>: Model
+parameter to test covariate on (e.g., CL, V, KA) -
+<code>COVARIATE</code>: Covariate column name from dataset -
+<code>STATUS</code>: “continuous” or “categorical” -
+<code>FORMULA</code>: “linear” or “power” (for continuous covariates) -
+<code>LEVELS</code>: Number of categories (for categorical), NA
+otherwise - <code>REFERENCE</code>: Reference category value (for
+categorical), NA otherwise - <code>TIME_DEPENDENT</code>: TRUE if
+covariate changes over time, usually FALSE <strong>Note:</strong> The
+package automatically generates the <code>cov_to_test</code> column
+(e.g., <code>beta_WT_CL</code>) during initialization. You don’t need to
+include this column in your CSV file.</p>
+<hr>
+</div>
+</div>
+<div class="section level3">
+<h3 id="basic-usage">🚀 Basic Usage<a class="anchor" aria-label="anchor" href="#basic-usage"></a>
+</h3>
+<div class="section level4">
+<h4 id="initialize-search">Initialize Search<a class="anchor" aria-label="anchor" href="#initialize-search"></a>
+</h4>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/Ollegst/CovariateSearcher" class="external-link">CovariateSearcher</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Initialize a new search</span></span>
-<span><span class="va">search_state</span> <span class="op">&lt;-</span> <span class="fu">initialize_new_search</span><span class="op">(</span></span>
+<span><span class="va">search_state</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/initialize_covariate_search.html">initialize_covariate_search</a></span><span class="op">(</span></span>
 <span>  base_model_path <span class="op">=</span> <span class="st">"models/run1"</span>,</span>
 <span>  data_file_path <span class="op">=</span> <span class="st">"data/analysis.csv"</span>,</span>
 <span>  covariate_search_path <span class="op">=</span> <span class="st">"data/covariates.csv"</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Run stepwise covariate modeling</span></span>
-<span><span class="va">result</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_stepwise_covariate_modeling.html">run_stepwise_covariate_modeling</a></span><span class="op">(</span></span>
-<span>  search_state <span class="op">=</span> <span class="va">search_state</span>,</span>
-<span>  forward_threshold <span class="op">=</span> <span class="fl">3.84</span>,</span>
-<span>  max_steps <span class="op">=</span> <span class="fl">10</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 </div>
+<div class="section level4">
+<h4 id="run-stepwise-covariate-modeling">Run Stepwise Covariate Modeling<a class="anchor" aria-label="anchor" href="#run-stepwise-covariate-modeling"></a>
+</h4>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Run standard SCM (Forward → Backward)</span></span>
+<span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_automated_scm_testing.html">run_automated_scm_testing</a></span><span class="op">(</span></span>
+<span>  search_state <span class="op">=</span> <span class="va">search_state</span>,</span>
+<span>  base_model_id <span class="op">=</span> <span class="st">"run1"</span>,</span>
+<span>  scm_type <span class="op">=</span> <span class="st">"standard"</span>,</span>
+<span>  starting_phase <span class="op">=</span> <span class="st">"forward"</span>,</span>
+<span>  full_scm <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level4">
+<h4 id="check-results">Check Results<a class="anchor" aria-label="anchor" href="#check-results"></a>
+</h4>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Final model</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">results</span><span class="op">$</span><span class="va">final_model</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Final covariates</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">results</span><span class="op">$</span><span class="va">final_covariates</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># View complete database</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/View.html" class="external-link">View</a></span><span class="op">(</span><span class="va">results</span><span class="op">$</span><span class="va">search_state</span><span class="op">$</span><span class="va">search_database</span><span class="op">)</span></span></code></pre></div>
+<hr>
+</div>
+</div>
 <div class="section level3">
-<h3 id="next-steps">Next Steps<a class="anchor" aria-label="anchor" href="#next-steps"></a>
+<h3 id="model-selection-criteria">📊 Model Selection Criteria<a class="anchor" aria-label="anchor" href="#model-selection-criteria"></a>
+</h3>
+<p>Models are selected if they meet <strong>BOTH</strong> criteria:</p>
+<ol style="list-style-type: decimal">
+<li>
+<strong>ΔOFV &gt; threshold</strong>
+<ul>
+<li>Forward: ΔOFV &gt; 3.84 (p &lt; 0.05)</li>
+<li>Backward: ΔOFV &gt; 6.63 (p &lt; 0.01)</li>
+</ul>
+</li>
+<li>
+<strong>RSE &lt; threshold</strong> (default: 50%)</li>
+</ol>
+<hr>
+</div>
+<div class="section level3">
+<h3 id="common-options">⚙️ Common Options<a class="anchor" aria-label="anchor" href="#common-options"></a>
+</h3>
+<div class="section level4">
+<h4 id="selective-scm-faster-forward-backward">Selective SCM (faster Forward → Backward)<a class="anchor" aria-label="anchor" href="#selective-scm-faster-forward-backward"></a>
+</h4>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_automated_scm_testing.html">run_automated_scm_testing</a></span><span class="op">(</span></span>
+<span>  search_state <span class="op">=</span> <span class="va">search_state</span>,</span>
+<span>  base_model_id <span class="op">=</span> <span class="st">"run1"</span>,</span>
+<span>  scm_type <span class="op">=</span> <span class="st">"selective"</span>,  <span class="co"># Only test significant covariates from step 1</span></span>
+<span>  starting_phase <span class="op">=</span> <span class="st">"forward"</span>,</span>
+<span>  full_scm <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level4">
+<h4 id="full-scm-workflow-backward-forward-backward">Full SCM Workflow (Backward → Forward → Backward)<a class="anchor" aria-label="anchor" href="#full-scm-workflow-backward-forward-backward"></a>
+</h4>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_automated_scm_testing.html">run_automated_scm_testing</a></span><span class="op">(</span></span>
+<span>  search_state <span class="op">=</span> <span class="va">search_state</span>,</span>
+<span>  base_model_id <span class="op">=</span> <span class="st">"run1"</span>,</span>
+<span>  scm_type <span class="op">=</span> <span class="st">"standard"</span>,</span>
+<span>  starting_phase <span class="op">=</span> <span class="st">"backward"</span>,  <span class="co"># Start with backward elimination</span></span>
+<span>  full_scm <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level4">
+<h4 id="custom-thresholds">Custom Thresholds<a class="anchor" aria-label="anchor" href="#custom-thresholds"></a>
+</h4>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_automated_scm_testing.html">run_automated_scm_testing</a></span><span class="op">(</span></span>
+<span>  search_state <span class="op">=</span> <span class="va">search_state</span>,</span>
+<span>  base_model_id <span class="op">=</span> <span class="st">"run1"</span>,</span>
+<span>  forward_p_value <span class="op">=</span> <span class="fl">0.01</span>,    <span class="co"># More stringent (ΔOFV &gt; 6.63)</span></span>
+<span>  backward_p_value <span class="op">=</span> <span class="fl">0.001</span>,  <span class="co"># Very stringent (ΔOFV &gt; 10.83)</span></span>
+<span>  rse_threshold <span class="op">=</span> <span class="fl">30</span>         <span class="co"># Stricter RSE requirement</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<hr>
+</div>
+</div>
+<div class="section level3">
+<h3 id="save-and-resume">💾 Save and Resume<a class="anchor" aria-label="anchor" href="#save-and-resume"></a>
+</h3>
+<div class="section level4">
+<h4 id="save-progress">Save Progress<a class="anchor" aria-label="anchor" href="#save-progress"></a>
+</h4>
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Save search state</span></span>
+<span><span class="fu"><a href="../reference/save_search_state.html">save_search_state</a></span><span class="op">(</span><span class="va">search_state</span>, <span class="st">"scm_state.rds"</span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level4">
+<h4 id="resume-interrupted-search">Resume Interrupted Search<a class="anchor" aria-label="anchor" href="#resume-interrupted-search"></a>
+</h4>
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Load saved state</span></span>
+<span><span class="va">search_state</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/load_search_state.html">load_search_state</a></span><span class="op">(</span><span class="st">"scm_state.rds"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Continue from where you left off</span></span>
+<span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_automated_scm_testing.html">run_automated_scm_testing</a></span><span class="op">(</span></span>
+<span>  search_state <span class="op">=</span> <span class="va">search_state</span>,</span>
+<span>  base_model_id <span class="op">=</span> <span class="st">"run25"</span>,  <span class="co"># Last completed model</span></span>
+<span>  starting_phase <span class="op">=</span> <span class="st">"backward"</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<hr>
+</div>
+</div>
+<div class="section level3">
+<h3 id="validate-base-model">🔍 Validate Base Model<a class="anchor" aria-label="anchor" href="#validate-base-model"></a>
+</h3>
+<p>Check that your base model meets requirements:</p>
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Validate parameter format</span></span>
+<span><span class="va">validation</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/validate_base_model_parameters.html">validate_base_model_parameters</a></span><span class="op">(</span></span>
+<span>  base_model_path <span class="op">=</span> <span class="st">"models/run1"</span>,</span>
+<span>  strict <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Check validation results</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">validation</span><span class="op">$</span><span class="va">valid</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">validation</span><span class="op">$</span><span class="va">issues</span><span class="op">)</span></span></code></pre></div>
+<hr>
+</div>
+<div class="section level3">
+<h3 id="common-issues">⚠️ Common Issues<a class="anchor" aria-label="anchor" href="#common-issues"></a>
+</h3>
+<div class="section level4">
+<h4 id="base-model-validation-fails">Base model validation fails<a class="anchor" aria-label="anchor" href="#base-model-validation-fails"></a>
+</h4>
+<p><strong>Problem</strong>: Parameter format incorrect</p>
+<p><strong>Solution</strong>: Ensure parameters follow format:
+<code>value ; NAME ; units ; RATIO|LOG</code></p>
+</div>
+<div class="section level4">
+<h4 id="high-rse-rejecting-good-models">High RSE rejecting good models<a class="anchor" aria-label="anchor" href="#high-rse-rejecting-good-models"></a>
+</h4>
+<p><strong>Problem</strong>: RSE threshold too strict</p>
+<p><strong>Solution</strong>: Increase threshold</p>
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_automated_scm_testing.html">run_automated_scm_testing</a></span><span class="op">(</span></span>
+<span>  search_state <span class="op">=</span> <span class="va">search_state</span>,</span>
+<span>  base_model_id <span class="op">=</span> <span class="st">"run1"</span>,</span>
+<span>  rse_threshold <span class="op">=</span> <span class="fl">100</span>  <span class="co"># More lenient</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<hr>
+</div>
+</div>
+<div class="section level3">
+<h3 id="next-steps">📚 Next Steps<a class="anchor" aria-label="anchor" href="#next-steps"></a>
 </h3>
 <p>Visit the <a href="https://ollegst.github.io/CovariateSearcher/">online
 documentation</a> for:</p>
 <ul>
-<li>Complete workflow examples</li>
-<li>Advanced features</li>
-<li>Troubleshooting guide</li>
-<li>Case studies</li>
+<li>
+<strong>User Guide</strong>: Complete reference with all
+options</li>
+<li>
+<strong>Complete Workflow</strong>: Detailed step-by-step
+tutorial</li>
+<li>
+<strong>Recovery System</strong>: Understanding automatic error
+handling</li>
+<li>
+<strong>Troubleshooting</strong>: Solutions to common problems</li>
 </ul>
+<div class="section level4">
+<h4 id="function-documentation">Function Documentation<a class="anchor" aria-label="anchor" href="#function-documentation"></a>
+</h4>
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="op">?</span><span class="va">initialize_covariate_search</span></span>
+<span><span class="op">?</span><span class="va">run_automated_scm_testing</span></span>
+<span><span class="op">?</span><span class="va">validate_base_model_parameters</span></span>
+<span><span class="op">?</span><span class="va">save_search_state</span></span>
+<span><span class="op">?</span><span class="va">load_search_state</span></span></code></pre></div>
+<hr>
+</div>
+</div>
+<div class="section level3">
+<h3 id="workflow-summary">📊 Workflow Summary<a class="anchor" aria-label="anchor" href="#workflow-summary"></a>
+</h3>
+<pre><code>1. Prepare Files
+   ├─ Base model (.ctl)
+   ├─ Dataset (.csv)
+   └─ Covariate config (.csv)
+   
+2. Initialize
+   └─ initialize_covariate_search()
+   
+3. Run SCM
+   └─ run_automated_scm_testing()
+   
+4. Check Results
+   ├─ results$final_model
+   ├─ results$final_covariates
+   └─ View(search_state$search_database)</code></pre>
+<hr>
+</div>
+<div class="section level3">
+<h3 id="example-output">✅ Example Output<a class="anchor" aria-label="anchor" href="#example-output"></a>
+</h3>
+<p>After successful SCM run:</p>
+<pre><code>🎉 AUTOMATED SCM TESTING COMPLETE!
+======================================================================
+Final model: run85
+Final covariates: WT_CL, SEX_V
+OFV improvement: -23.45
+
+Models tested: 47
+Models completed: 45
+Models failed: 2
+Models retried: 2
+
+Forward steps: 3
+Backward removals: 1
+======================================================================</code></pre>
+<hr>
+<p><strong>That’s it!</strong> CovariateSearcher handles the complex
+workflow automatically.</p>
+<p>For detailed examples and advanced usage, see the <a href="https://ollegst.github.io/CovariateSearcher/">complete
+documentation</a>.</p>
 </div>
 </div>
   </main><aside class="col-md-3"><nav id="toc"><h2>On this page</h2>

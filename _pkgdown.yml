@@ -1,4 +1,3 @@
-
 url: https://ollegst.github.io/CovariateSearcher/
 
 template:
@@ -20,6 +19,10 @@ navbar:
       menu:
       - text: Complete Workflow
         href: articles/complete-workflow.html
+      - text: YAML Specification Files
+        href: articles/yaml-specification-files.html
+      - text: Parameter Tables with model_report()
+        href: articles/model-report-usage.html
       - text: Troubleshooting Guide
         href: articles/troubleshooting.html
       - text: Recovery System
@@ -35,6 +38,8 @@ articles:
   navbar: Extended Docs
   contents:
   - articles/complete-workflow
+  - articles/yaml-specification-files
+  - articles/model-report-usage
   - articles/troubleshooting
   - articles/recovery-system
 
@@ -42,7 +47,8 @@ reference:
 - title: Main Workflow Functions
   desc: Core functions for running SCM
   contents:
-  - initialize_new_search
+  - initialize_covariate_search
+  - run_automated_scm_testing
   - run_stepwise_covariate_modeling
   - run_scm_selective_forward
   - run_backward_elimination
@@ -55,16 +61,108 @@ reference:
   - create_retry_model
 
 - title: Evaluation and Selection
-  desc: Functions for model evaluation
+  desc: Functions for model evaluation and selection
   contents:
   - select_best_model
   - update_model_status_from_files
   - get_param2
   - get_significant_models_from_step
+  - get_model_covariates
+  - get_model_covariates_from_db
+
+- title: Validation
+  desc: Functions for model validation
+  contents:
+  - validate_base_model_parameters
+  - validate_parameter_blocks
+  - validate_search_inputs
+
+- title: State Management
+  desc: Functions for saving and loading search state
+  contents:
+  - save_search_state
+  - load_search_state
+  - discover_existing_models
+
+- title: Reporting and Visualization
+  desc: Functions for generating reports and tables
+  contents:
+  - generate_scm_report
+  - create_scm_results_table
+  - view_comprehensive_table
+  - plot_nonmem_iterations
 
 - title: Monitoring and Reporting
-  desc: Functions for tracking progress
+  desc: Functions for tracking progress and status
   contents:
   - get_model_status_from_files
-  - get_model_info
+  - update_all_model_statuses
+  - get_model_status
 
+- title: Internal Functions
+  desc: Internal helper functions (advanced users only)
+  contents:
+  - CovariateSearcher-package
+  - adjust_theta_for_covariate
+  - analyze_existing_models_yaml
+  - analyze_model_covariates_yaml
+  - analyze_model_from_logic
+  - calculate_covariate_df
+  - clean_dir
+  - create_comprehensive_table
+  - create_model_info_log
+  - detect_estimation_problems
+  - discover_existing_models_simple
+  - ensure_base_model_in_database
+  - evaluate_removal_impacts
+  - extract_covariate_name_from_tag
+  - extract_model_params
+  - extract_nonmem_timestamps
+  - extract_params
+  - fix_theta_renumbering
+  - force_update_models
+  - generate_changes_display
+  - generate_phase
+  - generate_recovery_report
+  - generate_step_description
+  - generate_step_display
+  - generate_tags_from_covariate_search
+  - get_covariate_tag_from_name
+  - get_covariates_from_models
+  - get_dropped_covariates
+  - get_excluded_covariates
+  - get_fixed_covariates
+  - get_model_covariates_from_files
+  - get_model_max_rse
+  - get_model_ofv_from_database
+  - get_model_parent_yaml
+  - get_remaining_covariates
+  - handle_failed_retry
+  - initialize_search_config
+  - initialize_search_database_core
+  - load_existing_search
+  - load_search_config
+  - load_search_data
+  - load_tags
+  - model_add_cov
+  - model_report
+  - null-coalesce
+  - print_parameter_validation
+  - print_scm_results_table
+  - process_estimation_issues
+  - pvalue_to_threshold
+  - read_ext_file
+  - read_ext_iterations
+  - read_model_file
+  - read_model_yaml
+  - read_nonmem_ext
+  - read_nonmem_lst
+  - resume_selective_forward
+  - run_univariate_step
+  - submit_and_wait_for_step
+  - theme_pps_table
+  - update_model_counter
+  - update_tags_yaml
+  - validate_setup
+  - view_exclusion_status
+  - write_model_file

@@ -40,24 +40,32 @@ print(results$final_covariates)
 **Requirements**:
 
     $THETA
-    ; Typical values: use TV_ prefix or numbers
-    0.5 ; TV_CL ; L/h ; LOG
-    10  ; TV_V  ; L   ; LOG
-    ; OR
+    ; Simple parameter names (no TV_ prefix in THETA block!)
+    0.5 ; CL ; L/h ; LOG
+    10  ; V  ; L   ; LOG
+    ; OR numbered format
     0.5 ; 1_CL ; L/h ; LOG
     10  ; 2_V  ; L   ; LOG
 
+    $PK
+    ; Use TV_ prefix in PK block for typical values
+    TV_CL = THETA(1)
+    TV_V  = THETA(2)
+    CL = TV_CL * EXP(ETA(1))
+    V  = TV_V  * EXP(ETA(2))
+
     $OMEGA BLOCK(2)
     0.1 ; IIV_CL ; ; RATIO
-    0.1 ; IIV_V2 ; ; RATIO
+    0.1 ; IIV_V  ; ; RATIO
 
     $SIGMA
     0.1 ; RUV ; ; RATIO
 
 Format: `value ; NAME ; units ; RATIO|LOG`
 
-**THETA Naming**: Must use `TV_` prefix (e.g., `TV_CL`, `TV_V`) or
-numbers (e.g., `1_CL`, `2_V`)
+**THETA Naming**: Use simple names (e.g., `CL`, `V`) or numbered (e.g.,
+`1_CL`, `2_V`) in \$THETA block. Use `TV_` prefix only in $PK/$PRED
+block.
 
 ### 2. Dataset
 
@@ -162,7 +170,7 @@ full_scm = FALSE
 
 ------------------------------------------------------------------------
 
-## 🔍 Check Results
+## 📝 Check Results
 
 ``` r
 # Final model
@@ -224,23 +232,36 @@ cat(results$final_summary)
 
 ## 🎨 Parameter Format Examples
 
-### THETA (Typical Values)
+### THETA (Population Parameters)
 
-**IMPORTANT**: Use `TV_` prefix or number prefix
+**IMPORTANT**: Use simple names or numbered format in \$THETA block (NO
+TV\_ prefix!)
 
     $THETA
-    ; Recommended: TV_ prefix
-    (0, 0.5, 100) ; TV_CL ; L/h ; LOG
-    (0, 10)       ; TV_V  ; L   ; LOG
-    0.5 FIX       ; TV_KA ; 1/h ; LOG
+    ; Option 1: Simple names (recommended)
+    (0, 0.5, 100) ; CL ; L/h ; LOG
+    (0, 10)       ; V  ; L   ; LOG
+    0.5 FIX       ; KA ; 1/h ; LOG
 
-    ; Alternative: Number prefix
+    ; Option 2: Numbered format
     (0, 0.5, 100) ; 1_CL ; L/h ; LOG
     (0, 10)       ; 2_V  ; L   ; LOG
     0.5 FIX       ; 3_KA ; 1/h ; LOG
 
-**✅ Correct**: `TV_CL`, `TV_V`, `1_CL`, `2_V`  
-**❌ Wrong**: `TVCL`, `CL`, `TVV` (missing underscore or prefix)
+**Then in \$PK block, use TV\_ prefix for typical values:**
+
+    $PK
+    TV_CL = THETA(1)  ; Use TV_ prefix here
+    TV_V  = THETA(2)
+    TV_KA = THETA(3)
+
+    CL = TV_CL * EXP(ETA(1))
+    V  = TV_V  * EXP(ETA(2))
+    KA = TV_KA * EXP(ETA(3))
+
+**✅ Correct THETA naming**: `CL`, `V`, `KA` or `1_CL`, `2_V`, `3_KA`  
+**❌ Wrong THETA naming**: `TV_CL`, `TVCL`, `TVV` (don’t use TV\_ in
+\$THETA block!)
 
 ### OMEGA Diagonal
 
@@ -252,8 +273,8 @@ cat(results$final_summary)
 
     $OMEGA BLOCK(3)
     0.1 ; IIV_CL    ; ; RATIO
-    0.1 ; IIV_CL_V2 ; ; RATIO
-    0.1 ; IIV_V2    ; ; RATIO
+    0.1 ; IIV_CL_V  ; ; RATIO
+    0.1 ; IIV_V     ; ; RATIO
 
 ### SIGMA
 
@@ -265,13 +286,41 @@ cat(results$final_summary)
 
     $OMEGA BLOCK(3)
     0.1 ; IIV_CL
-    0.1 0.1 ; IIV_V2      ← Don't do this!
+    0.1 0.1 ; IIV_V      ← Don't do this!
 
-**❌ WRONG** (THETA naming):
+**❌ WRONG** (TV\_ prefix in THETA block):
 
     $THETA
-    0.5 ; TVCL ; L/h ; LOG    ← Missing underscore
-    0.5 ; CL ; L/h ; LOG      ← Missing TV_ or number prefix
+    0.5 ; TV_CL ; L/h ; LOG    ← Don't use TV_ in $THETA block!
+    0.5 ; TVCL ; L/h ; LOG     ← Missing underscore
+
+------------------------------------------------------------------------
+
+## 📋 Complete Correct Example
+
+    $THETA
+    ; Simple names in THETA block
+    0.5 ; CL ; L/h ; LOG
+    10  ; V  ; L   ; LOG
+    1   ; KA ; 1/h ; LOG
+
+    $PK
+    ; TV_ prefix used here in PK block
+    TV_CL = THETA(1)
+    TV_V  = THETA(2)
+    TV_KA = THETA(3)
+
+    CL = TV_CL * EXP(ETA(1))
+    V  = TV_V  * EXP(ETA(2))
+    KA = TV_KA * EXP(ETA(3))
+
+    $OMEGA BLOCK(3)
+    0.1 ; IIV_CL ; ; RATIO
+    0.1 ; IIV_CL_V ; ; RATIO
+    0.1 ; IIV_V ; ; RATIO
+
+    $SIGMA
+    0.1 ; RUV_PROP ; ; RATIO
 
 ------------------------------------------------------------------------
 

@@ -48,6 +48,7 @@
   <a href="#" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" role="button" aria-expanded="false" aria-haspopup="true" id="dropdown-extended-docs">Extended Docs</a>
   <div class="dropdown-menu" aria-labelledby="dropdown-extended-docs">
     <a class="dropdown-item" href="../articles/complete-workflow.html">Complete Workflow</a>
+    <a class="dropdown-item" href="../articles/yaml-specification-files.html">YAML Specification Files</a>
     <a class="dropdown-item" href="../articles/troubleshooting.html">Troubleshooting Guide</a>
     <a class="dropdown-item" href="../articles/recovery-system.html">Recovery System</a>
   </div>
@@ -148,7 +149,7 @@ Covariates (WT, AGE, SEX, etc.)</p>
 <span>  <span class="st">"V"</span>,        <span class="st">"WT"</span>,        <span class="st">"test"</span>,  <span class="st">"power"</span>,  <span class="cn">NA</span>,      <span class="cn">NA</span></span>
 <span><span class="op">)</span></span>
 <span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/write.table.html" class="external-link">write.csv</a></span><span class="op">(</span><span class="va">covariate_config</span>, <span class="st">"data/covariate_search.csv"</span>, row.names <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/write.table.html" class="external-link">write.csv</a></span><span class="op">(</span><span class="va">covariate_config</span>, <span class="st">"data/derived/covariate_search.csv"</span>, row.names <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
 </div>
 </div>
 <div class="section level3">
@@ -156,10 +157,10 @@ Covariates (WT, AGE, SEX, etc.)</p>
 </h3>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">search_state</span> <span class="op">&lt;-</span> <span class="fu">initialize_new_search</span><span class="op">(</span></span>
-<span>  base_model_path <span class="op">=</span> <span class="st">"models/run1"</span>,              <span class="co"># Your base model</span></span>
-<span>  data_file_path <span class="op">=</span> <span class="st">"data/nonmem_data.csv"</span>,      <span class="co"># NONMEM dataset</span></span>
+<span>  base_model_path <span class="op">=</span> <span class="st">"run1"</span>,                             <span class="co"># Your base model</span></span>
+<span>  data_file_path <span class="op">=</span> <span class="st">"data/derived/nonmem_data.csv"</span>,      <span class="co"># NONMEM dataset</span></span>
 <span>  covariate_search_path <span class="op">=</span> <span class="st">"data/covariate_search.csv"</span>,</span>
-<span>  models_folder <span class="op">=</span> <span class="st">"models"</span>,                     <span class="co"># Where to save models</span></span>
+<span>  models_folder <span class="op">=</span> <span class="st">"models/"</span>,                     <span class="co"># Where to save models</span></span>
 <span>  output_folder <span class="op">=</span> <span class="st">"output"</span>,                     <span class="co"># Where to save results</span></span>
 <span>  auto_submit <span class="op">=</span> <span class="cn">TRUE</span>,                           <span class="co"># Submit models automatically</span></span>
 <span>  auto_retry <span class="op">=</span> <span class="cn">TRUE</span>                             <span class="co"># Retry failed models</span></span>
@@ -263,15 +264,11 @@ models:</p>
 <h3 id="exporting-results">Exporting Results<a class="anchor" aria-label="anchor" href="#exporting-results"></a>
 </h3>
 <div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Save complete state</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">saveRDS</a></span><span class="op">(</span><span class="va">search_state</span>, <span class="st">"output/search_state.rds"</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Export database to CSV</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/write.table.html" class="external-link">write.csv</a></span><span class="op">(</span></span>
-<span>  <span class="va">search_state</span><span class="op">$</span><span class="va">search_database</span>,</span>
-<span>  <span class="st">"output/scm_results.csv"</span>,</span>
-<span>  row.names <span class="op">=</span> <span class="cn">FALSE</span></span>
-<span><span class="op">)</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="co">#read results from final step</span></span>
+<span><span class="va">search_state</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">readRDS</a></span><span class="op">(</span><span class="st">"./models/scm_rds/scm_auto_final_complete.rds"</span><span class="op">)</span></span>
+<span><span class="co"># create table with results</span></span>
+<span><span class="va">results_table</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/create_scm_results_table.html">create_scm_results_table</a></span><span class="op">(</span><span class="va">search_state</span><span class="op">)</span></span>
+<span><span class="fu"><a href="../reference/print_scm_results_table.html">print_scm_results_table</a></span><span class="op">(</span><span class="va">search_state</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level3">
 <h3 id="next-steps">Next Steps<a class="anchor" aria-label="anchor" href="#next-steps"></a>

@@ -1,0 +1,524 @@
+---
+title: "YAML Specification Files"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE
+)
+```
+
+# YAML Specification Files for CovariateSearcher
+
+CovariateSearcher uses YAML specification files from the [yspec](https://metrumresearchgroup.github.io/yspec/) package (developed by Metrum Research Group) to enhance documentation and create formatted output tables.
+
+## 📋 Overview
+
+The YAML specification system provides:
+
+- ✅ **Standardized variable definitions** with units and descriptions
+- ✅ **Formatted output tables** for parameters and results
+- ✅ **Categorical variable decoding** (e.g., 1 = "White", 2 = "Black")
+- ✅ **Automatic documentation** generation
+
+---
+
+## 🗂️ Required Files
+
+You need three YAML files in your `data/spec/` directory:
+
+```
+data/spec/
+├── lookup.yml        # Variable definitions and decoding
+├── pk-extend.yml     # Parameter formatting for output tables
+└── pk.yml            # Main specification file
+```
+
+---
+
+## 📄 File 1: lookup.yml
+
+Defines variables, their types, units, and categorical value decoding.
+
+### Example Structure
+
+```yaml
+SETUP__:
+  description: yspec internal column database for PT010
+NUM:
+  short: Row number
+  type: numeric
+OPROJID:
+  short: Project name
+  type: character
+RACE:
+  short: Race
+  values: [1, 2, 3, 9]
+  decode: ["White", "Black or African American", "Asian", "Other"]
+EGFR:
+  short: Estimated GFR
+  type: numeric
+  unit.text: "mL/min/1.73m^2"
+BBSA:
+  short: Body surface area
+  unit: m2
+  unit.tex: "m^2"
+```
+
+
+### Common Variables to Include
+
+**Demographics:**
+```yaml
+AGE:
+  short: Age
+  type: numeric
+  unit: years
+WT:
+  short: Body weight
+  type: numeric
+  unit: kg
+SEX:
+  short: Sex
+  values: [0, 1]
+  decode: ["Female", "Male"]
+```
+
+**Clinical Covariates:**
+```yaml
+CRCL:
+  short: Creatinine clearance
+  type: numeric
+  unit: mL/min
+BMI:
+  short: Body mass index
+  type: numeric
+  unit.text: "kg/m^2"
+```
+
+---
+
+## 📄 File 2: pk-extend.yml
+
+Defines parameter formatting for output tables. This creates nicely formatted parameter names with units and descriptions.
+
+### Example Structure
+
+```yaml
+SETUP__:
+  max_nchar_label: 10000
+DVNORM:
+  short: Dose-normalized concentration
+  unit: ng/mL/mg
+AUCss:
+  short: AUC,ss
+  label: steady-state area under the concentration-time curve
+  unit: mg*hr/L
+CMAXss:
+  short: Cmax,ss
+  label: steady-state maximum concentration
+  unit: ng/mL
+CMINss:
+  short: Cmin,ss
+  label: steady-state minimum concentration
+  unit: ng/mL
+KA:
+  short: Ka
+  label: Absorption rate constant
+  unit: 1/hr
+  comment: Typical parameters
+Frel:
+  short: Frel
+  label: Relative bioavailability
+  unit: percent
+  comment: Typical parameters
+CL:
+  short: CL/F
+  label: Apparent clearance
+  unit: L/h
+  comment: Typical parameters
+V1:
+  short: Vc/F
+  label: Apparent central volume
+  unit: L
+  comment: Typical parameters
+V2:
+  short: Vp1/F
+  label: Apparent peripheral volume
+  unit: L
+  comment: Typical parameters
+```
+
+### Key Fields for Parameters
+
+| Field     | Description         | Example              |
+|-----------|---------------------|----------------------|
+| `short`   | Abbreviated name    | "CL/F"               |
+| `label`   | Full description    | "Apparent clearance" |
+| `unit`    | Unit of measurement | "L/h"                |
+| `comment` | Category or note    | "Typical parameters" |
+
+comments should be selected from this list:
+Typical parameters"
+Inter-individual variability
+Correlation of random effects
+Parameter-Covariate relationships
+Residual variability
+
+### Common Parameters to Include
+
+
+```yaml
+CL:
+  short: CL/F
+  label: Apparent clearance
+  unit: L/h
+  comment: Typical parameters
+V:
+  short: V/F
+  label: Apparent volume of distribution
+  unit: L
+  comment: Typical parameters
+KA:
+  short: Ka
+  label: Absorption rate constant
+  unit: 1/hr
+  comment: Typical parameters
+IIV_CL:
+  short:CL/F CV%
+  label: Inter-individual variability on clearance
+  comment: Random effects
+IIV_V:
+  short: V/F CV%
+  label: Inter-individual variability on volume
+  comment: Random effects
+RUV_PROP:
+  short: Prop error
+  label: Proportional residual error
+  comment: Residual error
+```
+
+---
+
+## 📄 File 3: pk.yml
+
+Main specification file that ties everything together and defines variable categories for plots and tables.
+
+### Example Structure
+
+```yaml
+SETUP__:
+  lookup_file: [lookup.yml]
+  description: Formoterol Population PK Analysis
+  sponsor: AstraZeneca
+  projectnumber: PT010
+  extend_file: pk-extend.yml
+  flags:
+    contcov: [AGE, SCR, CRCL, EGFR, BEGFR, BSCR, BCRCL, BWT, BBMI, BBSA]
+    catcov: [SEXM, RACE, ETHNIC, SMOKING, DOSE, FORM, TRTID, ICS, ASTHMA]
+    diagContCov: [AGE, BEGFR, BSCR, BCRCL, BWT, BBMI, BBSA]
+    diagCatCov: [SEXM, RACE, ETHNIC, SMOKING, DOSE, FORM, TRTID, ICS, ASTHMA]
+NUM:
+OPROJID:
+OSTUDYID:
+STUDYID:
+USID:
+ID:
+IND:
+AGE:
+SEXM:
+RACE:
+ETHNIC:
+SMOKING:
+```
+
+### SETUP__ Section
+
+| Field           | Description                          |
+|-----------------|--------------------------------------|
+| `lookup_file`   | lookup.yml                           |
+| `description`   | Project description                  |
+| `sponsor`       | Sponsor name                         |
+| `projectnumber` | Project identifier                   |
+| `extend_file`   | pk-extend.yml                        |
+| `flags`         | Variable categories for plots/tables |
+
+### Flags Categories
+
+**`contcov`**: Continuous covariates for covariate modeling
+```yaml
+contcov: [AGE, WT, BMI, CRCL, EGFR]
+```
+
+**`catcov`**: Categorical covariates for covariate modeling
+```yaml
+catcov: [SEX, RACE, ETHNIC, SMOKING, DOSE]
+```
+
+**`diagContCov`**: Continuous covariates for diagnostic plots
+```yaml
+diagContCov: [AGE, WT, BMI, CRCL]
+```
+
+**`diagCatCov`**: Categorical covariates for diagnostic plots
+```yaml
+diagCatCov: [SEX, RACE, SMOKING, DOSE]
+```
+
+
+
+---
+
+## 🎯 How CovariateSearcher Uses YAML Files
+
+### 1. Variable Decoding
+Categorical variables are automatically decoded in output tables:
+
+```
+Instead of: RACE = 1, 2, 3
+Shows:      RACE = White, Black or African American, Asian
+```
+
+### 2. Parameter Formatting
+Output tables show formatted parameter names:
+
+```
+Instead of: CL = 5.2 (units unclear)
+Shows:      CL/F [L/h] = 5.2 (Apparent clearance)
+```
+
+### 3. Covariate Categorization
+Automatically identifies which covariates to test:
+
+```yaml
+flags:
+  contcov: [AGE, WT, BMI]  # Test these continuous covariates
+  catcov: [SEX, RACE]      # Test these categorical covariates
+```
+
+---
+
+## 📝 Creating Your YAML Files
+
+### Step 1: Start with lookup.yml
+
+List all variables in your dataset:
+
+```yaml
+SETUP__:
+  description: My PK Analysis
+ID:
+  short: Subject ID
+  type: numeric
+TIME:
+  short: Time
+  type: numeric
+  unit: hr
+DV:
+  short: Concentration
+  type: numeric
+  unit: ng/mL
+AGE:
+  short: Age
+  type: numeric
+  unit: years
+WT:
+  short: Weight
+  type: numeric
+  unit: kg
+SEX:
+  short: Sex
+  values: [0, 1]
+  decode: ["Female", "Male"]
+```
+
+### Step 2: Create pk-extend.yml
+
+Define your model parameters:
+
+```yaml
+SETUP__:
+  max_nchar_label: 10000
+CL:
+  short: CL/F
+  label: Apparent clearance
+  unit: L/h
+V:
+  short: V/F
+  label: Apparent volume
+  unit: L
+IIV_CL:
+  short: CL CV%
+  label: IIV on clearance
+RUV_PROP:
+  short: prop error
+  label: Proportional error
+```
+
+### Step 3: Create pk.yml
+
+Tie everything together:
+
+```yaml
+SETUP__:
+  lookup_file: [lookup.yml]
+  description: My Population PK Analysis
+  extend_file: pk-extend.yml
+  flags:
+    contcov: [AGE, WT, BMI, CRCL]
+    catcov: [SEX, RACE, SMOKING]
+ID:
+TIME:
+DV:
+AGE:
+WT:
+SEX:
+RACE:
+```
+
+---
+
+## ✅ Best Practices
+
+### 1. Match Parameter Names
+Ensure names in `pk-extend.yml` match your NONMEM model:
+
+```yaml
+# If your model has:
+$THETA
+0.5 ; CL ; L/h ; LOG
+
+# Your pk-extend.yml should have:
+CL:
+  short: CL/F
+  label: Apparent clearance
+  unit: L/h
+```
+
+### 2. Include All Covariates
+List all potential covariates in both `lookup.yml` and `pk.yml`:
+
+```yaml
+# In lookup.yml - define them
+AGE:
+  short: Age
+  type: numeric
+  unit: years
+
+# In pk.yml - reference them
+AGE:
+```
+
+### 3. Use Consistent Units
+Match units across files:
+
+```yaml
+# lookup.yml
+WT:
+  unit: kg
+
+# pk-extend.yml
+CL:
+  unit: L/h  # Not L/hr or L/hour
+```
+
+### 4. Decode All Categorical Variables
+Provide meaningful labels:
+
+```yaml
+RACE:
+  values: [1, 2, 3, 9]
+  decode: ["White", "Black or African American", "Asian", "Other"]
+  # NOT: ["1", "2", "3", "9"]
+```
+
+---
+
+## 🔍 Validation
+
+Check your YAML files are valid:
+
+```{r validate, eval=FALSE}
+library(yspec)
+
+# Load and validate
+spec <- ys_load("data/spec/pk.yml")
+
+# Check for issues
+ys_check(spec)
+
+# View summary
+summary(spec)
+```
+
+---
+
+## 📚 Additional Resources
+
+- **yspec Documentation**: https://metrumresearchgroup.github.io/yspec/
+- **yspec Book**: https://metrumresearchgroup.github.io/ysp-book/
+- **Examples**: See the yspec package for more examples
+
+---
+
+## 🎯 Summary
+
+**Three files needed:**
+
+1. **lookup.yml** - Variable definitions, types, units, decoding
+2. **pk-extend.yml** - Parameter formatting for output tables
+3. **pk.yml** - Main spec file that references the others
+
+**Key benefits:**
+
+- Automatic variable decoding
+- Formatted output tables
+- Consistent documentation
+- Enhanced reporting
+
+**Location:** `data/spec/` directory in your project
+
+---
+
+## 💡 Quick Start Template
+
+Minimal working set:
+
+**lookup.yml:**
+```yaml
+SETUP__:
+  description: My Analysis
+AGE:
+  short: Age
+  type: numeric
+  unit: years
+WT:
+  short: Weight
+  type: numeric
+  unit: kg
+```
+
+**pk-extend.yml:**
+```yaml
+SETUP__:
+  max_nchar_label: 10000
+CL:
+  short: CL/F
+  label: Apparent clearance
+  unit: L/h
+```
+
+**pk.yml:**
+```yaml
+SETUP__:
+  lookup_file: [lookup.yml]
+  extend_file: pk-extend.yml
+  flags:
+    contcov: [AGE, WT]
+AGE:
+WT:
+```
+
+Build from this template as your analysis grows!

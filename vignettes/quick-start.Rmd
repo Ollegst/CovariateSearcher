@@ -21,32 +21,311 @@ This is a minimal vignette included in the package installation.
 
 For complete documentation, see the [online documentation](https://ollegst.github.io/CovariateSearcher/).
 
-## Basic Usage
+---
 
-```{r basic}
+## 📋 What You Need
+
+### 1. Base Model
+NONMEM control file with properly formatted parameters:
+
+```
+$THETA
+; Simple names (NO TV_ prefix in THETA block!)
+0.5 ; CL ; L/h ; RATIO
+10  ; V  ; L   ; RATIO
+
+$PK
+; Use TV_ prefix HERE in PK block
+TV_CL = THETA(1)
+TV_V  = THETA(2)
+
+CL = TV_CL * EXP(ETA(1))
+V  = TV_V  * EXP(ETA(2))
+
+$OMEGA BLOCK(2)
+0.1 ; IIV_CL   ; ; LOG
+0.1 ; IIV_CL_V ; ; LOG
+0.1 ; IIV_V    ; ; LOG
+
+$SIGMA
+0.1 ; RUV_PROP ; ; LOG
+```
+
+**Parameter Format**: `value ; NAME ; units ; RATIO|LOG`
+
+**Important**: 
+- In `$THETA` block: Use `CL`, `V` (simple names) OR `1_CL`, `2_V` (numbered)
+- In `$PK/$PRED` block: Use `TV_CL`, `TV_V` (with TV_ prefix)
+- **OMEGA BLOCK**: One value per line (not multiple values on same line)
+- **Four fields required**: `value ; name ; units ; transform`
+
+**❌ Wrong OMEGA format:**
+```
+$OMEGA BLOCK(2)
+0.1     ; IIV_CL   
+0.1 0.1 ; IIV_V   ← Don't put multiple values per line!
+```
+
+**✅ Correct OMEGA format:**
+```
+$OMEGA BLOCK(2)
+0.1 ; IIV_CL   ; ; LOG
+0.1 ; IIV_CL_V ; ; LOG
+0.1 ; IIV_V    ; ; LOG
+```
+
+### 2. Analysis Dataset
+NONMEM dataset with covariates (CSV format)
+
+### 3. Covariate Search Configuration
+CSV file defining which covariates to test:
+link : data/derived/covariate_search.csv (optional)
+
+| PARAMETER | COVARIATE | STATUS      | FORMULA | LEVELS | REFERENCE | TIME_DEPENDENT |
+|-----------|-----------|-------------|---------|--------|-----------|----------------|
+| CL        | WT        | continuous  | power   | NA     | NA        | FALSE          |
+| CL        | AGE       | continuous  | linear  | NA     | NA        | FALSE          |
+| CL        | SEX       | categorical | linear  | 0;1    | 1         | FALSE          |
+| V         | WT        | continuous  | linear  | NA     | NA        | FALSE          |
+
+**Column Descriptions:**
+- `PARAMETER`: Model parameter to test covariate on (e.g., CL, V, KA)
+- `COVARIATE`: Covariate column name from dataset
+- `STATUS`: "continuous" or "categorical"
+- `FORMULA`: "linear" or "power" (for continuous covariates)
+- `LEVELS`: Number of categories (for categorical), NA otherwise
+- `REFERENCE`: Reference category value (for categorical), NA otherwise
+- `TIME_DEPENDENT`: TRUE if covariate changes over time, usually FALSE
+**Note:** The package automatically generates the `cov_to_test` column (e.g., `beta_WT_CL`) 
+during initialization. You don't need to include this column in your CSV file.
+
+---
+
+## 🚀 Basic Usage
+
+### Initialize Search
+
+```{r initialize}
 library(CovariateSearcher)
 
 # Initialize a new search
-search_state <- initialize_new_search(
+search_state <- initialize_covariate_search(
   base_model_path = "models/run1",
   data_file_path = "data/analysis.csv",
   covariate_search_path = "data/covariates.csv"
 )
+```
 
-# Run stepwise covariate modeling
-result <- run_stepwise_covariate_modeling(
+### Run Stepwise Covariate Modeling
+
+```{r run_scm}
+# Run standard SCM (Forward → Backward)
+results <- run_automated_scm_testing(
   search_state = search_state,
-  forward_threshold = 3.84,
-  max_steps = 10
+  base_model_id = "run1",
+  scm_type = "standard",
+  starting_phase = "forward",
+  full_scm = TRUE
 )
 ```
 
-## Next Steps
+### Check Results
+
+```{r results}
+# Final model
+print(results$final_model)
+
+# Final covariates
+print(results$final_covariates)
+
+# View complete database
+View(results$search_state$search_database)
+```
+
+---
+
+## 📊 Model Selection Criteria
+
+Models are selected if they meet **BOTH** criteria:
+
+1. **ΔOFV > threshold**
+   - Forward: ΔOFV > 3.84 (p < 0.05)
+   - Backward: ΔOFV > 6.63 (p < 0.01)
+
+2. **RSE < threshold** (default: 50%)
+
+---
+
+## ⚙️ Common Options
+
+### Selective SCM (faster Forward → Backward)
+
+```{r selective}
+results <- run_automated_scm_testing(
+  search_state = search_state,
+  base_model_id = "run1",
+  scm_type = "selective",  # Only test significant covariates from step 1
+  starting_phase = "forward",
+  full_scm = TRUE
+)
+```
+
+### Full SCM Workflow (Backward → Forward → Backward)
+
+```{r scm_plus}
+results <- run_automated_scm_testing(
+  search_state = search_state,
+  base_model_id = "run1",
+  scm_type = "standard",
+  starting_phase = "backward",  # Start with backward elimination
+  full_scm = TRUE
+)
+```
+
+### Custom Thresholds
+
+```{r custom}
+results <- run_automated_scm_testing(
+  search_state = search_state,
+  base_model_id = "run1",
+  forward_p_value = 0.01,    # More stringent (ΔOFV > 6.63)
+  backward_p_value = 0.001,  # Very stringent (ΔOFV > 10.83)
+  rse_threshold = 30         # Stricter RSE requirement
+)
+```
+
+---
+
+## 💾 Save and Resume
+
+### Save Progress
+
+```{r save}
+# Save search state
+save_search_state(search_state, "scm_state.rds")
+```
+
+### Resume Interrupted Search
+
+```{r resume}
+# Load saved state
+search_state <- load_search_state("scm_state.rds")
+
+# Continue from where you left off
+results <- run_automated_scm_testing(
+  search_state = search_state,
+  base_model_id = "run25",  # Last completed model
+  starting_phase = "backward"
+)
+```
+
+---
+
+## 🔍 Validate Base Model
+
+Check that your base model meets requirements:
+
+```{r validate}
+# Validate parameter format
+validation <- validate_base_model_parameters(
+  base_model_path = "models/run1",
+  strict = TRUE
+)
+
+# Check validation results
+print(validation$valid)
+print(validation$issues)
+```
+
+---
+
+## ⚠️ Common Issues
+
+### Base model validation fails
+**Problem**: Parameter format incorrect
+
+**Solution**: Ensure parameters follow format: `value ; NAME ; units ; RATIO|LOG`
+
+### High RSE rejecting good models
+**Problem**: RSE threshold too strict
+
+**Solution**: Increase threshold
+```{r rse_fix}
+results <- run_automated_scm_testing(
+  search_state = search_state,
+  base_model_id = "run1",
+  rse_threshold = 100  # More lenient
+)
+```
+
+---
+
+## 📚 Next Steps
 
 Visit the [online documentation](https://ollegst.github.io/CovariateSearcher/) for:
 
-- Complete workflow examples
-- Advanced features
-- Troubleshooting guide
-- Case studies
+- **User Guide**: Complete reference with all options
+- **Complete Workflow**: Detailed step-by-step tutorial
+- **Recovery System**: Understanding automatic error handling
+- **Troubleshooting**: Solutions to common problems
 
+### Function Documentation
+
+```{r help, eval=FALSE}
+?initialize_covariate_search
+?run_automated_scm_testing
+?validate_base_model_parameters
+?save_search_state
+?load_search_state
+```
+
+---
+
+## 📊 Workflow Summary
+
+```
+1. Prepare Files
+   ├─ Base model (.ctl)
+   ├─ Dataset (.csv)
+   └─ Covariate config (.csv)
+   
+2. Initialize
+   └─ initialize_covariate_search()
+   
+3. Run SCM
+   └─ run_automated_scm_testing()
+   
+4. Check Results
+   ├─ results$final_model
+   ├─ results$final_covariates
+   └─ View(search_state$search_database)
+```
+
+---
+
+## ✅ Example Output
+
+After successful SCM run:
+
+```
+🎉 AUTOMATED SCM TESTING COMPLETE!
+======================================================================
+Final model: run85
+Final covariates: WT_CL, SEX_V
+OFV improvement: -23.45
+
+Models tested: 47
+Models completed: 45
+Models failed: 2
+Models retried: 2
+
+Forward steps: 3
+Backward removals: 1
+======================================================================
+```
+
+---
+
+**That's it!** CovariateSearcher handles the complex workflow automatically.
+
+For detailed examples and advanced usage, see the [complete documentation](https://ollegst.github.io/CovariateSearcher/).

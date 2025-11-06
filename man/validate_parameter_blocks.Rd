@@ -35,8 +35,8 @@ number ; PARAM_NAME ; \link{units} ; RATIO|LOG
 
 Examples:
 $THETA
-0.5 ; TVCL ; L/h ; LOG
-10  ; TVV  ; L   ; LOG
+0.5 ; CL ; L/h ; LOG
+10  ; V  ; L   ; LOG
 
 $OMEGA BLOCK(3)
 0.1 ; IIV_CL    ; ; RATIO

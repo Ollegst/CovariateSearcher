@@ -264,16 +264,54 @@ get_param2 <- function(model_number,
         ),
         label = dplyr::case_when(
           grepl("^beta_", parameter_names) ~ {
+            # Split the parameter name
             parts <- strsplit(parameter_names, "_")[[1]]
-            if (length(parts) >= 3 && parts[3] %in% names(spec_pk)) {
-              # Check if there's a level number (4th part)
-              if (length(parts) >= 4) {
-                paste0("Effect of ", parts[2], " ", parts[4], " on ", spec_pk[[parts[3]]]$label)
-              } else {
-                paste0("Effect of ", parts[2], " on ", spec_pk[[parts[3]]]$label)
-              }
-            } else {
+
+            # beta_COV_PARAM or beta_COV_PARAM_LEVEL
+            # parts[1] = "beta"
+            # parts[2] = covariate name (e.g., "SMOKING")
+            # parts[3:n-1] = parameter name (e.g., "F1" or "CL" or "V")
+            # parts[n] = level (optional, if categorical with >2 levels)
+
+            if (length(parts) < 3) {
+              # Malformed name
               NA_character_
+            } else {
+              # Check if last part is a numeric level
+              last_part <- parts[length(parts)]
+              is_level <- !is.na(suppressWarnings(as.numeric(last_part)))
+
+              if (is_level && length(parts) >= 4) {
+                # Has level: beta_SMOKING_F1_2
+                # Covariate: parts[2] = "SMOKING"
+                # Parameter: parts[3:(length-1)] = "F1"
+                # Level: parts[length] = "2"
+                cov_name <- parts[2]
+                param_parts <- parts[3:(length(parts)-1)]
+                param_name <- paste(param_parts, collapse = "_")
+                level <- last_part
+
+                # Look up parameter in spec_pk
+                if (param_name %in% names(spec_pk)) {
+                  paste0("Effect of ", cov_name, " level ", level, " on ", spec_pk[[param_name]]$label)
+                } else {
+                  paste0("Effect of ", cov_name, " level ", level, " on ", param_name)
+                }
+              } else {
+                # No level: beta_AGE_CL
+                # Covariate: parts[2] = "AGE"
+                # Parameter: parts[3:end] = "CL"
+                cov_name <- parts[2]
+                param_parts <- parts[3:length(parts)]
+                param_name <- paste(param_parts, collapse = "_")
+
+                # Look up parameter in spec_pk
+                if (param_name %in% names(spec_pk)) {
+                  paste0("Effect of ", cov_name, " on ", spec_pk[[param_name]]$label)
+                } else {
+                  paste0("Effect of ", cov_name, " on ", param_name)
+                }
+              }
             }
           },
           parameter_names %in% names(spec_pk) ~ {
@@ -284,11 +322,39 @@ get_param2 <- function(model_number,
         ),
         parameter_names = dplyr::case_when(
           grepl("^beta_", parameter_names) ~ {
+            # Same parsing logic for short name
             parts <- strsplit(parameter_names, "_")[[1]]
-            if (length(parts) >= 3 && parts[3] %in% names(spec_pk)) {
-              paste0(parts[2], "~", spec_pk[[parts[3]]]$short)
-            } else {
+
+            if (length(parts) < 3) {
               parameter_names
+            } else {
+              last_part <- parts[length(parts)]
+              is_level <- !is.na(suppressWarnings(as.numeric(last_part)))
+
+              if (is_level && length(parts) >= 4) {
+                # Has level
+                cov_name <- parts[2]
+                param_parts <- parts[3:(length(parts)-1)]
+                param_name <- paste(param_parts, collapse = "_")
+                level <- last_part
+
+                if (param_name %in% names(spec_pk)) {
+                  paste0(cov_name, " level ", level, "~", spec_pk[[param_name]]$short)
+                } else {
+                  paste0(cov_name, " level ", level, "~", param_name)
+                }
+              } else {
+                # No level
+                cov_name <- parts[2]
+                param_parts <- parts[3:length(parts)]
+                param_name <- paste(param_parts, collapse = "_")
+
+                if (param_name %in% names(spec_pk)) {
+                  paste0(cov_name, "~", spec_pk[[param_name]]$short)
+                } else {
+                  paste0(cov_name, "~", param_name)
+                }
+              }
             }
           },
           parameter_names %in% names(spec_pk) ~ {
@@ -372,26 +438,17 @@ get_param2 <- function(model_number,
 }
 
 
-#' Generate Model Comparison Report Table
+# FINAL CORRECTED model_report WITH COMPLETE ERROR HANDLING
+# Replace the entire model_report function in model-output-tables.R
+
+#' Generate Parameter Table Report for Multiple Models
 #'
-#' @description Creates a formatted flextable comparing parameters across one or more NONMEM models
-#' @param model_names Character vector. Names of models to compare
-#' @param shrinkage Character string. Type of shrinkage to report (default: "etasd")
-#' @param models_folder Character string. Path to models folder (default: "models")
-#' @param spec_pk List. Optional parameter specifications with labels and units
-#' @return A formatted flextable object ready for display or export
+#' @param model_names Character vector of model names
+#' @param shrinkage Type of shrinkage to report ("etasd", "etavr", "ebvsd", "ebvvr")
+#' @param models_folder Path to models folder
+#' @param spec_pk Optional yspec object for parameter formatting
+#' @return flextable object with formatted parameter table
 #' @export
-#' @examples
-#' \dontrun{
-#' # Single model report
-#' table <- model_report("run1")
-#'
-#' # Compare multiple models
-#' table <- model_report(c("run1", "run2", "run3"))
-#'
-#' # Save to Word document
-#' flextable::save_as_docx(table, path = "model_comparison.docx")
-#' }
 model_report <- function(model_names,
                          shrinkage = "etasd",
                          models_folder = "models",
@@ -403,15 +460,67 @@ model_report <- function(model_names,
 
   count_model <- length(model_names)
 
-  # Generate individual model tables
-  param_est <- purrr::map(
-    model_names,
-    get_param2,
-    count_model = count_model,
-    shrinkage = shrinkage,
-    models_folder = models_folder,
-    spec_pk = spec_pk
-  ) %>%
+  cat(sprintf("\n📊 Generating report for %d model(s)...\n", count_model))
+
+  # Try to generate parameter table for each model with error handling
+  param_results <- list()
+  failed_models <- character(0)
+  successful_models <- character(0)
+
+  for (model_name in model_names) {
+    cat(sprintf("  Processing %s... ", model_name))
+
+    result <- tryCatch({
+      param_table <- get_param2(
+        model_number = model_name,
+        count_model = count_model,
+        shrinkage = shrinkage,
+        models_folder = models_folder,
+        spec_pk = spec_pk
+      )
+      cat("✓\n")
+      list(success = TRUE, data = param_table, model = model_name)
+    }, error = function(e) {
+      cat("✗\n")
+      cat(sprintf("    ⚠️  Error: %s\n", conditionMessage(e)))
+      list(success = FALSE, error = conditionMessage(e), model = model_name)
+    }, warning = function(w) {
+      cat("⚠️\n")
+      cat(sprintf("    Warning: %s\n", conditionMessage(w)))
+      list(success = FALSE, error = paste("Warning:", conditionMessage(w)), model = model_name)
+    })
+
+    if (result$success) {
+      param_results[[model_name]] <- result$data
+      successful_models <- c(successful_models, model_name)
+    } else {
+      failed_models <- c(failed_models, model_name)
+    }
+  }
+
+  # Check if we have any successful models
+  if (length(successful_models) == 0) {
+    stop("\nAll models failed to process. Cannot generate report.")
+  }
+
+  # Print summary
+  cat("\n")
+  if (length(failed_models) > 0) {
+    cat("⚠️  WARNING: The following models failed and were excluded:\n")
+    for (failed_model in failed_models) {
+      cat(sprintf("  • %s\n", failed_model))
+    }
+    cat("\n")
+  }
+
+  cat(sprintf("✅ Successfully processed %d/%d model(s)\n\n",
+              length(successful_models), count_model))
+
+  # Update count to reflect successful models only
+  count_model <- length(successful_models)
+
+  # Combine successful model tables
+  param_est <- param_results %>%
     purrr::reduce(dplyr::full_join, by = c("parameter_names", "label", "comment")) %>%
     dplyr::arrange(comment)
 
@@ -434,15 +543,28 @@ model_report <- function(model_names,
     )
 
   # Rename columns based on single vs multiple models
-  if (length(model_names) == 1) {
+  if (count_model == 1) {
+    # For single model, check which columns actually exist before renaming
+    col_names <- names(grouped_table)
+
+    # Build rename list dynamically based on existing columns
+    rename_list <- list()
+    if ("Parameter" %in% col_names) rename_list[["Estimate"]] <- "Parameter"
+    if ("RSE" %in% col_names) rename_list[["RSE (%)"]] <- "RSE"
+    if ("SHRINKAGE" %in% col_names) rename_list[["Shrinkage (%)"]] <- "SHRINKAGE"
+
+    # Only rename if we have columns to rename
+    if (length(rename_list) > 0) {
+      grouped_table <- grouped_table %>%
+        dplyr::rename(!!!rename_list)
+    }
+
+    # Remove helper columns
     grouped_table <- grouped_table %>%
-      dplyr::rename(
-        Estimate = Parameter,
-        `RSE (%)` = RSE,
-        `Shrinkage (%)` = SHRINKAGE
-      ) %>%
-      dplyr::select(-comment_info, -group, -comment)
+      dplyr::select(-dplyr::any_of(c("comment_info", "group", "comment")))
+
   } else {
+    # Multiple models
     keep_cols <- c("group", "comment", "parameter_names", "label", "comment_info")
     new_names <- names(grouped_table)
     new_names[!new_names %in% keep_cols] <- paste0(
@@ -452,7 +574,7 @@ model_report <- function(model_names,
     )
     colnames(grouped_table) <- new_names
     grouped_table <- grouped_table %>%
-      dplyr::select(-comment_info, -group, -comment)
+      dplyr::select(-dplyr::any_of(c("comment_info", "group", "comment")))
   }
 
   # Create and format flextable
@@ -467,6 +589,19 @@ model_report <- function(model_names,
     ) %>%
     flextable::merge_v(j = 1) %>%
     flextable::autofit()
+
+  # Add footer note if models were skipped
+  if (length(failed_models) > 0) {
+    footer_text <- sprintf(
+      "Note: %d model(s) excluded due to errors: %s",
+      length(failed_models),
+      paste(failed_models, collapse = ", ")
+    )
+    flextable_object <- flextable::add_footer_lines(
+      flextable_object,
+      values = footer_text
+    )
+  }
 
   return(flextable_object)
 }
