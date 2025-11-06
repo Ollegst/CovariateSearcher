@@ -49,6 +49,7 @@
   <div class="dropdown-menu" aria-labelledby="dropdown-extended-docs">
     <a class="dropdown-item" href="../articles/complete-workflow.html">Complete Workflow</a>
     <a class="dropdown-item" href="../articles/yaml-specification-files.html">YAML Specification Files</a>
+    <a class="dropdown-item" href="../articles/model-report-usage.html">Parameter Tables with model_report()</a>
     <a class="dropdown-item" href="../articles/troubleshooting.html">Troubleshooting Guide</a>
     <a class="dropdown-item" href="../articles/recovery-system.html">Recovery System</a>
   </div>
@@ -292,9 +293,9 @@ include this column in your CSV file.</p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_automated_scm_testing.html">run_automated_scm_testing</a></span><span class="op">(</span></span>
 <span>  search_state <span class="op">=</span> <span class="va">search_state</span>,</span>
-<span>  base_model_id <span class="op">=</span> <span class="st">"run1"</span>,</span>
-<span>  scm_type <span class="op">=</span> <span class="st">"selective"</span>,  <span class="co"># Only test significant covariates from step 1</span></span>
-<span>  starting_phase <span class="op">=</span> <span class="st">"forward"</span>,</span>
+<span>  base_model_id <span class="op">=</span> <span class="st">"run1"</span>,  </span>
+<span>  scm_type <span class="op">=</span> <span class="st">"selective"</span>,     <span class="co"># Only test significant covariates from step 1</span></span>
+<span>  starting_phase <span class="op">=</span> <span class="st">"forward"</span>, <span class="co"># Start with forward selection</span></span>
 <span>  full_scm <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 </div>
@@ -305,7 +306,7 @@ include this column in your CSV file.</p>
 <code class="sourceCode R"><span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_automated_scm_testing.html">run_automated_scm_testing</a></span><span class="op">(</span></span>
 <span>  search_state <span class="op">=</span> <span class="va">search_state</span>,</span>
 <span>  base_model_id <span class="op">=</span> <span class="st">"run1"</span>,</span>
-<span>  scm_type <span class="op">=</span> <span class="st">"standard"</span>,</span>
+<span>  scm_type <span class="op">=</span> <span class="st">"standard"</span>,        <span class="co"># Standard SCM</span></span>
 <span>  starting_phase <span class="op">=</span> <span class="st">"backward"</span>,  <span class="co"># Start with backward elimination</span></span>
 <span>  full_scm <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>

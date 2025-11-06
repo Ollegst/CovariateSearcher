@@ -163,20 +163,20 @@ Models are selected if they meet **BOTH** criteria:
 ```{r selective}
 results <- run_automated_scm_testing(
   search_state = search_state,
-  base_model_id = "run1",
-  scm_type = "selective",  # Only test significant covariates from step 1
-  starting_phase = "forward",
+  base_model_id = "run1",  
+  scm_type = "selective",     # Only test significant covariates from step 1
+  starting_phase = "forward", # Start with forward selection
   full_scm = TRUE
 )
 ```
 
 ### Full SCM Workflow (Backward → Forward → Backward)
 
-```{r scm_plus}
+```{r scm}
 results <- run_automated_scm_testing(
   search_state = search_state,
   base_model_id = "run1",
-  scm_type = "standard",
+  scm_type = "standard",        # Standard SCM
   starting_phase = "backward",  # Start with backward elimination
   full_scm = TRUE
 )
