@@ -248,16 +248,12 @@ create_scm_results_table <- function(search_state) {
     # Extract model numbers for sorting
     model_numbers <- as.numeric(gsub("^run", "", results$Model))
 
-    # Create sort order for Phase_Step: Base < Forward < Backward
-    phase_order <- ifelse(results$Phase_Step == "Base", 0,
-                          ifelse(grepl("^Forward", results$Phase_Step), 1, 2))
-
-    # Extract step numbers for proper ordering within Forward and Backward
     step_numbers <- as.numeric(gsub(".*Step", "", results$Phase_Step))
     step_numbers[is.na(step_numbers)] <- 0  # For Base
 
-    # Sort by: phase_order, then step_numbers, then model_numbers
-    results <- results[order(phase_order, step_numbers, model_numbers), ]
+    # Sort by: step_numbers, then model_numbers (phase-agnostic)
+    results <- results[order(step_numbers, model_numbers), ]
+
   }
   if (nrow(results) > 0) {
     results$OFV <- round(results$OFV, 2)
