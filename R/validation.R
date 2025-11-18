@@ -740,11 +740,12 @@ validate_parameter_blocks <- function(model_file,
       # ===================================================================
 
       if (check_omega_structure && is_omega_block && !is.na(block_size)) {
-        # Check: Should have exactly block_size lines (one per parameter)
-        if (length(block_lines) != block_size) {
+        # Check: Should have exactly n*(n+1)/2 lines for BLOCK(n) (lower triangle of matrix)
+        expected_lines <- block_size * (block_size + 1) / 2
+        if (length(block_lines) != expected_lines) {
           issues <- c(issues, sprintf(
             "%s BLOCK(%d) at line %d: Expected %d lines, found %d lines",
-            block_type, block_size, start_line, block_size, length(block_lines)
+            block_type, block_size, start_line, expected_lines, length(block_lines)
           ))
         }
 
