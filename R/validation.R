@@ -793,13 +793,19 @@ validate_parameter_blocks <- function(model_file,
           parts <- strsplit(line, ";")[[1]]
           parts <- trimws(parts)
 
-          # Should have at least 4 parts (value, name, units, transform)
-          if (length(parts) < 4) {
+          # Should have at least 3 semicolons (4 fields)
+          semicolon_count <- length(gregexpr(";", line)[[1]])
+          if (semicolon_count < 3) {
             issues <- c(issues, sprintf(
-              "Line %d (%s): Incorrect comment format - expected 'value ; NAME ; units ; RATIO|LOG', found %d field(s)",
-              line_num, block_type, length(parts)
+              "Line %d (%s): Incorrect comment format - expected 'value ; NAME ; units ; RATIO|LOG' (3 semicolons required), found %d",
+              line_num, block_type, semicolon_count
             ))
             next
+          }
+
+          # Pad parts to ensure we have 4 elements (handles empty trailing fields)
+          while (length(parts) < 4) {
+            parts <- c(parts, "")
           }
 
           value_part <- parts[1]
