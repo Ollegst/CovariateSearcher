@@ -993,16 +993,24 @@ validate_base_model_parameters <- function(base_model_path,
     full_path <- base_model_path
   }
 
-  # Find model file
-  if (dir.exists(full_path)) {
+  ctl_path <- paste0(full_path, ".ctl")
+  mod_path <- paste0(full_path, ".mod")
+
+  if (file.exists(ctl_path)) {
+    model_file <- ctl_path
+  } else if (file.exists(mod_path)) {
+    model_file <- mod_path
+  } else if (file.exists(full_path)) {
+    # Full path already includes extension
+    model_file <- full_path
+  } else if (dir.exists(full_path)) {
+    # Look inside directory
     ctl_files <- list.files(full_path, pattern = "\\.(ctl|mod)$",
                             full.names = TRUE, ignore.case = TRUE)
     if (length(ctl_files) == 0) {
       stop("No .ctl or .mod file found in directory: ", full_path)
     }
     model_file <- ctl_files[1]
-  } else if (file.exists(full_path)) {
-    model_file <- full_path
   } else {
     stop("Base model path not found: ", full_path)
   }
