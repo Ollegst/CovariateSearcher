@@ -29,9 +29,9 @@ Imports:
     tidyr,
     rlang,
     tidyselect,
+    bbr (>= 1.0.0),
     ggplot2
 Suggests:
-    bbr (>= 1.0.0),
     testthat (>= 3.0.0),
     knitr,
     rmarkdown

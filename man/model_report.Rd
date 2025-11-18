@@ -2,7 +2,7 @@
 % Please edit documentation in R/model-output-tables.R
 \name{model_report}
 \alias{model_report}
-\title{Generate Model Comparison Report Table}
+\title{Generate Parameter Table Report for Multiple Models}
 \usage{
 model_report(
   model_names,
@@ -12,29 +12,17 @@ model_report(
 )
 }
 \arguments{
-\item{model_names}{Character vector. Names of models to compare}
+\item{model_names}{Character vector of model names}
 
-\item{shrinkage}{Character string. Type of shrinkage to report (default: "etasd")}
+\item{shrinkage}{Type of shrinkage to report ("etasd", "etavr", "ebvsd", "ebvvr")}
 
-\item{models_folder}{Character string. Path to models folder (default: "models")}
+\item{models_folder}{Path to models folder}
 
-\item{spec_pk}{List. Optional parameter specifications with labels and units}
+\item{spec_pk}{Optional yspec object for parameter formatting}
 }
 \value{
-A formatted flextable object ready for display or export
+flextable object with formatted parameter table
 }
 \description{
-Creates a formatted flextable comparing parameters across one or more NONMEM models
-}
-\examples{
-\dontrun{
-# Single model report
-table <- model_report("run1")
-
-# Compare multiple models
-table <- model_report(c("run1", "run2", "run3"))
-
-# Save to Word document
-flextable::save_as_docx(table, path = "model_comparison.docx")
-}
+Generate Parameter Table Report for Multiple Models
 }

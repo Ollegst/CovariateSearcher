@@ -169,14 +169,12 @@ get_excluded_covariates <- function(search_state, return_details = FALSE) {
 #'   All models within each step run in parallel.
 #' @param search_state List containing covariate search state and configuration
 #' @param base_model_id Character. Starting base model
-#' @param max_forward_steps Numeric. Maximum number of forward steps (default: 30)
 #' @param auto_submit Logical. Whether to automatically submit models (default: TRUE)
 #' @param forward_p_value Numeric. P-value for forward selection (uses config if NULL)
 #' @param rse_threshold Numeric. Maximum RSE threshold (uses config if NULL)
 #' @return List with complete SCM results and updated search_state
 #' @export
 run_stepwise_covariate_modeling <- function(search_state, base_model_id = NULL,
-                                            max_forward_steps = 30,
                                             auto_submit = TRUE,
                                             forward_p_value = NULL,
                                             rse_threshold = NULL) {
@@ -195,7 +193,6 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id = NULL,
   cat(paste0("\n", paste(rep("=", 80), collapse=""), "\n"))
   cat("🎯 STARTING STEPWISE COVARIATE MODELING (SCM)\n")
   cat(sprintf("Base model: %s\n", base_model_id))
-  cat(sprintf("Max forward steps: %d\n", max_forward_steps))
   cat(sprintf("Forward ΔOFV threshold: %.2f\n", ofv_threshold_display))
   cat(paste0(paste(rep("=", 80), collapse=""), "\n"))
 
@@ -338,9 +335,7 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id = NULL,
   cat(sprintf("🎯 Step %d complete - new base model: %s\n", current_step_number, current_base_model))
 
   # ITERATIVE FORWARD STEPS (continue from current step)
-  max_iterations <- max_forward_steps - 1  # -1 because we already did step 1
-
-  for (iteration in 1:max_iterations) {
+  while (TRUE) {
 
     # Get current step number from database
     current_step_number <- max(search_state$search_database$step_number, na.rm = TRUE) + 1

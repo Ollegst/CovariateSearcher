@@ -215,9 +215,7 @@ initialize_search_config <- function(search_state) {
     forward_p_value = 0.05,        # p-value for forward selection
     backward_p_value = 0.01,       # p-value for backward elimination (more stringent)
     max_rse_threshold = 50,
-    max_forward_steps = 10,
-    max_backward_steps = 10,
-    timeout_minutes = 60,
+    timeout_minutes = 3600,
     threads = search_state$threads,
     current_phase = "initialization",
     current_step = 0
