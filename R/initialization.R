@@ -110,6 +110,7 @@ initialize_covariate_search <- function(base_model_path,
   if (validate_parameters) {
     validate_base_model_parameters(
       base_model_path = base_model_path,
+      models_folder = models_folder,
       strict = TRUE  # Stops if issues found
     )
   }

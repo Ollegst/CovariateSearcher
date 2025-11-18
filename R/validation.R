@@ -969,11 +969,13 @@ print_parameter_validation <- function(validation_result, verbose = TRUE) {
 #'
 #' @param base_model_path Character. Path to base model directory or .ctl file
 #' @param strict Logical. If TRUE, stops on validation failure (default: TRUE)
+#' @param models_folder Character. Directory containing models (default: NULL)
 #' @param check_omega_structure Logical. Validate OMEGA BLOCK structure (default: TRUE)
 #' @param check_comments Logical. Validate comment structure (default: TRUE)
 #' @return List with validation results. Stops execution if strict=TRUE and validation fails.
 #' @export
 validate_base_model_parameters <- function(base_model_path,
+                                           models_folder = NULL,
                                            strict = TRUE,
                                            check_omega_structure = TRUE,
                                            check_comments = TRUE) {
@@ -983,18 +985,25 @@ validate_base_model_parameters <- function(base_model_path,
   cat("VALIDATING BASE MODEL PARAMETER STRUCTURE\n")
   cat(paste(rep("=", 70), collapse = ""), "\n")
 
+  # Construct full path if models_folder provided
+  if (!is.null(models_folder)) {
+    full_path <- file.path(models_folder, base_model_path)
+  } else {
+    full_path <- base_model_path
+  }
+
   # Find model file
-  if (dir.exists(base_model_path)) {
-    ctl_files <- list.files(base_model_path, pattern = "\\.(ctl|mod)$",
+  if (dir.exists(full_path)) {
+    ctl_files <- list.files(full_path, pattern = "\\.(ctl|mod)$",
                             full.names = TRUE, ignore.case = TRUE)
     if (length(ctl_files) == 0) {
-      stop("No .ctl or .mod file found in directory: ", base_model_path)
+      stop("No .ctl or .mod file found in directory: ", full_path)
     }
     model_file <- ctl_files[1]
-  } else if (file.exists(base_model_path)) {
-    model_file <- base_model_path
+  } else if (file.exists(full_path)) {
+    model_file <- full_path
   } else {
-    stop("Base model path not found: ", base_model_path)
+    stop("Base model path not found: ", full_path)
   }
 
   cat(sprintf("\nChecking: %s\n", model_file))

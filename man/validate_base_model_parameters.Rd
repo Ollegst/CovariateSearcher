@@ -6,6 +6,7 @@
 \usage{
 validate_base_model_parameters(
   base_model_path,
+  models_folder = NULL,
   strict = TRUE,
   check_omega_structure = TRUE,
   check_comments = TRUE
@@ -13,6 +14,8 @@ validate_base_model_parameters(
 }
 \arguments{
 \item{base_model_path}{Character. Path to base model directory or .ctl file}
+
+\item{models_folder}{Character. Directory containing models (default: NULL)}
 
 \item{strict}{Logical. If TRUE, stops on validation failure (default: TRUE)}
 
