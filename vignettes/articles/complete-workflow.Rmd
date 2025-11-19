@@ -14,12 +14,11 @@ knitr::opts_chunk$set(
 
 This comprehensive guide walks through a complete SCM analysis from start to finish.
 
-**Note**: This article is NOT included in the package build. You can update it anytime without reinstalling CovariateSearcher!
 
 ## Overview
 
-The stepwise covariate modeling (SCM) process consists of:
-
+The stepwise covariate modeling (SCM/SCM+) process consists of:
+0. **Backward elimination** :Remove non-significant covariates (optional)
 1. **Forward Selection**: Add covariates that improve model fit
 2. **Backward Elimination**: Remove non-significant covariates
 3. **Final Model**: Select the best parsimonious model
@@ -57,11 +56,11 @@ Create a CSV file defining which covariates to test:
 ```{r covariate-config}
 # Example: covariate_search.csv
 covariate_config <- tribble(
-  ~PARAMETER, ~COVARIATE, ~STATUS, ~FORMULA, ~LEVELS, ~REFERENCE,
-  "CL",       "WT",        "test",  "power",  NA,      NA,
-  "CL",       "AGE",       "test",  "linear", NA,      NA,
-  "CL",       "SEX",       "test",  "cat",    "0,1",   0,
-  "V",        "WT",        "test",  "power",  NA,      NA
+  ~PARAMETER, ~COVARIATE, ~STATUS,        ~FORMULA, ~LEVELS, ~REFERENCE,
+  "CL",       "WT",        "continouous",  "power",  NA,      70,
+  "CL",       "AGE",       "continouous",  "linear", NA,      50,
+  "CL",       "SEX",       "categorical",  "cat",    "0;1",   1,
+  "V",        "WT",        "continouous",  "power",  NA,      70
 )
 
 write.csv(covariate_config, "data/derived/covariate_search.csv", row.names = FALSE)
@@ -70,32 +69,35 @@ write.csv(covariate_config, "data/derived/covariate_search.csv", row.names = FAL
 ## Step 2: Initialize Search
 
 ```{r initialize}
-search_state <- initialize_new_search(
-  base_model_path = "run1",                             # Your base model
-  data_file_path = "data/derived/nonmem_data.csv",      # NONMEM dataset
+search_state <- initialize_covariate_search(
+  base_model_path = "run10",
+  data_file_path = "data/derived/analysis.csv",
   covariate_search_path = "data/covariate_search.csv",
-  models_folder = "models/",                     # Where to save models
-  output_folder = "output",                     # Where to save results
-  auto_submit = TRUE,                           # Submit models automatically
-  auto_retry = TRUE                             # Retry failed models
-)
+  discover_existing = TRUE, 
+  models_folder = "models", 
+  threads = 40)
+
 ```
 
 ## Step 3: Run Forward Selection
 
 ```{r forward-selection}
 # Standard forward selection
-forward_result <- run_stepwise_covariate_modeling(
+ results <- full_scm_search(
   search_state = search_state,
-  forward_threshold = 3.84,    # p < 0.05 (chi-square with 1 df)
-  rse_threshold = 50,          # Max RSE = 50%
-  max_steps = 10,              # Maximum forward steps
-  submit = TRUE                # Submit to cluster
+  base_model_id = "run10",
+  scm_type = "standard",      # or "selective"
+  starting_phase = "forward",
+  full_scm = FALSE,           # This runs ONLY forward selection
+  forward_p_value = 0.05,
+  rse_threshold = 50,
+  auto_submit = TRUE,
+  auto_retry = TRUE
 )
 
 # Check results
-print(forward_result$final_model)
-print(forward_result$selected_covariates)
+print(results$final_model)
+print(results$selected_covariates)
 ```
 
 ### Understanding Selection Criteria
@@ -107,82 +109,27 @@ Models are selected if they meet BOTH criteria:
 ## Step 4: Backward Elimination
 
 ```{r backward-elimination}
-backward_result <- run_backward_elimination(
+results <- full_scm_search(
   search_state = search_state,
-  backward_threshold = 6.63,   # p < 0.01 (chi-square with 1 df)
-  rse_threshold = 50,
-  start_model = forward_result$final_model
+  base_model_id = "run10",
+  starting_phase = "backward",
+  full_scm = FALSE,            # This runs ONLY the specified phase
+  backward_p_value = 0.01,
+  auto_submit = TRUE,
+  auto_retry = TRUE
 )
 
-print(backward_result$final_model)
+print(results$final_model)
 ```
 
 ## Step 5: Review Results
 
 ```{r review}
-# Get final model details
-final_model_name <- backward_result$final_model
-
-# Extract from database
-final_model_row <- search_state$search_database %>%
-  filter(model_name == final_model_name)
-
-# Show final covariates
-cat("Final covariates:", unlist(final_model_row$tags), "\n")
-cat("Final OFV:", final_model_row$ofv, "\n")
-cat("OFV improvement from base:", 
-    search_state$base_model_ofv - final_model_row$ofv, "\n")
-```
-
-## Advanced: Selective Forward Search
-
-If you want to test only covariates that were significant in step 1:
-
-```{r selective}
-selective_result <- run_scm_selective_forward(
-  search_state = search_state,
-  forward_threshold = 3.84,
-  rse_threshold = 50
-)
-```
-
-## Monitoring Progress
-
-While models are running:
-
-```{r monitor}
-# Check current status
-status_summary <- search_state$search_database %>%
-  count(status, phase)
-print(status_summary)
-
-# View specific model
-model_info <- get_model_info(search_state, "run11")
-print(model_info)
-```
-
-## Handling Failed Models
-
-CovariateSearcher automatically detects and retries failed models:
-
-```{r recovery}
-# Failed models are automatically retried with THETA adjustment
-# Check retry models in database
-retries <- search_state$search_database %>%
-  filter(phase == "retry")
-
-print(retries)
-```
-
-## Exporting Results
-
-```{r export}
-#read results from final step
-search_state <- readRDS("./models/scm_rds/scm_auto_final_complete.rds")
-# create table with results
+search_state <-readRDS("./models/scm_rds/scm_auto_final_complete.rds")
 results_table <- create_scm_results_table(search_state)
 print_scm_results_table(search_state)
 ```
+
 
 ## Next Steps
 

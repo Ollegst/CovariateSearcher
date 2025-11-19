@@ -2,11 +2,8 @@
 title: "CovariateSearcher: Quick Reference"
 author: "CovariateSearcher Package"
 date: "`r Sys.Date()`"
-output: rmarkdown::html_vignette
-vignette: >
-  %\VignetteIndexEntry{CovariateSearcher: Quick Reference}
-  %\VignetteEngine{knitr::rmarkdown}
-  %\VignetteEncoding{UTF-8}
+output: github_document
+
 ---
 
 ```{r setup, include = FALSE}
@@ -30,23 +27,35 @@ library(CovariateSearcher)
 
 # 1. Initialize
 search_state <- initialize_covariate_search(
-  base_model_path = "models/run10",
-  data_file_path = "data/analysis.csv",
-  covariate_search_path = "data/covariates.csv"
-)
+  base_model_path = "run10",
+  data_file_path = "data/derived/analysis.csv",
+  covariate_search_path = "data/covariate_search.csv“,
+  discover_existing = TRUE, 
+  models_folder = "models", 
+  threads = 40)
+
 
 # 2. Run SCM
-results <- run_automated_scm_testing(
-  search_state = search_state,
-  base_model_id = "run10",
-  scm_type = "standard",
-  starting_phase = "forward",
-  full_scm = TRUE
-)
+result <- run_automated_scm_testing(
+		search_state = search_state,
+		scm_type = "selective",                     # or "standard"  
+    starting_phase = "backward",                # Starting phase
+    full_scm = TRUE,                            # Run complete workflow 
+    forward_p_value = 0.05, 	                  # p-value for the forward selection	
+    backward_p_value = 0.01,                    # p-value for the backward elimination
+    rse_threshold = 50,                         # RSE threshold
+    auto_submit = TRUE,                         # if FALSE – only model creation 
+    auto_retry = TRUE,                          # Retry model in case of failure
+    save_checkpoints = TRUE,                    # Save each step
+    checkpoint_prefix = "scm_auto",
+    final_testing = TRUE)                       # Test excluded covariates form failed model
+
 
 # 3. Check results
-print(results$final_model)
-print(results$final_covariates)
+search_state <-readRDS("./models/scm_rds/scm_auto_final_complete.rds")
+results_table <- create_scm_results_table(search_state)
+print_scm_results_table(search_state)
+
 ```
 
 ---
@@ -59,12 +68,12 @@ print(results$final_covariates)
 **Requirements**:
 ```
 $THETA
-; Simple parameter names (no TV_ prefix in THETA block!)
-0.5 ; CL ; L/h ; LOG
-10  ; V  ; L   ; LOG
+; Simple parameter names 
+0.5 ; CL ; L/h ; RATIO
+10  ; V  ; L   ; RATIO
 ; OR numbered format
-0.5 ; 1_CL ; L/h ; LOG
-10  ; 2_V  ; L   ; LOG
+0.5 ; 1_CL ; L/h ; RATIO
+10  ; 2_V  ; L   ; RATIO
 
 $PK
 ; Use TV_ prefix in PK block for typical values
@@ -74,8 +83,9 @@ CL = TV_CL * EXP(ETA(1))
 V  = TV_V  * EXP(ETA(2))
 
 $OMEGA BLOCK(2)
-0.1 ; IIV_CL ; ; RATIO
-0.1 ; IIV_V  ; ; RATIO
+0.1 ; IIV_CL   ; ; LOG
+0.1 ; IIV_CL_V ; ; LOG
+0.1 ; IIV_V    ; ; LOG
 
 $SIGMA
 0.1 ; RUV ; ; RATIO
@@ -86,47 +96,21 @@ Format: `value ; NAME ; units ; RATIO|LOG`
 **THETA Naming**: Use simple names (e.g., `CL`, `V`) or numbered (e.g., `1_CL`, `2_V`) in $THETA block. Use `TV_` prefix only in $PK/$PRED block.
 
 ### 2. Dataset
-`data/analysis.csv` - NONMEM dataset with covariates
+`data/derived/analysis.csv` - NONMEM dataset with covariates
 
 ### 3. Covariate Search
-`data/covariates.csv`
+`data/derived/covariates.csv`
 
-```csv
-PARAMETER,COVARIATE,STATUS,FORMULA,LEVELS,REFERENCE,TIME_DEPENDENT
-CL,WT,continuous,linear,NA,NA,FALSE
-CL,AGE,continuous,linear,NA,NA,FALSE
-CL,SEX,categorical,linear,2,1,FALSE
-V2,WT,continuous,linear,NA,NA,FALSE
-```
+
+|PARAMETER|COVARIATE|STATUS     |FORMULA|LEVELS|REFERENCE|TIME_DEPENDENT|
+|---------|---------|-----------|-------|------|---------|--------------|
+|CL       |WT       |continuous |power  |NA    |70       |FALSE         |
+|CL       |AGE      |continuous |linear |NA    |50       |FALSE         |
+|CL       |ECOG     |categorical|linear |0,1;2 |1        |FALSE         |
+|V2       |WT       |continuous |power  |NA    |70       |FALSE         |
+
 
 ---
-
-## 🎯 Main Functions
-
-### Initialize
-```r
-search_state <- initialize_covariate_search(
-  base_model_path,
-  data_file_path,
-  covariate_search_path
-)
-```
-
-### Run Complete SCM
-```r
-results <- run_automated_scm_testing(
-  search_state,
-  base_model_id,
-  scm_type = "standard",      # or "selective"
-  starting_phase = "forward", # or "backward"
-  full_scm = TRUE
-)
-```
-
-### Validate Base Model
-```r
-validate_base_model_parameters("models/run10")
-```
 
 ### Save/Load State
 ```r
@@ -138,41 +122,60 @@ search_state <- load_search_state("state.rds")
 
 ## 📊 Workflow Types
 
-### Standard SCM
+### Standard SCM/SCM+
 ```r
 starting_phase = "forward"
 full_scm = TRUE
 ```
 ➜ Forward → Backward
 
-### SCM+
+### SCM/SCM+ with start from previously developed model
 ```r
 starting_phase = "backward"
 full_scm = TRUE
 ```
 ➜ Backward → Forward → Backward
 
-### Forward Only
+### Backward Only
 ```r
-starting_phase = "forward"
-full_scm = FALSE
+results <- full_scm_search(
+  search_state = search_state,
+  base_model_id = "run10",
+  starting_phase = "backward",
+  full_scm = FALSE,            # This runs ONLY the specified phase
+  backward_p_value = 0.01,
+  auto_submit = TRUE,
+  auto_retry = TRUE
+)
 ```
-➜ Forward only
-
+### Forward only
+ ```r
+ results <- full_scm_search(
+  search_state = search_state,
+  base_model_id = "run10",
+  scm_type = "standard",      # or "selective"
+  starting_phase = "forward",
+  full_scm = FALSE,           # This runs ONLY forward selection
+  forward_p_value = 0.05,
+  rse_threshold = 50,
+  auto_submit = TRUE,
+  auto_retry = TRUE
+)
+```
 ---
 
 ## ⚙️ Common Parameters
 
-| Parameter | Default | Options |
-|-----------|---------|---------|
-| `scm_type` | "standard" | "standard", "selective" |
-| `starting_phase` | "forward" | "forward", "backward" |
-| `full_scm` | TRUE | TRUE, FALSE |
-| `forward_p_value` | 0.05 | 0.001-0.1 |
-| `backward_p_value` | 0.01 | 0.001-0.1 |
-| `rse_threshold` | 50 | 30-100 |
-| `auto_submit` | TRUE | TRUE, FALSE |
-| `auto_retry` | TRUE | TRUE, FALSE |
+| Parameter          | Default    | Options                 |
+|--------------------|------------|-------------------------|
+| `scm_type`         | "standard" | "standard", "selective" |
+| `starting_phase`   | "forward"  | "forward", "backward"   |
+| `full_scm`         | TRUE       | TRUE, FALSE             |
+| `forward_p_value`  | 0.05       | 0.001-0.1               |
+| `backward_p_value` | 0.01       | 0.001-0.1               |
+| `rse_threshold`    | 50         | 0-100                   |
+| `auto_submit`      | TRUE       | TRUE, FALSE             |
+| `auto_retry`       | TRUE       | TRUE, FALSE             |
 
 ---
 
@@ -300,38 +303,12 @@ $OMEGA BLOCK(3)
 ```
 $THETA
 0.5 ; TV_CL ; L/h ; LOG    ← Don't use TV_ in $THETA block!
-0.5 ; TVCL ; L/h ; LOG     ← Missing underscore
+0.5 ; 1CL   ; L/h ; LOG     ← Missing underscore
 ```
 
 ---
 
-## 📋 Complete Correct Example
 
-```
-$THETA
-; Simple names in THETA block
-0.5 ; CL ; L/h ; LOG
-10  ; V  ; L   ; LOG
-1   ; KA ; 1/h ; LOG
-
-$PK
-; TV_ prefix used here in PK block
-TV_CL = THETA(1)
-TV_V  = THETA(2)
-TV_KA = THETA(3)
-
-CL = TV_CL * EXP(ETA(1))
-V  = TV_V  * EXP(ETA(2))
-KA = TV_KA * EXP(ETA(3))
-
-$OMEGA BLOCK(3)
-0.1 ; IIV_CL ; ; RATIO
-0.1 ; IIV_CL_V ; ; RATIO
-0.1 ; IIV_V ; ; RATIO
-
-$SIGMA
-0.1 ; RUV_PROP ; ; RATIO
-```
 
 ---
 
