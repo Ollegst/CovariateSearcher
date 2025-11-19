@@ -55,6 +55,7 @@
   <div class="dropdown-menu" aria-labelledby="dropdown-extended-docs">
     <a class="dropdown-item" href="articles/complete-workflow.html">Complete Workflow</a>
     <a class="dropdown-item" href="articles/yaml-specification-files.html">YAML Specification Files</a>
+    <a class="dropdown-item" href="articles/model-report-usage.html">Parameter Tables with model_report()</a>
     <a class="dropdown-item" href="articles/troubleshooting.html">Troubleshooting Guide</a>
     <a class="dropdown-item" href="articles/recovery-system.html">Recovery System</a>
   </div>
@@ -81,32 +82,45 @@
   <main id="main" class="col-md-9"><div class="section level1">
 <div class="page-header"><h1 id="covariatesearcher-quick-reference">CovariateSearcher: Quick Reference<a class="anchor" aria-label="anchor" href="#covariatesearcher-quick-reference"></a>
 </h1></div>
-<p>CovariateSearcher Package 2025-11-06</p>
+<p>CovariateSearcher Package 2025-11-19</p>
 <div class="section level2">
 <h2 id="-minimal-working-example">🚀 Minimal Working Example<a class="anchor" aria-label="anchor" href="#-minimal-working-example"></a>
 </h2>
-<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/Ollegst/CovariateSearcher" class="external-link">CovariateSearcher</a></span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># 1. Initialize</span></span>
-<span><span class="va">search_state</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/initialize_covariate_search.html">initialize_covariate_search</a></span><span class="op">(</span></span>
-<span>  base_model_path <span class="op">=</span> <span class="st">"models/run10"</span>,</span>
-<span>  data_file_path <span class="op">=</span> <span class="st">"data/analysis.csv"</span>,</span>
-<span>  covariate_search_path <span class="op">=</span> <span class="st">"data/covariates.csv"</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># 2. Run SCM</span></span>
-<span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/run_automated_scm_testing.html">run_automated_scm_testing</a></span><span class="op">(</span></span>
-<span>  search_state <span class="op">=</span> <span class="va">search_state</span>,</span>
-<span>  base_model_id <span class="op">=</span> <span class="st">"run10"</span>,</span>
-<span>  scm_type <span class="op">=</span> <span class="st">"standard"</span>,</span>
-<span>  starting_phase <span class="op">=</span> <span class="st">"forward"</span>,</span>
-<span>  full_scm <span class="op">=</span> <span class="cn">TRUE</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># 3. Check results</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">results</span><span class="op">$</span><span class="va">final_model</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">results</span><span class="op">$</span><span class="va">final_covariates</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Install from GitHub</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>devtools<span class="sc">::</span><span class="fu">install_github</span>(<span class="st">"Ollegst/CovariateSearcher"</span>)</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(CovariateSearcher)</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Initialize</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>search_state <span class="ot">&lt;-</span> <span class="fu">initialize_covariate_search</span>(</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">base_model_path =</span> <span class="st">"run10"</span>,</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">data_file_path =</span> <span class="st">"data/derived/analysis.csv"</span>,</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">covariate_search_path =</span> <span class="st">"data/covariate_search.csv“,</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="st">  discover_existing = TRUE, </span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="st">  models_folder = "</span>models<span class="st">", </span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="st">  threads = 40)</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a><span class="st"># 2. Run SCM</span></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a><span class="st">result &lt;- run_automated_scm_testing(</span></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a><span class="st">        search_state = search_state,</span></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a><span class="st">        scm_type = "</span>selective<span class="st">",                     # or "</span>standard<span class="st">"  </span></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="st">    starting_phase = "</span>backward<span class="st">",                # Starting phase</span></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a><span class="st">    full_scm = TRUE,                            # Run complete workflow </span></span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a><span class="st">    forward_p_value = 0.05,                       # p-value for the forward selection   </span></span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a><span class="st">    backward_p_value = 0.01,                    # p-value for the backward elimination</span></span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a><span class="st">    rse_threshold = 50,                         # RSE threshold</span></span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a><span class="st">    auto_submit = TRUE,                         # if FALSE – only model creation </span></span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a><span class="st">    auto_retry = TRUE,                          # Retry model in case of failure</span></span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a><span class="st">    save_checkpoints = TRUE,                    # Save each step</span></span>
+<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a><span class="st">    checkpoint_prefix = "</span>scm_auto<span class="st">",</span></span>
+<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a><span class="st">    final_testing = TRUE)                       # Test excluded covariates form failed model</span></span>
+<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a><span class="st"># 3. Check results</span></span>
+<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a><span class="st">search_state &lt;-readRDS("</span>.<span class="sc">/</span>models<span class="sc">/</span>scm_rds<span class="sc">/</span>scm_auto_final_complete.rds<span class="st">")</span></span>
+<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a><span class="st">results_table &lt;- create_scm_results_table(search_state)</span></span>
+<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a><span class="st">print_scm_results_table(search_state)</span></span></code></pre></div>
 <hr>
 </div>
 <div class="section level2">
@@ -118,12 +132,12 @@
 <p><code>models/run10/run10.ctl</code> - NONMEM control file</p>
 <p><strong>Requirements</strong>:</p>
 <div class="sourceCode" id="cb2"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="sc">$</span>THETA</span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>; Simple parameter <span class="fu">names</span> (no TV_ prefix <span class="cf">in</span> THETA block<span class="sc">!</span>)</span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="fl">0.5</span> ; CL ; L<span class="sc">/</span>h ; LOG</span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="dv">10</span>  ; V  ; L   ; LOG</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>; Simple parameter names </span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="fl">0.5</span> ; CL ; L<span class="sc">/</span>h ; RATIO</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="dv">10</span>  ; V  ; L   ; RATIO</span>
 <span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>; OR numbered format</span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="fl">0.5</span> ; 1_CL ; L<span class="sc">/</span>h ; LOG</span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="dv">10</span>  ; 2_V  ; L   ; LOG</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="fl">0.5</span> ; 1_CL ; L<span class="sc">/</span>h ; RATIO</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="dv">10</span>  ; 2_V  ; L   ; RATIO</span>
 <span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="sc">$</span>PK</span>
 <span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>; Use TV_ prefix <span class="cf">in</span> PK block <span class="cf">for</span> typical values</span>
@@ -133,66 +147,88 @@
 <span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>V  <span class="ot">=</span> TV_V  <span class="sc">*</span> <span class="fu">EXP</span>(<span class="fu">ETA</span>(<span class="dv">2</span>))</span>
 <span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a><span class="sc">$</span>OMEGA <span class="fu">BLOCK</span>(<span class="dv">2</span>)</span>
-<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a><span class="fl">0.1</span> ; IIV_CL ; ; RATIO</span>
-<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a><span class="fl">0.1</span> ; IIV_V  ; ; RATIO</span>
-<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a><span class="sc">$</span>SIGMA</span>
-<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a><span class="fl">0.1</span> ; RUV ; ; RATIO</span></code></pre></div>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a><span class="fl">0.1</span> ; IIV_CL   ; ; LOG</span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a><span class="fl">0.1</span> ; IIV_CL_V ; ; LOG</span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a><span class="fl">0.1</span> ; IIV_V    ; ; LOG</span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a><span class="sc">$</span>SIGMA</span>
+<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a><span class="fl">0.1</span> ; RUV ; ; RATIO</span></code></pre></div>
 <p>Format: <code>value ; NAME ; units ; RATIO|LOG</code></p>
 <p><strong>THETA Naming</strong>: Use simple names (e.g., <code>CL</code>, <code>V</code>) or numbered (e.g., <code>1_CL</code>, <code>2_V</code>) in $THETA block. Use <code>TV_</code> prefix only in <span class="math inline"><em>P</em><em>K</em>/</span>PRED block.</p>
 </div>
 <div class="section level3">
 <h3 id="2-dataset">2. Dataset<a class="anchor" aria-label="anchor" href="#2-dataset"></a>
 </h3>
-<p><code>data/analysis.csv</code> - NONMEM dataset with covariates</p>
+<p><code>data/derived/analysis.csv</code> - NONMEM dataset with covariates</p>
 </div>
 <div class="section level3">
 <h3 id="3-covariate-search">3. Covariate Search<a class="anchor" aria-label="anchor" href="#3-covariate-search"></a>
 </h3>
-<p><code>data/covariates.csv</code></p>
-<pre class="csv"><code>PARAMETER,COVARIATE,STATUS,FORMULA,LEVELS,REFERENCE,TIME_DEPENDENT
-CL,WT,continuous,linear,NA,NA,FALSE
-CL,AGE,continuous,linear,NA,NA,FALSE
-CL,SEX,categorical,linear,2,1,FALSE
-V2,WT,continuous,linear,NA,NA,FALSE</code></pre>
+<p><code>data/derived/covariates.csv</code></p>
+<table style="width:100%;" class="table">
+<colgroup>
+<col width="13%">
+<col width="13%">
+<col width="16%">
+<col width="11%">
+<col width="10%">
+<col width="13%">
+<col width="20%">
+</colgroup>
+<thead><tr class="header">
+<th>PARAMETER</th>
+<th>COVARIATE</th>
+<th>STATUS</th>
+<th>FORMULA</th>
+<th>LEVELS</th>
+<th>REFERENCE</th>
+<th>TIME_DEPENDENT</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td>CL</td>
+<td>WT</td>
+<td>continuous</td>
+<td>power</td>
+<td>NA</td>
+<td>70</td>
+<td>FALSE</td>
+</tr>
+<tr class="even">
+<td>CL</td>
+<td>AGE</td>
+<td>continuous</td>
+<td>linear</td>
+<td>NA</td>
+<td>50</td>
+<td>FALSE</td>
+</tr>
+<tr class="odd">
+<td>CL</td>
+<td>ECOG</td>
+<td>categorical</td>
+<td>linear</td>
+<td>0,1;2</td>
+<td>1</td>
+<td>FALSE</td>
+</tr>
+<tr class="even">
+<td>V2</td>
+<td>WT</td>
+<td>continuous</td>
+<td>power</td>
+<td>NA</td>
+<td>70</td>
+<td>FALSE</td>
+</tr>
+</tbody>
+</table>
 <hr>
-</div>
-</div>
-<div class="section level2">
-<h2 id="-main-functions">🎯 Main Functions<a class="anchor" aria-label="anchor" href="#-main-functions"></a>
-</h2>
-<div class="section level3">
-<h3 id="initialize">Initialize<a class="anchor" aria-label="anchor" href="#initialize"></a>
-</h3>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">search_state</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/initialize_covariate_search.html">initialize_covariate_search</a></span><span class="op">(</span></span>
-<span>  <span class="va">base_model_path</span>,</span>
-<span>  <span class="va">data_file_path</span>,</span>
-<span>  <span class="va">covariate_search_path</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-</div>
-<div class="section level3">
-<h3 id="run-complete-scm">Run Complete SCM<a class="anchor" aria-label="anchor" href="#run-complete-scm"></a>
-</h3>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/run_automated_scm_testing.html">run_automated_scm_testing</a></span><span class="op">(</span></span>
-<span>  <span class="va">search_state</span>,</span>
-<span>  <span class="va">base_model_id</span>,</span>
-<span>  scm_type <span class="op">=</span> <span class="st">"standard"</span>,      <span class="co"># or "selective"</span></span>
-<span>  starting_phase <span class="op">=</span> <span class="st">"forward"</span>, <span class="co"># or "backward"</span></span>
-<span>  full_scm <span class="op">=</span> <span class="cn">TRUE</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-</div>
-<div class="section level3">
-<h3 id="validate-base-model">Validate Base Model<a class="anchor" aria-label="anchor" href="#validate-base-model"></a>
-</h3>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="reference/validate_base_model_parameters.html">validate_base_model_parameters</a></span><span class="op">(</span><span class="st">"models/run10"</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level3">
 <h3 id="saveload-state">Save/Load State<a class="anchor" aria-label="anchor" href="#saveload-state"></a>
 </h3>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/save_search_state.html">save_search_state</a></span><span class="op">(</span><span class="va">search_state</span>, <span class="st">"state.rds"</span><span class="op">)</span></span>
 <span><span class="va">search_state</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/load_search_state.html">load_search_state</a></span><span class="op">(</span><span class="st">"state.rds"</span><span class="op">)</span></span></code></pre></div>
 <hr>
@@ -202,28 +238,50 @@ V2,WT,continuous,linear,NA,NA,FALSE</code></pre>
 <h2 id="-workflow-types">📊 Workflow Types<a class="anchor" aria-label="anchor" href="#-workflow-types"></a>
 </h2>
 <div class="section level3">
-<h3 id="standard-scm">Standard SCM<a class="anchor" aria-label="anchor" href="#standard-scm"></a>
+<h3 id="standard-scmscm">Standard SCM/SCM+<a class="anchor" aria-label="anchor" href="#standard-scmscm"></a>
 </h3>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">starting_phase</span> <span class="op">=</span> <span class="st">"forward"</span></span>
 <span><span class="va">full_scm</span> <span class="op">=</span> <span class="cn">TRUE</span></span></code></pre></div>
 <p>➜ Forward → Backward</p>
 </div>
 <div class="section level3">
-<h3 id="scm">SCM+<a class="anchor" aria-label="anchor" href="#scm"></a>
+<h3 id="scmscm-with-start-from-previously-developed-model">SCM/SCM+ with start from previously developed model<a class="anchor" aria-label="anchor" href="#scmscm-with-start-from-previously-developed-model"></a>
 </h3>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">starting_phase</span> <span class="op">=</span> <span class="st">"backward"</span></span>
 <span><span class="va">full_scm</span> <span class="op">=</span> <span class="cn">TRUE</span></span></code></pre></div>
 <p>➜ Backward → Forward → Backward</p>
 </div>
 <div class="section level3">
-<h3 id="forward-only">Forward Only<a class="anchor" aria-label="anchor" href="#forward-only"></a>
+<h3 id="backward-only">Backward Only<a class="anchor" aria-label="anchor" href="#backward-only"></a>
 </h3>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">starting_phase</span> <span class="op">=</span> <span class="st">"forward"</span></span>
-<span><span class="va">full_scm</span> <span class="op">=</span> <span class="cn">FALSE</span></span></code></pre></div>
-<p>➜ Forward only</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu">full_scm_search</span><span class="op">(</span></span>
+<span>  search_state <span class="op">=</span> <span class="va">search_state</span>,</span>
+<span>  base_model_id <span class="op">=</span> <span class="st">"run10"</span>,</span>
+<span>  starting_phase <span class="op">=</span> <span class="st">"backward"</span>,</span>
+<span>  full_scm <span class="op">=</span> <span class="cn">FALSE</span>,            <span class="co"># This runs ONLY the specified phase</span></span>
+<span>  backward_p_value <span class="op">=</span> <span class="fl">0.01</span>,</span>
+<span>  auto_submit <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  auto_retry <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level3">
+<h3 id="forward-only">Forward only<a class="anchor" aria-label="anchor" href="#forward-only"></a>
+</h3>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu">full_scm_search</span><span class="op">(</span></span>
+<span> search_state <span class="op">=</span> <span class="va">search_state</span>,</span>
+<span> base_model_id <span class="op">=</span> <span class="st">"run10"</span>,</span>
+<span> scm_type <span class="op">=</span> <span class="st">"standard"</span>,      <span class="co"># or "selective"</span></span>
+<span> starting_phase <span class="op">=</span> <span class="st">"forward"</span>,</span>
+<span> full_scm <span class="op">=</span> <span class="cn">FALSE</span>,           <span class="co"># This runs ONLY forward selection</span></span>
+<span> forward_p_value <span class="op">=</span> <span class="fl">0.05</span>,</span>
+<span> rse_threshold <span class="op">=</span> <span class="fl">50</span>,</span>
+<span> auto_submit <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span> auto_retry <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span><span class="op">)</span></span></code></pre></div>
 <hr>
 </div>
 </div>
@@ -265,7 +323,7 @@ V2,WT,continuous,linear,NA,NA,FALSE</code></pre>
 <tr class="even">
 <td><code>rse_threshold</code></td>
 <td>50</td>
-<td>30-100</td>
+<td>0-100</td>
 </tr>
 <tr class="odd">
 <td><code>auto_submit</code></td>
@@ -284,7 +342,7 @@ V2,WT,continuous,linear,NA,NA,FALSE</code></pre>
 <div class="section level2">
 <h2 id="-check-results">📝 Check Results<a class="anchor" aria-label="anchor" href="#-check-results"></a>
 </h2>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Final model</span></span>
 <span><span class="va">results</span><span class="op">$</span><span class="va">final_model</span></span>
 <span></span>
@@ -351,86 +409,59 @@ V2,WT,continuous,linear,NA,NA,FALSE</code></pre>
 <h3 id="theta-population-parameters">THETA (Population Parameters)<a class="anchor" aria-label="anchor" href="#theta-population-parameters"></a>
 </h3>
 <p><strong>IMPORTANT</strong>: Use simple names or numbered format in $THETA block (NO TV_ prefix!)</p>
-<div class="sourceCode" id="cb12"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="sc">$</span>THETA</span>
-<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>; Option <span class="dv">1</span><span class="sc">:</span> Simple <span class="fu">names</span> (recommended)</span>
-<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>(<span class="dv">0</span>, <span class="fl">0.5</span>, <span class="dv">100</span>) ; CL ; L<span class="sc">/</span>h ; LOG</span>
-<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>(<span class="dv">0</span>, <span class="dv">10</span>)       ; V  ; L   ; LOG</span>
-<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a><span class="fl">0.5</span> FIX       ; KA ; <span class="dv">1</span><span class="sc">/</span>h ; LOG</span>
-<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>; Option <span class="dv">2</span><span class="sc">:</span> Numbered format</span>
-<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>(<span class="dv">0</span>, <span class="fl">0.5</span>, <span class="dv">100</span>) ; 1_CL ; L<span class="sc">/</span>h ; LOG</span>
-<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>(<span class="dv">0</span>, <span class="dv">10</span>)       ; 2_V  ; L   ; LOG</span>
-<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a><span class="fl">0.5</span> FIX       ; 3_KA ; <span class="dv">1</span><span class="sc">/</span>h ; LOG</span></code></pre></div>
+<div class="sourceCode" id="cb9"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="sc">$</span>THETA</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>; Option <span class="dv">1</span><span class="sc">:</span> Simple <span class="fu">names</span> (recommended)</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>(<span class="dv">0</span>, <span class="fl">0.5</span>, <span class="dv">100</span>) ; CL ; L<span class="sc">/</span>h ; LOG</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>(<span class="dv">0</span>, <span class="dv">10</span>)       ; V  ; L   ; LOG</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="fl">0.5</span> FIX       ; KA ; <span class="dv">1</span><span class="sc">/</span>h ; LOG</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>; Option <span class="dv">2</span><span class="sc">:</span> Numbered format</span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>(<span class="dv">0</span>, <span class="fl">0.5</span>, <span class="dv">100</span>) ; 1_CL ; L<span class="sc">/</span>h ; LOG</span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>(<span class="dv">0</span>, <span class="dv">10</span>)       ; 2_V  ; L   ; LOG</span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a><span class="fl">0.5</span> FIX       ; 3_KA ; <span class="dv">1</span><span class="sc">/</span>h ; LOG</span></code></pre></div>
 <p><strong>Then in $PK block, use TV_ prefix for typical values:</strong></p>
-<div class="sourceCode" id="cb13"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="sc">$</span>PK</span>
-<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>TV_CL <span class="ot">=</span> <span class="fu">THETA</span>(<span class="dv">1</span>)  ; Use TV_ prefix here</span>
-<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>TV_V  <span class="ot">=</span> <span class="fu">THETA</span>(<span class="dv">2</span>)</span>
-<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>TV_KA <span class="ot">=</span> <span class="fu">THETA</span>(<span class="dv">3</span>)</span>
-<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>CL <span class="ot">=</span> TV_CL <span class="sc">*</span> <span class="fu">EXP</span>(<span class="fu">ETA</span>(<span class="dv">1</span>))</span>
-<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>V  <span class="ot">=</span> TV_V  <span class="sc">*</span> <span class="fu">EXP</span>(<span class="fu">ETA</span>(<span class="dv">2</span>))</span>
-<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>KA <span class="ot">=</span> TV_KA <span class="sc">*</span> <span class="fu">EXP</span>(<span class="fu">ETA</span>(<span class="dv">3</span>))</span></code></pre></div>
+<div class="sourceCode" id="cb10"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="sc">$</span>PK</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>TV_CL <span class="ot">=</span> <span class="fu">THETA</span>(<span class="dv">1</span>)  ; Use TV_ prefix here</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>TV_V  <span class="ot">=</span> <span class="fu">THETA</span>(<span class="dv">2</span>)</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>TV_KA <span class="ot">=</span> <span class="fu">THETA</span>(<span class="dv">3</span>)</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>CL <span class="ot">=</span> TV_CL <span class="sc">*</span> <span class="fu">EXP</span>(<span class="fu">ETA</span>(<span class="dv">1</span>))</span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>V  <span class="ot">=</span> TV_V  <span class="sc">*</span> <span class="fu">EXP</span>(<span class="fu">ETA</span>(<span class="dv">2</span>))</span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>KA <span class="ot">=</span> TV_KA <span class="sc">*</span> <span class="fu">EXP</span>(<span class="fu">ETA</span>(<span class="dv">3</span>))</span></code></pre></div>
 <p><strong>✅ Correct THETA naming</strong>: <code>CL</code>, <code>V</code>, <code>KA</code> or <code>1_CL</code>, <code>2_V</code>, <code>3_KA</code><br><strong>❌ Wrong THETA naming</strong>: <code>TV_CL</code>, <code>TVCL</code>, <code>TVV</code> (don’t use TV_ in $THETA block!)</p>
 </div>
 <div class="section level3">
 <h3 id="omega-diagonal">OMEGA Diagonal<a class="anchor" aria-label="anchor" href="#omega-diagonal"></a>
 </h3>
-<div class="sourceCode" id="cb14"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="sc">$</span>OMEGA</span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="fl">0.1</span> ; IIV_CL ; ; RATIO</span>
-<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a><span class="fl">0.1</span> ; IIV_V  ; ; RATIO</span></code></pre></div>
+<div class="sourceCode" id="cb11"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="sc">$</span>OMEGA</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="fl">0.1</span> ; IIV_CL ; ; RATIO</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="fl">0.1</span> ; IIV_V  ; ; RATIO</span></code></pre></div>
 </div>
 <div class="section level3">
 <h3 id="omega-block-one-value-per-line">OMEGA BLOCK (One value per line!)<a class="anchor" aria-label="anchor" href="#omega-block-one-value-per-line"></a>
 </h3>
-<div class="sourceCode" id="cb15"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="sc">$</span>OMEGA <span class="fu">BLOCK</span>(<span class="dv">3</span>)</span>
-<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="fl">0.1</span> ; IIV_CL    ; ; RATIO</span>
-<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a><span class="fl">0.1</span> ; IIV_CL_V  ; ; RATIO</span>
-<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a><span class="fl">0.1</span> ; IIV_V     ; ; RATIO</span></code></pre></div>
+<div class="sourceCode" id="cb12"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="sc">$</span>OMEGA <span class="fu">BLOCK</span>(<span class="dv">3</span>)</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="fl">0.1</span> ; IIV_CL    ; ; RATIO</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="fl">0.1</span> ; IIV_CL_V  ; ; RATIO</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a><span class="fl">0.1</span> ; IIV_V     ; ; RATIO</span></code></pre></div>
 </div>
 <div class="section level3">
 <h3 id="sigma">SIGMA<a class="anchor" aria-label="anchor" href="#sigma"></a>
 </h3>
-<div class="sourceCode" id="cb16"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="sc">$</span>SIGMA</span>
-<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="fl">0.1</span>  ; RUV_PROP ; ; RATIO</span>
-<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a><span class="fl">0.05</span> ; RUV_ADD  ; mg<span class="sc">/</span>L ; RATIO</span></code></pre></div>
+<div class="sourceCode" id="cb13"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="sc">$</span>SIGMA</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="fl">0.1</span>  ; RUV_PROP ; ; RATIO</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a><span class="fl">0.05</span> ; RUV_ADD  ; mg<span class="sc">/</span>L ; RATIO</span></code></pre></div>
 <p><strong>❌ WRONG</strong> (multiple values per line):</p>
-<div class="sourceCode" id="cb17"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="sc">$</span>OMEGA <span class="fu">BLOCK</span>(<span class="dv">3</span>)</span>
-<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a><span class="fl">0.1</span> ; IIV_CL</span>
-<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a><span class="fl">0.1</span> <span class="fl">0.1</span> ; IIV_V      ← Don<span class="st">'t do this!</span></span></code></pre></div>
+<div class="sourceCode" id="cb14"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="sc">$</span>OMEGA <span class="fu">BLOCK</span>(<span class="dv">3</span>)</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="fl">0.1</span> ; IIV_CL</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a><span class="fl">0.1</span> <span class="fl">0.1</span> ; IIV_V      ← Don<span class="st">'t do this!</span></span></code></pre></div>
 <p><strong>❌ WRONG</strong> (TV_ prefix in THETA block):</p>
-<div class="sourceCode" id="cb18"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="sc">$</span>THETA</span>
-<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="fl">0.5</span> ; TV_CL ; L<span class="sc">/</span>h ; LOG    ← Don<span class="st">'t use TV_ in $THETA block!</span></span>
-<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a><span class="st">0.5 ; TVCL ; L/h ; LOG     ← Missing underscore</span></span></code></pre></div>
+<div class="sourceCode" id="cb15"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="sc">$</span>THETA</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="fl">0.5</span> ; TV_CL ; L<span class="sc">/</span>h ; LOG    ← Don<span class="st">'t use TV_ in $THETA block!</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a><span class="st">0.5 ; 1CL   ; L/h ; LOG     ← Missing underscore</span></span></code></pre></div>
+<hr>
 <hr>
 </div>
-</div>
-<div class="section level2">
-<h2 id="-complete-correct-example">📋 Complete Correct Example<a class="anchor" aria-label="anchor" href="#-complete-correct-example"></a>
-</h2>
-<div class="sourceCode" id="cb19"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="sc">$</span>THETA</span>
-<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>; Simple names <span class="cf">in</span> THETA block</span>
-<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a><span class="fl">0.5</span> ; CL ; L<span class="sc">/</span>h ; LOG</span>
-<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a><span class="dv">10</span>  ; V  ; L   ; LOG</span>
-<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a><span class="dv">1</span>   ; KA ; <span class="dv">1</span><span class="sc">/</span>h ; LOG</span>
-<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a><span class="sc">$</span>PK</span>
-<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a>; TV_ prefix used here <span class="cf">in</span> PK block</span>
-<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a>TV_CL <span class="ot">=</span> <span class="fu">THETA</span>(<span class="dv">1</span>)</span>
-<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a>TV_V  <span class="ot">=</span> <span class="fu">THETA</span>(<span class="dv">2</span>)</span>
-<span id="cb19-11"><a href="#cb19-11" aria-hidden="true" tabindex="-1"></a>TV_KA <span class="ot">=</span> <span class="fu">THETA</span>(<span class="dv">3</span>)</span>
-<span id="cb19-12"><a href="#cb19-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-13"><a href="#cb19-13" aria-hidden="true" tabindex="-1"></a>CL <span class="ot">=</span> TV_CL <span class="sc">*</span> <span class="fu">EXP</span>(<span class="fu">ETA</span>(<span class="dv">1</span>))</span>
-<span id="cb19-14"><a href="#cb19-14" aria-hidden="true" tabindex="-1"></a>V  <span class="ot">=</span> TV_V  <span class="sc">*</span> <span class="fu">EXP</span>(<span class="fu">ETA</span>(<span class="dv">2</span>))</span>
-<span id="cb19-15"><a href="#cb19-15" aria-hidden="true" tabindex="-1"></a>KA <span class="ot">=</span> TV_KA <span class="sc">*</span> <span class="fu">EXP</span>(<span class="fu">ETA</span>(<span class="dv">3</span>))</span>
-<span id="cb19-16"><a href="#cb19-16" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-17"><a href="#cb19-17" aria-hidden="true" tabindex="-1"></a><span class="sc">$</span>OMEGA <span class="fu">BLOCK</span>(<span class="dv">3</span>)</span>
-<span id="cb19-18"><a href="#cb19-18" aria-hidden="true" tabindex="-1"></a><span class="fl">0.1</span> ; IIV_CL ; ; RATIO</span>
-<span id="cb19-19"><a href="#cb19-19" aria-hidden="true" tabindex="-1"></a><span class="fl">0.1</span> ; IIV_CL_V ; ; RATIO</span>
-<span id="cb19-20"><a href="#cb19-20" aria-hidden="true" tabindex="-1"></a><span class="fl">0.1</span> ; IIV_V ; ; RATIO</span>
-<span id="cb19-21"><a href="#cb19-21" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-22"><a href="#cb19-22" aria-hidden="true" tabindex="-1"></a><span class="sc">$</span>SIGMA</span>
-<span id="cb19-23"><a href="#cb19-23" aria-hidden="true" tabindex="-1"></a><span class="fl">0.1</span> ; RUV_PROP ; ; RATIO</span></code></pre></div>
-<hr>
 </div>
 <div class="section level2">
 <h2 id="-advanced-options">🔧 Advanced Options<a class="anchor" aria-label="anchor" href="#-advanced-options"></a>
@@ -438,20 +469,20 @@ V2,WT,continuous,linear,NA,NA,FALSE</code></pre>
 <div class="section level3">
 <h3 id="selective-forward-faster">Selective Forward (Faster)<a class="anchor" aria-label="anchor" href="#selective-forward-faster"></a>
 </h3>
-<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">scm_type</span> <span class="op">=</span> <span class="st">"selective"</span></span></code></pre></div>
 </div>
 <div class="section level3">
 <h3 id="custom-thresholds">Custom Thresholds<a class="anchor" aria-label="anchor" href="#custom-thresholds"></a>
 </h3>
-<div class="sourceCode" id="cb21"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a>forward_p_value <span class="ot">=</span> <span class="fl">0.01</span>,    <span class="co"># More stringent</span></span>
-<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>backward_p_value <span class="ot">=</span> <span class="fl">0.001</span>,  <span class="co"># Very stringent</span></span>
-<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>rse_threshold <span class="ot">=</span> <span class="dv">30</span>         <span class="co"># Stricter</span></span></code></pre></div>
+<div class="sourceCode" id="cb17"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>forward_p_value <span class="ot">=</span> <span class="fl">0.01</span>,    <span class="co"># More stringent</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>backward_p_value <span class="ot">=</span> <span class="fl">0.001</span>,  <span class="co"># Very stringent</span></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>rse_threshold <span class="ot">=</span> <span class="dv">30</span>         <span class="co"># Stricter</span></span></code></pre></div>
 </div>
 <div class="section level3">
 <h3 id="resume-interrupted">Resume Interrupted<a class="anchor" aria-label="anchor" href="#resume-interrupted"></a>
 </h3>
-<div class="sourceCode" id="cb22"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">search_state</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/load_search_state.html">load_search_state</a></span><span class="op">(</span><span class="st">"scm_auto_forward_complete.rds"</span><span class="op">)</span></span>
 <span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/run_backward_elimination.html">run_backward_elimination</a></span><span class="op">(</span></span>
 <span>  <span class="va">search_state</span>,</span>
@@ -465,7 +496,7 @@ V2,WT,continuous,linear,NA,NA,FALSE</code></pre>
 </h2>
 <p>Full guide: <code>CovariateSearcher_USER_GUIDE.md</code></p>
 <p>Help in R:</p>
-<div class="sourceCode" id="cb23"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="op">?</span><span class="va">initialize_covariate_search</span></span>
 <span><span class="op">?</span><span class="va">run_automated_scm_testing</span></span>
 <span><span class="op">?</span><span class="va">validate_base_model_parameters</span></span></code></pre></div>

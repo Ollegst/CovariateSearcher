@@ -3,11 +3,12 @@ pkgdown: 2.0.6
 pkgdown_sha: ~
 articles:
   complete-workflow: complete-workflow.html
+  model-report-usage: model-report-usage.html
   recovery-system: recovery-system.html
   troubleshooting: troubleshooting.html
   yaml-specification-files: yaml-specification-files.html
   quick-start: quick-start.html
-last_built: 2025-11-06T15:09Z
+last_built: 2025-11-19T16:52Z
 urls:
   reference: https://ollegst.github.io/CovariateSearcher/reference
   article: https://ollegst.github.io/CovariateSearcher/articles
