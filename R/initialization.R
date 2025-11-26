@@ -115,6 +115,7 @@ initialize_covariate_search <- function(base_model_path,
     )
   }
   cat("CovariateSearcher (Core) initialized successfully!\n")
+  cat("To run  covariate search use run_automated_scm_testing function \n")
   return(search_state)
 }
 

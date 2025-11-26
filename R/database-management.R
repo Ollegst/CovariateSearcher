@@ -208,7 +208,7 @@ initialize_search_database_core <- function(search_state) {
     excluded_from_step = logical(),
     stringsAsFactors = FALSE
   )
-  cat("Simplified search database initialized (removed redundant columns)\n")
+  cat("Simplified search database initialized\n")
   return(search_state)
 }
 

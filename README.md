@@ -1,7 +1,7 @@
 CovariateSearcher: Quick Reference
 ================
 CovariateSearcher Package
-2025-11-19
+2025-11-26
 
 ## 🚀 Minimal Working Example
 
@@ -15,7 +15,7 @@ library(CovariateSearcher)
 search_state <- initialize_covariate_search(
   base_model_path = "run10",
   data_file_path = "data/derived/analysis.csv",
-  covariate_search_path = "data/covariate_search.csv“,
+  covariate_search_path = "data/covariate_search.csv",
   discover_existing = TRUE, 
   models_folder = "models", 
   threads = 40)
@@ -276,7 +276,7 @@ TV\_ prefix!)
 
 ### OMEGA BLOCK (One value per line!)
 
-    $OMEGA BLOCK(3)
+    $OMEGA BLOCK(2)
     0.1 ; IIV_CL    ; ; RATIO
     0.1 ; IIV_CL_V  ; ; RATIO
     0.1 ; IIV_V     ; ; RATIO
@@ -289,7 +289,7 @@ TV\_ prefix!)
 
 **❌ WRONG** (multiple values per line):
 
-    $OMEGA BLOCK(3)
+    $OMEGA BLOCK(2)
     0.1 ; IIV_CL
     0.1 0.1 ; IIV_V      ← Don't do this!
 
