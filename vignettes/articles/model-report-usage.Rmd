@@ -37,6 +37,7 @@ The `model_report()` function uses a YAML specification file (`pk-extend.yml`) t
 library(CovariateSearcher)
 library(yspec)
 library(here)
+library(yaml)
 
 # Load parameter specification file
 spec_pk <- read_yaml(here("data", "spec", "pk-extend.yml"))

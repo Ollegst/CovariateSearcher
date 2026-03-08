@@ -29,7 +29,7 @@ library(CovariateSearcher)
 search_state <- initialize_covariate_search(
   base_model_path = "run10",
   data_file_path = "data/derived/analysis.csv",
-  covariate_search_path = "data/covariate_search.csv",
+  covariate_search_path = "data/derived/covariate_search.csv",
   discover_existing = TRUE, 
   models_folder = "models", 
   threads = 40)
@@ -57,13 +57,70 @@ results_table <- create_scm_results_table(search_state)
 print_scm_results_table(search_state)
 
 ```
+## Or if you need to create model with multiple covariates as base model
+```r
+library(CovariateSearcher)
 
+data_file_path = "data/test.csv"
+covariate_search_path = "data/derived/covariate_search.csv"
+
+data_file <- readr::read_csv(data_file_path, show_col_types = FALSE)
+covariate_search <- readr::read_csv(covariate_search_path, show_col_types = FALSE)
+
+covariate_search <- validate_covariate_search_table(
+  covariate_search = covariate_search,
+  data_file = data_file
+)
+
+# 1. Prepare base model
+prep <- prepare_search_base_model(
+  base_model_path = "run1",
+  covariate_tags = c("beta_WT_CL", "beta_AGE_V2", "beta_SEX_KA"),
+  new_model_number = 2,
+  data_file_path = data_file_path,
+  covariate_search_path = covariate_search_path",
+  models_folder = "models",
+  idcol = "ID"
+)
+
+mod <- bbr::read_model(file.path("models", prep$model_name))
+bbr::submit_model(mod, .bbi_args = list(threads = 4), .overwrite = TRUE)
+
+# 2. Initialize
+search_state <- initialize_covariate_search(
+  base_model_path = "run2",
+  data_file_path = data_file_path,
+  covariate_search_path = covariate_search_path,
+  models_folder = "models", 
+  threads = 4)
+
+# 3. Run SCM
+result <- run_automated_scm_testing(
+		search_state = search_state,
+		scm_type = "selective",                     # or "standard"  
+    starting_phase = "backward",                # Starting phase
+    full_scm = TRUE,                            # Run complete workflow 
+    forward_p_value = 0.05, 	                  # p-value for the forward selection	
+    backward_p_value = 0.01,                    # p-value for the backward elimination
+    rse_threshold = 50,                         # RSE threshold
+    auto_submit = TRUE,                         # if FALSE – only model creation 
+    auto_retry = TRUE,                          # Retry model in case of failure
+    save_checkpoints = TRUE,                    # Save each step
+    checkpoint_prefix = "scm_auto",
+    final_testing = TRUE)                       # Test excluded covariates form failed model
+
+
+# 4. Check results
+search_state <-readRDS("./models/scm_rds/scm_auto_final_complete.rds")
+results_table <- create_scm_results_table(search_state)
+print_scm_results_table(search_state)
+```
 ---
 
 ## 📋 Required Files
 
 ### 1. Base Model
-`models/run10/run10.ctl` - NONMEM control file
+`models/run10.ctl` - NONMEM control file
 
 **Requirements**:
 ```
@@ -99,15 +156,15 @@ Format: `value ; NAME ; units ; RATIO|LOG`
 `data/derived/analysis.csv` - NONMEM dataset with covariates
 
 ### 3. Covariate Search
-`data/derived/covariates.csv`
+`data/derived/covariate_search.csv`
 
 
 |PARAMETER|COVARIATE|STATUS     |FORMULA|LEVELS|REFERENCE|TIME_DEPENDENT|
 |---------|---------|-----------|-------|------|---------|--------------|
-|CL       |WT       |continuous |power  |NA    |70       |FALSE         |
-|CL       |AGE      |continuous |linear |NA    |50       |FALSE         |
-|CL       |ECOG     |categorical|linear |0,1;2 |1        |FALSE         |
-|V2       |WT       |continuous |power  |NA    |70       |FALSE         |
+|CL       |WT       |con        |power  |NA    |70       |FALSE         |
+|CL       |AGE      |con        |linear |NA    |50       |FALSE         |
+|CL       |ECOG     |cat        |linear |0;1;2 |1        |FALSE         |
+|V2       |WT       |con        |power  |NA    |70       |FALSE         |
 
 
 ---

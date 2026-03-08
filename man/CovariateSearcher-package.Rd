@@ -20,3 +20,16 @@ progress monitoring, and intelligent error recovery.
 }
 }
 
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://github.com/Ollegst/CovariateSearcher}
+  \item Report bugs at \url{https://github.com/Ollegst/CovariateSearcher/issues}
+}
+
+}
+\author{
+\strong{Maintainer}: Oleg Stepanov \email{oleg.stepanov@astrazeneca.com} (\href{https://orcid.org/0000-0001-6129-6499}{ORCID})
+
+}
+\keyword{internal}

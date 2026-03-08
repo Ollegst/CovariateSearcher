@@ -594,6 +594,201 @@ fix_theta_renumbering <- function(modelcode, theta_numbers_to_remove, log_functi
   return(modelcode)
 }
 
+# =============================================================================
+# PRE-INITIALIZATION MODEL PREPARATION
+# Create one model with multiple covariates and one combined log
+# =============================================================================
+
+#' Prepare Search Base Model by Adding Multiple Covariates
+#'
+#' @title Create one prepared base model with multiple covariates
+#' @description Copies a parent model, adds multiple covariates into the same
+#'   child model, writes one combined technical log, and returns metadata for
+#'   later initialization. Does NOT require search_database.
+#'
+#' @param base_model_path Character. Parent/base model id, e.g. "run1"
+#' @param covariate_tags Character vector of covariate tags, e.g.
+#'   c("beta_WT_CL", "beta_AGE_V2")
+#' @param new_model_number Integer. Required model number for the new model
+#' @param data_file_path Character. Path to NONMEM dataset CSV
+#' @param covariate_search_path Character. Path to covariate search CSV
+#' @param models_folder Character. Models directory
+#' @param idcol Character. ID column name
+#' @param overwrite Logical. Overwrite existing model if present
+#'
+#' @return List with status, model_name, model_path, log_file, covariates_added
+#' @export
+prepare_search_base_model <- function(base_model_path,
+                                      covariate_tags,
+                                      new_model_number,
+                                      data_file_path,
+                                      covariate_search_path,
+                                      models_folder = "models",
+                                      idcol = "ID",
+                                      overwrite = TRUE) {
+
+  cat("Preparing search base model with multiple covariates...\n")
+
+  # ---------------------------------------------------------------------------
+  # Step 1: Validate basic inputs
+  # ---------------------------------------------------------------------------
+  if (length(covariate_tags) == 0) {
+    stop("covariate_tags cannot be empty")
+  }
+
+  if (is.null(new_model_number) || length(new_model_number) != 1 || is.na(new_model_number)) {
+    stop("new_model_number must be a single non-missing integer")
+  }
+
+  new_model_number <- as.integer(new_model_number)
+  new_model_name <- sprintf("run%d", new_model_number)
+
+  parent_path <- file.path(models_folder, base_model_path)
+  if (!file.exists(paste0(parent_path, ".ctl")) && !file.exists(paste0(parent_path, ".mod"))) {
+    stop("Parent model file not found: ", parent_path)
+  }
+
+  # ---------------------------------------------------------------------------
+  # Step 2: Load data needed for model editing
+  # ---------------------------------------------------------------------------
+  data_file <- readr::read_csv(data_file_path, show_col_types = FALSE)
+  covariate_search <- readr::read_csv(covariate_search_path, show_col_types = FALSE)
+
+  if (!"cov_to_test" %in% names(covariate_search)) {
+    covariate_search$cov_to_test <- paste0(
+      "beta_",
+      covariate_search$COVARIATE, "_",
+      covariate_search$PARAMETER
+    )
+  }
+
+  # Build tags exactly as initialize does via tags.yaml semantics:
+  # beta_WT_CL -> "WT_CL"
+  tags <- stats::setNames(
+    as.list(gsub("^beta_", "", covariate_search$cov_to_test)),
+    covariate_search$cov_to_test
+  )
+
+  invalid_tags <- setdiff(covariate_tags, names(tags))
+  if (length(invalid_tags) > 0) {
+    stop("Unknown covariate tag(s): ", paste(invalid_tags, collapse = ", "))
+  }
+
+  covariate_tags <- unique(covariate_tags)
+  covariate_values <- unname(unlist(tags[covariate_tags]))
+
+  # ---------------------------------------------------------------------------
+  # Step 3: Build minimal temporary state required by model_add_cov()
+  # ---------------------------------------------------------------------------
+  temp_state <- list(
+    base_model = base_model_path,
+    data_file = data_file,
+    covariate_search = covariate_search,
+    models_folder = models_folder,
+    idcol = idcol,
+    tags = tags
+  )
+
+  # ---------------------------------------------------------------------------
+  # Step 4: Create one child model from parent
+  # ---------------------------------------------------------------------------
+  cat(sprintf("  Parent model: %s\n", base_model_path))
+  cat(sprintf("  New model: %s\n", new_model_name))
+
+  parent_mod <- bbr::read_model(parent_path)
+
+  new_mod <- bbr::copy_model_from(
+    .parent_mod = parent_mod,
+    .new_model = new_model_name,
+    .inherit_tags = TRUE,
+    .overwrite = overwrite
+  )
+
+  new_mod <- bbr::add_tags(new_mod, .tags = covariate_values)
+
+  note_text <- sprintf("Prepared base + %s", paste(covariate_values, collapse = "; "))
+  new_mod <- bbr::replace_all_notes(new_mod, .notes = note_text)
+
+  # ---------------------------------------------------------------------------
+  # Step 5: Add all covariates into the same child model
+  # ---------------------------------------------------------------------------
+  combined_log <- c(
+    "========================================",
+    "PREPARE SEARCH BASE MODEL",
+    "========================================",
+    sprintf("Timestamp: %s", format(Sys.time(), "%Y-%m-%d %H:%M:%S")),
+    sprintf("Parent model: %s", base_model_path),
+    sprintf("New model: %s", new_model_name),
+    sprintf("Requested tags: %s", paste(covariate_tags, collapse = ", ")),
+    sprintf("Resolved covariates: %s", paste(covariate_values, collapse = ", ")),
+    ""
+  )
+
+  for (cov_tag in covariate_tags) {
+    cov_value <- tags[[cov_tag]]
+
+    matching_cov <- covariate_search[covariate_search$cov_to_test == cov_tag, , drop = FALSE]
+    if (nrow(matching_cov) == 0) {
+      stop("No matching covariate definition found for tag: ", cov_tag)
+    }
+
+    cov_name <- matching_cov$COVARIATE[1]
+    param_name <- matching_cov$PARAMETER[1]
+    cov_on_param <- paste0(cov_name, "_", param_name)
+
+    combined_log <- c(
+      combined_log,
+      "----------------------------------------",
+      sprintf("Adding: %s", cov_tag),
+      sprintf("Resolved as: %s", cov_value),
+      sprintf("cov_on_param: %s", cov_on_param),
+      ""
+    )
+
+    model_result <- model_add_cov(
+      search_state = temp_state,
+      ref_model = new_model_name,
+      cov_on_param = cov_on_param,
+      id_var = idcol,
+      data_file = data_file,
+      covariate_search = covariate_search,
+      capture_log = TRUE
+    )
+
+    temp_state <- model_result$search_state
+
+    if (!is.null(model_result$log_entries) && length(model_result$log_entries) > 0) {
+      combined_log <- c(combined_log, model_result$log_entries, "")
+    } else {
+      combined_log <- c(combined_log, "[No technical log entries captured]", "")
+    }
+  }
+
+  # ---------------------------------------------------------------------------
+  # Step 6: Save one combined log file
+  # ---------------------------------------------------------------------------
+  safe_suffix <- paste(gsub("[^A-Za-z0-9_]+", "_", covariate_values), collapse = "__")
+  log_file <- file.path(
+    models_folder,
+    paste0(new_model_name, "_prepare_base_", safe_suffix, "_log.txt")
+  )
+
+  writeLines(combined_log, log_file)
+  cat(sprintf("  Combined log saved: %s\n", basename(log_file)))
+
+  # ---------------------------------------------------------------------------
+  # Step 7: Return metadata for later initialization
+  # ---------------------------------------------------------------------------
+  return(list(
+    status = "success",
+    model_name = new_model_name,
+    model_path = file.path(models_folder, new_model_name),
+    parent_model = base_model_path,
+    covariate_tags = covariate_tags,
+    covariates_added = covariate_values,
+    log_file = log_file
+  ))
+}
 
 
 #' Remove Covariate from Model (Clean Interface)

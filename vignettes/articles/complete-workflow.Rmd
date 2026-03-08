@@ -57,10 +57,10 @@ Create a CSV file defining which covariates to test:
 # Example: covariate_search.csv
 covariate_config <- tribble(
   ~PARAMETER, ~COVARIATE, ~STATUS,        ~FORMULA, ~LEVELS, ~REFERENCE,
-  "CL",       "WT",        "continouous",  "power",  NA,      70,
-  "CL",       "AGE",       "continouous",  "linear", NA,      50,
-  "CL",       "SEX",       "categorical",  "cat",    "0;1",   1,
-  "V",        "WT",        "continouous",  "power",  NA,      70
+  "CL",       "WT",        "con",          "power",      NA,         70,
+  "CL",       "AGE",       "con",         "linear",      NA,         50,
+  "CL",       "SEX",       "cat",            "cat",   "0;1",          1,
+  "V",        "WT",        "con",          "power",      NA,      70
 )
 
 write.csv(covariate_config, "data/derived/covariate_search.csv", row.names = FALSE)
@@ -72,7 +72,7 @@ write.csv(covariate_config, "data/derived/covariate_search.csv", row.names = FAL
 search_state <- initialize_covariate_search(
   base_model_path = "run10",
   data_file_path = "data/derived/analysis.csv",
-  covariate_search_path = "data/covariate_search.csv",
+  covariate_search_path = "data/derived/covariate_search.csv",
   discover_existing = TRUE, 
   models_folder = "models", 
   threads = 40)
@@ -97,7 +97,7 @@ search_state <- initialize_covariate_search(
 
 # Check results
 print(results$final_model)
-print(results$selected_covariates)
+print(results$final_covariates)
 ```
 
 ### Understanding Selection Criteria

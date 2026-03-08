@@ -19,8 +19,13 @@
 #' @param timecol Character. Time column name (default: "TIME")
 #' @param idcol Character. ID column name (default: "ID")
 #' @param threads Integer. Number of threads for execution (default: 60)
-#' @param discover_existing Logical. Discover existing models (default: TRUE)
 #' @param validate_parameters Logical. Validate parameter block formatting (default: TRUE)
+#' @param starting_model_number Optional integer. Sets the model counter manually.
+#'   Use this when covariate search starts from an existing structural model
+#'   and newly created covariate models should continue numbering from the
+#'   last model already present in the workflow. For example, if the last
+#'   existing model is `run10`, set `starting_model_number = 10` so the next model
+#'   created by covariate search will be `run11`.
 #' @return List containing complete search state configuration
 #' @export
 initialize_covariate_search <- function(base_model_path,
@@ -30,8 +35,8 @@ initialize_covariate_search <- function(base_model_path,
                                         timecol = "TIME",
                                         idcol = "ID",
                                         threads = 60,
-                                        discover_existing = TRUE,
-                                        validate_parameters = TRUE) {
+                                        validate_parameters = TRUE,
+                                        starting_model_number = NULL) {
 
   cat("Initializing CovariateSearcher (Core Module)...\n")
 
@@ -86,22 +91,55 @@ initialize_covariate_search <- function(base_model_path,
     cat("  ⚠️ Failed to generate tags.yaml, will try to load existing\n")
   }
 
+  cat("Checking base model results...\n")
+  validate_base_model_for_search(
+    base_model_path = search_state$base_model,
+    models_folder = search_state$models_folder
+  )
   # Load tags and run validations
   search_state <- load_tags(search_state)
   search_state <- validate_setup(search_state)
 
   # Initialize search database and configuration
   search_state <- initialize_search_database_core(search_state)
-  search_state <- ensure_base_model_in_database(search_state)  # ADD THIS LINE
-  search_state <- initialize_search_config(search_state)
 
-  # Discover existing models if requested
-  if (discover_existing) {
-    search_state <- discover_existing_models(search_state)
-  }
+  search_state <- initialize_search_config(search_state)
+  search_state <- discover_existing_models(search_state)
+
 
   # Set model counter based on existing models
   search_state <- update_model_counter(search_state)
+  # Optional manual override for model numbering
+  if (!is.null(starting_model_number)) {
+
+    if (!is.numeric(starting_model_number) ||
+        length(starting_model_number) != 1 ||
+        is.na(starting_model_number)) {
+      stop("starting_model_number must be a single non-missing numeric value")
+    }
+
+    starting_model_number <- as.integer(starting_model_number)
+
+    if (starting_model_number < 1) {
+      stop("starting_model_number must be >= 1")
+    }
+
+    base_model_number <- suppressWarnings(
+      as.integer(gsub("^run", "", base_model_path))
+    )
+
+    if (!is.na(base_model_number) && starting_model_number < base_model_number) {
+      stop(
+        "starting_model_number (", starting_model_number,
+        ") cannot be lower than base model number (", base_model_number, ")"
+      )
+    }
+
+    search_state$model_counter <- starting_model_number
+
+    cat("Model counter manually set to: run", search_state$model_counter, "\n", sep = "")
+  }
+
   scm_rds_dir <- file.path(search_state$models_folder, "scm_rds")
   if (!dir.exists(scm_rds_dir)) {
     dir.create(scm_rds_dir, recursive = TRUE)
@@ -142,67 +180,239 @@ load_tags <- function(search_state) {
 
 
 
-#' Validate Setup Configuration
+
+#' Validate covariate search table
 #'
-#' @title Validate covariate search setup and data consistency
-#' @description Performs validation checks on data files and configuration
-#' @param search_state List containing search state
-#' @return Updated search_state (unchanged if validation passes)
+#' Performs reusable checks on the covariate search table and returns the
+#' validated table. Creates `cov_to_test` if it does not exist.
+#'
+#' @param covariate_search data.frame with covariate search specification
+#' @param data_file data.frame with analysis dataset
+#'
+#' @return validated covariate_search data.frame
 #' @export
-validate_setup <- function(search_state) {
-  cat("Running validation checks...\n")
+validate_covariate_search_table <- function(covariate_search, data_file) {
 
-  # Check required columns in covariate_search
-  required_cols <- c("PARAMETER", "COVARIATE", "STATUS", "FORMULA",
-                     "LEVELS", "REFERENCE", "TIME_DEPENDENT")
-  missing_cols <- setdiff(required_cols, names(search_state$covariate_search))
+  cat("Checking covariate search table...\n")
+
+  if (!is.data.frame(covariate_search)) {
+    stop("covariate_search must be a data.frame")
+  }
+
+  if (!is.data.frame(data_file)) {
+    stop("data_file must be a data.frame")
+  }
+
+  required_cols <- c(
+    "PARAMETER", "COVARIATE", "STATUS", "FORMULA",
+    "LEVELS", "REFERENCE", "TIME_DEPENDENT"
+  )
+
+  missing_cols <- setdiff(required_cols, names(covariate_search))
   if (length(missing_cols) > 0) {
-    stop("Missing required columns in covariate_search: ",
-         paste(missing_cols, collapse = ", "))
+    stop(
+      "Missing required columns in covariate_search: ",
+      paste(missing_cols, collapse = ", ")
+    )
   }
 
-  # Check that covariates exist in dataset
-  missing_covs <- setdiff(search_state$covariate_search$COVARIATE,
-                          names(search_state$data_file))
+  if (any(is.na(covariate_search$COVARIATE) |
+          trimws(as.character(covariate_search$COVARIATE)) == "")) {
+    stop("covariate_search contains missing or empty values in COVARIATE")
+  }
+
+  if (any(is.na(covariate_search$PARAMETER) |
+          trimws(as.character(covariate_search$PARAMETER)) == "")) {
+    stop("covariate_search contains missing or empty values in PARAMETER")
+  }
+
+  if (!"cov_to_test" %in% names(covariate_search)) {
+    covariate_search$cov_to_test <- paste0(
+      "beta_",
+      covariate_search$COVARIATE,
+      "_",
+      covariate_search$PARAMETER
+    )
+    cat("Added cov_to_test column.\n")
+  }
+
+  duplicated_tags <- unique(covariate_search$cov_to_test[
+    duplicated(covariate_search$cov_to_test)
+  ])
+
+  if (length(duplicated_tags) > 0) {
+    stop(
+      "Duplicate cov_to_test values found: ",
+      paste(duplicated_tags, collapse = ", ")
+    )
+  }
+
+  missing_covs <- setdiff(unique(covariate_search$COVARIATE), names(data_file))
   if (length(missing_covs) > 0) {
-    stop("Covariates not found in dataset: ", paste(missing_covs, collapse = ", "))
+    stop(
+      "The following covariates are missing from the dataset: ",
+      paste(missing_covs, collapse = ", ")
+    )
   }
-  # Check categorical covariate levels
-  cat("Checking categorical covariate levels...\n")
-  categorical_covs <- search_state$covariate_search[search_state$covariate_search$STATUS == "cat", ]
 
-  for (i in seq_len(nrow(categorical_covs))) {
-    cov_name <- categorical_covs$COVARIATE[i]
-    specified_levels <- categorical_covs$LEVELS[i]
+  cat_rows <- covariate_search[
+    as.character(covariate_search$STATUS) == "cat",
+    ,
+    drop = FALSE
+  ]
 
-    if (cov_name %in% names(search_state$data_file)) {
-      actual_levels <- sort(unique(search_state$data_file[[cov_name]]))
-      actual_levels <- actual_levels[!is.na(actual_levels)]
+  if (nrow(cat_rows) > 0) {
+    for (cov_name in unique(cat_rows$COVARIATE)) {
 
-      # Parse specified levels
-      if (grepl(";", specified_levels)) {
-        expected_levels <- sort(as.numeric(unlist(strsplit(specified_levels, ";"))))
-      } else {
-        next  # Skip if can't parse
+      cov_rows <- cat_rows[cat_rows$COVARIATE == cov_name, , drop = FALSE]
+
+      levels_values <- unique(as.character(cov_rows$LEVELS))
+      levels_values <- levels_values[!is.na(levels_values)]
+      levels_values <- trimws(levels_values)
+      levels_values <- levels_values[levels_values != ""]
+
+      if (length(levels_values) == 0) {
+        stop(
+          "Categorical covariate '", cov_name,
+          "' has STATUS == 'cat' but no LEVELS specified"
+        )
       }
 
-      # Check if they match
-      if (!identical(actual_levels, expected_levels)) {
-        stop(sprintf(
-          "Level mismatch for %s: Specified=%s, Actual=%s. Update covariate_search.csv",
-          cov_name,
-          paste(expected_levels, collapse=";"),
-          paste(actual_levels, collapse = ";")
+      if (length(unique(levels_values)) > 1) {
+        stop(
+          "Categorical covariate '", cov_name,
+          "' has inconsistent LEVELS definitions: ",
+          paste(unique(levels_values), collapse = " | ")
+        )
+      }
 
-        ))
+      declared_levels <- unlist(strsplit(levels_values[1], ";", fixed = TRUE))
+      declared_levels <- trimws(declared_levels)
+      declared_levels <- declared_levels[declared_levels != ""]
+
+      declared_levels_num <- suppressWarnings(as.numeric(declared_levels))
+      if (any(is.na(declared_levels_num))) {
+        stop(
+          "LEVELS for categorical covariate '", cov_name,
+          "' must be numeric values separated by ';'. Found: ",
+          levels_values[1]
+        )
+      }
+
+      observed_levels_num <- sort(unique(stats::na.omit(data_file[[cov_name]])))
+
+      if (!all(observed_levels_num %in% declared_levels_num)) {
+        missing_levels <- setdiff(observed_levels_num, declared_levels_num)
+        stop(
+          "Covariate '", cov_name,
+          "' has values in dataset not present in LEVELS: ",
+          paste(missing_levels, collapse = ", ")
+        )
       }
     }
   }
 
+  cat("Covariate search table check passed.\n")
+  return(covariate_search)
+}
+#' Validate initialized search setup
+#'
+#' Performs high-level setup validation for an initialized search_state and
+#' reuses validate_covariate_search_table() for table/data checks.
+#'
+#' @param search_state list
+#'
+#' @return updated search_state
+#' @export
+validate_setup <- function(search_state) {
+
+  if (!is.list(search_state)) {
+    stop("search_state must be a list")
+  }
+
+  required_fields <- c("covariate_search", "data_file")
+  missing_fields <- setdiff(required_fields, names(search_state))
+
+  if (length(missing_fields) > 0) {
+    stop(
+      "search_state is missing required fields: ",
+      paste(missing_fields, collapse = ", ")
+    )
+  }
+
+  search_state$covariate_search <- validate_covariate_search_table(
+    covariate_search = search_state$covariate_search,
+    data_file = search_state$data_file
+  )
   cat("All validation checks passed!\n")
-  return(search_state)
+  search_state
 }
 
+#' Validate base model readiness for covariate search
+#'
+#' Checks that the selected base model:
+#' - exists in the models folder
+#' - finished successfully
+#' - has a readable OFV result
+#'
+#' This function should be used inside `initialize_covariate_search()`
+#' before starting the actual covariate search workflow.
+#'
+#' @param base_model_path Character. Base model name, for example `"run6"`.
+#'   Should be provided without file extension.
+#' @param models_folder Character. Path to the folder containing model files.
+#'
+#' @return Logical `TRUE` if the base model is valid for search initialization.
+#' @export
+validate_base_model_for_search <- function(base_model_path,
+                                           models_folder = "models") {
+
+  model_path <- file.path(models_folder, base_model_path)
+
+  ctl_exists <- file.exists(paste0(model_path, ".ctl"))
+  mod_exists <- file.exists(paste0(model_path, ".mod"))
+
+  if (!ctl_exists && !mod_exists) {
+    stop("Base model file not found: ", model_path, " (.ctl or .mod)")
+  }
+
+  model_status <- get_model_status_from_files(model_path)
+
+  if (!identical(model_status, "completed")) {
+    stop(
+      "Base model '", base_model_path,
+      "' is not ready for covariate search. Current status: ", model_status
+    )
+  }
+
+  ext_data <- tryCatch(
+    read_nonmem_ext(model_path),
+    error = function(e) NULL
+  )
+
+  if (is.null(ext_data)) {
+    stop(
+      "Base model '", base_model_path,
+      "' does not have readable .ext results"
+    )
+  }
+
+  if (!"ofv" %in% names(ext_data)) {
+    stop(
+      "Base model '", base_model_path,
+      "' .ext results do not contain OFV"
+    )
+  }
+
+  if (length(ext_data$ofv) == 0 || is.na(ext_data$ofv[1])) {
+    stop(
+      "Base model '", base_model_path,
+      "' does not have a readable OFV result"
+    )
+  }
+
+  return(TRUE)
+}
 
 
 #' Initialize Search Configuration

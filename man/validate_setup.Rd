@@ -2,19 +2,17 @@
 % Please edit documentation in R/initialization.R
 \name{validate_setup}
 \alias{validate_setup}
-\title{Validate covariate search setup and data consistency}
+\title{Validate initialized search setup}
 \usage{
 validate_setup(search_state)
 }
 \arguments{
-\item{search_state}{List containing search state}
+\item{search_state}{list}
 }
 \value{
-Updated search_state (unchanged if validation passes)
+updated search_state
 }
 \description{
-Performs validation checks on data files and configuration
-}
-\details{
-Validate Setup Configuration
+Performs high-level setup validation for an initialized search_state and
+reuses validate_covariate_search_table() for table/data checks.
 }

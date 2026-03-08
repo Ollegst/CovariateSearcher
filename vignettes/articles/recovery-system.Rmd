@@ -34,10 +34,9 @@ When a failure is detected, the system:
 model$status <- "failed"
 
 # 2. Creates retry model with adjusted parameters
-retry_model <- create_retry_model(
-  original_model = "run11",
-  retry_number = 1  # Creates run11001
-)
+  original_model = run11
+  retry_number = Creates run11001
+
 
 # 3. Adjusts THETA initial estimate
 # Original: THETA(1) = 0.1
@@ -124,10 +123,10 @@ print(recovery_stats)
 If you prefer manual control:
 
 ```{r manual}
-search_state <- initialize_new_search(
-  base_model_path = "models/run1",
-  data_file_path = "data/data.csv",
-  covariate_search_path = "data/covariates.csv",
+search_state <- initialize_covariate_search(
+  base_model_path = "run1",
+  data_file_path = "data/derived/data.csv",
+  covariate_search_path = "data/derived/covariates.csv",
   auto_retry = FALSE  # Disable automatic retry
 )
 

@@ -1,7 +1,7 @@
 CovariateSearcher: Quick Reference
 ================
 CovariateSearcher Package
-2025-11-26
+2026-03-08
 
 ## 🚀 Minimal Working Example
 
@@ -15,7 +15,7 @@ library(CovariateSearcher)
 search_state <- initialize_covariate_search(
   base_model_path = "run10",
   data_file_path = "data/derived/analysis.csv",
-  covariate_search_path = "data/covariate_search.csv",
+  covariate_search_path = "data/derived/covariate_search.csv",
   discover_existing = TRUE, 
   models_folder = "models", 
   threads = 40)
@@ -43,13 +43,73 @@ results_table <- create_scm_results_table(search_state)
 print_scm_results_table(search_state)
 ```
 
+## Or if you need to create model with multiple covariates as base model
+
+``` r
+library(CovariateSearcher)
+
+data_file_path = "data/test.csv"
+covariate_search_path = "data/derived/covariate_search.csv"
+
+data_file <- readr::read_csv(data_file_path, show_col_types = FALSE)
+covariate_search <- readr::read_csv(covariate_search_path, show_col_types = FALSE)
+
+covariate_search <- validate_covariate_search_table(
+  covariate_search = covariate_search,
+  data_file = data_file
+)
+
+# 1. Prepare base model
+prep <- prepare_search_base_model(
+  base_model_path = "run1",
+  covariate_tags = c("beta_WT_CL", "beta_AGE_V2", "beta_SEX_KA"),
+  new_model_number = 2,
+  data_file_path = data_file_path,
+  covariate_search_path = covariate_search_path",
+  models_folder = "models",
+  idcol = "ID"
+)
+
+mod <- bbr::read_model(file.path("models", prep$model_name))
+bbr::submit_model(mod, .bbi_args = list(threads = 4), .overwrite = TRUE)
+
+# 2. Initialize
+search_state <- initialize_covariate_search(
+  base_model_path = "run2",
+  data_file_path = data_file_path,
+  covariate_search_path = covariate_search_path,
+  models_folder = "models", 
+  threads = 4)
+
+# 3. Run SCM
+result <- run_automated_scm_testing(
+        search_state = search_state,
+        scm_type = "selective",                     # or "standard"  
+    starting_phase = "backward",                # Starting phase
+    full_scm = TRUE,                            # Run complete workflow 
+    forward_p_value = 0.05,                       # p-value for the forward selection   
+    backward_p_value = 0.01,                    # p-value for the backward elimination
+    rse_threshold = 50,                         # RSE threshold
+    auto_submit = TRUE,                         # if FALSE – only model creation 
+    auto_retry = TRUE,                          # Retry model in case of failure
+    save_checkpoints = TRUE,                    # Save each step
+    checkpoint_prefix = "scm_auto",
+    final_testing = TRUE)                       # Test excluded covariates form failed model
+
+
+# 4. Check results
+search_state <-readRDS("./models/scm_rds/scm_auto_final_complete.rds")
+results_table <- create_scm_results_table(search_state)
+print_scm_results_table(search_state)
+```
+
 ------------------------------------------------------------------------
 
 ## 📋 Required Files
 
 ### 1. Base Model
 
-`models/run10/run10.ctl` - NONMEM control file
+`models/run10.ctl` - NONMEM control file
 
 **Requirements**:
 
@@ -88,14 +148,14 @@ block.
 
 ### 3. Covariate Search
 
-`data/derived/covariates.csv`
+`data/derived/covariate_search.csv`
 
-| PARAMETER | COVARIATE | STATUS      | FORMULA | LEVELS | REFERENCE | TIME_DEPENDENT |
-|-----------|-----------|-------------|---------|--------|-----------|----------------|
-| CL        | WT        | continuous  | power   | NA     | 70        | FALSE          |
-| CL        | AGE       | continuous  | linear  | NA     | 50        | FALSE          |
-| CL        | ECOG      | categorical | linear  | 0,1;2  | 1         | FALSE          |
-| V2        | WT        | continuous  | power   | NA     | 70        | FALSE          |
+| PARAMETER | COVARIATE | STATUS | FORMULA | LEVELS | REFERENCE | TIME_DEPENDENT |
+|-----------|-----------|--------|---------|--------|-----------|----------------|
+| CL        | WT        | con    | power   | NA     | 70        | FALSE          |
+| CL        | AGE       | con    | linear  | NA     | 50        | FALSE          |
+| CL        | ECOG      | cat    | linear  | 0;1;2  | 1         | FALSE          |
+| V2        | WT        | con    | power   | NA     | 70        | FALSE          |
 
 ------------------------------------------------------------------------
 
@@ -228,10 +288,10 @@ cat(results$final_summary)
 
 ## 💾 Checkpoints (Auto-saved)
 
--   `scm_auto_forward_complete.rds`
--   `scm_auto_initial_backward_complete.rds`
--   `scm_auto_final_backward_complete.rds`
--   `scm_auto_final_complete.rds`
+- `scm_auto_forward_complete.rds`
+- `scm_auto_initial_backward_complete.rds`
+- `scm_auto_final_backward_complete.rds`
+- `scm_auto_final_complete.rds`
 
 ------------------------------------------------------------------------
 
@@ -253,63 +313,55 @@ TV\_ prefix!)
     (0, 10)       ; 2_V  ; L   ; LOG
     0.5 FIX       ; 3_KA ; 1/h ; LOG
 
-**Then in \$PK block, use TV\_ prefix for typical values:**
+\*\*Then in $PK block, use TV_ prefix for typical values:**
+```$PK TV_CL = THETA(1) ; Use TV\_ prefix here TV_V = THETA(2) TV_KA =
+THETA(3)
 
-    $PK
-    TV_CL = THETA(1)  ; Use TV_ prefix here
-    TV_V  = THETA(2)
-    TV_KA = THETA(3)
+CL = TV_CL \* EXP(ETA(1)) V = TV_V \* EXP(ETA(2)) KA = TV_KA \*
+EXP(ETA(3))
 
-    CL = TV_CL * EXP(ETA(1))
-    V  = TV_V  * EXP(ETA(2))
-    KA = TV_KA * EXP(ETA(3))
 
-**✅ Correct THETA naming**: `CL`, `V`, `KA` or `1_CL`, `2_V`, `3_KA`  
-**❌ Wrong THETA naming**: `TV_CL`, `TVCL`, `TVV` (don’t use TV\_ in
-\$THETA block!)
+    **✅ Correct THETA naming**: `CL`, `V`, `KA` or `1_CL`, `2_V`, `3_KA`  
+    **❌ Wrong THETA naming**: `TV_CL`, `TVCL`, `TVV` (don't use TV_ in $THETA block!)
 
-### OMEGA Diagonal
+    ### OMEGA Diagonal
 
-    $OMEGA
-    0.1 ; IIV_CL ; ; RATIO
-    0.1 ; IIV_V  ; ; RATIO
+\$OMEGA 0.1 ; IIV_CL ; ; RATIO 0.1 ; IIV_V ; ; RATIO
 
-### OMEGA BLOCK (One value per line!)
 
-    $OMEGA BLOCK(2)
-    0.1 ; IIV_CL    ; ; RATIO
-    0.1 ; IIV_CL_V  ; ; RATIO
-    0.1 ; IIV_V     ; ; RATIO
+    ### OMEGA BLOCK (One value per line!)
 
-### SIGMA
+\$OMEGA BLOCK(2) 0.1 ; IIV_CL ; ; RATIO 0.1 ; IIV_CL_V ; ; RATIO 0.1 ;
+IIV_V ; ; RATIO
 
-    $SIGMA
-    0.1  ; RUV_PROP ; ; RATIO
-    0.05 ; RUV_ADD  ; mg/L ; RATIO
 
-**❌ WRONG** (multiple values per line):
+    ### SIGMA
 
-    $OMEGA BLOCK(2)
-    0.1 ; IIV_CL
-    0.1 0.1 ; IIV_V      ← Don't do this!
+\$SIGMA 0.1 ; RUV_PROP ; ; RATIO 0.05 ; RUV_ADD ; mg/L ; RATIO
 
-**❌ WRONG** (TV\_ prefix in THETA block):
 
-    $THETA
-    0.5 ; TV_CL ; L/h ; LOG    ← Don't use TV_ in $THETA block!
-    0.5 ; 1CL   ; L/h ; LOG     ← Missing underscore
+    **❌ WRONG** (multiple values per line):
 
-------------------------------------------------------------------------
+\$OMEGA BLOCK(2) 0.1 ; IIV_CL 0.1 0.1 ; IIV_V ← Don’t do this!
 
-------------------------------------------------------------------------
 
-## 🔧 Advanced Options
+    **❌ WRONG** (TV_ prefix in THETA block):
 
-### Selective Forward (Faster)
+\$THETA 0.5 ; TV_CL ; L/h ; LOG ← Don’t use TV\_ in \$THETA block! 0.5 ;
+1CL ; L/h ; LOG ← Missing underscore
 
-``` r
-scm_type = "selective"
-```
+
+    ---
+
+
+
+    ---
+
+    ## 🔧 Advanced Options
+
+    ### Selective Forward (Faster)
+    ```r
+    scm_type = "selective"
 
 ### Custom Thresholds
 
