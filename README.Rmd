@@ -30,7 +30,6 @@ search_state <- initialize_covariate_search(
   base_model_path = "run10",
   data_file_path = "data/derived/analysis.csv",
   covariate_search_path = "data/derived/covariate_search.csv",
-  discover_existing = TRUE, 
   models_folder = "models", 
   threads = 40)
 
