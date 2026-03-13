@@ -16,12 +16,12 @@ knitr::opts_chunk$set(
 )
 ```
 
-
-## 🚀 Minimal Working Example
-
+  
+## 🚀 Minimal Working Example 
+  
 ```r
 # Install from GitHub
-devtools::install_github("Ollegst/CovariateSearcher")
+remotes::install_github("Ollegst/CovariateSearcher", ref = "feature/prepare-search-base-model", dependencies = TRUE)
 
 library(CovariateSearcher)
 
@@ -71,7 +71,9 @@ covariate_search <- validate_covariate_search_table(
   data_file = data_file
 )
 
-# 1. Prepare base model
+#Explain code below              
+
+# 1. Prepare base model     
 prep <- prepare_search_base_model(
   base_model_path = "run1",
   covariate_tags = c("beta_WT_CL", "beta_AGE_V2", "beta_SEX_KA"),

@@ -225,7 +225,7 @@ create_model_info_log <- function(search_state, model_name, parent_model, covari
     sprintf("[%s] Status: created", timestamp),
     "",
     "Model Details:",
-    sprintf("- Model file: %s.ctl", model_name),
+    sprintf("- Model file: %s", basename(find_model_file(file.path(search_state$models_folder, model_name)) %||% paste0(model_name, ".ctl"))),
     sprintf("- BBR YAML: %s.yaml", model_name),
     sprintf("- Parent model: %s", parent_model),
     sprintf("- Creation time: %s", timestamp),
@@ -418,23 +418,29 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
 
   if(time_varying == FALSE) {
     # First try to find TV_ prefixed parameter (typical values)
-    linetu <- grep(paste0('^\\s*TV_', param), modelcode)
-    search_pattern <- paste0('^\\s*TV_', param)
+    linetu <- grep(paste0('^\\s*TV_', param, '\\b'), modelcode)
+    search_pattern <- paste0('^\\s*TV_', param, '\\b')
 
     # If not found, try parameter without TV_ prefix (e.g., Km, Vmax, etc.)
     if (length(linetu) == 0) {
-      linetu <- grep(paste0('^\\s*', param, '\\s*='), modelcode)
-      search_pattern <- paste0('^\\s*', param, '\\s*=')
+      linetu <- grep(paste0('^\\s*', param, '\\b\\s*='), modelcode)
+      search_pattern <- paste0('^\\s*', param, '\\b\\s*=')
      }
   } else {
     # Time-varying: search for parameter as-is
-    linetu <- grep(paste0('^\\s*', param), modelcode)
-    search_pattern <- paste0('^\\s*', param)
+    linetu <- grep(paste0('^\\s*', param, '\\b'), modelcode)
+    search_pattern <- paste0('^\\s*', param, '\\b')
   }
 
 
   log_function(paste("Looking for parameter line with pattern:", search_pattern))
   log_function(paste("Found parameter line at index:", linetu))
+
+  # If multiple matches, use the last one (final assignment to the parameter)
+  if (length(linetu) > 1) {
+    log_function(paste("WARNING: Multiple matches found, using last match at index:", linetu[length(linetu)]))
+    linetu <- linetu[length(linetu)]
+  }
 
   if (length(linetu) > 0) {
     original_line <- modelcode[linetu]

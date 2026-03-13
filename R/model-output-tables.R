@@ -118,11 +118,11 @@ extract_params <- function(lines, block_tag, remove_prefix = FALSE) {
 #' @return A list containing THETAS, OMEGAS, and SIGMA parameters with transformations
 #' @keywords internal
 extract_model_params <- function(model_name, models_folder = "models") {
-  # Construct file path
-  ctl_path <- file.path(models_folder, paste0(model_name, ".ctl"))
+  # Construct file path (supports both .ctl and .mod)
+  ctl_path <- find_model_file(file.path(models_folder, model_name))
 
-  if (!file.exists(ctl_path)) {
-    stop(sprintf("Control file not found: %s", ctl_path))
+  if (is.null(ctl_path)) {
+    stop(sprintf("Control file not found for: %s (.ctl or .mod)", model_name))
   }
 
   # Read the file as a vector of lines

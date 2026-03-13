@@ -28,6 +28,25 @@ read_model_file <- function(search_state, run_name, extensions = c(".ctl", ".mod
 }
 
 
+#' Find Model File Path
+#'
+#' @title Find the actual file path for a NONMEM model
+#' @description Given a base path (without extension), finds the actual model file
+#'   by trying .ctl and .mod extensions in order.
+#' @param base_path Character. Base path without extension (e.g., "models/run001")
+#' @param extensions Character vector. File extensions to try (default: c(".ctl", ".mod"))
+#' @return Character string with the full path to the found file, or NULL if not found
+#' @export
+find_model_file <- function(base_path, extensions = c(".ctl", ".mod")) {
+  for (ext in extensions) {
+    file_path <- paste0(base_path, ext)
+    if (file.exists(file_path)) {
+      return(file_path)
+    }
+  }
+  return(NULL)
+}
+
 
 #' Write Model File
 #'

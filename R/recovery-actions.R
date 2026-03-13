@@ -251,10 +251,10 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
 adjust_theta_for_covariate <- function(search_state, model_name, covariate_tag) {
   tryCatch({
 
-    model_file_path <- file.path(search_state$models_folder, paste0(model_name, ".ctl"))
+    model_file_path <- find_model_file(file.path(search_state$models_folder, model_name))
 
-    if (!file.exists(model_file_path)) {
-      return(list(success = FALSE, message = "Model file not found"))
+    if (is.null(model_file_path)) {
+      return(list(success = FALSE, message = "Model file not found (.ctl or .mod)"))
     }
 
     modelcode <- readLines(model_file_path)

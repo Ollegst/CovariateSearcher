@@ -265,8 +265,8 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
     tryCatch({
       model_path <- file.path(search_state$models_folder, model_name)
 
-      if (!file.exists(paste0(model_path, ".ctl"))) {
-        stop(sprintf("Model file %s.ctl not found", model_path))
+      if (is.null(find_model_file(model_path))) {
+        stop(sprintf("Model file not found for %s (.ctl or .mod)", model_path))
       }
 
       mod <- bbr::read_model(model_path)

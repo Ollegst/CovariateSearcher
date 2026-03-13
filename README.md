@@ -7,7 +7,7 @@ CovariateSearcher Package
 
 ``` r
 # Install from GitHub
-devtools::install_github("Ollegst/CovariateSearcher")
+remotes::install_github("Ollegst/CovariateSearcher", ref = "feature/prepare-search-base-model", dependencies = TRUE)
 
 library(CovariateSearcher)
 
