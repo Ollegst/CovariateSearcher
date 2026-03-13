@@ -313,6 +313,25 @@ validate_covariate_search_table <- function(covariate_search, data_file) {
   }
 
   cat("Covariate search table check passed.\n")
+
+  # Validate LEVELS column for all rows: must be empty/NA or numeric semicolon-separated
+  for (i in seq_len(nrow(covariate_search))) {
+    levels_val <- as.character(covariate_search$LEVELS[i])
+    if (!is.na(levels_val) && trimws(levels_val) != "") {
+      parts <- trimws(unlist(strsplit(levels_val, ";", fixed = TRUE)))
+      parts <- parts[parts != ""]
+      parts_num <- suppressWarnings(as.numeric(parts))
+      if (any(is.na(parts_num))) {
+        stop(
+          "Row ", i, ": LEVELS for covariate '", covariate_search$COVARIATE[i],
+          "' on parameter '", covariate_search$PARAMETER[i],
+          "' contains non-numeric values: '", levels_val,
+          "'. LEVELS must be numeric codes separated by ';' (e.g., '0;1;2')"
+        )
+      }
+    }
+  }
+
   return(covariate_search)
 }
 #' Validate initialized search setup
