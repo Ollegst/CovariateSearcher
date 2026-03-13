@@ -319,6 +319,7 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id = NULL,
 
     # Calculate final step
     final_step <- max(search_state$search_database$step_number, na.rm = TRUE)
+    if (is.infinite(final_step)) final_step <- last_step
 
     return(list(
       search_state = search_state,
@@ -339,6 +340,7 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id = NULL,
 
     # Get current step number from database
     current_step_number <- max(search_state$search_database$step_number, na.rm = TRUE) + 1
+    if (is.infinite(current_step_number)) current_step_number <- last_step + 1
 
     cat(sprintf("\n🎯 FORWARD SELECTION - Step %d\n", current_step_number))
 
@@ -435,6 +437,7 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id = NULL,
 
   # Calculate final step
   final_step <- max(search_state$search_database$step_number, na.rm = TRUE)
+  if (is.infinite(final_step)) final_step <- last_step
   cat(sprintf("📊 Steps completed: %d\n", final_step - last_step))
   cat(sprintf("🎯 Final model: %s\n", current_base_model))
 

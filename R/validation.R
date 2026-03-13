@@ -85,7 +85,32 @@ update_model_status_from_files <- function(search_state, model_name, force = FAL
     lst_file <- file.path(model_path, paste0(model_name, ".lst"))
 
     if (!file.exists(lst_file)) {
-      # No LST file = still running
+      # No LST file - check if bbi even started NONMEM
+      output_dir <- model_path  # e.g., models/run19/
+
+      if (!dir.exists(output_dir)) {
+        # No output directory = model never started = failed launch
+        results$status <- "failed"
+        results$error_message <- "NONMEM never started - no output directory (check data path and bbi configuration)"
+        return(results)
+      }
+
+      # Output directory exists but no LST file
+      # Check for bbi error indicator: OUTPUT file
+      output_file <- file.path(output_dir, "OUTPUT")
+      if (file.exists(output_file)) {
+        output_content <- tryCatch(readLines(output_file, warn = FALSE), error = function(e) "")
+        error_msg <- if (length(output_content) > 0) {
+          paste(utils::head(output_content, 5), collapse = "; ")
+        } else {
+          "bbi error (empty OUTPUT file)"
+        }
+        results$status <- "failed"
+        results$error_message <- paste("bbi initialization error:", error_msg)
+        return(results)
+      }
+
+      # Directory exists, no OUTPUT error, no LST yet - still starting up
       results$status <- "in_progress"
       return(results)
     }

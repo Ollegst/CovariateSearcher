@@ -282,13 +282,13 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
       cat("✓\n")
 
     }, error = function(e) {
-      failed_submissions <- c(failed_submissions, model_name)
-      submission_results[[model_name]] <- paste("failed:", e$message)
+      failed_submissions <<- c(failed_submissions, model_name)
+      submission_results[[model_name]] <<- paste("failed:", e$message)
       cat(sprintf("✗ %s\n", e$message))
 
       db_idx <- which(search_state$search_database$model_name == model_name)
       if (length(db_idx) > 0) {
-        search_state$search_database$status[db_idx] <- "submission_failed"
+        search_state$search_database$status[db_idx] <<- "submission_failed"
       }
     })
   }
@@ -568,7 +568,7 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
 
                 db_idx <- which(search_state$search_database$model_name == retry_model)
                 if (length(db_idx) > 0) {
-                  search_state$search_database$status[db_idx] <- "submission_failed"
+                  search_state$search_database$status[db_idx] <<- "submission_failed"
                 }
               })
             }
@@ -579,7 +579,7 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
 
       }, error = function(retry_error) {
         cat(sprintf("❌ Error in retry processing: %s\n", retry_error$message))
-        already_processed_for_retry <- c(already_processed_for_retry, newly_failed)
+        already_processed_for_retry <<- c(already_processed_for_retry, newly_failed)
       })
     }
 

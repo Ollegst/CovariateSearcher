@@ -283,13 +283,18 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   log_function(paste("Covariate:", cova, "Parameter:", param, "Reference:", ref))
 
   # Get max THETA number
-  thetas <- modelcode[grepl('THETA\\(..?\\)', modelcode)] %>%
+  thetas <- modelcode[grepl('THETA\\(\\d+\\)', modelcode)] %>%
     gsub(pattern = '.*THETA\\(', replacement = '') %>%
     gsub(pattern = '\\).*', replacement = '') %>%
     as.double()
 
-  newtheta <- max(thetas) + 1
-  log_function(paste("Current max THETA:", max(thetas), "New THETA number:", newtheta))
+  if (length(thetas) == 0) {
+    newtheta <- 1
+    log_function("No existing THETAs found, starting at THETA(1)")
+  } else {
+    newtheta <- max(thetas) + 1
+    log_function(paste("Current max THETA:", max(thetas), "New THETA number:", newtheta))
+  }
 
   temp_cov <- dplyr::filter(covariate_search, cov_to_test == cov_on_param)
 
@@ -351,6 +356,10 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
         log_function(paste("Note: Could not use lookup.yaml:", e$message))
       })
     }
+    if (!cova %in% names(data_file)) {
+      stop("Covariate '", cova, "' not found in data file. Available columns: ",
+           paste(head(names(data_file), 20), collapse = ", "))
+    }
     uniqueval <- unique(data_file[[cova]])
     newvari <- cov_on_param
     formule <- paste0(' * ', newvari)
@@ -367,7 +376,7 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
       covx = uniqueval,
       label = character(length(uniqueval))  # Initialize empty
     )
-    for(a in 1:length(uniqueval)){
+    for(a in seq_along(uniqueval)){
       current_level <- uniqueval[a]
       theta_num <- newtheta + a - 1
 
@@ -412,6 +421,10 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   # Check if time-dependent
   max_levels <- max(tapply(data_file[[cova]], data_file[[id_var]],
                            function(x) length(unique(x))), na.rm = TRUE)
+  if (is.infinite(max_levels)) {
+    log_function("WARNING: Could not determine time-varying status - defaulting to non-time-varying")
+    max_levels <- 1
+  }
   time_varying <- max_levels > 1
 
   log_function(paste("Time-varying check:", time_varying, "(max levels:", max_levels, ")"))
@@ -477,6 +490,10 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   log_function(paste("New THETA line to add:", newthetaline))
 
   lineomeg <- grep('\\$OMEGA', modelcode)[1]
+  if (is.na(lineomeg)) {
+    log_function("ERROR: No $OMEGA section found in model file")
+    stop("Model file missing $OMEGA section - cannot insert THETA line")
+  }
   log_function(paste("Inserting THETA line before $OMEGA section at line:", lineomeg))
 
   modelcode <- c(
@@ -886,6 +903,9 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
 
   # Step 4: FIXED THETA DETECTION - Count actual THETA parameters, not line positions
   theta_start <- grep("^\\$THETA", modelcode)
+  if (length(theta_start) == 0) {
+    stop("No $THETA section found in model file for ", model_to_modify)
+  }
   next_section <- grep("^\\$", modelcode)
   theta_end <- next_section[next_section > theta_start[1]][1] - 1
   if (is.na(theta_end)) theta_end <- length(modelcode)
