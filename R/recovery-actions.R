@@ -332,6 +332,21 @@ adjust_theta_for_covariate <- function(search_state, model_name, covariate_tag) 
       return(list(success = FALSE, message = "No THETA lines found for covariate"))
     }
 
+    # Update $TABLE FILE= names to match retry model number
+    # e.g. FILE=catab2 -> FILE=catab2001 when model_name is "run2001"
+    new_model_num <- gsub("^run", "", model_name)
+    if (grepl("^\\d+$", new_model_num)) {
+      table_lines <- grep("FILE=", modelcode, ignore.case = TRUE)
+      for (i in table_lines) {
+        modelcode[i] <- gsub(
+          "(FILE=)([a-zA-Z]+)\\d+",
+          paste0("\\1\\2", new_model_num),
+          modelcode[i],
+          ignore.case = TRUE
+        )
+      }
+    }
+
     # Write the modified model file
     writeLines(modelcode, model_file_path)
 

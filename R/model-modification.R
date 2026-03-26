@@ -505,6 +505,27 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   log_function(paste("✓ THETA line added at position:", lineomeg))
   log_function(paste("Total lines in model:", length(modelcode)))
 
+  # Update $TABLE FILE= names to match new model number
+  # e.g. FILE=catab1 -> FILE=catab11 when ref_model is "run11"
+  new_model_num <- gsub("^run", "", ref_model)
+  if (grepl("^\\d+$", new_model_num)) {
+    table_lines <- grep("FILE=", modelcode, ignore.case = TRUE)
+    for (i in table_lines) {
+      old_line <- modelcode[i]
+      modelcode[i] <- gsub(
+        "(FILE=)([a-zA-Z]+)\\d+",
+        paste0("\\1\\2", new_model_num),
+        modelcode[i],
+        ignore.case = TRUE
+      )
+      if (modelcode[i] != old_line) {
+        log_function(paste("Updated TABLE FILE reference:"))
+        log_function(paste("  Before:", old_line))
+        log_function(paste("  After: ", modelcode[i]))
+      }
+    }
+  }
+
   # Write back
   attr(modelcode, "file_path") <- original_file_path
   search_state <- write_model_file(search_state, modelcode)
@@ -941,7 +962,7 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
   }
 
   theta_numbers_to_remove <- sort(theta_numbers_to_remove)
-  log_msg(paste("THETA numbers to remove:", paste(theta_numbers_to_remove, collapse = ", ")))
+  log_msg(paste("THETA numbers to remove:", paste(theta_numbers_to_remove, collapse = ", "))) # nolint: line_length_linter.
 
   # Step 5: Remove covariate effects from parameter equations
   lines_modified <- 0
@@ -1042,6 +1063,28 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
   # Step 8: Apply THETA renumbering
   log_msg("Starting THETA renumbering...")
   modelcode <- fix_theta_renumbering(modelcode, theta_numbers_to_remove, log_msg)
+
+  # Step 8b: Update $TABLE FILE= names to match the new model number
+  if (save_as_new_model) {
+    new_model_num <- gsub("^run", "", model_to_modify)
+    if (grepl("^\\d+$", new_model_num)) {
+      table_lines <- grep("FILE=", modelcode, ignore.case = TRUE)
+      for (i in table_lines) {
+        old_line <- modelcode[i]
+        modelcode[i] <- gsub(
+          "(FILE=)([a-zA-Z]+)\\d+",
+          paste0("\\1\\2", new_model_num),
+          modelcode[i],
+          ignore.case = TRUE
+        )
+        if (modelcode[i] != old_line) {
+          log_msg(paste("Updated TABLE FILE reference:"))
+          log_msg(paste("  Before:", old_line))
+          log_msg(paste("  After: ", modelcode[i]))
+        }
+      }
+    }
+  }
 
   # Step 9: Write the modified model file
   attr(modelcode, "file_path") <- original_file_path

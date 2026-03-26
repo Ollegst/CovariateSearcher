@@ -240,7 +240,10 @@ update_model_status_from_files <- function(search_state, model_name, force = FAL
           models_folder = search_state$models_folder
         )
 
-        rse_values <- params$RSE[!is.na(params$RSE) & is.finite(params$RSE)]
+        rse_values <- params$RSE[
+          (is.na(params$fixed) | !params$fixed) &
+          !is.na(params$RSE) & is.finite(params$RSE)
+        ]
         if (length(rse_values) > 0) max(rse_values) else NA_real_
       }, error = function(e) {
         NA_real_
@@ -622,8 +625,9 @@ get_model_max_rse <- function(search_state, model_name) {
       models_folder = search_state$models_folder
     )
 
-    # Extract RSE values
-    rse_values <- params$RSE[!is.na(params$RSE) & is.finite(params$RSE)]
+    # Extract RSE values for non-fixed parameters only
+    non_fixed <- is.na(params$fixed) | !params$fixed
+    rse_values <- params$RSE[non_fixed & !is.na(params$RSE) & is.finite(params$RSE)]
 
     if (length(rse_values) > 0) {
       return(max(rse_values))
@@ -971,8 +975,8 @@ print_parameter_validation <- function(validation_result, verbose = TRUE) {
     cat("  value ; PARAM_NAME ; units ; RATIO|LOG\n\n")
     cat("Examples:\n")
     cat("  $THETA\n")
-    cat("  0.5 ; TVCL ; L/h ; LOG\n")
-    cat("  10  ; TVV  ; L   ; LOG\n\n")
+    cat("  0.5 ; CL ; L/h ; LOG\n")
+    cat("  10  ; V  ; L   ; LOG\n\n")
     cat("  $OMEGA BLOCK(3)\n")
     cat("  0.1 ; IIV_CL    ; ; RATIO\n")
     cat("  0.1 ; IIV_CL_V2 ; ; RATIO\n")

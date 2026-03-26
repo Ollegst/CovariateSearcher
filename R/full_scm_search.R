@@ -111,6 +111,11 @@ run_automated_scm_testing <- function(search_state,
     rse_threshold <- search_state$search_config$max_rse_threshold %||% 50
   }
 
+  # Update search_config so downstream functions see the correct values
+  search_state$search_config$forward_p_value <- forward_p_value
+  search_state$search_config$backward_p_value <- backward_p_value
+  search_state$search_config$max_rse_threshold <- rse_threshold
+
   # Calculate ΔOFV thresholds for display (df=1 for typical single parameter)
   forward_ofv_threshold_display <- pvalue_to_threshold(forward_p_value, df = 1)
   backward_ofv_threshold_display <- pvalue_to_threshold(backward_p_value, df = 1)
