@@ -208,6 +208,15 @@ update_model_status_from_files <- function(search_state, model_name, force = FAL
             TRUE ~ "Invalid OFV"
           )
         }
+
+        # Check covariance step: .cov file is only written when covariance succeeds
+        if (results$status == "completed") {
+          cov_file <- file.path(model_path, paste0(model_name, ".cov"))
+          if (!file.exists(cov_file)) {
+            results$status <- "failed"
+            results$error_message <- "Covariance step failed (no .cov file)"
+          }
+        }
       }
     }
 
