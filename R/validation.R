@@ -240,10 +240,7 @@ update_model_status_from_files <- function(search_state, model_name, force = FAL
           models_folder = search_state$models_folder
         )
 
-        rse_values <- params$RSE[
-          (is.na(params$fixed) | !params$fixed) &
-          !is.na(params$RSE) & is.finite(params$RSE)
-        ]
+        rse_values <- params$RSE[!is.na(params$RSE) & is.finite(params$RSE)]
         if (length(rse_values) > 0) max(rse_values) else NA_real_
       }, error = function(e) {
         NA_real_
@@ -625,9 +622,7 @@ get_model_max_rse <- function(search_state, model_name) {
       models_folder = search_state$models_folder
     )
 
-    # Extract RSE values for non-fixed parameters only
-    non_fixed <- is.na(params$fixed) | !params$fixed
-    rse_values <- params$RSE[non_fixed & !is.na(params$RSE) & is.finite(params$RSE)]
+    rse_values <- params$RSE[!is.na(params$RSE) & is.finite(params$RSE)]
 
     if (length(rse_values) > 0) {
       return(max(rse_values))

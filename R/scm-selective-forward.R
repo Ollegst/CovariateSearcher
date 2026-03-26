@@ -699,6 +699,13 @@ run_scm_selective_forward <- function(search_state,
         cat(sprintf("✅ Redemption Step %d found %d significant models\n",
                     redemption_step, length(redemption_significant)))
 
+        # Update current_best_model so the final return value reflects the redemption winner
+        if (!is.null(redemption_selection$best_model)) {
+          current_redemption_base <- redemption_selection$best_model
+          current_best_model <- redemption_selection$best_model
+          cat(sprintf("📍 Redemption winner: %s (new best)\n", current_best_model))
+        }
+
         # Store redemption results
         step_results[[sprintf("redemption_%d", redemption_step)]] <- list(
           creation = redemption_result,

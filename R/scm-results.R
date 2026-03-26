@@ -9,6 +9,11 @@
 #' @export
 create_scm_results_table <- function(search_state) {
 
+  # Accept either a full result list (from run_automated_scm_testing) or a bare search_state
+  if (!is.null(search_state$search_state)) {
+    search_state <- search_state$search_state
+  }
+
   db <- search_state$search_database
 
   # Get thresholds from search_state config
@@ -273,7 +278,12 @@ create_scm_results_table <- function(search_state) {
 #' @export
 print_scm_results_table <- function(search_state, show_rse = TRUE, truncate_covariates = 35) {
 
-  results <- create_scm_results_table(search_state)
+  # Accept either a pre-built results data.frame or a search_state/result list
+  if (is.data.frame(search_state)) {
+    results <- search_state
+  } else {
+    results <- create_scm_results_table(search_state)
+  }
 
   if (nrow(results) == 0) {
     cat("No results to display\n")
