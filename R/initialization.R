@@ -309,6 +309,30 @@ validate_covariate_search_table <- function(covariate_search, data_file) {
           paste(missing_levels, collapse = ", ")
         )
       }
+
+      # Check REFERENCE is within declared LEVELS
+      ref_values <- unique(as.character(cov_rows$REFERENCE))
+      ref_values <- ref_values[!is.na(ref_values) & trimws(ref_values) != ""]
+
+      if (length(ref_values) > 0) {
+        ref_num <- suppressWarnings(as.numeric(ref_values))
+        invalid_ref <- ref_values[is.na(ref_num)]
+        if (length(invalid_ref) > 0) {
+          stop(
+            "Categorical covariate '", cov_name,
+            "' has non-numeric REFERENCE value(s): ",
+            paste(invalid_ref, collapse = ", ")
+          )
+        }
+        outside_levels <- ref_num[!ref_num %in% declared_levels_num]
+        if (length(outside_levels) > 0) {
+          stop(
+            "Categorical covariate '", cov_name,
+            "' has REFERENCE value(s) not present in LEVELS (", levels_values[1], "): ",
+            paste(outside_levels, collapse = ", ")
+          )
+        }
+      }
     }
   }
 
