@@ -251,6 +251,7 @@ update_model_status_from_files <- function(search_state, model_name, force = FAL
       }, error = function(e) {
         NA_real_
       })
+
     }
 
     return(results)
