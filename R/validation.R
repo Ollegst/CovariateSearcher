@@ -234,10 +234,16 @@ update_model_status_from_files <- function(search_state, model_name, force = FAL
     # Extract RSE (only for successful runs)
     if (results$status == "completed") {
       results$rse_max <- tryCatch({
-        params <- get_param2(
-          model_number = model_name,
-          count_model = 1,
-          models_folder = search_state$models_folder
+        params <- withCallingHandlers(
+          get_param2(
+            model_number = model_name,
+            count_model = 1,
+            models_folder = search_state$models_folder
+          ),
+          warning = function(w) {
+            if (grepl("fixed", conditionMessage(w), fixed = TRUE))
+              invokeRestart("muffleWarning")
+          }
         )
 
         rse_values <- params$RSE[!is.na(params$RSE) & is.finite(params$RSE)]
