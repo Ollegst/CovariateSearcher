@@ -727,6 +727,22 @@ run_scm_selective_forward <- function(search_state,
     }
   }
 
+  # After redemption, update current_best_model to the model with lowest absolute OFV
+  # that also passed the forward selection OFV criteria
+  forward_ofv_threshold <- pvalue_to_threshold(forward_p_value, df = 1)
+  all_completed <- search_state$search_database[
+    search_state$search_database$status == "completed" &
+      !is.na(search_state$search_database$ofv) &
+      !is.na(search_state$search_database$delta_ofv) &
+      search_state$search_database$delta_ofv >= forward_ofv_threshold &
+      search_state$search_database$step_number > 0, ]
+  if (nrow(all_completed) > 0) {
+    current_best_model <- all_completed$model_name[which.min(all_completed$ofv)]
+    cat(sprintf("🏆 Overall best model after forward+redemption: %s (OFV=%.2f)\n",
+                current_best_model,
+                all_completed$ofv[which.min(all_completed$ofv)]))
+  }
+
   # ===================================================================
   # FINAL SUMMARY
   # ===================================================================
