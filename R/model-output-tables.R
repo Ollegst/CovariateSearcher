@@ -249,7 +249,8 @@ get_param2 <- function(model_number,
     dplyr::select(parameter_names, Parameter, RSE, fixed) %>%
     dplyr::left_join(shrinkage_df, by = "parameter_names") %>%
     dplyr::bind_rows(OFV) %>%
-    dplyr::rowwise()
+    dplyr::rowwise() %>%
+    dplyr::mutate(RSE = ifelse(fixed == TRUE, NA, RSE))
 
   # Add labels and comments if spec_pk is provided
   if (!is.null(spec_pk)) {
