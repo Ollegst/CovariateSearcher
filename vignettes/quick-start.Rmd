@@ -190,7 +190,8 @@ results <- run_automated_scm_testing(
   base_model_id = "run1",
   forward_p_value = 0.01,    # More stringent (ΔOFV > 6.63)
   backward_p_value = 0.001,  # Very stringent (ΔOFV > 10.83)
-  rse_threshold = 30         # Stricter RSE requirement
+  rse_threshold = 30,        # Stricter RSE requirement
+  require_cov_step = TRUE    # Require successful covariance step
 )
 ```
 
@@ -237,7 +238,8 @@ results <- run_automated_scm_testing(
 results <- run_automated_scm_testing(
   search_state = search_state,
   base_model_id = "run1",
-  rse_threshold = 100  # More lenient
+  rse_threshold = 100,        # More lenient
+  require_cov_step = FALSE    # Skip covariance step check
 )
 ```
 

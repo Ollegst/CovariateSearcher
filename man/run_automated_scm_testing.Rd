@@ -13,6 +13,7 @@ run_automated_scm_testing(
   forward_p_value = NULL,
   backward_p_value = NULL,
   rse_threshold = NULL,
+  require_cov_step = TRUE,
   auto_submit = TRUE,
   auto_retry = TRUE,
   save_checkpoints = TRUE,
@@ -50,6 +51,9 @@ If NULL, uses search_state$search_config$backward_p_value (default: 0.01, more s
 
 \item{rse_threshold}{Numeric. Maximum RSE threshold as percentage.
 If NULL, uses search_state$search_config$max_rse_threshold (default: 50)}
+
+\item{require_cov_step}{Logical. Whether to require a successful covariance step
+(presence of .cov file) for a model to be considered completed (default: TRUE)}
 
 \item{auto_submit}{Logical. Whether to automatically submit models to cluster (default: TRUE)}
 

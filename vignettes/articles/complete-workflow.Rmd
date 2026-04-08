@@ -91,6 +91,7 @@ search_state <- initialize_covariate_search(
   full_scm = FALSE,           # This runs ONLY forward selection
   forward_p_value = 0.05,
   rse_threshold = 50,
+  require_cov_step = TRUE,
   auto_submit = TRUE,
   auto_retry = TRUE
 )

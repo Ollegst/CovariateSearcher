@@ -27,6 +27,8 @@
 #'   If NULL, uses search_state$search_config$backward_p_value (default: 0.01, more stringent)
 #' @param rse_threshold Numeric. Maximum RSE threshold as percentage.
 #'   If NULL, uses search_state$search_config$max_rse_threshold (default: 50)
+#' @param require_cov_step Logical. Whether to require a successful covariance step
+#'   (presence of .cov file) for a model to be considered completed (default: TRUE)
 #' @param auto_submit Logical. Whether to automatically submit models to cluster (default: TRUE)
 #' @param auto_retry Logical. Whether to enable automatic retry for failed models (default: TRUE)
 #' @param save_checkpoints Logical. Whether to save state after each major step (default: TRUE)
@@ -42,6 +44,7 @@ run_automated_scm_testing <- function(search_state,
                                       forward_p_value = NULL,
                                       backward_p_value = NULL,
                                       rse_threshold = NULL,
+                                      require_cov_step = TRUE,
                                       auto_submit = TRUE,
                                       auto_retry = TRUE,
                                       save_checkpoints = TRUE,
@@ -98,7 +101,9 @@ run_automated_scm_testing <- function(search_state,
   if (!is.null(rse_threshold) && (rse_threshold <= 0 || rse_threshold > 100)) {
     stop("rse_threshold must be between 0 and 100")
   }
-
+  if (!is.logical(require_cov_step)) {
+    stop("require_cov_step must be TRUE or FALSE")
+  }
 
   # Set defaults with proper null coalescing
   if (is.null(forward_p_value)) {
@@ -115,6 +120,7 @@ run_automated_scm_testing <- function(search_state,
   search_state$search_config$forward_p_value <- forward_p_value
   search_state$search_config$backward_p_value <- backward_p_value
   search_state$search_config$max_rse_threshold <- rse_threshold
+  search_state$search_config$require_cov_step <- require_cov_step
 
   # Calculate ΔOFV thresholds for display (df=1 for typical single parameter)
   forward_ofv_threshold_display <- pvalue_to_threshold(forward_p_value, df = 1)
@@ -136,6 +142,7 @@ run_automated_scm_testing <- function(search_state,
   cat(sprintf("Forward ΔOFV threshold: %.2f\n", forward_ofv_threshold_display))
   cat(sprintf("Backward ΔOFV threshold: %.2f\n", backward_ofv_threshold_display))
   cat(sprintf("RSE threshold: %d%%\n", rse_threshold))
+  cat(sprintf("Require covariance step: %s\n", require_cov_step))
   cat(sprintf("Auto-retry enabled: %s\n", auto_retry))
   cat(sprintf("Checkpoints enabled: %s\n", save_checkpoints))
   cat(sprintf("Final testing enabled: %s\n", final_testing))

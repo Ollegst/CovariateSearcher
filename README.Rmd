@@ -43,6 +43,7 @@ result <- run_automated_scm_testing(
     forward_p_value = 0.05, 	                  # p-value for the forward selection	
     backward_p_value = 0.01,                    # p-value for the backward elimination
     rse_threshold = 50,                         # RSE threshold
+    require_cov_step = TRUE,                    # Require successful covariance step
     auto_submit = TRUE,                         # if FALSE – only model creation 
     auto_retry = TRUE,                          # Retry model in case of failure
     save_checkpoints = TRUE,                    # Save each step
@@ -104,6 +105,7 @@ result <- run_automated_scm_testing(
     forward_p_value = 0.05, 	                  # p-value for the forward selection	
     backward_p_value = 0.01,                    # p-value for the backward elimination
     rse_threshold = 50,                         # RSE threshold
+    require_cov_step = TRUE,                    # Require successful covariance step
     auto_submit = TRUE,                         # if FALSE – only model creation 
     auto_retry = TRUE,                          # Retry model in case of failure
     save_checkpoints = TRUE,                    # Save each step
@@ -202,6 +204,7 @@ results <- full_scm_search(
   starting_phase = "backward",
   full_scm = FALSE,            # This runs ONLY the specified phase
   backward_p_value = 0.01,
+  require_cov_step = TRUE,
   auto_submit = TRUE,
   auto_retry = TRUE
 )
@@ -216,6 +219,7 @@ results <- full_scm_search(
   full_scm = FALSE,           # This runs ONLY forward selection
   forward_p_value = 0.05,
   rse_threshold = 50,
+  require_cov_step = TRUE,
   auto_submit = TRUE,
   auto_retry = TRUE
 )
@@ -232,6 +236,7 @@ results <- full_scm_search(
 | `forward_p_value`  | 0.05       | 0.001-0.1               |
 | `backward_p_value` | 0.01       | 0.001-0.1               |
 | `rse_threshold`    | 50         | 0-100                   |
+| `require_cov_step` | TRUE       | TRUE, FALSE             |
 | `auto_submit`      | TRUE       | TRUE, FALSE             |
 | `auto_retry`       | TRUE       | TRUE, FALSE             |
 
@@ -381,7 +386,8 @@ scm_type = "selective"
 ```r
 forward_p_value = 0.01,    # More stringent
 backward_p_value = 0.001,  # Very stringent
-rse_threshold = 30         # Stricter
+rse_threshold = 30,        # Stricter
+require_cov_step = FALSE   # Skip covariance step check
 ```
 
 ### Resume Interrupted
@@ -398,6 +404,7 @@ results <- run_backward_elimination(
 ## 📚 Documentation
 
 Full guide: `CovariateSearcher_USER_GUIDE.md`
+For detailed examples and advanced usage, see the [complete documentation](https://ollegst.github.io/CovariateSearcher/).
 
 Help in R:
 ```r

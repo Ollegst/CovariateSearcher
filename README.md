@@ -1,7 +1,7 @@
 CovariateSearcher: Quick Reference
 ================
 CovariateSearcher Package
-2026-03-08
+2026-04-08
 
 ## 🚀 Minimal Working Example
 
@@ -29,6 +29,7 @@ result <- run_automated_scm_testing(
     forward_p_value = 0.05,                       # p-value for the forward selection   
     backward_p_value = 0.01,                    # p-value for the backward elimination
     rse_threshold = 50,                         # RSE threshold
+    require_cov_step = TRUE,                    # Require successful covariance step
     auto_submit = TRUE,                         # if FALSE – only model creation 
     auto_retry = TRUE,                          # Retry model in case of failure
     save_checkpoints = TRUE,                    # Save each step
@@ -58,7 +59,9 @@ covariate_search <- validate_covariate_search_table(
   data_file = data_file
 )
 
-# 1. Prepare base model
+#Explain code below              
+
+# 1. Prepare base model     
 prep <- prepare_search_base_model(
   base_model_path = "run1",
   covariate_tags = c("beta_WT_CL", "beta_AGE_V2", "beta_SEX_KA"),
@@ -89,6 +92,7 @@ result <- run_automated_scm_testing(
     forward_p_value = 0.05,                       # p-value for the forward selection   
     backward_p_value = 0.01,                    # p-value for the backward elimination
     rse_threshold = 50,                         # RSE threshold
+    require_cov_step = TRUE,                    # Require successful covariance step
     auto_submit = TRUE,                         # if FALSE – only model creation 
     auto_retry = TRUE,                          # Retry model in case of failure
     save_checkpoints = TRUE,                    # Save each step
@@ -196,6 +200,7 @@ results <- full_scm_search(
   starting_phase = "backward",
   full_scm = FALSE,            # This runs ONLY the specified phase
   backward_p_value = 0.01,
+  require_cov_step = TRUE,
   auto_submit = TRUE,
   auto_retry = TRUE
 )
@@ -212,6 +217,7 @@ results <- full_scm_search(
  full_scm = FALSE,           # This runs ONLY forward selection
  forward_p_value = 0.05,
  rse_threshold = 50,
+ require_cov_step = TRUE,
  auto_submit = TRUE,
  auto_retry = TRUE
 )
@@ -229,6 +235,7 @@ results <- full_scm_search(
 | `forward_p_value`  | 0.05       | 0.001-0.1               |
 | `backward_p_value` | 0.01       | 0.001-0.1               |
 | `rse_threshold`    | 50         | 0-100                   |
+| `require_cov_step` | TRUE       | TRUE, FALSE             |
 | `auto_submit`      | TRUE       | TRUE, FALSE             |
 | `auto_retry`       | TRUE       | TRUE, FALSE             |
 
@@ -367,7 +374,8 @@ IIV_V ; ; RATIO
 ``` r
 forward_p_value = 0.01,    # More stringent
 backward_p_value = 0.001,  # Very stringent
-rse_threshold = 30         # Stricter
+rse_threshold = 30,        # Stricter
+require_cov_step = FALSE   # Skip covariance step check
 ```
 
 ### Resume Interrupted
@@ -384,7 +392,9 @@ results <- run_backward_elimination(
 
 ## 📚 Documentation
 
-Full guide: `CovariateSearcher_USER_GUIDE.md`
+Full guide: `CovariateSearcher_USER_GUIDE.md` For detailed examples and
+advanced usage, see the [complete
+documentation](https://ollegst.github.io/CovariateSearcher/).
 
 Help in R:
 
