@@ -83,44 +83,23 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
     latest_covariate_name <- NULL
     latest_covariate_tag <- NULL
 
-    if (!is.na(parent_model) && nchar(parent_model) > 0) {
-      # Get covariates in parent vs original to find what was added
-      parent_covs <- get_model_covariates(search_state, parent_model)
-      original_covs <- get_model_covariates(search_state, original_model_name)
-      added_covs <- setdiff(original_covs, parent_covs)
+    latest_covariate_tag <- original_row$covariate_tested[1]
 
-      if (length(added_covs) > 0) {
-        latest_covariate_name <- added_covs[1]  # e.g., "WT_CL"
-        log_msg(sprintf("Latest covariate identified: %s", latest_covariate_name))
+    if (!is.na(latest_covariate_tag) && nchar(latest_covariate_tag) > 0) {
+      latest_covariate_name <- search_state$tags[[latest_covariate_tag]] %||% latest_covariate_tag
+      log_msg(sprintf("Latest covariate identified: %s", latest_covariate_tag))
+      log_msg(sprintf("Covariate name: %s", latest_covariate_name))
 
-        # Convert covariate name back to tag
-        for (tag_name in names(search_state$tags)) {
-          if (search_state$tags[[tag_name]] == latest_covariate_name) {
-            latest_covariate_tag <- tag_name
-            break
-          }
-        }
+      # Call the THETA adjustment function
+      adjustment_result <- adjust_theta_for_covariate(search_state, retry_model_name, latest_covariate_tag)
 
-        if (!is.null(latest_covariate_tag)) {
-          log_msg(sprintf("Covariate tag found: %s", latest_covariate_tag))
-
-          # Call the THETA adjustment function
-          adjustment_result <- adjust_theta_for_covariate(search_state, retry_model_name, latest_covariate_tag)
-
-          if (adjustment_result$success) {
-            log_msg(sprintf("✓ THETA adjustment successful: %d lines modified", adjustment_result$theta_lines_modified))
-          } else {
-            log_msg(sprintf("⚠️  THETA adjustment failed: %s", adjustment_result$message))
-          }
-        } else {
-          log_msg("⚠️  Could not find covariate tag - using original values")
-        }
-
+      if (adjustment_result$success) {
+        log_msg(sprintf("✓ THETA adjustment successful: %d lines modified", adjustment_result$theta_lines_modified))
       } else {
-        log_msg("⚠️  No added covariate found - using original values")
+        log_msg(sprintf("⚠️  THETA adjustment failed: %s", adjustment_result$message))
       }
     } else {
-      log_msg("⚠️  No parent model info - using original values")
+      log_msg("⚠️  No covariate tag found in model row - using original values")
     }
     step_info <- sprintf("Step %d Retry + %s", original_step, latest_covariate_name)
     retry_mod <- bbr::replace_all_notes(retry_mod, .notes = step_info)
@@ -266,26 +245,40 @@ adjust_theta_for_covariate <- function(search_state, model_name, covariate_tag) 
     }
 
     # Find matching covariate in covariate_search to get the beta name
-    matching_row <- search_state$covariate_search[
+    matching_rows <- search_state$covariate_search[
       grepl(paste0("_", covariate_value, "$"), search_state$covariate_search$cov_to_test), ]
 
-    if (nrow(matching_row) == 0) {
+    if (nrow(matching_rows) == 0) {
       return(list(success = FALSE, message = paste("No matching covariate found for", covariate_value)))
     }
 
-    cov_info <- matching_row[1, ]
-    cov_to_test <- cov_info$cov_to_test  # e.g., "beta_WT_CL"
+    cov_to_test_values <- unique(matching_rows$cov_to_test)
+    cov_to_test_values <- cov_to_test_values[!is.na(cov_to_test_values) & cov_to_test_values != ""]
 
-    cat(sprintf("    Looking for THETA with: %s\n", cov_to_test))
+    if (length(cov_to_test_values) == 0) {
+      return(list(success = FALSE, message = paste("No valid covariate terms found for", covariate_value)))
+    }
+
+    cat(sprintf("    Looking for THETA with: %s\n", paste(cov_to_test_values, collapse = ", ")))
 
     # Find and modify THETA lines
     theta_lines_modified <- 0
 
-    for (i in 1:length(modelcode)) {
-      line <- modelcode[i]
+    token_match_counts <- stats::setNames(integer(length(cov_to_test_values)), cov_to_test_values)
 
-      if (grepl(paste0("\\b", cov_to_test, "\\b"), line) ||
-          grepl(paste0("\\b", cov_to_test, "_[^\\s;]+"), line)) {
+    for (i in seq_along(modelcode)) {
+      line <- modelcode[i]
+      matched_token <- NULL
+
+      for (cov_to_test in cov_to_test_values) {
+        if (grepl(paste0("\\b", cov_to_test, "\\b"), line) ||
+            grepl(paste0("\\b", cov_to_test, "_[^\\s;]+"), line)) {
+          matched_token <- cov_to_test
+          break
+        }
+      }
+
+      if (!is.null(matched_token)) {
 
         original_line <- line
 
@@ -319,6 +312,7 @@ adjust_theta_for_covariate <- function(search_state, model_name, covariate_tag) 
           if (modified_line != original_line) {
             modelcode[i] <- modified_line
             theta_lines_modified <- theta_lines_modified + 1
+            token_match_counts[matched_token] <- token_match_counts[matched_token] + 1
 
             cat(sprintf("    THETA line %d modified:\n", i))
             cat(sprintf("      Before: %s\n", trimws(original_line)))
@@ -330,6 +324,11 @@ adjust_theta_for_covariate <- function(search_state, model_name, covariate_tag) 
 
     if (theta_lines_modified == 0) {
       return(list(success = FALSE, message = "No THETA lines found for covariate"))
+    }
+
+    matched_tokens <- names(token_match_counts[token_match_counts > 0])
+    if (length(matched_tokens) > 0) {
+      cat(sprintf("    Matched covariate terms: %s\n", paste(matched_tokens, collapse = ", ")))
     }
 
     # Update $TABLE FILE= names to match retry model number
@@ -356,7 +355,8 @@ adjust_theta_for_covariate <- function(search_state, model_name, covariate_tag) 
     return(list(
       success = TRUE,
       theta_lines_modified = theta_lines_modified,
-      covariate = covariate_value
+      covariate = covariate_value,
+      matched_terms = matched_tokens
     ))
 
   }, error = function(e) {
