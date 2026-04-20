@@ -624,13 +624,14 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
       final_current_status
     })
 
-    if (nrow(display_models) <= 10) {
-      for (i in 1:nrow(display_models)) {
+    if (nrow(display_models) > 0 && nrow(display_models) <= 10) {
+      for (i in seq_len(nrow(display_models))) {
         row <- display_models[i, ]
 
-        status_icon <- if (row$status == "completed") {
+        row_status <- if (!is.null(row$status) && length(row$status) > 0) row$status else NA_character_
+        status_icon <- if (!is.na(row_status) && row_status == "completed") {
           "✅"
-        } else if (row$status %in% c("failed", "estimation_error")) {
+        } else if (!is.na(row_status) && row_status %in% c("failed", "estimation_error")) {
           "❌"
         } else {
           "🔄"

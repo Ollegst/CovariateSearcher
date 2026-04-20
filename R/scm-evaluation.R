@@ -128,9 +128,9 @@ select_best_model <- function(search_state, model_names, p_value = NULL, rse_thr
 
   # Print results
   cat("📋 Evaluation Results:\n")
-  for (i in 1:nrow(evaluation_results)) {
+  for (i in seq_len(nrow(evaluation_results))) {
     row <- evaluation_results[i, ]
-    status_icon <- if (row$overall_significant) "✅" else "❌"
+    status_icon <- if (isTRUE(row$overall_significant)) "✅" else "❌"
     best_icon <- if (length(row$model_name) > 0 && !is.na(row$model_name) &&
                      !is.null(best_model) && !is.na(best_model)) {
       if (row$model_name == best_model) " 🏆" else ""

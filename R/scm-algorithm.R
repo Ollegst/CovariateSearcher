@@ -105,7 +105,7 @@ get_dropped_covariates <- function(search_state, current_model_id, tested_covari
 #' @export
 get_excluded_covariates <- function(search_state, return_details = FALSE) {
 
-  excluded_models <- search_state$search_database[search_state$search_database$excluded_from_step == TRUE, ]
+  excluded_models <- search_state$search_database[which(search_state$search_database$excluded_from_step == TRUE), ]
 
   if (nrow(excluded_models) == 0) {
     if (return_details) {
