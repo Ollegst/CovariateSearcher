@@ -377,9 +377,21 @@ run_automated_scm_testing <- function(search_state,
     character(0)
   })
 
-  # Get excluded covariates
+  # Get excluded covariates and keep only forward-phase failures
   excluded_covariates <- tryCatch({
-    get_excluded_covariates(search_state)
+    excluded_all <- get_excluded_covariates(search_state)
+
+    forward_excluded <- search_state$search_database[
+      which(search_state$search_database$excluded_from_step == TRUE &
+              search_state$search_database$phase == "forward"),
+      , drop = FALSE
+    ]
+
+    forward_covariates <- unique(forward_excluded$covariate_tested)
+    forward_covariates <- forward_covariates[!is.na(forward_covariates) & forward_covariates != ""]
+
+    # Keep original helper behavior but report only forward failures
+    intersect(excluded_all, forward_covariates)
   }, error = function(e) {
     cat(sprintf("Warning: Could not get excluded covariates: %s\n", e$message))
     character(0)
@@ -490,8 +502,7 @@ run_automated_scm_testing <- function(search_state,
     if (!final_testing) {
       cat("\n⏭️ PHASE 3: Final testing disabled\n")
     } else if (run_final_backward) {
-      cat("\n⏭️ PHASE 3: Final testing not applicable for backward elimination\n")
-      cat("(Excluded covariates would be handled during backward elimination process)\n")
+      # Final testing is intentionally skipped when final backward elimination runs.
     } else {
       cat("\n⏭️ PHASE 3: No forward selection performed\n")
     }
@@ -530,7 +541,7 @@ run_automated_scm_testing <- function(search_state,
   }
 
   final_summary <- sprintf(
-    "%s (%s) completed in %.1f minutes. Final model: %s with %d covariates (%s). %d total models created, %d excluded covariates.",
+    "%s (%s) completed in %.1f minutes. Final model: %s with %d covariates (%s). %d total models created, %d excluded forward covariates.",
     workflow_desc,
     scm_type,
     total_time,
@@ -559,7 +570,7 @@ run_automated_scm_testing <- function(search_state,
   }
 
   if (length(excluded_covariates) > 0) {
-    cat(sprintf("🚫 Excluded covariates: %s\n", paste(excluded_covariates, collapse = ", ")))
+    cat(sprintf("🚫 Excluded covariates (forward failures): %s\n", paste(excluded_covariates, collapse = ", ")))
   }
 
   cat(sprintf("💾 Checkpoints saved: %d files\n", length(checkpoint_files)))

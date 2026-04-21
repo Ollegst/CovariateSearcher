@@ -95,17 +95,24 @@ get_dropped_covariates <- function(search_state, current_model_id, tested_covari
 
 
 
-#' Get Excluded Covariates (ENHANCED VERSION - FIXED COLUMN REFERENCE)
+#' Get Excluded Covariates
 #'
 #' @title Get list of covariates excluded from current step with details
 #' @description Returns covariates that have been excluded due to estimation issues
 #' @param search_state List containing covariate search state and configuration
 #' @param return_details Logical. Whether to return detailed exclusion info (default: FALSE)
+#' @param phase_filter Character vector of phases to include (e.g., "forward").
+#'   If NULL, include exclusions from all phases.
 #' @return Character vector of excluded covariate names, or data.frame if return_details=TRUE
 #' @export
-get_excluded_covariates <- function(search_state, return_details = FALSE) {
+get_excluded_covariates <- function(search_state, return_details = FALSE, phase_filter = NULL) {
 
   excluded_models <- search_state$search_database[which(search_state$search_database$excluded_from_step == TRUE), ]
+
+  # Optionally limit exclusions to specific phases (e.g., forward only)
+  if (!is.null(phase_filter) && "phase" %in% names(excluded_models) && nrow(excluded_models) > 0) {
+    excluded_models <- excluded_models[excluded_models$phase %in% phase_filter, , drop = FALSE]
+  }
 
   if (nrow(excluded_models) == 0) {
     if (return_details) {
