@@ -422,9 +422,36 @@ validate_base_model_for_search <- function(base_model_path,
   model_status <- get_model_status_from_files(model_path)
 
   if (!identical(model_status, "completed")) {
+    lst_info <- tryCatch(
+      read_nonmem_lst(model_path),
+      error = function(e) list(found = FALSE, error_message = paste("LST read error:", e$message))
+    )
+
+    ext_info <- tryCatch(
+      read_nonmem_ext(model_path),
+      error = function(e) list(found = FALSE, error = paste("EXT read error:", e$message), ofv = NA_real_)
+    )
+
+    failure_reason <- NULL
+
+    if (!is.null(lst_info$error_message) && !is.na(lst_info$error_message) && nzchar(lst_info$error_message)) {
+      failure_reason <- lst_info$error_message
+    } else if (!is.null(lst_info$error_excerpt) && !is.na(lst_info$error_excerpt) && nzchar(lst_info$error_excerpt)) {
+      failure_reason <- paste("LST error excerpt:", lst_info$error_excerpt)
+    } else if (!is.null(ext_info$error) && !is.na(ext_info$error) && nzchar(ext_info$error)) {
+      failure_reason <- ext_info$error
+    } else if (isFALSE(ext_info$found)) {
+      failure_reason <- "EXT results missing or unreadable"
+    } else if (is.null(ext_info$ofv) || length(ext_info$ofv) == 0 || is.na(ext_info$ofv[1])) {
+      failure_reason <- "OFV missing or unreadable in EXT results"
+    } else {
+      failure_reason <- "No additional diagnostic details available"
+    }
+
     stop(
       "Base model '", base_model_path,
-      "' is not ready for covariate search. Current status: ", model_status
+      "' is not ready for covariate search. Current status: ", model_status,
+      ". Reason: ", failure_reason
     )
   }
 
