@@ -202,6 +202,7 @@ get_param2 <- function(model_number,
     dplyr::mutate(dplyr::across(where(is.numeric))) %>%
     dplyr::filter(random_effect_sd != 0 | is.na(random_effect_sd) | diag == TRUE) %>%
     dplyr::mutate(
+      parameter_names2  = parameter_names,
       parameter_names = rbind(
         params_list$THETAS,
         params_list$OMEGAS,
@@ -223,6 +224,7 @@ get_param2 <- function(model_number,
         TRUE ~ stderr                         # Keep original for others
       )
     ) %>%
+    dplyr::filter(!(parameter_names2 == "SIGMA(1,1)" & fixed == TRUE)) %>%
     dplyr::mutate(
       Parameter = dplyr::case_when(
         is.na(random_effect_sd) & trans == "RATIO" ~ estimate,
@@ -236,13 +238,14 @@ get_param2 <- function(model_number,
         diag == TRUE ~ 100 * stderr * exp(estimate) / (2 * exp(estimate) - 1),
         diag == FALSE ~ 100 * stderr / estimate
       )
-    )
+    ) %>%
+    dplyr::select(-parameter_names2)
 
   # Extract shrinkage for diagonal elements
   shrinkage_df <- dplyr::filter(param_est, diag == TRUE) %>%
     dplyr::select(parameter_names, shrinkage) %>%
     dplyr::rename(SHRINKAGE = shrinkage) %>%
-    dplyr::mutate(SHRINKAGE = shrinkage_value)
+    dplyr::mutate(SHRINKAGE = shrinkage_value[1:dplyr::n()])
 
   # Combine all parameters
   param_est <- param_est %>%
@@ -254,13 +257,23 @@ get_param2 <- function(model_number,
 
   # Add labels and comments if spec_pk is provided
   if (!is.null(spec_pk)) {
+    non_beta_params <- param_est$parameter_names[!grepl("^beta_", param_est$parameter_names) &
+                                                   param_est$parameter_names != "OFV"]
+    missing_from_spec <- non_beta_params[!non_beta_params %in% names(spec_pk)]
+
+    if (length(missing_from_spec) > 0) {
+      cat(sprintf(
+        "Parameters not found in spec_pk: %s",
+        paste(missing_from_spec, collapse = ", ")
+      ))
+    }
     param_est <- param_est %>%
       dplyr::mutate(
         comment = dplyr::case_when(
-          parameter_names %in% names(spec_pk) ~ {
-            comment_value <- spec_pk[[parameter_names]]$comment
-            if (!is.null(comment_value)) comment_value else NA_character_
-          },
+          parameter_names %in% names(spec_pk) ~ sapply(parameter_names, function(p) {
+            val <- spec_pk[[p]]$comment
+            if (!is.null(val)) val else NA_character_
+          }),
           TRUE ~ "Parameter-Covariate relationships"
         ),
         label = dplyr::case_when(
@@ -358,15 +371,15 @@ get_param2 <- function(model_number,
               }
             }
           },
-          parameter_names %in% names(spec_pk) ~ {
-            if (!is.null(spec_pk[[parameter_names]]) && !is.null(spec_pk[[parameter_names]]$unit)) {
-              paste0(spec_pk[[parameter_names]]$short, " (", spec_pk[[parameter_names]]$unit, ")")
-            } else if (!is.null(spec_pk[[parameter_names]]) && !is.null(spec_pk[[parameter_names]]$short)) {
-              spec_pk[[parameter_names]]$short
+          parameter_names %in% names(spec_pk) ~ sapply(parameter_names, function(p) {
+            if (!is.null(spec_pk[[p]]$unit)) {
+              paste0(spec_pk[[p]]$short, " (", spec_pk[[p]]$unit, ")")
+            } else if (!is.null(spec_pk[[p]]$short)) {
+              spec_pk[[p]]$short
             } else {
-              parameter_names
+              p
             }
-          },
+          }, USE.NAMES = FALSE),
           TRUE ~ parameter_names
         )
       ) %>%
@@ -437,6 +450,7 @@ get_param2 <- function(model_number,
 
   return(param_est)
 }
+
 
 
 # FINAL CORRECTED model_report WITH COMPLETE ERROR HANDLING
