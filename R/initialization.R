@@ -115,10 +115,14 @@ initialize_covariate_search <- function(base_model_path,
     # Find DATA line (case-insensitive, may have spaces)
     data_line <- grep("^\\s*\\$DATA", modelcode, ignore.case = TRUE, value = TRUE)
     if (length(data_line) > 0) {
-      # Extract filename from DATA statement (e.g., "$DATA mydata.csv IGNORE=@")
-      data_filename <- trimws(sub("^\\$DATA\\s+([^\\s]+).*$", "\\1", data_line[1], ignore.case = TRUE))
+      # Extract filename token from DATA statement (e.g., "$DATA mydata.csv IGNORE=@")
+      data_tokens <- strsplit(trimws(data_line[1]), "[[:space:]]+")[[1]]
+      if (length(data_tokens) < 2) {
+        stop("Could not parse $DATA line in model: ", data_line[1])
+      }
+      data_filename <- gsub("^['\"]|['\"]$", "", data_tokens[2])
       # Compare using file names only (ignore relative/absolute directory paths)
-      model_data_basename <- basename(gsub("^['\"]|['\"]$", "", data_filename))
+      model_data_basename <- basename(data_filename)
       user_filename <- basename(data_file_path)
       
       # Compare file names only, case-insensitive
