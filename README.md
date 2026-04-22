@@ -25,7 +25,7 @@ search_state <- initialize_covariate_search(
 result <- run_automated_scm_testing(
         search_state = search_state,
         scm_type = "selective",                     # or "standard"  
-    starting_phase = "backward",                # Starting phase
+    starting_phase = "forward",                 # Starting phase forward/backward
     full_scm = TRUE,                            # Run complete workflow 
     forward_p_value = 0.05,                       # p-value for the forward selection   
     backward_p_value = 0.01,                    # p-value for the backward elimination
@@ -162,6 +162,13 @@ block.
 | CL        | AGE       | con    | linear  | NA     | 50        | FALSE          |
 | CL        | ECOG      | cat    | linear  | 0;1;2  | 1         | FALSE          |
 | V2        | WT        | con    | power   | NA     | 70        | FALSE          |
+
+**FORMULA options for continuous covariates (`STATUS = "con"`):** -
+`linear`: `PARAM * (1 + (COV - REF) * THETA)` - `power`:
+`PARAM * (COV / REF) ** THETA` - `power1`:
+`PARAM * (COV / REF) ** THETA` with THETA fixed to 1 - `power0.75`:
+`PARAM * (COV / REF) ** THETA` with THETA fixed to 0.75 - `exponential`:
+`PARAM * EXP(THETA * (COV - REF))`
 
 ------------------------------------------------------------------------
 

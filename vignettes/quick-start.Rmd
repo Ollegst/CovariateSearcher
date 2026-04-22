@@ -92,7 +92,7 @@ link : data/derived/covariate_search.csv (optional)
 - `PARAMETER`: Model parameter to test covariate on (e.g., CL, V, KA)
 - `COVARIATE`: Covariate column name from dataset
 - `STATUS`: "continuous" or "categorical"
-- `FORMULA`: "linear" or "power" (for continuous covariates)
+- `FORMULA`: "linear", "power", or "exponential" (for continuous covariates)
 - `LEVELS`: Number of categories (for categorical), NA otherwise
 - `REFERENCE`: Reference category value (for categorical), NA otherwise
 - `TIME_DEPENDENT`: TRUE if covariate changes over time, usually FALSE

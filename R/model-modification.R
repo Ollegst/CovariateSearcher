@@ -212,6 +212,8 @@ create_model_info_log <- function(search_state, model_name, parent_model, covari
     formula_display <- sprintf("* (%s/%s)**THETA(3)", cov_info$COVARIATE, cov_info$REFERENCE)
   } else if (cov_info$STATUS == "con" & cov_info$FORMULA == "linear") {
     formula_display <- sprintf("* (1 + (%s-%s) * THETA(3))", cov_info$COVARIATE, cov_info$REFERENCE)
+  } else if (cov_info$STATUS == "con" & cov_info$FORMULA == "exponential") {
+    formula_display <- sprintf("* EXP(THETA(N) * (%s-%s))", cov_info$COVARIATE, cov_info$REFERENCE)
   } else if (cov_info$STATUS == "cat") {
     formula_display <- sprintf("* beta_%s_%s", cov_info$COVARIATE, cov_info$PARAMETER)
   } else {
@@ -329,6 +331,7 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
     cov_status == "con" & cov_formula == "power" ~ "2",
     cov_status == "con" & cov_formula == "power1" ~ "5",
     cov_status == "con" & cov_formula == "power0.75" ~ "6",
+    cov_status == "con" & cov_formula == "exponential" ~ "4",
     .default = "Please check covariate status and formula"
   )
 
@@ -345,6 +348,7 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   # Generate formula based on FLAG
   if(FLAG == "2") formule <- paste0(' * (',cova,'/',ref,')**THETA(', newtheta ,')')
   if(FLAG == "3") formule <- paste0(' * (1 + (',cova,'-',ref, ') * THETA(',newtheta ,'))')
+  if(FLAG == "4") formule <- paste0(" * EXP(THETA(", newtheta, ") * (", cova, "-", ref, "))")
   if(FLAG == "5") formule <- paste0(' * (',cova,'/',ref,')** THETA(', newtheta ,')')
   if(FLAG == "6") formule <- paste0(' * (',cova,'/',ref,')** THETA(', newtheta ,')')
 
@@ -430,6 +434,7 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   # Generate formula based on FLAG
   if(FLAG == "2") formule <- paste0(' * (',cova,'/',ref,')**THETA(', newtheta ,')')
   if(FLAG == "3") formule <- paste0(' * (1 + (',cova,'-',ref, ') * THETA(',newtheta ,'))')
+  if(FLAG == "4") formule <- paste0(" * EXP(THETA(", newtheta, ") * (", cova, "-", ref, "))")
   if(FLAG == "5") formule <- paste0(' * (',cova,'/',ref,')** THETA(', newtheta ,')')
   if(FLAG == "6") formule <- paste0(' * (',cova,'/',ref,')** THETA(', newtheta ,')')
 
@@ -1009,6 +1014,8 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
         pattern2 <- paste0("\\s*\\*\\s*\\(", cova, "/[0-9\\.]+\\)\\*\\*THETA\\(", theta_num, "\\)")
         # Pattern 3: * COVARIATE_VARIABLE
         pattern3 <- paste0("\\s*\\*\\s*", covariate_to_remove, "\\b")
+        # Pattern 4: * EXP(THETA(X) * (COVARIATE-REF))
+        pattern4 <- paste0("\\s*\\*\\s*EXP\\(THETA\\(", theta_num, "\\)\\s*\\*\\s*\\(", cova, "-[0-9\\.]+\\)\\)")
 
         if (grepl(pattern1, modified_line)) {
           modified_line <- gsub(pattern1, "", modified_line)
@@ -1018,6 +1025,9 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
           line_changed <- TRUE
         } else if (grepl(pattern3, modified_line)) {
           modified_line <- gsub(pattern3, "", modified_line)
+          line_changed <- TRUE
+        } else if (grepl(pattern4, modified_line)) {
+          modified_line <- gsub(pattern4, "", modified_line)
           line_changed <- TRUE
         }
       }

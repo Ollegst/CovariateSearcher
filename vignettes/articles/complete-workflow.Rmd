@@ -66,6 +66,13 @@ covariate_config <- tribble(
 write.csv(covariate_config, "data/derived/covariate_search.csv", row.names = FALSE)
 ```
 
+**FORMULA options for continuous covariates (`STATUS = "con"`):**
+- `linear`: `PARAM * (1 + (COV - REF) * THETA)`
+- `power`: `PARAM * (COV / REF) ** THETA`
+- `power1`: `PARAM * (COV / REF) ** THETA` with THETA fixed to 1
+- `power0.75`: `PARAM * (COV / REF) ** THETA` with THETA fixed to 0.75
+- `exponential`: `PARAM * EXP(THETA * (COV - REF))`
+
 ## Step 2: Initialize Search
 
 ```{r initialize}

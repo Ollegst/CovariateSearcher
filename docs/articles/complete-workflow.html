@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">CovariateSearcher</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.15</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.18</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -129,6 +129,14 @@ Covariates (WT, AGE, SEX, etc.)</p>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/write.table.html" class="external-link">write.csv</a></span><span class="op">(</span><span class="va">covariate_config</span>, <span class="st">"data/derived/covariate_search.csv"</span>, row.names <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
+<p><strong>FORMULA options for continuous covariates
+(<code>STATUS = "con"</code>):</strong> - <code>linear</code>:
+<code>PARAM * (1 + (COV - REF) * THETA)</code> - <code>power</code>:
+<code>PARAM * (COV / REF) ** THETA</code> - <code>power1</code>:
+<code>PARAM * (COV / REF) ** THETA</code> with THETA fixed to 1 -
+<code>power0.75</code>: <code>PARAM * (COV / REF) ** THETA</code> with
+THETA fixed to 0.75 - <code>exponential</code>:
+<code>PARAM * EXP(THETA * (COV - REF))</code></p>
 </div>
 </div>
 <div class="section level3">

@@ -569,6 +569,19 @@ generate_tags_from_covariate_search <- function(covariate_search,
     stop(sprintf("Missing required columns: %s", paste(missing_cols, collapse = ", ")))
   }
 
+  # Validate FORMULA values for continuous covariates
+  valid_con_formulas <- c("linear", "power", "power1", "power0.75", "exponential")
+  invalid_formulas <- covariate_search_df %>%
+    dplyr::filter(.data$STATUS == "con" & !tolower(.data$FORMULA) %in% valid_con_formulas)
+
+  if (nrow(invalid_formulas) > 0) {
+    stop(sprintf(
+      "Invalid FORMULA value(s) for continuous covariates: %s\nValid options are: %s",
+      paste(unique(invalid_formulas$FORMULA), collapse = ", "),
+      paste(valid_con_formulas, collapse = ", ")
+    ))
+  }
+
   # Generate covariate tag entries
   generate_tag_entry <- function(row) {
     # Use beta_ prefix directly from cov_to_test
