@@ -12,7 +12,8 @@ prepare_search_base_model(
   covariate_search_path,
   models_folder = "models",
   idcol = "ID",
-  overwrite = TRUE
+  overwrite = TRUE,
+  lookup_file = NULL
 )
 }
 \arguments{
@@ -32,6 +33,9 @@ c("beta_WT_CL", "beta_AGE_V2")}
 \item{idcol}{Character. ID column name}
 
 \item{overwrite}{Logical. Overwrite existing model if present}
+
+\item{lookup_file}{Character or NULL. Optional path to lookup YAML for
+categorical labels. If NULL, defaults to data/spec/lookup.yaml.}
 }
 \value{
 List with status, model_name, model_path, log_file, covariates_added

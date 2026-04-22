@@ -12,10 +12,13 @@
 #' @param base_model_id Character. Base model identifier (e.g., "run1")
 #' @param covariate_tag Character. Covariate tag to add (e.g., "beta_cl_wt")
 #' @param step_number Integer. Optional step number (NULL for auto-calculation)
+#' @param lookup_file Character or NULL. Optional path to lookup YAML for
+#'   categorical labels. If NULL, uses search_state configuration/default.
 #' @return List with updated search_state and new model information
 #' @export
 add_covariate_to_model <- function(search_state, base_model_id, covariate_tag,
-                                   step_number = NULL) {
+                                   step_number = NULL,
+                                   lookup_file = NULL) {
   cat(sprintf("[+] Adding covariate %s to model %s\n", covariate_tag, base_model_id))
 
   # STEP 1: Validate inputs and calculate step number FIRST
@@ -92,7 +95,8 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag,
       id_var = search_state$idcol,
       data_file = search_state$data_file,
       covariate_search = search_state$covariate_search,
-      capture_log = TRUE
+      capture_log = TRUE,
+      lookup_file = lookup_file
     )
 
     search_state <- model_result$search_state
@@ -247,10 +251,14 @@ create_model_info_log <- function(search_state, model_name, parent_model, covari
 #' @param data_file Data.frame. Dataset for time-varying checks
 #' @param covariate_search Data.frame. Covariate search configuration
 #' @param capture_log Function. Logging function (optional)
+#' @param lookup_file Character or NULL. Optional path to lookup YAML for
+#'   categorical labels. If NULL, uses search_state$search_config$lookup_file
+#'   then defaults to data/spec/lookup.yaml.
 #' @return Updated search_state
 #' @export
 model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
-                          data_file, covariate_search, capture_log = FALSE) {
+                          data_file, covariate_search, capture_log = FALSE,
+                          lookup_file = NULL) {
 
   # Default logging function if none provided
   captured_log <- character(0)
@@ -269,6 +277,15 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   log_function(paste("=== Adding Covariate to Model File ==="))
   log_function(paste("Model:", ref_model))
   log_function(paste("Covariate parameter:", cov_on_param))
+
+  resolved_lookup_file <- if (!is.null(lookup_file)) {
+    lookup_file
+  } else if (!is.null(search_state$search_config) &&
+             !is.null(search_state$search_config$lookup_file)) {
+    search_state$search_config$lookup_file
+  } else {
+    file.path("data", "spec", "lookup.yaml")
+  }
 
   modelcode <- read_model_file(search_state, ref_model)
   original_file_path <- attr(modelcode, "file_path")
@@ -334,12 +351,11 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   # Handle categorical covariates (simplified for core module)
   thetanmulti <- tibble()
   if(FLAG == "1"){
-    # Try to load lookup.yaml for categorical labels (optional)
+    # Try to load lookup YAML for categorical labels (optional)
     lookup_values <- NULL
-    lookup_file <- file.path("data", "spec", "lookup.yaml")
-    if (file.exists(lookup_file)) {
+    if (!is.null(resolved_lookup_file) && file.exists(resolved_lookup_file)) {
       tryCatch({
-        lookup_data <- yaml::read_yaml(lookup_file)
+        lookup_data <- yaml::read_yaml(resolved_lookup_file)
         # Check if this covariate exists in lookup
         if (cova %in% names(lookup_data)) {
           lookup_info <- lookup_data[[cova]]
@@ -349,12 +365,14 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
               as.list(lookup_info$decode),
               as.character(lookup_info$values)
             )
-            log_function(paste("Found lookup values for", cova, "in lookup.yaml"))
+            log_function(paste("Found lookup values for", cova, "in", resolved_lookup_file))
           }
         }
       }, error = function(e) {
-        log_function(paste("Note: Could not use lookup.yaml:", e$message))
+        log_function(paste("Note: Could not use lookup file:", e$message))
       })
+    } else {
+      log_function(paste("No lookup file found at:", resolved_lookup_file, "(using numeric labels)"))
     }
     if (!cova %in% names(data_file)) {
       stop("Covariate '", cova, "' not found in data file. Available columns: ",
@@ -659,6 +677,8 @@ fix_theta_renumbering <- function(modelcode, theta_numbers_to_remove, log_functi
 #' @param models_folder Character. Models directory
 #' @param idcol Character. ID column name
 #' @param overwrite Logical. Overwrite existing model if present
+#' @param lookup_file Character or NULL. Optional path to lookup YAML for
+#'   categorical labels. If NULL, defaults to data/spec/lookup.yaml.
 #'
 #' @return List with status, model_name, model_path, log_file, covariates_added
 #' @export
@@ -669,7 +689,8 @@ prepare_search_base_model <- function(base_model_path,
                                       covariate_search_path,
                                       models_folder = "models",
                                       idcol = "ID",
-                                      overwrite = TRUE) {
+                                      overwrite = TRUE,
+                                      lookup_file = NULL) {
 
   cat("Preparing search base model with multiple covariates...\n")
 
@@ -721,6 +742,12 @@ prepare_search_base_model <- function(base_model_path,
   covariate_tags <- unique(covariate_tags)
   covariate_values <- unname(unlist(tags[covariate_tags]))
 
+  resolved_lookup_file <- if (!is.null(lookup_file)) {
+    lookup_file
+  } else {
+    file.path("data", "spec", "lookup.yaml")
+  }
+
   # ---------------------------------------------------------------------------
   # Step 3: Build minimal temporary state required by model_add_cov()
   # ---------------------------------------------------------------------------
@@ -730,7 +757,8 @@ prepare_search_base_model <- function(base_model_path,
     covariate_search = covariate_search,
     models_folder = models_folder,
     idcol = idcol,
-    tags = tags
+    tags = tags,
+    search_config = list(lookup_file = resolved_lookup_file)
   )
 
   # ---------------------------------------------------------------------------

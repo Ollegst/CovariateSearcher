@@ -127,14 +127,20 @@ search_state <- initialize_covariate_search(
   base_model_path = "run1",
   data_file_path = "data/derived/data.csv",
   covariate_search_path = "data/derived/covariates.csv",
-  auto_retry = FALSE  # Disable automatic retry
+  lookup_file = "data/spec/lookup.yaml"  # Optional: covariate labels
 )
 
 # Then manually create retries when needed
 retry_model <- create_retry_model(
   search_state = search_state,
-  model_name = "run11",
-  retry_number = 1
+  original_model_name = "run11"
+  # issue_type defaults to "estimation_error"
+)
+
+# Or disable automatic retry in the search function
+search_result <- run_automated_scm_testing(
+  search_state = search_state,
+  auto_retry = FALSE  # Disable automatic retry for manual control
 )
 ```
 
@@ -196,5 +202,125 @@ total_retries <- search_state$search_database %>%
 
 cat("Recovery success rate:", 
     round(100 * successful_retries / total_retries, 1), "%\n")
+```
+
+## Resuming After Recovery
+
+When your search encounters failures and retries, you can pause and resume at any time:
+
+### Pause and Resume Workflow
+
+```{r resume-recovery}
+# 1. Load existing search state (continue from last session)
+search_state <- load_existing_search(
+  base_model_path = "run1",
+  data_file_path = "data/derived/data.csv",
+  covariate_search_path = "data/derived/covariates.csv",
+  models_folder = "models",
+  lookup_file = "data/spec/lookup.yaml"  # Optional: restore covariate labels
+)
+
+# 2. Check status of recovery
+retries_completed <- search_state$search_database %>%
+  filter(phase == "retry", status == "completed") %>%
+  arrange(desc(model_name))
+
+print(retries_completed)
+
+# 3. Continue search from last checkpoint
+search_result <- run_automated_scm_testing(
+  search_state = search_state,
+  full_scm = TRUE,           # Continue with full SCM workflow
+  starting_phase = "forward" # Start from forward selection
+)
+```
+
+### Handling Persistent Failures
+
+If the same covariate repeatedly fails across retries:
+
+```{r persistent-failure}
+# 1. Load search state
+search_state <- load_existing_search(
+  base_model_path = "run1",
+  data_file_path = "data/derived/data.csv",
+  covariate_search_path = "data/derived/covariates.csv",
+  models_folder = "models"
+)
+
+# 2. Identify problematic covariate
+persistent_failures <- search_state$search_database %>%
+  filter(status == "failed") %>%
+  group_by(covariate) %>%
+  summarize(failure_count = n()) %>%
+  arrange(desc(failure_count))
+
+print(persistent_failures)
+
+# 3. Remove problematic covariate from remaining search
+search_state$search_config$excluded_covariates <- c(
+  search_state$search_config$excluded_covariates,
+  "AGE"  # Example: exclude AGE if it keeps failing
+)
+
+# 4. Continue with updated configuration
+search_result <- run_automated_scm_testing(
+  search_state = search_state,
+  full_scm = TRUE
+)
+```
+
+## FAQ: Resuming from Unfinished Steps
+
+### Do I need to delete existing models when resuming?
+
+**No.** When you call `load_existing_search()`, the system automatically:
+
+1. **Detects existing models** in the models folder
+2. **Loads the database** of all completed and failed models
+3. **Updates the model counter** to the highest existing model number
+4. **Continues with the next available number** for new models
+
+Example:
+```{r resume-no-cleanup}
+# Session 1: Stop after step 4, models run1 through run25 exist
+# (run1 = base, run2-run25 = models from steps 1-4)
+
+# Session 2: Resume the next day
+search_state <- load_existing_search(
+  base_model_path = "run1",
+  data_file_path = "data/derived/data.csv",
+  covariate_search_path = "data/derived/covariates.csv",
+  models_folder = "models"  # Contains run1-run25
+)
+
+# Model counter automatically set to 25
+# Next model created will be run26 (start of step 5)
+# No duplicates of run2-run25 will be created
+```
+
+### Will existing models be re-tested?
+
+**No.** The system checks the database to see which models have already been tested:
+
+- Completed models (with OFV values) are skipped
+- Failed models are recorded but not re-created
+- Only new covariates or covariate combinations are tested in new models
+
+### Can I do a fresh start from a specific point?
+
+If you want to restart a specific phase (e.g., re-run backward elimination), you can:
+
+```{r fresh-start-phase}
+# Option 1: Delete specific models from database before resuming
+# (requires direct database manipulation - use with caution)
+
+# Option 2: Create a new search with a different base model
+search_state <- initialize_covariate_search(
+  base_model_path = "run20",  # Start from run20 instead
+  data_file_path = "data/derived/data.csv",
+  covariate_search_path = "data/derived/covariates.csv",
+  models_folder = "models_phase4_retry"  # Separate folder
+)
 ```
 

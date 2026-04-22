@@ -7,8 +7,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <title>Complete SCM Workflow • CovariateSearcher</title>
 <script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<link href="../deps/bootstrap-5.1.3/bootstrap.min.css" rel="stylesheet">
-<script src="../deps/bootstrap-5.1.3/bootstrap.bundle.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><meta property="og:title" content="Complete SCM Workflow">
+<link href="../deps/bootstrap-5.3.1/bootstrap.min.css" rel="stylesheet">
+<script src="../deps/bootstrap-5.3.1/bootstrap.bundle.min.js"></script><link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
+<link href="../deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
+<script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><meta property="og:title" content="Complete SCM Workflow">
 </head>
 <body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -18,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">CovariateSearcher</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.15</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -137,16 +139,27 @@ Covariates (WT, AGE, SEX, etc.)</p>
 <span>  base_model_path <span class="op">=</span> <span class="st">"run10"</span>,</span>
 <span>  data_file_path <span class="op">=</span> <span class="st">"data/derived/analysis.csv"</span>,</span>
 <span>  covariate_search_path <span class="op">=</span> <span class="st">"data/derived/covariate_search.csv"</span>,</span>
-<span>  discover_existing <span class="op">=</span> <span class="cn">TRUE</span>, </span>
+<span>  lookup_file <span class="op">=</span> <span class="st">"data/spec/lookup.yaml"</span>, <span class="co"># optional</span></span>
 <span>  models_folder <span class="op">=</span> <span class="st">"models"</span>, </span>
 <span>  threads <span class="op">=</span> <span class="fl">40</span><span class="op">)</span></span></code></pre></div>
+<p>If you are continuing an existing project with pre-existing models,
+use:</p>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">search_state</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/load_existing_search.html">load_existing_search</a></span><span class="op">(</span></span>
+<span>  base_model_path <span class="op">=</span> <span class="st">"run10"</span>,</span>
+<span>  data_file_path <span class="op">=</span> <span class="st">"data/derived/analysis.csv"</span>,</span>
+<span>  covariate_search_path <span class="op">=</span> <span class="st">"data/derived/covariate_search.csv"</span>,</span>
+<span>  models_folder <span class="op">=</span> <span class="st">"models"</span>,</span>
+<span>  threads <span class="op">=</span> <span class="fl">40</span>,</span>
+<span>  lookup_file <span class="op">=</span> <span class="st">"data/spec/lookup.yaml"</span> <span class="co"># optional</span></span>
+<span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level3">
 <h3 id="step-3-run-forward-selection">Step 3: Run Forward Selection<a class="anchor" aria-label="anchor" href="#step-3-run-forward-selection"></a>
 </h3>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Standard forward selection</span></span>
-<span> <span class="va">results</span> <span class="op">&lt;-</span> <span class="fu">full_scm_search</span><span class="op">(</span></span>
+<span> <span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_automated_scm_testing.html">run_automated_scm_testing</a></span><span class="op">(</span></span>
 <span>  search_state <span class="op">=</span> <span class="va">search_state</span>,</span>
 <span>  base_model_id <span class="op">=</span> <span class="st">"run10"</span>,</span>
 <span>  scm_type <span class="op">=</span> <span class="st">"standard"</span>,      <span class="co"># or "selective"</span></span>
@@ -154,6 +167,7 @@ Covariates (WT, AGE, SEX, etc.)</p>
 <span>  full_scm <span class="op">=</span> <span class="cn">FALSE</span>,           <span class="co"># This runs ONLY forward selection</span></span>
 <span>  forward_p_value <span class="op">=</span> <span class="fl">0.05</span>,</span>
 <span>  rse_threshold <span class="op">=</span> <span class="fl">50</span>,</span>
+<span>  require_cov_step <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  auto_submit <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  auto_retry <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span>
@@ -173,8 +187,8 @@ precise</p>
 <div class="section level3">
 <h3 id="step-4-backward-elimination">Step 4: Backward Elimination<a class="anchor" aria-label="anchor" href="#step-4-backward-elimination"></a>
 </h3>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu">full_scm_search</span><span class="op">(</span></span>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_automated_scm_testing.html">run_automated_scm_testing</a></span><span class="op">(</span></span>
 <span>  search_state <span class="op">=</span> <span class="va">search_state</span>,</span>
 <span>  base_model_id <span class="op">=</span> <span class="st">"run10"</span>,</span>
 <span>  starting_phase <span class="op">=</span> <span class="st">"backward"</span>,</span>
@@ -187,12 +201,48 @@ precise</p>
 <span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">results</span><span class="op">$</span><span class="va">final_model</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level3">
-<h3 id="step-5-review-results">Step 5: Review Results<a class="anchor" aria-label="anchor" href="#step-5-review-results"></a>
+<h3 id="step-5-full-scm-workflow-in-one-call">Step 5: Full SCM+ Workflow in One Call<a class="anchor" aria-label="anchor" href="#step-5-full-scm-workflow-in-one-call"></a>
 </h3>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<p>Use this when you want a complete SCM+ sequence starting from a
+developed model:</p>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_automated_scm_testing.html">run_automated_scm_testing</a></span><span class="op">(</span></span>
+<span>  search_state <span class="op">=</span> <span class="va">search_state</span>,</span>
+<span>  base_model_id <span class="op">=</span> <span class="st">"run10"</span>,</span>
+<span>  scm_type <span class="op">=</span> <span class="st">"selective"</span>,</span>
+<span>  starting_phase <span class="op">=</span> <span class="st">"backward"</span>,</span>
+<span>  full_scm <span class="op">=</span> <span class="cn">TRUE</span>,              <span class="co"># Backward -&gt; Forward -&gt; Backward</span></span>
+<span>  forward_p_value <span class="op">=</span> <span class="fl">0.05</span>,</span>
+<span>  backward_p_value <span class="op">=</span> <span class="fl">0.01</span>,</span>
+<span>  rse_threshold <span class="op">=</span> <span class="fl">50</span>,</span>
+<span>  require_cov_step <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  auto_submit <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  auto_retry <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  save_checkpoints <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  checkpoint_prefix <span class="op">=</span> <span class="st">"scm_auto"</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level3">
+<h3 id="step-6-review-results">Step 6: Review Results<a class="anchor" aria-label="anchor" href="#step-6-review-results"></a>
+</h3>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">search_state</span> <span class="op">&lt;-</span><span class="fu"><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">readRDS</a></span><span class="op">(</span><span class="st">"./models/scm_rds/scm_auto_final_complete.rds"</span><span class="op">)</span></span>
 <span><span class="va">results_table</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/create_scm_results_table.html">create_scm_results_table</a></span><span class="op">(</span><span class="va">search_state</span><span class="op">)</span></span>
 <span><span class="fu"><a href="../reference/print_scm_results_table.html">print_scm_results_table</a></span><span class="op">(</span><span class="va">search_state</span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level3">
+<h3 id="step-7-resume-from-checkpoints">Step 7: Resume from Checkpoints<a class="anchor" aria-label="anchor" href="#step-7-resume-from-checkpoints"></a>
+</h3>
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">search_state</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/load_search_state.html">load_search_state</a></span><span class="op">(</span><span class="st">"scm_auto_forward_complete.rds"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_automated_scm_testing.html">run_automated_scm_testing</a></span><span class="op">(</span></span>
+<span>  search_state <span class="op">=</span> <span class="va">search_state</span>,</span>
+<span>  base_model_id <span class="op">=</span> <span class="st">"run10"</span>,</span>
+<span>  starting_phase <span class="op">=</span> <span class="st">"backward"</span>,</span>
+<span>  full_scm <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  backward_p_value <span class="op">=</span> <span class="fl">0.01</span></span>
+<span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level3">
 <h3 id="next-steps">Next Steps<a class="anchor" aria-label="anchor" href="#next-steps"></a>

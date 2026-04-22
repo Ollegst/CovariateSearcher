@@ -1,7 +1,7 @@
 CovariateSearcher: Quick Reference
 ================
 CovariateSearcher Package
-2026-04-08
+2026-04-22
 
 ## 🚀 Minimal Working Example
 
@@ -16,6 +16,7 @@ search_state <- initialize_covariate_search(
   base_model_path = "run10",
   data_file_path = "data/derived/analysis.csv",
   covariate_search_path = "data/derived/covariate_search.csv",
+  lookup_file = "data/spec/lookup.yaml",  # optional
   models_folder = "models", 
   threads = 40)
 
@@ -67,7 +68,8 @@ prep <- prepare_search_base_model(
   covariate_tags = c("beta_WT_CL", "beta_AGE_V2", "beta_SEX_KA"),
   new_model_number = 2,
   data_file_path = data_file_path,
-  covariate_search_path = covariate_search_path",
+  covariate_search_path = covariate_search_path,
+  lookup_file = "data/spec/lookup.yaml",  # optional
   models_folder = "models",
   idcol = "ID"
 )
@@ -80,6 +82,7 @@ search_state <- initialize_covariate_search(
   base_model_path = "run2",
   data_file_path = data_file_path,
   covariate_search_path = covariate_search_path,
+  lookup_file = "data/spec/lookup.yaml",  # optional
   models_folder = "models", 
   threads = 4)
 
@@ -97,7 +100,7 @@ result <- run_automated_scm_testing(
     auto_retry = TRUE,                          # Retry model in case of failure
     save_checkpoints = TRUE,                    # Save each step
     checkpoint_prefix = "scm_auto",
-    final_testing = TRUE)                       # Test excluded covariates form failed model
+    final_testing = TRUE)                       # Test excluded covariates from failed model
 
 
 # 4. Check results
@@ -133,7 +136,7 @@ print_scm_results_table(search_state)
 
     $OMEGA BLOCK(2)
     0.1 ; IIV_CL   ; ; LOG
-    0.1 ; IIV_CL_V ; ; LOG
+    0.1 ; IIV_CL_V ; ; RATIO
     0.1 ; IIV_V    ; ; LOG
 
     $SIGMA
@@ -142,7 +145,7 @@ print_scm_results_table(search_state)
 Format: `value ; NAME ; units ; RATIO|LOG`
 
 **THETA Naming**: Use simple names (e.g., `CL`, `V`) or numbered (e.g.,
-`1_CL`, `2_V`) in \$THETA block. Use `TV_` prefix only in $PK/$PRED
+`1_CL`, `2_V`) in `$THETA` block. Use `TV_` prefix only in `$PK`/`$PRED`
 block.
 
 ### 2. Dataset
@@ -194,7 +197,7 @@ full_scm = TRUE
 ### Backward Only
 
 ``` r
-results <- full_scm_search(
+results <- run_automated_scm_testing(
   search_state = search_state,
   base_model_id = "run10",
   starting_phase = "backward",
@@ -209,7 +212,7 @@ results <- full_scm_search(
 ### Forward only
 
 ``` r
-results <- full_scm_search(
+results <- run_automated_scm_testing(
  search_state = search_state,
  base_model_id = "run10",
  scm_type = "standard",      # or "selective"
@@ -258,6 +261,24 @@ View(results$search_state$search_database)
 
 # Summary
 cat(results$final_summary)
+
+# Parameter table (includes OFV and Conditional number rows)
+ft <- model_report(model_names = "run10", models_folder = "models")
+ft
+
+# Or if you want to compare several models
+ft <- model_report(model_names = c("run10", "run11", "run12"), models_folder = "models")
+ft
+
+# With parameter metadata (labels/short names/units/comments)
+# IMPORTANT: spec_pk must be an R object (e.g., pk_extended), not a file path.
+# If your metadata is in a file, load it first and then pass the object.
+ft_with_spec <- model_report(
+  model_names = c("run10"),
+  models_folder = "models",
+  spec_pk = pk_extended
+)
+ft_with_spec
 ```
 
 ------------------------------------------------------------------------
@@ -284,7 +305,7 @@ cat(results$final_summary)
 
 ### Models failing
 
-➜ Check: `search_state$search_database$estimation_issue`
+➜ Check: `results$search_database$estimation_issue`
 
 ### Need to resume
 
@@ -305,7 +326,7 @@ cat(results$final_summary)
 
 ### THETA (Population Parameters)
 
-**IMPORTANT**: Use simple names or numbered format in \$THETA block (NO
+**IMPORTANT**: Use simple names or numbered format in `$THETA` block (NO
 TV\_ prefix!)
 
     $THETA
@@ -319,55 +340,63 @@ TV\_ prefix!)
     (0, 10)       ; 2_V  ; L   ; LOG
     0.5 FIX       ; 3_KA ; 1/h ; LOG
 
-\*\*Then in $PK block, use TV_ prefix for typical values:**
-```$PK TV_CL = THETA(1) ; Use TV\_ prefix here TV_V = THETA(2) TV_KA =
-THETA(3)
+**Then in `$PK` block, use `TV_` prefix for typical values:**
 
-CL = TV_CL \* EXP(ETA(1)) V = TV_V \* EXP(ETA(2)) KA = TV_KA \*
-EXP(ETA(3))
+    $PK
+    TV_CL = THETA(1)  ; Use TV_ prefix here
+    TV_V  = THETA(2)
+    TV_KA = THETA(3)
 
+    CL = TV_CL * EXP(ETA(1))
+    V  = TV_V  * EXP(ETA(2))
+    KA = TV_KA * EXP(ETA(3))
 
-    **✅ Correct THETA naming**: `CL`, `V`, `KA` or `1_CL`, `2_V`, `3_KA`  
-    **❌ Wrong THETA naming**: `TV_CL`, `TVCL`, `TVV` (don't use TV_ in $THETA block!)
+**✅ Correct THETA naming**: `CL`, `V`, `KA` or `1_CL`, `2_V`, `3_KA`  
+**❌ Wrong THETA naming**: `TV_CL`, `TVCL`, `TVV` (don’t use `TV_` in
+`$THETA` block!)
 
-    ### OMEGA Diagonal
+### OMEGA Diagonal
 
-\$OMEGA 0.1 ; IIV_CL ; ; RATIO 0.1 ; IIV_V ; ; RATIO
+    $OMEGA
+    0.1 ; IIV_CL ; ; RATIO
+    0.1 ; IIV_V  ; ; RATIO
 
+### OMEGA BLOCK (One value per line!)
 
-    ### OMEGA BLOCK (One value per line!)
+    $OMEGA BLOCK(2)
+    0.1 ; IIV_CL    ; ; LOG
+    0.1 ; IIV_CL_V  ; ; RATIO
+    0.1 ; IIV_V     ; ; LOG
 
-\$OMEGA BLOCK(2) 0.1 ; IIV_CL ; ; RATIO 0.1 ; IIV_CL_V ; ; RATIO 0.1 ;
-IIV_V ; ; RATIO
+### SIGMA
 
+    $SIGMA
+    0.1  ; RUV_PROP ; ; RATIO
+    0.05 ; RUV_ADD  ; mg/L ; RATIO
 
-    ### SIGMA
+**❌ WRONG** (multiple values per line):
 
-\$SIGMA 0.1 ; RUV_PROP ; ; RATIO 0.05 ; RUV_ADD ; mg/L ; RATIO
+    $OMEGA BLOCK(2)
+    0.1 ; IIV_CL
+    0.1 0.1 ; IIV_V      ← Don't do this!
 
+**❌ WRONG** (TV\_ prefix in THETA block):
 
-    **❌ WRONG** (multiple values per line):
+    $THETA
+    0.5 ; TV_CL ; L/h ; LOG    <- Don't use TV_ in $THETA block!
+    0.5 ; 1CL   ; L/h ; LOG     ← Missing underscore
 
-\$OMEGA BLOCK(2) 0.1 ; IIV_CL 0.1 0.1 ; IIV_V ← Don’t do this!
+------------------------------------------------------------------------
 
+------------------------------------------------------------------------
 
-    **❌ WRONG** (TV_ prefix in THETA block):
+## 🔧 Advanced Options
 
-\$THETA 0.5 ; TV_CL ; L/h ; LOG ← Don’t use TV\_ in \$THETA block! 0.5 ;
-1CL ; L/h ; LOG ← Missing underscore
+### Selective Forward (Faster)
 
-
-    ---
-
-
-
-    ---
-
-    ## 🔧 Advanced Options
-
-    ### Selective Forward (Faster)
-    ```r
-    scm_type = "selective"
+``` r
+scm_type = "selective"
+```
 
 ### Custom Thresholds
 

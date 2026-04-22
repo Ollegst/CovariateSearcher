@@ -20,6 +20,8 @@
 #' @param idcol Character. ID column name (default: "ID")
 #' @param threads Integer. Number of threads for execution (default: 60)
 #' @param validate_parameters Logical. Validate parameter block formatting (default: TRUE)
+#' @param lookup_file Character or NULL. Optional path to lookup YAML for
+#'   categorical covariate labels. If NULL, defaults to data/spec/lookup.yaml.
 #' @param starting_model_number Optional integer. Sets the model counter manually.
 #'   Use this when covariate search starts from an existing structural model
 #'   and newly created covariate models should continue numbering from the
@@ -36,6 +38,7 @@ initialize_covariate_search <- function(base_model_path,
                                         idcol = "ID",
                                         threads = 60,
                                         validate_parameters = TRUE,
+                                        lookup_file = NULL,
                                         starting_model_number = NULL) {
 
   cat("Initializing CovariateSearcher (Core Module)...\n")
@@ -103,7 +106,10 @@ initialize_covariate_search <- function(base_model_path,
   # Initialize search database and configuration
   search_state <- initialize_search_database_core(search_state)
 
-  search_state <- initialize_search_config(search_state)
+  search_state <- initialize_search_config(
+    search_state = search_state,
+    lookup_file = lookup_file
+  )
   search_state <- discover_existing_models(search_state)
 
 
@@ -490,15 +496,24 @@ validate_base_model_for_search <- function(base_model_path,
 #' @title Initialize search configuration parameters
 #' @description Sets up default configuration for SCM workflow
 #' @param search_state List containing search state
+#' @param lookup_file Character or NULL. Optional path to lookup YAML for
+#'   categorical covariate labels.
 #' @return Updated search_state with initialized configuration
 #' @export
-initialize_search_config <- function(search_state) {
+initialize_search_config <- function(search_state, lookup_file = NULL) {
+  resolved_lookup_file <- if (!is.null(lookup_file)) {
+    lookup_file
+  } else {
+    file.path("data", "spec", "lookup.yaml")
+  }
+
   search_state$search_config <- list(
     forward_p_value = 0.05,        # p-value for forward selection
     backward_p_value = 0.01,       # p-value for backward elimination (more stringent)
     max_rse_threshold = 50,
     timeout_minutes = 3600,
     threads = search_state$threads,
+    lookup_file = resolved_lookup_file,
     current_phase = "initialization",
     current_step = 0
   )

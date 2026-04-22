@@ -4,10 +4,13 @@
 \alias{initialize_search_config}
 \title{Initialize search configuration parameters}
 \usage{
-initialize_search_config(search_state)
+initialize_search_config(search_state, lookup_file = NULL)
 }
 \arguments{
 \item{search_state}{List containing search state}
+
+\item{lookup_file}{Character or NULL. Optional path to lookup YAML for
+categorical covariate labels.}
 }
 \value{
 Updated search_state with initialized configuration

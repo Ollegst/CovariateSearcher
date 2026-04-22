@@ -13,6 +13,7 @@ initialize_covariate_search(
   idcol = "ID",
   threads = 60,
   validate_parameters = TRUE,
+  lookup_file = NULL,
   starting_model_number = NULL
 )
 }
@@ -32,6 +33,9 @@ initialize_covariate_search(
 \item{threads}{Integer. Number of threads for execution (default: 60)}
 
 \item{validate_parameters}{Logical. Validate parameter block formatting (default: TRUE)}
+
+\item{lookup_file}{Character or NULL. Optional path to lookup YAML for
+categorical covariate labels. If NULL, defaults to data/spec/lookup.yaml.}
 
 \item{starting_model_number}{Optional integer. Sets the model counter manually.
 Use this when covariate search starts from an existing structural model

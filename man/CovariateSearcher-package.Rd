@@ -24,6 +24,7 @@ progress monitoring, and intelligent error recovery.
 Useful links:
 \itemize{
   \item \url{https://github.com/Ollegst/CovariateSearcher}
+  \item \url{https://ollegst.github.io/CovariateSearcher}
   \item Report bugs at \url{https://github.com/Ollegst/CovariateSearcher/issues}
 }
 

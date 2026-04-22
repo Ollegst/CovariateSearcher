@@ -18,6 +18,8 @@
 #' @param timecol Character. Time column name (default: "TIME")
 #' @param idcol Character. ID column name (default: "ID")
 #' @param threads Integer. Number of threads for execution (default: 60)
+#' @param lookup_file Character or NULL. Optional path to lookup YAML for
+#'   categorical labels. If NULL, defaults to data/spec/lookup.yaml.
 #' @return List containing search state with discovered models
 #' @export
 load_existing_search <- function(base_model_path,
@@ -26,7 +28,8 @@ load_existing_search <- function(base_model_path,
                                  models_folder = "models",
                                  timecol = "TIME",
                                  idcol = "ID",
-                                 threads = 60) {
+                                 threads = 60,
+                                 lookup_file = NULL) {
 
   cat("📂 Loading EXISTING Covariate Search (Discovery Mode)...\n")
 
@@ -54,6 +57,13 @@ load_existing_search <- function(base_model_path,
       threads = threads
     )
 
+    if (!is.null(lookup_file)) {
+      if (is.null(search_state$search_config)) {
+        search_state$search_config <- list()
+      }
+      search_state$search_config$lookup_file <- lookup_file
+    }
+
     cat("✅ EXISTING search loaded successfully\n")
     cat(sprintf("📊 Database: %d models discovered, Counter: %d\n",
                 nrow(search_state$search_database), search_state$model_counter))
@@ -62,7 +72,7 @@ load_existing_search <- function(base_model_path,
     if (nrow(search_state$search_database) > 0) {
       cat("📋 Discovered models:\n")
       discovered <- search_state$search_database[, c("model_name", "covariate_tested")]
-      for (i in 1:min(5, nrow(discovered))) {
+      for (i in seq_len(min(5, nrow(discovered)))) {
         cat(sprintf("  - %s: %s\n", discovered$model_name[i],
                     ifelse(is.na(discovered$covariate_tested[i]), "Base", discovered$covariate_tested[i])))
       }

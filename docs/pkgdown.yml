@@ -1,15 +1,14 @@
-pandoc: 2.17.1.1
-pkgdown: 2.0.6
+pandoc: '3.3'
+pkgdown: 2.1.1
 pkgdown_sha: ~
 articles:
-  complete-workflow: complete-workflow.html
-  model-report-usage: model-report-usage.html
-  recovery-system: recovery-system.html
-  troubleshooting: troubleshooting.html
-  yaml-specification-files: yaml-specification-files.html
+  articles/complete-workflow: complete-workflow.html
+  articles/model-report-usage: model-report-usage.html
   quick-start: quick-start.html
-last_built: 2025-11-26T17:02Z
+  articles/recovery-system: recovery-system.html
+  articles/troubleshooting: troubleshooting.html
+  articles/yaml-specification-files: yaml-specification-files.html
+last_built: 2026-04-22T11:08Z
 urls:
   reference: https://ollegst.github.io/CovariateSearcher/reference
   article: https://ollegst.github.io/CovariateSearcher/articles
-

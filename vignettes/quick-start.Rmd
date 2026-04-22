@@ -44,7 +44,7 @@ V  = TV_V  * EXP(ETA(2))
 
 $OMEGA BLOCK(2)
 0.1 ; IIV_CL   ; ; LOG
-0.1 ; IIV_CL_V ; ; LOG
+0.1 ; IIV_CL_V ; ; RATIO
 0.1 ; IIV_V    ; ; LOG
 
 $SIGMA
@@ -70,7 +70,7 @@ $OMEGA BLOCK(2)
 ```
 $OMEGA BLOCK(2)
 0.1 ; IIV_CL   ; ; LOG
-0.1 ; IIV_CL_V ; ; LOG
+0.1 ; IIV_CL_V ; ; RATIO
 0.1 ; IIV_V    ; ; LOG
 ```
 

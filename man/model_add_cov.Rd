@@ -11,7 +11,8 @@ model_add_cov(
   id_var = "ID",
   data_file,
   covariate_search,
-  capture_log = FALSE
+  capture_log = FALSE,
+  lookup_file = NULL
 )
 }
 \arguments{
@@ -28,6 +29,10 @@ model_add_cov(
 \item{covariate_search}{Data.frame. Covariate search configuration}
 
 \item{capture_log}{Function. Logging function (optional)}
+
+\item{lookup_file}{Character or NULL. Optional path to lookup YAML for
+categorical labels. If NULL, uses search_state$search_config$lookup_file
+then defaults to data/spec/lookup.yaml.}
 }
 \value{
 Updated search_state
