@@ -4,12 +4,19 @@
 \alias{get_excluded_covariates}
 \title{Get list of covariates excluded from current step with details}
 \usage{
-get_excluded_covariates(search_state, return_details = FALSE)
+get_excluded_covariates(
+  search_state,
+  return_details = FALSE,
+  phase_filter = NULL
+)
 }
 \arguments{
 \item{search_state}{List containing covariate search state and configuration}
 
 \item{return_details}{Logical. Whether to return detailed exclusion info (default: FALSE)}
+
+\item{phase_filter}{Character vector of phases to include (e.g., "forward").
+If NULL, include exclusions from all phases.}
 }
 \value{
 Character vector of excluded covariate names, or data.frame if return_details=TRUE
@@ -18,5 +25,5 @@ Character vector of excluded covariate names, or data.frame if return_details=TR
 Returns covariates that have been excluded due to estimation issues
 }
 \details{
-Get Excluded Covariates (ENHANCED VERSION - FIXED COLUMN REFERENCE)
+Get Excluded Covariates
 }

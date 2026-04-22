@@ -146,6 +146,111 @@ extract_model_params <- function(model_name, models_folder = "models") {
 }
 
 
+#' Calculate Condition Number from NONMEM .cor/.cov File
+#'
+#' @description Internal function to compute condition number from NONMEM
+#' correlation/covariance matrix output. Prefers .cor, falls back to .cov.
+#' @param model_number Character string. Model name/number
+#' @param models_folder Character string. Path to models folder
+#' @param tolerance Numeric tolerance for near-zero/non-positive eigenvalues
+#' @return Numeric condition number, Inf for near-singular matrices, or NA if
+#' computation is not possible
+#' @keywords internal
+calculate_condition_number <- function(model_number,
+                                       models_folder = "models",
+                                       tolerance = 1e-10) {
+  model_path <- file.path(models_folder, model_number)
+  matrix_file <- NA_character_
+  if (file.exists(file.path(model_path, paste0(model_number, ".cor")))) {
+    matrix_file <- file.path(model_path, paste0(model_number, ".cor"))
+  } else if (file.exists(file.path(model_path, paste0(model_number, ".cov")))) {
+    matrix_file <- file.path(model_path, paste0(model_number, ".cov"))
+  }
+
+  if (is.na(matrix_file)) {
+    return(NA_real_)
+  }
+
+  lines <- readLines(matrix_file, warn = FALSE)
+  numeric_tokens <- stringr::str_extract_all(
+    lines,
+    "[-+]?(?:\\d*\\.?\\d+)(?:[Ee][-+]?\\d+)?"
+  )[[1]]
+  values <- suppressWarnings(as.numeric(numeric_tokens))
+  values <- values[is.finite(values)]
+
+  if (length(values) == 0) {
+    return(NA_real_)
+  }
+
+  # NONMEM matrix files can be either full square matrices or lower-triangular.
+  n_vals <- length(values)
+  square_n <- sqrt(n_vals)
+  matrix_obj <- NULL
+
+  if (abs(square_n - round(square_n)) < .Machine$double.eps^0.5) {
+    n <- as.integer(round(square_n))
+    matrix_obj <- matrix(values, nrow = n, byrow = TRUE)
+  } else {
+    tri_n <- (sqrt(8 * n_vals + 1) - 1) / 2
+    if (abs(tri_n - round(tri_n)) < .Machine$double.eps^0.5) {
+      n <- as.integer(round(tri_n))
+      matrix_obj <- matrix(0, nrow = n, ncol = n)
+      matrix_obj[lower.tri(matrix_obj, diag = TRUE)] <- values
+      matrix_obj <- matrix_obj + t(matrix_obj) - diag(diag(matrix_obj))
+    }
+  }
+
+  if (is.null(matrix_obj) || nrow(matrix_obj) == 0) {
+    return(NA_real_)
+  }
+
+  is_zeroish_row <- function(x) {
+    all(!is.finite(x) | abs(x) <= tolerance)
+  }
+
+  keep_idx <- which(!apply(matrix_obj, 1, is_zeroish_row))
+  if (length(keep_idx) == 0) {
+    return(NA_real_)
+  }
+
+  matrix_obj <- matrix_obj[keep_idx, keep_idx, drop = FALSE]
+  matrix_obj <- (matrix_obj + t(matrix_obj)) / 2
+
+  eig_values <- tryCatch(
+    eigen(matrix_obj, symmetric = TRUE, only.values = TRUE)$values,
+    error = function(e) NULL
+  )
+
+  if (is.null(eig_values)) {
+    return(NA_real_)
+  }
+
+  eig_values <- eig_values[is.finite(eig_values)]
+  if (length(eig_values) == 0) {
+    return(NA_real_)
+  }
+
+  eig_nonneg <- eig_values[eig_values >= -tolerance]
+  if (length(eig_nonneg) == 0) {
+    return(NA_real_)
+  }
+
+  max_ev <- max(eig_nonneg)
+  min_ev <- min(eig_nonneg)
+
+  if (max_ev <= tolerance) {
+    return(NA_real_)
+  }
+
+  if (min_ev <= tolerance) {
+    return(Inf)
+  }
+
+  max_ev / min_ev
+}
+
+
 #' Get Model Parameters and Statistics
 #'
 #' @description Internal function to extract and format model parameters with estimates and statistics
@@ -193,6 +298,16 @@ get_param2 <- function(model_number,
     Parameter = tail(model_stats$ofv, 1)[[1]]$ofv_no_constant
   )
 
+  # Extract condition number from NONMEM matrix files (.cor preferred, .cov fallback)
+  COND_NUM <- data.table::data.table(
+    parameter_names = "Conditional number",
+    Parameter = calculate_condition_number(
+      model_number = model_number,
+      models_folder = models_folder,
+      tolerance = 1e-10
+    )
+  )
+
   # Extract parameter definitions from control file
   params_list <- extract_model_params(model_number, models_folder)
 
@@ -224,7 +339,7 @@ get_param2 <- function(model_number,
         TRUE ~ stderr                         # Keep original for others
       )
     ) %>%
-    dplyr::filter(!(parameter_names2 == "SIGMA(1,1)" & fixed == TRUE)) %>%
+    dplyr::filter(!(.data$parameter_names2 == "SIGMA(1,1)" & .data$fixed == TRUE)) %>%
     dplyr::mutate(
       Parameter = dplyr::case_when(
         is.na(random_effect_sd) & trans == "RATIO" ~ estimate,
@@ -239,26 +354,26 @@ get_param2 <- function(model_number,
         diag == FALSE ~ 100 * stderr / estimate
       )
     ) %>%
-    dplyr::select(-parameter_names2)
+    dplyr::select(-.data$parameter_names2)
 
   # Extract shrinkage for diagonal elements
   shrinkage_df <- dplyr::filter(param_est, diag == TRUE) %>%
     dplyr::select(parameter_names, shrinkage) %>%
     dplyr::rename(SHRINKAGE = shrinkage) %>%
-    dplyr::mutate(SHRINKAGE = shrinkage_value[1:dplyr::n()])
+    dplyr::mutate(SHRINKAGE = shrinkage_value[dplyr::row_number()])
 
   # Combine all parameters
   param_est <- param_est %>%
     dplyr::select(parameter_names, Parameter, RSE, fixed) %>%
     dplyr::left_join(shrinkage_df, by = "parameter_names") %>%
-    dplyr::bind_rows(OFV) %>%
+    dplyr::bind_rows(OFV, COND_NUM) %>%
     dplyr::rowwise() %>%
     dplyr::mutate(RSE = ifelse(fixed == TRUE, NA, RSE))
 
   # Add labels and comments if spec_pk is provided
   if (!is.null(spec_pk)) {
     non_beta_params <- param_est$parameter_names[!grepl("^beta_", param_est$parameter_names) &
-                                                   param_est$parameter_names != "OFV"]
+                                                   !param_est$parameter_names %in% c("OFV", "Conditional number")]
     missing_from_spec <- non_beta_params[!non_beta_params %in% names(spec_pk)]
 
     if (length(missing_from_spec) > 0) {
@@ -270,6 +385,7 @@ get_param2 <- function(model_number,
     param_est <- param_est %>%
       dplyr::mutate(
         comment = dplyr::case_when(
+          parameter_names %in% c("OFV", "Conditional number") ~ NA_character_,
           parameter_names %in% names(spec_pk) ~ sapply(parameter_names, function(p) {
             val <- spec_pk[[p]]$comment
             if (!is.null(val)) val else NA_character_
