@@ -64,6 +64,77 @@ initialize_covariate_search <- function(base_model_path,
   search_state$data_file <- readr::read_csv(data_file_path, show_col_types = FALSE)
   search_state$covariate_search <- readr::read_csv(covariate_search_path, show_col_types = FALSE)
 
+  # VALIDATION: Check that the ID column exists in the data
+  # First try exact match, then search for columns containing "ID"
+  if (!idcol %in% names(search_state$data_file)) {
+    # Search for columns containing "ID" (case-insensitive)
+    id_cols <- grep("ID", names(search_state$data_file), ignore.case = TRUE, value = TRUE)
+    
+    if (length(id_cols) == 1) {
+      # Auto-detect single ID column (silently use it - no ambiguity)
+      actual_idcol <- id_cols[1]
+      search_state$idcol <- actual_idcol
+      idcol <- actual_idcol
+    } else if (length(id_cols) > 1) {
+      # Multiple ID columns found
+      available_cols <- paste(names(search_state$data_file), collapse = ", ")
+      stop(
+        sprintf("ID column '%s' not found in data file.\n", idcol),
+        sprintf("Multiple potential ID columns found: %s\n", paste(id_cols, collapse = ", ")),
+        sprintf("Please specify the correct one in initialize_covariate_search():\n"),
+        sprintf("  idcol = '%s'  # Choose one of: %s\n", id_cols[1], paste(id_cols, collapse = ", ")),
+        sprintf("\nAll available columns: %s\n", available_cols)
+      )
+    } else {
+      # No ID column found
+      available_cols <- paste(names(search_state$data_file), collapse = ", ")
+      stop(
+        sprintf("ID column '%s' not found in data file.\n", idcol),
+        sprintf("No columns containing 'ID' were found.\n"),
+        sprintf("Available columns: %s\n", available_cols),
+        sprintf("Please specify the correct ID column name in initialize_covariate_search():\n"),
+        sprintf("  idcol = 'COLUMN_NAME'\n")
+      )
+    }
+  }
+
+  cat(sprintf("✓ ID column '%s' verified in data\n", idcol))
+
+  # VALIDATION: Check that the data file name in the model matches what user specified
+  model_path <- file.path(models_folder, base_model_path)
+  ctl_file <- if (file.exists(paste0(model_path, ".ctl"))) {
+    paste0(model_path, ".ctl")
+  } else if (file.exists(paste0(model_path, ".mod"))) {
+    paste0(model_path, ".mod")
+  } else {
+    NULL
+  }
+
+  if (!is.null(ctl_file)) {
+    modelcode <- readLines(ctl_file)
+    # Find DATA line (case-insensitive, may have spaces)
+    data_line <- grep("^\\s*\\$DATA", modelcode, ignore.case = TRUE, value = TRUE)
+    if (length(data_line) > 0) {
+      # Extract filename from DATA statement (e.g., "$DATA mydata.csv IGNORE=@")
+      data_filename <- trimws(sub("^\\$DATA\\s+([^\\s]+).*$", "\\1", data_line[1], ignore.case = TRUE))
+      user_filename <- basename(data_file_path)
+      
+      # Compare filenames (accounting for case sensitivity and path variations)
+      if (!tolower(data_filename) %in% tolower(c(user_filename, basename(data_filename)))) {
+        stop(
+          sprintf("⚠️  DATA FILE MISMATCH!\n"),
+          sprintf("  Model '%s' references: %s\n", base_model_path, data_filename),
+          sprintf("  You specified: %s\n", data_file_path),
+          sprintf("  Filename mismatch: '%s' vs '%s'\n", data_filename, user_filename),
+          sprintf("  Please ensure the data file name matches the $DATA line in your model,\n"),
+          sprintf("  or update the data_file_path parameter in initialize_covariate_search()\n")
+        )
+      } else {
+        cat(sprintf("✓ Data file name verified: %s\n", data_filename))
+      }
+    }
+  }
+
   # Add cov_to_test column if missing
   if (!"cov_to_test" %in% names(search_state$covariate_search)) {
     cat("Adding cov_to_test column...\n")

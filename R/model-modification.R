@@ -60,6 +60,9 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag,
   # STEP 3: Comprehensive error handling wrapper
   tryCatch({
     # Sub-step 3a: Create BBR model
+      technical_log <- character(0)  # Initialize early for error handler scope
+      log_filename <- NULL
+   
     cat("  Creating BBR model...\n")
     parent_path <- file.path(search_state$models_folder, base_model_id)
 
@@ -88,16 +91,59 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag,
     param_name <- cov_info$PARAMETER
     cov_on_param <- paste0(cov_name, "_", param_name)
 
-    model_result <- model_add_cov(
-      search_state = search_state,
-      ref_model = new_model_name,
-      cov_on_param = cov_on_param,
-      id_var = search_state$idcol,
-      data_file = search_state$data_file,
-      covariate_search = search_state$covariate_search,
-      capture_log = TRUE,
-      lookup_file = lookup_file
-    )
+    # Wrap model_add_cov with error tracing to capture logs even on failure
+    model_result <- tryCatch({
+      model_add_cov(
+        search_state = search_state,
+        ref_model = new_model_name,
+        cov_on_param = cov_on_param,
+        id_var = search_state$idcol,
+        data_file = search_state$data_file,
+        covariate_search = search_state$covariate_search,
+        capture_log = TRUE,
+        lookup_file = lookup_file
+      )
+    }, error = function(cov_error) {
+      # Even on error, we want to save what we captured
+      cat(sprintf("  [ERROR] Covariate addition failed: %s\n", cov_error$message))
+      # Save error details including what we know so far
+      list(
+        status = "error",
+        error_message = cov_error$message,
+        log_entries = character(0)  # Will be populated if we could extract it
+      )
+    })
+
+    # Check if model_add_cov succeeded or failed
+    if (!is.null(model_result$status) && model_result$status == "error") {
+      # Save error log with diagnostics
+      error_log_content <- c(
+        "=== COVARIATE ADDITION FAILED ===",
+        sprintf("Time: %s", Sys.time()),
+        sprintf("Model: %s", new_model_name),
+        sprintf("Covariate parameter: %s", cov_on_param),
+        sprintf("Covariate: %s (Reference: %s)", cov_name, matching_cov$REFERENCE[1]),
+        sprintf("ID column: %s", search_state$idcol),
+        sprintf("Data file dimensions: %d rows x %d columns", nrow(search_state$data_file), ncol(search_state$data_file)),
+        sprintf("Available columns: %s", paste(names(search_state$data_file), collapse = ", ")),
+        "",
+        "ERROR DETAILS:",
+        model_result$error_message,
+        "",
+        "POSSIBLE CAUSES:",
+        sprintf("- Covariate column '%s' missing from data? Check available columns above.", cov_name),
+        sprintf("- ID column '%s' not found in data? Available: %s", search_state$idcol, paste(names(search_state$data_file), collapse = ", ")),
+        "- Data mismatch in tapply() call (arguments must have same length)"
+      )
+      
+      log_filename <<- file.path(search_state$models_folder,
+                                 paste0(new_model_name, "_add_", covariate_name, "_error_log.txt"))
+      writeLines(error_log_content, log_filename)
+      cat(sprintf("  📝 Error log saved: %s\n", basename(log_filename)))
+      
+      # Now throw to be caught by outer handler
+      stop(model_result$error_message)
+    }
 
     search_state <- model_result$search_state
     technical_log <- model_result$log_entries

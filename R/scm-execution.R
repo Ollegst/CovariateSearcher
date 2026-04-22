@@ -174,9 +174,16 @@ run_univariate_step <- function(search_state, base_model_id, covariates_to_test 
 
   # STEP 6: Validate database consistency (this should NEVER fail if our logic is correct)
   if (successful_count > 0) {
-    db_step_numbers <- search_state$search_database$step_number[
-      search_state$search_database$model_name %in% created_models
+    db_subset <- search_state$search_database[
+      search_state$search_database$model_name %in% created_models,
+      ,
+      drop = FALSE
     ]
+
+    # If model names were reused (e.g., reruns/overwrites), keep only the latest row
+    # per model name so validation reflects the models created in this step.
+    db_subset <- db_subset[!duplicated(db_subset$model_name, fromLast = TRUE), , drop = FALSE]
+    db_step_numbers <- db_subset$step_number
 
     # This is an ASSERTION - if it fails, our code has a bug
     inconsistent_steps <- db_step_numbers[db_step_numbers != step_number]
