@@ -117,20 +117,22 @@ initialize_covariate_search <- function(base_model_path,
     if (length(data_line) > 0) {
       # Extract filename from DATA statement (e.g., "$DATA mydata.csv IGNORE=@")
       data_filename <- trimws(sub("^\\$DATA\\s+([^\\s]+).*$", "\\1", data_line[1], ignore.case = TRUE))
+      # Compare using file names only (ignore relative/absolute directory paths)
+      model_data_basename <- basename(gsub("^['\"]|['\"]$", "", data_filename))
       user_filename <- basename(data_file_path)
       
-      # Compare filenames (accounting for case sensitivity and path variations)
-      if (!tolower(data_filename) %in% tolower(c(user_filename, basename(data_filename)))) {
+      # Compare file names only, case-insensitive
+      if (!identical(tolower(model_data_basename), tolower(user_filename))) {
         stop(
           sprintf("⚠️  DATA FILE MISMATCH!\n"),
           sprintf("  Model '%s' references: %s\n", base_model_path, data_filename),
           sprintf("  You specified: %s\n", data_file_path),
-          sprintf("  Filename mismatch: '%s' vs '%s'\n", data_filename, user_filename),
+          sprintf("  Filename mismatch: '%s' vs '%s'\n", model_data_basename, user_filename),
           sprintf("  Please ensure the data file name matches the $DATA line in your model,\n"),
           sprintf("  or update the data_file_path parameter in initialize_covariate_search()\n")
         )
       } else {
-        cat(sprintf("✓ Data file name verified: %s\n", data_filename))
+        cat(sprintf("✓ Data file name verified: %s\n", model_data_basename))
       }
     }
   }
