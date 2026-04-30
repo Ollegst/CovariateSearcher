@@ -11,7 +11,8 @@ load_existing_search(
   models_folder = "models",
   timecol = "TIME",
   idcol = "ID",
-  threads = 60
+  threads = 60,
+  lookup_file = NULL
 )
 }
 \arguments{
@@ -28,6 +29,9 @@ load_existing_search(
 \item{idcol}{Character. ID column name (default: "ID")}
 
 \item{threads}{Integer. Number of threads for execution (default: 60)}
+
+\item{lookup_file}{Character or NULL. Optional path to lookup YAML for
+categorical labels. If NULL, defaults to data/spec/lookup.yaml.}
 }
 \value{
 List containing search state with discovered models

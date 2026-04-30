@@ -12,8 +12,9 @@ initialize_covariate_search(
   timecol = "TIME",
   idcol = "ID",
   threads = 60,
-  discover_existing = TRUE,
-  validate_parameters = TRUE
+  validate_parameters = TRUE,
+  lookup_file = NULL,
+  starting_model_number = NULL
 )
 }
 \arguments{
@@ -31,9 +32,17 @@ initialize_covariate_search(
 
 \item{threads}{Integer. Number of threads for execution (default: 60)}
 
-\item{discover_existing}{Logical. Discover existing models (default: TRUE)}
-
 \item{validate_parameters}{Logical. Validate parameter block formatting (default: TRUE)}
+
+\item{lookup_file}{Character or NULL. Optional path to lookup YAML for
+categorical covariate labels. If NULL, defaults to data/spec/lookup.yaml.}
+
+\item{starting_model_number}{Optional integer. Sets the model counter manually.
+Use this when covariate search starts from an existing structural model
+and newly created covariate models should continue numbering from the
+last model already present in the workflow. For example, if the last
+existing model is \code{run10}, set \code{starting_model_number = 10} so the next model
+created by covariate search will be \code{run11}.}
 }
 \value{
 List containing complete search state configuration

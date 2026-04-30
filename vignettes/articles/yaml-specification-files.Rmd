@@ -12,7 +12,7 @@ knitr::opts_chunk$set(
 
 # YAML Specification Files for CovariateSearcher
 
-CovariateSearcher uses YAML specification files from the [yspec](https://metrumresearchgroup.github.io/yspec/) package (developed by Metrum Research Group) to enhance documentation and create formatted output tables.
+CovariateSearcher uses YAML specification files inspired by the [yspec](https://metrumresearchgroup.github.io/yspec/) structure (developed by Metrum Research Group) to enhance documentation and create formatted output tables.
 
 ## 📋 Overview
 
@@ -27,26 +27,62 @@ The YAML specification system provides:
 
 ## 🗂️ Required Files
 
-You need three YAML files in your `data/spec/` directory:
+For CovariateSearcher, use this two-file setup in `data/spec/`:
 
 ```
 data/spec/
-├── lookup.yml        # Variable definitions and decoding
-├── pk-extend.yml     # Parameter formatting for output tables
-└── pk.yml            # Main specification file
+├── lookup.yaml       # Variable definitions + SETUP__ metadata + covariate flags
+└── pk-extend.yml     # Parameter formatting for output tables (optional but recommended)
+```
+
+In addition, CovariateSearcher automatically creates `data/spec/tags.yaml` during initialization from your covariate search table.
+
+## 🏷️ Auto-Generated File: tags.yaml
+
+`tags.yaml` is generated automatically when you run initialization. It maps internal beta tags to covariate-parameter combinations used in model generation and tracking.
+
+You do not need to create this file manually.
+
+### Example tags.yaml
+
+```yaml
+# Tags configuration file
+# Auto-generated from covariate search table
+# Generated: 2026-04-20
+
+## Covariates
+beta_WT_CL: "WT_CL"                     # Continuous, power, time-independent
+beta_ALB_CL: "ALB_CL"                   # Continuous, power, time-independent
+beta_LDH_CL: "LDH_CL"                   # Continuous, power, time-independent
+beta_SEXN_CL: "SEXN_CL"                 # Categorical 2-level, linear, time-independent
+beta_WT_V1: "WT_V1"                     # Continuous, power, time-independent
+beta_SEXN_V1: "SEXN_V1"                 # Categorical 2-level, linear, time-independent
+beta_AST_V2: "AST_V2"                   # Continuous, power, time-independent
+beta_NLR_V2: "NLR_V2"                   # Continuous, power, time-independent
+beta_SMOKH2_V2: "SMOKH2_V2"             # Categorical 2-level, linear, time-independent
+beta_COMB_V2: "COMB_V2"                 # Categorical 2-level, linear, time-independent
+beta_TUMTYP2_TMAX: "TUMTYP2_TMAX"       # Categorical 2-level, linear, time-independent
 ```
 
 ---
 
-## 📄 File 1: lookup.yml
+## 📄 File 1: lookup.yaml
 
-Defines variables, their types, units, and categorical value decoding.
+Defines variables, their types, units, categorical value decoding, and project-level `SETUP__` metadata.
 
 ### Example Structure
 
 ```yaml
 SETUP__:
-  description: yspec internal column database for PT010
+  description: Formoterol Population PK Analysis
+  sponsor: AstraZeneca
+  projectnumber: PT010
+  extend_file: pk-extend.yml
+  flags:
+    contcov: [AGE, SCR, CRCL, EGFR, BEGFR, BSCR, BCRCL, BWT, BBMI, BBSA]
+    catcov: [SEXM, RACE, ETHNIC, SMOKING, DOSE, FORM, TRTID, ICS, ASTHMA]
+    diagContCov: [AGE, BEGFR, BSCR, BCRCL, BWT, BBMI, BBSA]
+    diagCatCov: [SEXM, RACE, ETHNIC, SMOKING, DOSE, FORM, TRTID, ICS, ASTHMA]
 NUM:
   short: Row number
   type: numeric
@@ -202,75 +238,6 @@ RUV_PROP:
 
 ---
 
-## 📄 File 3: pk.yml
-
-Main specification file that ties everything together and defines variable categories for plots and tables.
-
-### Example Structure
-
-```yaml
-SETUP__:
-  lookup_file: [lookup.yml]
-  description: Formoterol Population PK Analysis
-  sponsor: AstraZeneca
-  projectnumber: PT010
-  extend_file: pk-extend.yml
-  flags:
-    contcov: [AGE, SCR, CRCL, EGFR, BEGFR, BSCR, BCRCL, BWT, BBMI, BBSA]
-    catcov: [SEXM, RACE, ETHNIC, SMOKING, DOSE, FORM, TRTID, ICS, ASTHMA]
-    diagContCov: [AGE, BEGFR, BSCR, BCRCL, BWT, BBMI, BBSA]
-    diagCatCov: [SEXM, RACE, ETHNIC, SMOKING, DOSE, FORM, TRTID, ICS, ASTHMA]
-NUM:
-OPROJID:
-OSTUDYID:
-STUDYID:
-USID:
-ID:
-IND:
-AGE:
-SEXM:
-RACE:
-ETHNIC:
-SMOKING:
-```
-
-### SETUP__ Section
-
-| Field           | Description                          |
-|-----------------|--------------------------------------|
-| `lookup_file`   | lookup.yml                           |
-| `description`   | Project description                  |
-| `sponsor`       | Sponsor name                         |
-| `projectnumber` | Project identifier                   |
-| `extend_file`   | pk-extend.yml                        |
-| `flags`         | Variable categories for plots/tables |
-
-### Flags Categories
-
-**`contcov`**: Continuous covariates for covariate modeling
-```yaml
-contcov: [AGE, WT, BMI, CRCL, EGFR]
-```
-
-**`catcov`**: Categorical covariates for covariate modeling
-```yaml
-catcov: [SEX, RACE, ETHNIC, SMOKING, DOSE]
-```
-
-**`diagContCov`**: Continuous covariates for diagnostic plots
-```yaml
-diagContCov: [AGE, WT, BMI, CRCL]
-```
-
-**`diagCatCov`**: Categorical covariates for diagnostic plots
-```yaml
-diagCatCov: [SEX, RACE, SMOKING, DOSE]
-```
-
-
-
----
-
 ## 🎯 How CovariateSearcher Uses YAML Files
 
 ### 1. Variable Decoding
@@ -300,86 +267,6 @@ flags:
 
 ---
 
-## 📝 Creating Your YAML Files
-
-### Step 1: Start with lookup.yml
-
-List all variables in your dataset:
-
-```yaml
-SETUP__:
-  description: My PK Analysis
-ID:
-  short: Subject ID
-  type: numeric
-TIME:
-  short: Time
-  type: numeric
-  unit: hr
-DV:
-  short: Concentration
-  type: numeric
-  unit: ng/mL
-AGE:
-  short: Age
-  type: numeric
-  unit: years
-WT:
-  short: Weight
-  type: numeric
-  unit: kg
-SEX:
-  short: Sex
-  values: [0, 1]
-  decode: ["Female", "Male"]
-```
-
-### Step 2: Create pk-extend.yml
-
-Define your model parameters:
-
-```yaml
-SETUP__:
-  max_nchar_label: 10000
-CL:
-  short: CL/F
-  label: Apparent clearance
-  unit: L/h
-V:
-  short: V/F
-  label: Apparent volume
-  unit: L
-IIV_CL:
-  short: CL CV%
-  label: IIV on clearance
-RUV_PROP:
-  short: prop error
-  label: Proportional error
-```
-
-### Step 3: Create pk.yml
-
-Tie everything together:
-
-```yaml
-SETUP__:
-  lookup_file: [lookup.yml]
-  description: My Population PK Analysis
-  extend_file: pk-extend.yml
-  flags:
-    contcov: [AGE, WT, BMI, CRCL]
-    catcov: [SEX, RACE, SMOKING]
-ID:
-TIME:
-DV:
-AGE:
-WT:
-SEX:
-RACE:
-```
-
----
-
 ## ✅ Best Practices
 
 ### 1. Match Parameter Names
@@ -398,24 +285,21 @@ CL:
 ```
 
 ### 2. Include All Covariates
-List all potential covariates in both `lookup.yml` and `pk.yml`:
+List all potential covariates in `lookup.yaml`:
 
 ```yaml
-# In lookup.yml - define them
+# In lookup.yaml - define them
 AGE:
   short: Age
   type: numeric
   unit: years
-
-# In pk.yml - reference them
-AGE:
 ```
 
 ### 3. Use Consistent Units
 Match units across files:
 
 ```yaml
-# lookup.yml
+# lookup.yaml
 WT:
   unit: kg
 
@@ -441,16 +325,15 @@ RACE:
 Check your YAML files are valid:
 
 ```{r validate, eval=FALSE}
-library(yspec)
+library(yaml)
 
-# Load and validate
-spec <- ys_load("data/spec/pk.yml")
+# Core validation for CovariateSearcher
+lookup <- read_yaml("data/spec/lookup.yaml")
+pk_extended <- read_yaml("data/spec/pk-extend.yml")
 
-# Check for issues
-ys_check(spec)
-
-# View summary
-summary(spec)
+# Quick checks
+names(lookup)
+names(pk_extended)
 ```
 
 ---
@@ -461,64 +344,4 @@ summary(spec)
 - **yspec Book**: https://metrumresearchgroup.github.io/ysp-book/
 - **Examples**: See the yspec package for more examples
 
----
 
-## 🎯 Summary
-
-**Three files needed:**
-
-1. **lookup.yml** - Variable definitions, types, units, decoding
-2. **pk-extend.yml** - Parameter formatting for output tables
-3. **pk.yml** - Main spec file that references the others
-
-**Key benefits:**
-
-- Automatic variable decoding
-- Formatted output tables
-- Consistent documentation
-- Enhanced reporting
-
-**Location:** `data/spec/` directory in your project
-
----
-
-## 💡 Quick Start Template
-
-Minimal working set:
-
-**lookup.yml:**
-```yaml
-SETUP__:
-  description: My Analysis
-AGE:
-  short: Age
-  type: numeric
-  unit: years
-WT:
-  short: Weight
-  type: numeric
-  unit: kg
-```
-
-**pk-extend.yml:**
-```yaml
-SETUP__:
-  max_nchar_label: 10000
-CL:
-  short: CL/F
-  label: Apparent clearance
-  unit: L/h
-```
-
-**pk.yml:**
-```yaml
-SETUP__:
-  lookup_file: [lookup.yml]
-  extend_file: pk-extend.yml
-  flags:
-    contcov: [AGE, WT]
-AGE:
-WT:
-```
-
-Build from this template as your analysis grows!

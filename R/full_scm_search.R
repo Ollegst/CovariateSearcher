@@ -27,6 +27,8 @@
 #'   If NULL, uses search_state$search_config$backward_p_value (default: 0.01, more stringent)
 #' @param rse_threshold Numeric. Maximum RSE threshold as percentage.
 #'   If NULL, uses search_state$search_config$max_rse_threshold (default: 50)
+#' @param require_cov_step Logical. Whether to require a successful covariance step
+#'   (presence of .cov file) for a model to be considered completed (default: TRUE)
 #' @param auto_submit Logical. Whether to automatically submit models to cluster (default: TRUE)
 #' @param auto_retry Logical. Whether to enable automatic retry for failed models (default: TRUE)
 #' @param save_checkpoints Logical. Whether to save state after each major step (default: TRUE)
@@ -42,6 +44,7 @@ run_automated_scm_testing <- function(search_state,
                                       forward_p_value = NULL,
                                       backward_p_value = NULL,
                                       rse_threshold = NULL,
+                                      require_cov_step = TRUE,
                                       auto_submit = TRUE,
                                       auto_retry = TRUE,
                                       save_checkpoints = TRUE,
@@ -98,7 +101,9 @@ run_automated_scm_testing <- function(search_state,
   if (!is.null(rse_threshold) && (rse_threshold <= 0 || rse_threshold > 100)) {
     stop("rse_threshold must be between 0 and 100")
   }
-
+  if (!is.logical(require_cov_step)) {
+    stop("require_cov_step must be TRUE or FALSE")
+  }
 
   # Set defaults with proper null coalescing
   if (is.null(forward_p_value)) {
@@ -110,6 +115,12 @@ run_automated_scm_testing <- function(search_state,
   if (is.null(rse_threshold)) {
     rse_threshold <- search_state$search_config$max_rse_threshold %||% 50
   }
+
+  # Update search_config so downstream functions see the correct values
+  search_state$search_config$forward_p_value <- forward_p_value
+  search_state$search_config$backward_p_value <- backward_p_value
+  search_state$search_config$max_rse_threshold <- rse_threshold
+  search_state$search_config$require_cov_step <- require_cov_step
 
   # Calculate ΔOFV thresholds for display (df=1 for typical single parameter)
   forward_ofv_threshold_display <- pvalue_to_threshold(forward_p_value, df = 1)
@@ -131,6 +142,7 @@ run_automated_scm_testing <- function(search_state,
   cat(sprintf("Forward ΔOFV threshold: %.2f\n", forward_ofv_threshold_display))
   cat(sprintf("Backward ΔOFV threshold: %.2f\n", backward_ofv_threshold_display))
   cat(sprintf("RSE threshold: %d%%\n", rse_threshold))
+  cat(sprintf("Require covariance step: %s\n", require_cov_step))
   cat(sprintf("Auto-retry enabled: %s\n", auto_retry))
   cat(sprintf("Checkpoints enabled: %s\n", save_checkpoints))
   cat(sprintf("Final testing enabled: %s\n", final_testing))
@@ -365,9 +377,21 @@ run_automated_scm_testing <- function(search_state,
     character(0)
   })
 
-  # Get excluded covariates
+  # Get excluded covariates and keep only forward-phase failures
   excluded_covariates <- tryCatch({
-    get_excluded_covariates(search_state)
+    excluded_all <- get_excluded_covariates(search_state)
+
+    forward_excluded <- search_state$search_database[
+      which(search_state$search_database$excluded_from_step == TRUE &
+              search_state$search_database$phase == "forward"),
+      , drop = FALSE
+    ]
+
+    forward_covariates <- unique(forward_excluded$covariate_tested)
+    forward_covariates <- forward_covariates[!is.na(forward_covariates) & forward_covariates != ""]
+
+    # Keep original helper behavior but report only forward failures
+    intersect(excluded_all, forward_covariates)
   }, error = function(e) {
     cat(sprintf("Warning: Could not get excluded covariates: %s\n", e$message))
     character(0)
@@ -478,8 +502,7 @@ run_automated_scm_testing <- function(search_state,
     if (!final_testing) {
       cat("\n⏭️ PHASE 3: Final testing disabled\n")
     } else if (run_final_backward) {
-      cat("\n⏭️ PHASE 3: Final testing not applicable for backward elimination\n")
-      cat("(Excluded covariates would be handled during backward elimination process)\n")
+      # Final testing is intentionally skipped when final backward elimination runs.
     } else {
       cat("\n⏭️ PHASE 3: No forward selection performed\n")
     }
@@ -518,7 +541,7 @@ run_automated_scm_testing <- function(search_state,
   }
 
   final_summary <- sprintf(
-    "%s (%s) completed in %.1f minutes. Final model: %s with %d covariates (%s). %d total models created, %d excluded covariates.",
+    "%s (%s) completed in %.1f minutes. Final model: %s with %d covariates (%s). %d total models created, %d excluded forward covariates.",
     workflow_desc,
     scm_type,
     total_time,
@@ -547,7 +570,7 @@ run_automated_scm_testing <- function(search_state,
   }
 
   if (length(excluded_covariates) > 0) {
-    cat(sprintf("🚫 Excluded covariates: %s\n", paste(excluded_covariates, collapse = ", ")))
+    cat(sprintf("🚫 Excluded covariates (forward failures): %s\n", paste(excluded_covariates, collapse = ", ")))
   }
 
   cat(sprintf("💾 Checkpoints saved: %d files\n", length(checkpoint_files)))

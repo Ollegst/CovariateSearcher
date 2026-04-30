@@ -174,9 +174,16 @@ run_univariate_step <- function(search_state, base_model_id, covariates_to_test 
 
   # STEP 6: Validate database consistency (this should NEVER fail if our logic is correct)
   if (successful_count > 0) {
-    db_step_numbers <- search_state$search_database$step_number[
-      search_state$search_database$model_name %in% created_models
+    db_subset <- search_state$search_database[
+      search_state$search_database$model_name %in% created_models,
+      ,
+      drop = FALSE
     ]
+
+    # If model names were reused (e.g., reruns/overwrites), keep only the latest row
+    # per model name so validation reflects the models created in this step.
+    db_subset <- db_subset[!duplicated(db_subset$model_name, fromLast = TRUE), , drop = FALSE]
+    db_step_numbers <- db_subset$step_number
 
     # This is an ASSERTION - if it fails, our code has a bug
     inconsistent_steps <- db_step_numbers[db_step_numbers != step_number]
@@ -265,8 +272,8 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
     tryCatch({
       model_path <- file.path(search_state$models_folder, model_name)
 
-      if (!file.exists(paste0(model_path, ".ctl"))) {
-        stop(sprintf("Model file %s.ctl not found", model_path))
+      if (is.null(find_model_file(model_path))) {
+        stop(sprintf("Model file not found for %s (.ctl or .mod)", model_path))
       }
 
       mod <- bbr::read_model(model_path)
@@ -282,13 +289,13 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
       cat("✓\n")
 
     }, error = function(e) {
-      failed_submissions <- c(failed_submissions, model_name)
-      submission_results[[model_name]] <- paste("failed:", e$message)
+      failed_submissions <<- c(failed_submissions, model_name)
+      submission_results[[model_name]] <<- paste("failed:", e$message)
       cat(sprintf("✗ %s\n", e$message))
 
       db_idx <- which(search_state$search_database$model_name == model_name)
       if (length(db_idx) > 0) {
-        search_state$search_database$status[db_idx] <- "submission_failed"
+        search_state$search_database$status[db_idx] <<- "submission_failed"
       }
     })
   }
@@ -568,7 +575,7 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
 
                 db_idx <- which(search_state$search_database$model_name == retry_model)
                 if (length(db_idx) > 0) {
-                  search_state$search_database$status[db_idx] <- "submission_failed"
+                  search_state$search_database$status[db_idx] <<- "submission_failed"
                 }
               })
             }
@@ -579,7 +586,7 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
 
       }, error = function(retry_error) {
         cat(sprintf("❌ Error in retry processing: %s\n", retry_error$message))
-        already_processed_for_retry <- c(already_processed_for_retry, newly_failed)
+        already_processed_for_retry <<- c(already_processed_for_retry, newly_failed)
       })
     }
 
@@ -624,13 +631,14 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
       final_current_status
     })
 
-    if (nrow(display_models) <= 10) {
-      for (i in 1:nrow(display_models)) {
+    if (nrow(display_models) > 0 && nrow(display_models) <= 10) {
+      for (i in seq_len(nrow(display_models))) {
         row <- display_models[i, ]
 
-        status_icon <- if (row$status == "completed") {
+        row_status <- if (!is.null(row$status) && length(row$status) > 0) row$status else NA_character_
+        status_icon <- if (!is.na(row_status) && row_status == "completed") {
           "✅"
-        } else if (row$status %in% c("failed", "estimation_error")) {
+        } else if (!is.na(row_status) && row_status %in% c("failed", "estimation_error")) {
           "❌"
         } else {
           "🔄"

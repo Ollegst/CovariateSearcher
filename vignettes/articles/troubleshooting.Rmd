@@ -93,7 +93,7 @@ Consider:
 names(read.csv(search_state$data_file_path))
 
 # Check covariate config
-read.csv(search_state$covariate_search_path) %>%
+search_state$covariate$search %>%
   pull(COVARIATE) %>%
   unique()
 ```
@@ -124,7 +124,7 @@ sapply(data, function(x) sum(is.na(x)))
 # Test only significant covariates from step 1
 result <- run_scm_selective_forward(
   search_state = search_state,
-  forward_threshold = 3.84
+  forward_p_value  = 0.01
 )
 ```
 

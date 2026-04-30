@@ -12,10 +12,13 @@
 #' @param base_model_id Character. Base model identifier (e.g., "run1")
 #' @param covariate_tag Character. Covariate tag to add (e.g., "beta_cl_wt")
 #' @param step_number Integer. Optional step number (NULL for auto-calculation)
+#' @param lookup_file Character or NULL. Optional path to lookup YAML for
+#'   categorical labels. If NULL, uses search_state configuration/default.
 #' @return List with updated search_state and new model information
 #' @export
 add_covariate_to_model <- function(search_state, base_model_id, covariate_tag,
-                                   step_number = NULL) {
+                                   step_number = NULL,
+                                   lookup_file = NULL) {
   cat(sprintf("[+] Adding covariate %s to model %s\n", covariate_tag, base_model_id))
 
   # STEP 1: Validate inputs and calculate step number FIRST
@@ -57,6 +60,9 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag,
   # STEP 3: Comprehensive error handling wrapper
   tryCatch({
     # Sub-step 3a: Create BBR model
+      technical_log <- character(0)  # Initialize early for error handler scope
+      log_filename <- NULL
+   
     cat("  Creating BBR model...\n")
     parent_path <- file.path(search_state$models_folder, base_model_id)
 
@@ -85,15 +91,59 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag,
     param_name <- cov_info$PARAMETER
     cov_on_param <- paste0(cov_name, "_", param_name)
 
-    model_result <- model_add_cov(
-      search_state = search_state,
-      ref_model = new_model_name,
-      cov_on_param = cov_on_param,
-      id_var = search_state$idcol,
-      data_file = search_state$data_file,
-      covariate_search = search_state$covariate_search,
-      capture_log = TRUE
-    )
+    # Wrap model_add_cov with error tracing to capture logs even on failure
+    model_result <- tryCatch({
+      model_add_cov(
+        search_state = search_state,
+        ref_model = new_model_name,
+        cov_on_param = cov_on_param,
+        id_var = search_state$idcol,
+        data_file = search_state$data_file,
+        covariate_search = search_state$covariate_search,
+        capture_log = TRUE,
+        lookup_file = lookup_file
+      )
+    }, error = function(cov_error) {
+      # Even on error, we want to save what we captured
+      cat(sprintf("  [ERROR] Covariate addition failed: %s\n", cov_error$message))
+      # Save error details including what we know so far
+      list(
+        status = "error",
+        error_message = cov_error$message,
+        log_entries = character(0)  # Will be populated if we could extract it
+      )
+    })
+
+    # Check if model_add_cov succeeded or failed
+    if (!is.null(model_result$status) && model_result$status == "error") {
+      # Save error log with diagnostics
+      error_log_content <- c(
+        "=== COVARIATE ADDITION FAILED ===",
+        sprintf("Time: %s", Sys.time()),
+        sprintf("Model: %s", new_model_name),
+        sprintf("Covariate parameter: %s", cov_on_param),
+        sprintf("Covariate: %s (Reference: %s)", cov_name, matching_cov$REFERENCE[1]),
+        sprintf("ID column: %s", search_state$idcol),
+        sprintf("Data file dimensions: %d rows x %d columns", nrow(search_state$data_file), ncol(search_state$data_file)),
+        sprintf("Available columns: %s", paste(names(search_state$data_file), collapse = ", ")),
+        "",
+        "ERROR DETAILS:",
+        model_result$error_message,
+        "",
+        "POSSIBLE CAUSES:",
+        sprintf("- Covariate column '%s' missing from data? Check available columns above.", cov_name),
+        sprintf("- ID column '%s' not found in data? Available: %s", search_state$idcol, paste(names(search_state$data_file), collapse = ", ")),
+        "- Data mismatch in tapply() call (arguments must have same length)"
+      )
+      
+      log_filename <<- file.path(search_state$models_folder,
+                                 paste0(new_model_name, "_add_", covariate_name, "_error_log.txt"))
+      writeLines(error_log_content, log_filename)
+      cat(sprintf("  📝 Error log saved: %s\n", basename(log_filename)))
+      
+      # Now throw to be caught by outer handler
+      stop(model_result$error_message)
+    }
 
     search_state <- model_result$search_state
     technical_log <- model_result$log_entries
@@ -208,6 +258,8 @@ create_model_info_log <- function(search_state, model_name, parent_model, covari
     formula_display <- sprintf("* (%s/%s)**THETA(3)", cov_info$COVARIATE, cov_info$REFERENCE)
   } else if (cov_info$STATUS == "con" & cov_info$FORMULA == "linear") {
     formula_display <- sprintf("* (1 + (%s-%s) * THETA(3))", cov_info$COVARIATE, cov_info$REFERENCE)
+  } else if (cov_info$STATUS == "con" & cov_info$FORMULA == "exponential") {
+    formula_display <- sprintf("* EXP(THETA(N) * (%s-%s))", cov_info$COVARIATE, cov_info$REFERENCE)
   } else if (cov_info$STATUS == "cat") {
     formula_display <- sprintf("* beta_%s_%s", cov_info$COVARIATE, cov_info$PARAMETER)
   } else {
@@ -225,7 +277,7 @@ create_model_info_log <- function(search_state, model_name, parent_model, covari
     sprintf("[%s] Status: created", timestamp),
     "",
     "Model Details:",
-    sprintf("- Model file: %s.ctl", model_name),
+    sprintf("- Model file: %s", basename(find_model_file(file.path(search_state$models_folder, model_name)) %||% paste0(model_name, ".ctl"))),
     sprintf("- BBR YAML: %s.yaml", model_name),
     sprintf("- Parent model: %s", parent_model),
     sprintf("- Creation time: %s", timestamp),
@@ -247,10 +299,14 @@ create_model_info_log <- function(search_state, model_name, parent_model, covari
 #' @param data_file Data.frame. Dataset for time-varying checks
 #' @param covariate_search Data.frame. Covariate search configuration
 #' @param capture_log Function. Logging function (optional)
+#' @param lookup_file Character or NULL. Optional path to lookup YAML for
+#'   categorical labels. If NULL, uses search_state$search_config$lookup_file
+#'   then defaults to data/spec/lookup.yaml.
 #' @return Updated search_state
 #' @export
 model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
-                          data_file, covariate_search, capture_log = FALSE) {
+                          data_file, covariate_search, capture_log = FALSE,
+                          lookup_file = NULL) {
 
   # Default logging function if none provided
   captured_log <- character(0)
@@ -270,6 +326,15 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   log_function(paste("Model:", ref_model))
   log_function(paste("Covariate parameter:", cov_on_param))
 
+  resolved_lookup_file <- if (!is.null(lookup_file)) {
+    lookup_file
+  } else if (!is.null(search_state$search_config) &&
+             !is.null(search_state$search_config$lookup_file)) {
+    search_state$search_config$lookup_file
+  } else {
+    file.path("data", "spec", "lookup.yaml")
+  }
+
   modelcode <- read_model_file(search_state, ref_model)
   original_file_path <- attr(modelcode, "file_path")
   log_function(paste("Read model file:", basename(original_file_path)))
@@ -283,13 +348,18 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   log_function(paste("Covariate:", cova, "Parameter:", param, "Reference:", ref))
 
   # Get max THETA number
-  thetas <- modelcode[grepl('THETA\\(..?\\)', modelcode)] %>%
+  thetas <- modelcode[grepl('THETA\\(\\d+\\)', modelcode)] %>%
     gsub(pattern = '.*THETA\\(', replacement = '') %>%
     gsub(pattern = '\\).*', replacement = '') %>%
     as.double()
 
-  newtheta <- max(thetas) + 1
-  log_function(paste("Current max THETA:", max(thetas), "New THETA number:", newtheta))
+  if (length(thetas) == 0) {
+    newtheta <- 1
+    log_function("No existing THETAs found, starting at THETA(1)")
+  } else {
+    newtheta <- max(thetas) + 1
+    log_function(paste("Current max THETA:", max(thetas), "New THETA number:", newtheta))
+  }
 
   temp_cov <- dplyr::filter(covariate_search, cov_to_test == cov_on_param)
 
@@ -307,6 +377,7 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
     cov_status == "con" & cov_formula == "power" ~ "2",
     cov_status == "con" & cov_formula == "power1" ~ "5",
     cov_status == "con" & cov_formula == "power0.75" ~ "6",
+    cov_status == "con" & cov_formula == "exponential" ~ "4",
     .default = "Please check covariate status and formula"
   )
 
@@ -323,18 +394,18 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   # Generate formula based on FLAG
   if(FLAG == "2") formule <- paste0(' * (',cova,'/',ref,')**THETA(', newtheta ,')')
   if(FLAG == "3") formule <- paste0(' * (1 + (',cova,'-',ref, ') * THETA(',newtheta ,'))')
+  if(FLAG == "4") formule <- paste0(" * EXP(THETA(", newtheta, ") * (", cova, "-", ref, "))")
   if(FLAG == "5") formule <- paste0(' * (',cova,'/',ref,')** THETA(', newtheta ,')')
   if(FLAG == "6") formule <- paste0(' * (',cova,'/',ref,')** THETA(', newtheta ,')')
 
   # Handle categorical covariates (simplified for core module)
   thetanmulti <- tibble()
   if(FLAG == "1"){
-    # Try to load lookup.yaml for categorical labels (optional)
+    # Try to load lookup YAML for categorical labels (optional)
     lookup_values <- NULL
-    lookup_file <- file.path("data", "spec", "lookup.yaml")
-    if (file.exists(lookup_file)) {
+    if (!is.null(resolved_lookup_file) && file.exists(resolved_lookup_file)) {
       tryCatch({
-        lookup_data <- yaml::read_yaml(lookup_file)
+        lookup_data <- yaml::read_yaml(resolved_lookup_file)
         # Check if this covariate exists in lookup
         if (cova %in% names(lookup_data)) {
           lookup_info <- lookup_data[[cova]]
@@ -344,12 +415,18 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
               as.list(lookup_info$decode),
               as.character(lookup_info$values)
             )
-            log_function(paste("Found lookup values for", cova, "in lookup.yaml"))
+            log_function(paste("Found lookup values for", cova, "in", resolved_lookup_file))
           }
         }
       }, error = function(e) {
-        log_function(paste("Note: Could not use lookup.yaml:", e$message))
+        log_function(paste("Note: Could not use lookup file:", e$message))
       })
+    } else {
+      log_function(paste("No lookup file found at:", resolved_lookup_file, "(using numeric labels)"))
+    }
+    if (!cova %in% names(data_file)) {
+      stop("Covariate '", cova, "' not found in data file. Available columns: ",
+           paste(head(names(data_file), 20), collapse = ", "))
     }
     uniqueval <- unique(data_file[[cova]])
     newvari <- cov_on_param
@@ -367,7 +444,7 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
       covx = uniqueval,
       label = character(length(uniqueval))  # Initialize empty
     )
-    for(a in 1:length(uniqueval)){
+    for(a in seq_along(uniqueval)){
       current_level <- uniqueval[a]
       theta_num <- newtheta + a - 1
 
@@ -403,6 +480,7 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   # Generate formula based on FLAG
   if(FLAG == "2") formule <- paste0(' * (',cova,'/',ref,')**THETA(', newtheta ,')')
   if(FLAG == "3") formule <- paste0(' * (1 + (',cova,'-',ref, ') * THETA(',newtheta ,'))')
+  if(FLAG == "4") formule <- paste0(" * EXP(THETA(", newtheta, ") * (", cova, "-", ref, "))")
   if(FLAG == "5") formule <- paste0(' * (',cova,'/',ref,')** THETA(', newtheta ,')')
   if(FLAG == "6") formule <- paste0(' * (',cova,'/',ref,')** THETA(', newtheta ,')')
 
@@ -412,29 +490,39 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   # Check if time-dependent
   max_levels <- max(tapply(data_file[[cova]], data_file[[id_var]],
                            function(x) length(unique(x))), na.rm = TRUE)
+  if (is.infinite(max_levels)) {
+    log_function("WARNING: Could not determine time-varying status - defaulting to non-time-varying")
+    max_levels <- 1
+  }
   time_varying <- max_levels > 1
 
   log_function(paste("Time-varying check:", time_varying, "(max levels:", max_levels, ")"))
 
   if(time_varying == FALSE) {
     # First try to find TV_ prefixed parameter (typical values)
-    linetu <- grep(paste0('^\\s*TV_', param), modelcode)
-    search_pattern <- paste0('^\\s*TV_', param)
+    linetu <- grep(paste0('^\\s*TV_', param, '\\b'), modelcode)
+    search_pattern <- paste0('^\\s*TV_', param, '\\b')
 
     # If not found, try parameter without TV_ prefix (e.g., Km, Vmax, etc.)
     if (length(linetu) == 0) {
-      linetu <- grep(paste0('^\\s*', param, '\\s*='), modelcode)
-      search_pattern <- paste0('^\\s*', param, '\\s*=')
+      linetu <- grep(paste0('^\\s*', param, '\\b\\s*='), modelcode)
+      search_pattern <- paste0('^\\s*', param, '\\b\\s*=')
      }
   } else {
     # Time-varying: search for parameter as-is
-    linetu <- grep(paste0('^\\s*', param), modelcode)
-    search_pattern <- paste0('^\\s*', param)
+    linetu <- grep(paste0('^\\s*', param, '\\b'), modelcode)
+    search_pattern <- paste0('^\\s*', param, '\\b')
   }
 
 
   log_function(paste("Looking for parameter line with pattern:", search_pattern))
   log_function(paste("Found parameter line at index:", linetu))
+
+  # If multiple matches, use the last one (final assignment to the parameter)
+  if (length(linetu) > 1) {
+    log_function(paste("WARNING: Multiple matches found, using last match at index:", linetu[length(linetu)]))
+    linetu <- linetu[length(linetu)]
+  }
 
   if (length(linetu) > 0) {
     original_line <- modelcode[linetu]
@@ -471,6 +559,10 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   log_function(paste("New THETA line to add:", newthetaline))
 
   lineomeg <- grep('\\$OMEGA', modelcode)[1]
+  if (is.na(lineomeg)) {
+    log_function("ERROR: No $OMEGA section found in model file")
+    stop("Model file missing $OMEGA section - cannot insert THETA line")
+  }
   log_function(paste("Inserting THETA line before $OMEGA section at line:", lineomeg))
 
   modelcode <- c(
@@ -481,6 +573,27 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
 
   log_function(paste("✓ THETA line added at position:", lineomeg))
   log_function(paste("Total lines in model:", length(modelcode)))
+
+  # Update $TABLE FILE= names to match new model number
+  # e.g. FILE=catab1 -> FILE=catab11 when ref_model is "run11"
+  new_model_num <- gsub("^run", "", ref_model)
+  if (grepl("^\\d+$", new_model_num)) {
+    table_lines <- grep("FILE=", modelcode, ignore.case = TRUE)
+    for (i in table_lines) {
+      old_line <- modelcode[i]
+      modelcode[i] <- gsub(
+        "(FILE=)([a-zA-Z]+)\\d+",
+        paste0("\\1\\2", new_model_num),
+        modelcode[i],
+        ignore.case = TRUE
+      )
+      if (modelcode[i] != old_line) {
+        log_function(paste("Updated TABLE FILE reference:"))
+        log_function(paste("  Before:", old_line))
+        log_function(paste("  After: ", modelcode[i]))
+      }
+    }
+  }
 
   # Write back
   attr(modelcode, "file_path") <- original_file_path
@@ -594,6 +707,211 @@ fix_theta_renumbering <- function(modelcode, theta_numbers_to_remove, log_functi
   return(modelcode)
 }
 
+# =============================================================================
+# PRE-INITIALIZATION MODEL PREPARATION
+# Create one model with multiple covariates and one combined log
+# =============================================================================
+
+#' Prepare Search Base Model by Adding Multiple Covariates
+#'
+#' @title Create one prepared base model with multiple covariates
+#' @description Copies a parent model, adds multiple covariates into the same
+#'   child model, writes one combined technical log, and returns metadata for
+#'   later initialization. Does NOT require search_database.
+#'
+#' @param base_model_path Character. Parent/base model id, e.g. "run1"
+#' @param covariate_tags Character vector of covariate tags, e.g.
+#'   c("beta_WT_CL", "beta_AGE_V2")
+#' @param new_model_number Integer. Required model number for the new model
+#' @param data_file_path Character. Path to NONMEM dataset CSV
+#' @param covariate_search_path Character. Path to covariate search CSV
+#' @param models_folder Character. Models directory
+#' @param idcol Character. ID column name
+#' @param overwrite Logical. Overwrite existing model if present
+#' @param lookup_file Character or NULL. Optional path to lookup YAML for
+#'   categorical labels. If NULL, defaults to data/spec/lookup.yaml.
+#'
+#' @return List with status, model_name, model_path, log_file, covariates_added
+#' @export
+prepare_search_base_model <- function(base_model_path,
+                                      covariate_tags,
+                                      new_model_number,
+                                      data_file_path,
+                                      covariate_search_path,
+                                      models_folder = "models",
+                                      idcol = "ID",
+                                      overwrite = TRUE,
+                                      lookup_file = NULL) {
+
+  cat("Preparing search base model with multiple covariates...\n")
+
+  # ---------------------------------------------------------------------------
+  # Step 1: Validate basic inputs
+  # ---------------------------------------------------------------------------
+  if (length(covariate_tags) == 0) {
+    stop("covariate_tags cannot be empty")
+  }
+
+  if (is.null(new_model_number) || length(new_model_number) != 1 || is.na(new_model_number)) {
+    stop("new_model_number must be a single non-missing integer")
+  }
+
+  new_model_number <- as.integer(new_model_number)
+  new_model_name <- sprintf("run%d", new_model_number)
+
+  parent_path <- file.path(models_folder, base_model_path)
+  if (!file.exists(paste0(parent_path, ".ctl")) && !file.exists(paste0(parent_path, ".mod"))) {
+    stop("Parent model file not found: ", parent_path)
+  }
+
+  # ---------------------------------------------------------------------------
+  # Step 2: Load data needed for model editing
+  # ---------------------------------------------------------------------------
+  data_file <- readr::read_csv(data_file_path, show_col_types = FALSE)
+  covariate_search <- readr::read_csv(covariate_search_path, show_col_types = FALSE)
+
+  if (!"cov_to_test" %in% names(covariate_search)) {
+    covariate_search$cov_to_test <- paste0(
+      "beta_",
+      covariate_search$COVARIATE, "_",
+      covariate_search$PARAMETER
+    )
+  }
+
+  # Build tags exactly as initialize does via tags.yaml semantics:
+  # beta_WT_CL -> "WT_CL"
+  tags <- stats::setNames(
+    as.list(gsub("^beta_", "", covariate_search$cov_to_test)),
+    covariate_search$cov_to_test
+  )
+
+  invalid_tags <- setdiff(covariate_tags, names(tags))
+  if (length(invalid_tags) > 0) {
+    stop("Unknown covariate tag(s): ", paste(invalid_tags, collapse = ", "))
+  }
+
+  covariate_tags <- unique(covariate_tags)
+  covariate_values <- unname(unlist(tags[covariate_tags]))
+
+  resolved_lookup_file <- if (!is.null(lookup_file)) {
+    lookup_file
+  } else {
+    file.path("data", "spec", "lookup.yaml")
+  }
+
+  # ---------------------------------------------------------------------------
+  # Step 3: Build minimal temporary state required by model_add_cov()
+  # ---------------------------------------------------------------------------
+  temp_state <- list(
+    base_model = base_model_path,
+    data_file = data_file,
+    covariate_search = covariate_search,
+    models_folder = models_folder,
+    idcol = idcol,
+    tags = tags,
+    search_config = list(lookup_file = resolved_lookup_file)
+  )
+
+  # ---------------------------------------------------------------------------
+  # Step 4: Create one child model from parent
+  # ---------------------------------------------------------------------------
+  cat(sprintf("  Parent model: %s\n", base_model_path))
+  cat(sprintf("  New model: %s\n", new_model_name))
+
+  parent_mod <- bbr::read_model(parent_path)
+
+  new_mod <- bbr::copy_model_from(
+    .parent_mod = parent_mod,
+    .new_model = new_model_name,
+    .inherit_tags = TRUE,
+    .overwrite = overwrite
+  )
+
+  new_mod <- bbr::add_tags(new_mod, .tags = covariate_values)
+
+  note_text <- sprintf("Prepared base + %s", paste(covariate_values, collapse = "; "))
+  new_mod <- bbr::replace_all_notes(new_mod, .notes = note_text)
+
+  # ---------------------------------------------------------------------------
+  # Step 5: Add all covariates into the same child model
+  # ---------------------------------------------------------------------------
+  combined_log <- c(
+    "========================================",
+    "PREPARE SEARCH BASE MODEL",
+    "========================================",
+    sprintf("Timestamp: %s", format(Sys.time(), "%Y-%m-%d %H:%M:%S")),
+    sprintf("Parent model: %s", base_model_path),
+    sprintf("New model: %s", new_model_name),
+    sprintf("Requested tags: %s", paste(covariate_tags, collapse = ", ")),
+    sprintf("Resolved covariates: %s", paste(covariate_values, collapse = ", ")),
+    ""
+  )
+
+  for (cov_tag in covariate_tags) {
+    cov_value <- tags[[cov_tag]]
+
+    matching_cov <- covariate_search[covariate_search$cov_to_test == cov_tag, , drop = FALSE]
+    if (nrow(matching_cov) == 0) {
+      stop("No matching covariate definition found for tag: ", cov_tag)
+    }
+
+    cov_name <- matching_cov$COVARIATE[1]
+    param_name <- matching_cov$PARAMETER[1]
+    cov_on_param <- paste0(cov_name, "_", param_name)
+
+    combined_log <- c(
+      combined_log,
+      "----------------------------------------",
+      sprintf("Adding: %s", cov_tag),
+      sprintf("Resolved as: %s", cov_value),
+      sprintf("cov_on_param: %s", cov_on_param),
+      ""
+    )
+
+    model_result <- model_add_cov(
+      search_state = temp_state,
+      ref_model = new_model_name,
+      cov_on_param = cov_on_param,
+      id_var = idcol,
+      data_file = data_file,
+      covariate_search = covariate_search,
+      capture_log = TRUE
+    )
+
+    temp_state <- model_result$search_state
+
+    if (!is.null(model_result$log_entries) && length(model_result$log_entries) > 0) {
+      combined_log <- c(combined_log, model_result$log_entries, "")
+    } else {
+      combined_log <- c(combined_log, "[No technical log entries captured]", "")
+    }
+  }
+
+  # ---------------------------------------------------------------------------
+  # Step 6: Save one combined log file
+  # ---------------------------------------------------------------------------
+  safe_suffix <- paste(gsub("[^A-Za-z0-9_]+", "_", covariate_values), collapse = "__")
+  log_file <- file.path(
+    models_folder,
+    paste0(new_model_name, "_prepare_base_", safe_suffix, "_log.txt")
+  )
+
+  writeLines(combined_log, log_file)
+  cat(sprintf("  Combined log saved: %s\n", basename(log_file)))
+
+  # ---------------------------------------------------------------------------
+  # Step 7: Return metadata for later initialization
+  # ---------------------------------------------------------------------------
+  return(list(
+    status = "success",
+    model_name = new_model_name,
+    model_path = file.path(models_folder, new_model_name),
+    parent_model = base_model_path,
+    covariate_tags = covariate_tags,
+    covariates_added = covariate_values,
+    log_file = log_file
+  ))
+}
 
 
 #' Remove Covariate from Model (Clean Interface)
@@ -685,6 +1003,9 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
 
   # Step 4: FIXED THETA DETECTION - Count actual THETA parameters, not line positions
   theta_start <- grep("^\\$THETA", modelcode)
+  if (length(theta_start) == 0) {
+    stop("No $THETA section found in model file for ", model_to_modify)
+  }
   next_section <- grep("^\\$", modelcode)
   theta_end <- next_section[next_section > theta_start[1]][1] - 1
   if (is.na(theta_end)) theta_end <- length(modelcode)
@@ -720,7 +1041,7 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
   }
 
   theta_numbers_to_remove <- sort(theta_numbers_to_remove)
-  log_msg(paste("THETA numbers to remove:", paste(theta_numbers_to_remove, collapse = ", ")))
+  log_msg(paste("THETA numbers to remove:", paste(theta_numbers_to_remove, collapse = ", "))) # nolint: line_length_linter.
 
   # Step 5: Remove covariate effects from parameter equations
   lines_modified <- 0
@@ -739,6 +1060,8 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
         pattern2 <- paste0("\\s*\\*\\s*\\(", cova, "/[0-9\\.]+\\)\\*\\*THETA\\(", theta_num, "\\)")
         # Pattern 3: * COVARIATE_VARIABLE
         pattern3 <- paste0("\\s*\\*\\s*", covariate_to_remove, "\\b")
+        # Pattern 4: * EXP(THETA(X) * (COVARIATE-REF))
+        pattern4 <- paste0("\\s*\\*\\s*EXP\\(THETA\\(", theta_num, "\\)\\s*\\*\\s*\\(", cova, "-[0-9\\.]+\\)\\)")
 
         if (grepl(pattern1, modified_line)) {
           modified_line <- gsub(pattern1, "", modified_line)
@@ -748,6 +1071,9 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
           line_changed <- TRUE
         } else if (grepl(pattern3, modified_line)) {
           modified_line <- gsub(pattern3, "", modified_line)
+          line_changed <- TRUE
+        } else if (grepl(pattern4, modified_line)) {
+          modified_line <- gsub(pattern4, "", modified_line)
           line_changed <- TRUE
         }
       }
@@ -821,6 +1147,28 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
   # Step 8: Apply THETA renumbering
   log_msg("Starting THETA renumbering...")
   modelcode <- fix_theta_renumbering(modelcode, theta_numbers_to_remove, log_msg)
+
+  # Step 8b: Update $TABLE FILE= names to match the new model number
+  if (save_as_new_model) {
+    new_model_num <- gsub("^run", "", model_to_modify)
+    if (grepl("^\\d+$", new_model_num)) {
+      table_lines <- grep("FILE=", modelcode, ignore.case = TRUE)
+      for (i in table_lines) {
+        old_line <- modelcode[i]
+        modelcode[i] <- gsub(
+          "(FILE=)([a-zA-Z]+)\\d+",
+          paste0("\\1\\2", new_model_num),
+          modelcode[i],
+          ignore.case = TRUE
+        )
+        if (modelcode[i] != old_line) {
+          log_msg(paste("Updated TABLE FILE reference:"))
+          log_msg(paste("  Before:", old_line))
+          log_msg(paste("  After: ", modelcode[i]))
+        }
+      }
+    }
+  }
 
   # Step 9: Write the modified model file
   attr(modelcode, "file_path") <- original_file_path

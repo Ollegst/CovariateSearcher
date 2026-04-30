@@ -5,7 +5,6 @@
 
 #' CovariateSearcher: Automated Stepwise Covariate Modeling for NONMEM
 #'
-#' @description
 #' Functional R package for stepwise covariate modeling with NONMEM integration
 #' via the bbr package. Provides automated covariate selection, model execution,
 #' progress monitoring, and intelligent error recovery.
@@ -18,9 +17,9 @@
 #'   \item \code{\link{remove_covariate_from_model}}: Remove single covariate
 #' }
 #'
-#' @docType package
 #' @name CovariateSearcher-package
 #' @aliases CovariateSearcher
+#' @keywords internal
 #'
 #' @importFrom dplyr %>% mutate arrange filter select group_by summarise bind_rows case_when count n desc pull
 #' @importFrom tibble tibble
@@ -38,7 +37,7 @@
 #' @importFrom rlang parse_expr
 #' @importFrom dplyr first if_else where
 #' @importFrom rlang := !!
-NULL
+"_PACKAGE"
 
 
 # In CovariateSearchr.R file, update the globalVariables section:

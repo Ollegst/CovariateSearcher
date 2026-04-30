@@ -222,7 +222,7 @@ generate_scm_report <- function(search_state,
       excluded <- search_state$excluded_covariates
       if (length(excluded) > 0) {
         lines <- c(lines,
-                   sprintf("Excluded Covariates: %s", paste(excluded, collapse = ", "))
+                   sprintf("Excluded Covariates: %s", paste(excluded, collapse = ", ")) 
         )
       }
     }

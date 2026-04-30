@@ -28,6 +28,25 @@ read_model_file <- function(search_state, run_name, extensions = c(".ctl", ".mod
 }
 
 
+#' Find Model File Path
+#'
+#' @title Find the actual file path for a NONMEM model
+#' @description Given a base path (without extension), finds the actual model file
+#'   by trying .ctl and .mod extensions in order.
+#' @param base_path Character. Base path without extension (e.g., "models/run001")
+#' @param extensions Character vector. File extensions to try (default: c(".ctl", ".mod"))
+#' @return Character string with the full path to the found file, or NULL if not found
+#' @export
+find_model_file <- function(base_path, extensions = c(".ctl", ".mod")) {
+  for (ext in extensions) {
+    file_path <- paste0(base_path, ext)
+    if (file.exists(file_path)) {
+      return(file_path)
+    }
+  }
+  return(NULL)
+}
+
 
 #' Write Model File
 #'
@@ -258,115 +277,80 @@ read_nonmem_lst <- function(model_path) {
       has_issues = FALSE
     )
 
-    # FIXED: Safer pattern matching with validation
-    has_successful <- any(grepl("MINIMIZATION SUCCESSFUL|OPTIMIZATION WAS COMPLETED", lst_content, ignore.case = FALSE))
-    has_terminated <- any(grepl("MINIMIZATION TERMINATED", lst_content, ignore.case = FALSE))
-    has_obj_terminated <- any(grepl("PROGRAM TERMINATED BY OBJ", lst_content, ignore.case = FALSE))
-    has_problem_ended <- any(grepl("PROBLEM ENDED", lst_content, ignore.case = FALSE))
-    has_stop_time <- any(grepl("Stop Time:", lst_content, ignore.case = FALSE))
+    # Generalized status markers for better portability across NONMEM versions.
+    success_patterns <- c(
+      "MINIMIZATION SUCCESSFUL",
+      "OPTIMIZATION( WAS)? COMPLETED",
+      "ESTIMATION STEP WAS COMPLETED"
+    )
+    hard_failure_patterns <- c(
+      "MINIMIZATION TERMINATED",
+      "PROGRAM TERMINATED BY OBJ",
+      "TERMINATED DUE TO",
+      "FATAL ERROR"
+    )
+    severe_warning_patterns <- c(
+      "WARNING.*SEVERE",
+      "NUMERICAL DIFFICULT",
+      "SINGULAR"
+    )
+    stop_marker_patterns <- c("Stop Time:")
+    # Keep runtime error patterns specific to avoid false positives from generic words.
+    runtime_error_patterns <- c(
+      "ERROR=",
+      "ERROR IN",
+      "PROGRAM TERMINATED",
+      "ABORTING"
+    )
+    soft_end_patterns <- c("PROBLEM ENDED")
 
-    # Check for successful completion
-    if (has_successful) {
+    pattern_hit <- function(patterns) {
+      idx <- which(grepl(paste(patterns, collapse = "|"), lst_content, ignore.case = TRUE))
+      list(found = length(idx) > 0, idx = idx)
+    }
+
+    success_hit <- pattern_hit(success_patterns)
+    hard_failure_hit <- pattern_hit(hard_failure_patterns)
+    severe_warning_hit <- pattern_hit(severe_warning_patterns)
+    stop_hit <- pattern_hit(stop_marker_patterns)
+    runtime_error_hit <- pattern_hit(runtime_error_patterns)
+    soft_end_hit <- pattern_hit(soft_end_patterns)
+
+    has_successful <- success_hit$found
+    has_hard_failure <- hard_failure_hit$found
+    has_stop_time <- stop_hit$found
+
+    # Check for completion/failure with precedence to explicit hard failures.
+    if (has_hard_failure) {
+      result$status <- "failed"
+      result$has_issues <- TRUE
+      result$error_message <- trimws(lst_content[hard_failure_hit$idx[1]])
+      result$error_excerpt <- result$error_message
+
+    } else if (has_successful) {
       result$status <- "completed"
       result$has_issues <- FALSE
 
-    } else if (has_problem_ended) {
-      # NEW: PROBLEM ENDED indicates failure
-      result$status <- "failed"
-      result$has_issues <- TRUE
-      result$error_message <- "PROBLEM ENDED - Abnormal termination"
-
-      # Try to extract more context around PROBLEM ENDED
-      problem_lines <- which(grepl("PROBLEM ENDED", lst_content))
-      if (length(problem_lines) > 0) {
-        # Get lines around the PROBLEM ENDED message
-        context_start <- max(1, problem_lines[1] - 2)
-        context_end <- min(length(lst_content), problem_lines[1] + 2)
-        context_lines <- lst_content[context_start:context_end]
-        result$error_excerpt <- paste(context_lines, collapse = "\n")
-      }
-
-    } else if (has_terminated) {
-      result$status <- "failed"
-      result$has_issues <- TRUE
-
-      # FIXED: Comprehensive error message extraction with validation
-      tryCatch({
-        term_lines <- lst_content[grepl("MINIMIZATION TERMINATED|DUE TO|ERROR=",
-                                        lst_content, ignore.case = FALSE)]
-
-        if (length(term_lines) > 0) {
-          # Extract the most informative line
-          error_lines <- term_lines[grepl("DUE TO|ERROR=", term_lines, ignore.case = FALSE)]
-
-          if (length(error_lines) > 0) {
-            error_line <- error_lines[1]
-            # FIXED: Safer string processing with validation
-            if (!is.null(error_line) && nchar(as.character(error_line)) > 0) {
-              clean_error <- tryCatch({
-                error_str <- as.character(error_line)
-                # Remove leading spaces
-                error_str <- gsub("^\\s+", "", error_str)
-                # Normalize spaces
-                error_str <- gsub("\\s+", " ", error_str)
-                # Remove "DUE TO"
-                error_str <- gsub("DUE TO ", "", error_str)
-                # Clean up error format
-                error_str <- gsub("\\(ERROR=", "(Error ", error_str)
-                # Final trim
-                trimws(error_str)
-              }, error = function(e) {
-                "MINIMIZATION TERMINATED"
-              })
-
-              # FIXED: Ensure we have a non-empty error message
-              if (!is.null(clean_error) && nchar(as.character(clean_error)) > 0) {
-                result$error_message <- as.character(clean_error)
-              } else {
-                result$error_message <- "MINIMIZATION TERMINATED"
-              }
-            } else {
-              result$error_message <- "MINIMIZATION TERMINATED"
-            }
-          } else {
-            result$error_message <- "MINIMIZATION TERMINATED"
-          }
-        } else {
-          result$error_message <- "MINIMIZATION TERMINATED"
-        }
-      }, error = function(e) {
-        result$error_message <- "MINIMIZATION TERMINATED (error parsing details)"
-      })
-
-    } else if (has_obj_terminated) {
-      result$status <- "failed"
-      result$has_issues <- TRUE
-      result$error_message <- "PROGRAM TERMINATED BY OBJ"
     } else if (has_stop_time) {
-      # NEW: If we have Stop Time but no success/failure markers
-      # This means the run finished but we need to determine if it succeeded
-
-      # Check for other failure indicators
-      has_error <- any(grepl("ERROR|ABORT", lst_content, ignore.case = TRUE))
-      has_warning_severe <- any(grepl("WARNING.*SEVERE", lst_content, ignore.case = TRUE))
-
-      if (has_error || has_warning_severe) {
+      # Stop Time with no hard failure usually means the run finished.
+      if (runtime_error_hit$found) {
         result$status <- "failed"
         result$has_issues <- TRUE
-
-        # Try to find the error message
-        if (has_error) {
-          error_lines <- lst_content[grepl("ERROR", lst_content, ignore.case = TRUE)]
-          result$error_message <- if (length(error_lines) > 0) error_lines[1] else "Unknown error"
-        } else {
-          warning_lines <- lst_content[grepl("WARNING.*SEVERE", lst_content, ignore.case = TRUE)]
-          result$error_message <- if (length(warning_lines) > 0) warning_lines[1] else "Severe warning"
-        }
+        result$error_message <- trimws(lst_content[runtime_error_hit$idx[1]])
+        result$error_excerpt <- result$error_message
       } else {
-        # Has Stop Time but no clear success/failure - likely completed with issues
-        result$status <- "completed_with_issues"
-        result$has_issues <- TRUE
-        result$error_message <- "Run completed without clear success message"
+        result$status <- "completed"
+        if (severe_warning_hit$found || soft_end_hit$found) {
+          result$has_issues <- TRUE
+          result$error_message <- "Run completed with warning markers"
+          marker_idx <- c(severe_warning_hit$idx, soft_end_hit$idx)
+          if (length(marker_idx) > 0) {
+            first_idx <- min(marker_idx)
+            context_start <- max(1, first_idx - 2)
+            context_end <- min(length(lst_content), first_idx + 2)
+            result$error_excerpt <- paste(lst_content[context_start:context_end], collapse = "\n")
+          }
+        }
       }
 
     } else {
@@ -385,7 +369,7 @@ read_nonmem_lst <- function(model_path) {
     }
     # ADDITIONAL CHECK: If status is still unknown but Stop Time exists
     if (result$status == "unknown" && has_stop_time) {
-      result$status <- "completed_with_issues"
+      result$status <- "completed"
       result$error_message <- "Run finished with unknown status"
       result$has_issues <- TRUE
     }
@@ -416,13 +400,23 @@ get_model_status_from_files <- function(model_path) {
 
   lst_info <- read_nonmem_lst(model_path)
   ext_info <- read_nonmem_ext(model_path)
+  ext_has_valid_ofv <- isTRUE(ext_info$found) &&
+    !is.null(ext_info$ofv) &&
+    length(ext_info$ofv) > 0 &&
+    is.finite(ext_info$ofv[1])
 
   if (!lst_info$found && !ext_info$found) {
     return("not_run")
   }
 
   if (!lst_info$found) {
-    return("incomplete")
+    return(if (ext_has_valid_ofv) "completed_with_issues" else "incomplete")
+  }
+
+  # EXT fallback: if LST parser is conservative but EXT has valid final OFV,
+  # keep status non-failing so completed runs are not blocked.
+  if (identical(lst_info$status, "failed") && ext_has_valid_ofv) {
+    return("completed_with_issues")
   }
 
   # Return the status from enhanced LST analysis

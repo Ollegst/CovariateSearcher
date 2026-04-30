@@ -85,7 +85,32 @@ update_model_status_from_files <- function(search_state, model_name, force = FAL
     lst_file <- file.path(model_path, paste0(model_name, ".lst"))
 
     if (!file.exists(lst_file)) {
-      # No LST file = still running
+      # No LST file - check if bbi even started NONMEM
+      output_dir <- model_path  # e.g., models/run19/
+
+      if (!dir.exists(output_dir)) {
+        # No output directory = model never started = failed launch
+        results$status <- "failed"
+        results$error_message <- "NONMEM never started - no output directory (check data path and bbi configuration)"
+        return(results)
+      }
+
+      # Output directory exists but no LST file
+      # Check for bbi error indicator: OUTPUT file
+      output_file <- file.path(output_dir, "OUTPUT")
+      if (file.exists(output_file)) {
+        output_content <- tryCatch(readLines(output_file, warn = FALSE), error = function(e) "")
+        error_msg <- if (length(output_content) > 0) {
+          paste(utils::head(output_content, 5), collapse = "; ")
+        } else {
+          "bbi error (empty OUTPUT file)"
+        }
+        results$status <- "failed"
+        results$error_message <- paste("bbi initialization error:", error_msg)
+        return(results)
+      }
+
+      # Directory exists, no OUTPUT error, no LST yet - still starting up
       results$status <- "in_progress"
       return(results)
     }
@@ -183,6 +208,16 @@ update_model_status_from_files <- function(search_state, model_name, force = FAL
             TRUE ~ "Invalid OFV"
           )
         }
+
+        # Check covariance step: .cov file is only written when covariance succeeds
+        require_cov_step <- search_state$search_config$require_cov_step %||% TRUE
+        if (require_cov_step && results$status == "completed") {
+          cov_file <- file.path(model_path, paste0(model_name, ".cov"))
+          if (!file.exists(cov_file)) {
+            results$status <- "failed"
+            results$error_message <- "Covariance step failed (no .cov file)"
+          }
+        }
       }
     }
 
@@ -209,10 +244,16 @@ update_model_status_from_files <- function(search_state, model_name, force = FAL
     # Extract RSE (only for successful runs)
     if (results$status == "completed") {
       results$rse_max <- tryCatch({
-        params <- get_param2(
-          model_number = model_name,
-          count_model = 1,
-          models_folder = search_state$models_folder
+        params <- withCallingHandlers(
+          get_param2(
+            model_number = model_name,
+            count_model = 1,
+            models_folder = search_state$models_folder
+          ),
+          warning = function(w) {
+            if (grepl("fixed", conditionMessage(w), fixed = TRUE))
+              invokeRestart("muffleWarning")
+          }
         )
 
         rse_values <- params$RSE[!is.na(params$RSE) & is.finite(params$RSE)]
@@ -220,6 +261,7 @@ update_model_status_from_files <- function(search_state, model_name, force = FAL
       }, error = function(e) {
         NA_real_
       })
+
     }
 
     return(results)
@@ -597,7 +639,6 @@ get_model_max_rse <- function(search_state, model_name) {
       models_folder = search_state$models_folder
     )
 
-    # Extract RSE values
     rse_values <- params$RSE[!is.na(params$RSE) & is.finite(params$RSE)]
 
     if (length(rse_values) > 0) {
@@ -946,8 +987,8 @@ print_parameter_validation <- function(validation_result, verbose = TRUE) {
     cat("  value ; PARAM_NAME ; units ; RATIO|LOG\n\n")
     cat("Examples:\n")
     cat("  $THETA\n")
-    cat("  0.5 ; TVCL ; L/h ; LOG\n")
-    cat("  10  ; TVV  ; L   ; LOG\n\n")
+    cat("  0.5 ; CL ; L/h ; LOG\n")
+    cat("  10  ; V  ; L   ; LOG\n\n")
     cat("  $OMEGA BLOCK(3)\n")
     cat("  0.1 ; IIV_CL    ; ; RATIO\n")
     cat("  0.1 ; IIV_CL_V2 ; ; RATIO\n")

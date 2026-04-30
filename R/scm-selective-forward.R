@@ -699,6 +699,13 @@ run_scm_selective_forward <- function(search_state,
         cat(sprintf("✅ Redemption Step %d found %d significant models\n",
                     redemption_step, length(redemption_significant)))
 
+        # Update current_best_model so the final return value reflects the redemption winner
+        if (!is.null(redemption_selection$best_model)) {
+          current_redemption_base <- redemption_selection$best_model
+          current_best_model <- redemption_selection$best_model
+          cat(sprintf("📍 Redemption winner: %s (new best)\n", current_best_model))
+        }
+
         # Store redemption results
         step_results[[sprintf("redemption_%d", redemption_step)]] <- list(
           creation = redemption_result,
@@ -718,6 +725,38 @@ run_scm_selective_forward <- function(search_state,
     } else {
       cat("\n✅ No redemption needed - no remaining covariates to test\n")
     }
+  }
+
+  # After redemption, update current_best_model to the model with lowest absolute OFV
+  # that also passed the forward selection OFV criteria (using per-covariate df)
+  all_completed_candidates <- search_state$search_database[
+    search_state$search_database$status == "completed" &
+      !is.na(search_state$search_database$ofv) &
+      !is.na(search_state$search_database$delta_ofv) &
+      search_state$search_database$step_number > 0, ]
+  if (nrow(all_completed_candidates) > 0) {
+    passed <- vapply(seq_len(nrow(all_completed_candidates)), function(i) {
+      row <- all_completed_candidates[i, ]
+      cov_name <- tryCatch(
+        extract_covariate_name_from_tag(row$covariate_tested),
+        error = function(e) NA_character_
+      )
+      cov_df <- tryCatch(
+        calculate_covariate_df(cov_name, search_state$covariate_search),
+        error = function(e) 1L
+      )
+      threshold <- pvalue_to_threshold(forward_p_value, df = cov_df)
+      isTRUE(row$delta_ofv >= threshold)
+    }, logical(1))
+    all_completed <- all_completed_candidates[passed, ]
+  } else {
+    all_completed <- all_completed_candidates
+  }
+  if (nrow(all_completed) > 0) {
+    current_best_model <- all_completed$model_name[which.min(all_completed$ofv)]
+    cat(sprintf("🏆 Overall best model after forward+redemption: %s (OFV=%.2f)\n",
+                current_best_model,
+                all_completed$ofv[which.min(all_completed$ofv)]))
   }
 
   # ===================================================================

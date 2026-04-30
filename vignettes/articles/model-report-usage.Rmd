@@ -12,7 +12,7 @@ knitr::opts_chunk$set(
 
 # Generating Formatted Parameter Tables
 
-The `model_report()` function creates professional parameter tables from NONMEM model outputs. It formats estimates, RSE values, and shrinkage in a publication-ready table.
+The `model_report()` function creates professional parameter tables from NONMEM model outputs. It formats estimates, RSE values, shrinkage, and includes model-level metrics like OFV and Conditional number in a publication-ready table.
 
 ## 📋 Overview
 
@@ -29,17 +29,19 @@ The `model_report()` function creates professional parameter tables from NONMEM 
 
 ## 🚀 Basic Usage
 
-### Step 1: Load YAML Specification File
+### Step 1: Create `spec_pk` as an R Object
 
-The `model_report()` function uses a YAML specification file (`pk-extend.yml`) to format parameter names and labels.
+The `model_report()` function expects `spec_pk` to be an in-memory R object (list-like), not a file path string.
 
 ```{r load_spec}
 library(CovariateSearcher)
-library(yspec)
 library(here)
+library(yaml)
 
-# Load parameter specification file
-spec_pk <- read_yaml(here("data", "spec", "pk-extend.yml"))
+# Load parameter specification into an R object
+spec_pk <- yaml::read_yaml(here::here("data", "spec", "pk-extend.yml"))
+
+# Then pass the object to model_report(spec_pk = spec_pk)
 ```
 
 **What's in pk-extend.yml?**
@@ -119,10 +121,10 @@ pk_res
 
 ```{r function_signature}
 model_report(
-  model_names,              # Character vector of model names
-  shrinkage = "etasd",     # Type of shrinkage ("etasd", "etavr", "ebvsd", "ebvvr")
+  model_names,               # Character vector of model names
+  shrinkage = "etasd",      # Type of shrinkage ("etasd", "etavr", "ebvsd", "ebvvr")
   models_folder = "models", # Path to models folder
-  spec_pk = NULL           # yspec object for formatting (optional but recommended)
+  spec_pk = NULL             # Optional R object with parameter metadata
 )
 ```
 
@@ -133,7 +135,7 @@ model_report(
 | `model_names`   | Model name(s) without file extension | -          | ✅ Yes |    | 
 | `shrinkage`     | Type of shrinkage to report          | `"etasd"`  | No          |
 | `models_folder` | Directory containing models          | `"models"` | No          |
-| `spec_pk`       | YAML specification for formatting    | `NULL`     | Recommended |
+| `spec_pk`       | R object (list-like) for formatting metadata | `NULL` | Recommended |
 
 ### Shrinkage Options
 
@@ -148,11 +150,11 @@ model_report(
 
 ```{r complete_example}
 library(CovariateSearcher)
-library(yspec)
 library(here)
+library(yaml)
 
-# 1. Load YAML specification
-spec_pk <- read_yaml(here("data", "spec", "pk-extend.yml"))
+# 1. Load YAML specification into an R object
+spec_pk <- yaml::read_yaml(here::here("data", "spec", "pk-extend.yml"))
 
 # 2. Generate report for final models
 final_models <- c("run85", "run90", "run95")
@@ -241,7 +243,7 @@ pk_res <- model_report(
 
 ```{r with_spec}
 # With YAML specification
-spec_pk <- read_yaml(here("data", "spec", "pk-extend.yml"))
+spec_pk <- yaml::read_yaml(here::here("data", "spec", "pk-extend.yml"))
 
 pk_res <- model_report(
   model_names = "run28",
@@ -332,6 +334,8 @@ The table is automatically organized into sections:
 - `Estimate`: Parameter value
 - `RSE (%)`: Relative standard error
 - `Shrinkage (%)`: ETA shrinkage (for random effects)
+- `OFV` row: Objective function value
+- `Conditional number` row: Matrix-conditioning metric from `.cor`/`.cov` outputs
 
 **Multiple Models:**
 - `parameter_names`: Formatted parameter name
@@ -352,7 +356,7 @@ The table is automatically organized into sections:
 
 ```{r tip1}
 # ✅ Good - formatted output
-spec_pk <- read_yaml(here("data", "spec", "pk-extend.yml"))
+spec_pk <- yaml::read_yaml(here::here("data", "spec", "pk-extend.yml"))
 pk_res <- model_report(model_names = "run28", spec_pk = spec_pk)
 
 # ❌ Less ideal - raw parameter names
@@ -404,73 +408,8 @@ pk_res <- readRDS("output/parameter_table.rds")
 
 ---
 
-## 🐛 Troubleshooting
-
-### Issue: "File does not exist: 'models/runX.yaml'"
-
-**Cause:** Model files not found
-
-**Solution:**
-```{r troubleshoot1}
-# Check if model exists
-file.exists("models/run28.yaml")
-file.exists("models/run28.ctl")
-file.exists("models/run28.ext")
-
-# Check models folder path
-list.files("models")
-```
-
-### Issue: "Assertion on 'yaml_path' failed"
-
-**Cause:** BBR YAML file missing
-
-**Solution:**
-Model must be created/copied with BBR functions to have YAML metadata.
-
-### Issue: Parameters show as THETA1, OMEGA(1,1)
-
-**Cause:** Missing or incorrect `spec_pk`
-
-**Solution:**
-```{r troubleshoot2}
-# Load correct specification file
-spec_pk <- read_yaml(here("data", "spec", "pk-extend.yml"))
-
-# Check it loaded correctly
-names(spec_pk)  # Should show parameter names
-
-# Use in function
-pk_res <- model_report(model_names = "run28", spec_pk = spec_pk)
-```
-
-
----
-
 ## 📚 See Also
 
 - [YAML Specification Files](yaml-specification-files.html) - How to create pk-extend.yml
 - [Complete Workflow](complete-workflow.html) - Full SCM example
 - [Troubleshooting](troubleshooting.html) - Common issues and solutions
-
----
-
-## 🎯 Quick Reference
-
-```r
-# Minimal example
-library(CovariateSearcher)
-spec_pk <- read_yaml(here("data", "spec", "pk-extend.yml"))
-
-# Single model
-model_report("run28", spec_pk = spec_pk)
-
-# Multiple models
-model_report(c("run10", "run28", "run45"), spec_pk = spec_pk)
-
-# Save output
-pk_res <- model_report(c("run85", "run90"), spec_pk = spec_pk)
-flextable::save_as_docx(pk_res, path = "tables/parameters.docx")
-```
-
-**That's it!** You now have professional parameter tables for your NONMEM models.

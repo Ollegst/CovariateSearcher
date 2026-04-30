@@ -58,6 +58,7 @@ reference:
   contents:
   - add_covariate_to_model
   - remove_covariate_from_model
+  - prepare_search_base_model
   - create_retry_model
 
 - title: Evaluation and Selection
@@ -73,6 +74,8 @@ reference:
 - title: Validation
   desc: Functions for model validation
   contents:
+  - validate_base_model_for_search
+  - validate_covariate_search_table
   - validate_base_model_parameters
   - validate_parameter_blocks
   - validate_search_inputs
@@ -104,7 +107,6 @@ reference:
   contents:
   - CovariateSearcher-package
   - adjust_theta_for_covariate
-  - analyze_existing_models_yaml
   - analyze_model_covariates_yaml
   - analyze_model_from_logic
   - calculate_covariate_df
@@ -112,13 +114,12 @@ reference:
   - create_comprehensive_table
   - create_model_info_log
   - detect_estimation_problems
-  - discover_existing_models_simple
-  - ensure_base_model_in_database
   - evaluate_removal_impacts
   - extract_covariate_name_from_tag
   - extract_model_params
   - extract_nonmem_timestamps
   - extract_params
+  - find_model_file
   - fix_theta_renumbering
   - force_update_models
   - generate_changes_display

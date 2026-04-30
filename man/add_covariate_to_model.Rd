@@ -8,7 +8,8 @@ add_covariate_to_model(
   search_state,
   base_model_id,
   covariate_tag,
-  step_number = NULL
+  step_number = NULL,
+  lookup_file = NULL
 )
 }
 \arguments{
@@ -19,6 +20,9 @@ add_covariate_to_model(
 \item{covariate_tag}{Character. Covariate tag to add (e.g., "beta_cl_wt")}
 
 \item{step_number}{Integer. Optional step number (NULL for auto-calculation)}
+
+\item{lookup_file}{Character or NULL. Optional path to lookup YAML for
+categorical labels. If NULL, uses search_state configuration/default.}
 }
 \value{
 List with updated search_state and new model information

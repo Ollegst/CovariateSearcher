@@ -9,6 +9,11 @@
 #' @export
 create_scm_results_table <- function(search_state) {
 
+  # Accept either a full result list (from run_automated_scm_testing) or a bare search_state
+  if (!is.null(search_state$search_state)) {
+    search_state <- search_state$search_state
+  }
+
   db <- search_state$search_database
 
   # Get thresholds from search_state config
@@ -97,12 +102,27 @@ create_scm_results_table <- function(search_state) {
       if (is.na(delta_ofv)) {
         return(list(selected = "NO", comment = "Delta OFV not available"))
       }
-      # Backward: negative delta_ofv means worsening when removing
-      # We keep the covariate if removal causes large negative delta_ofv
-      if (abs(delta_ofv) > threshold_ofv) {
-        return(list(selected = "KEPT", comment = sprintf("Removal would worsen OFV by %.2f", abs(delta_ofv))))
+      # Use covariate-specific df (categorical covariates with >2 levels use df>1)
+      cov_tag <- row$covariate_tested
+      cov_df <- 1L
+      if (!is.na(cov_tag) && nchar(cov_tag) > 0) {
+        cov_name <- tryCatch(extract_covariate_name_from_tag(cov_tag), error = function(e) NA)
+        if (!is.na(cov_name)) {
+          cov_df <- tryCatch(
+            calculate_covariate_df(cov_name, search_state$covariate_search),
+            error = function(e) 1L
+          )
+        }
+      }
+      actual_threshold <- pvalue_to_threshold(backward_p_value, df = cov_df)
+      if (abs(delta_ofv) > actual_threshold) {
+        return(list(selected = "KEPT",
+                    comment = sprintf("Removal would worsen OFV by %.2f (threshold %.2f, df=%d)",
+                                      abs(delta_ofv), actual_threshold, cov_df)))
       } else {
-        return(list(selected = "REMOVED", comment = sprintf("Removal acceptable (ΔOFV=%.2f < %.2f)", abs(delta_ofv), threshold_ofv)))
+        return(list(selected = "REMOVED",
+                    comment = sprintf("Removal acceptable (ΔOFV=%.2f < %.2f, df=%d)",
+                                      abs(delta_ofv), actual_threshold, cov_df)))
       }
     }
 
@@ -111,20 +131,34 @@ create_scm_results_table <- function(search_state) {
       return(list(selected = "NO", comment = "Delta OFV not available"))
     }
 
+    # Use covariate-specific df (categorical covariates with >2 levels use df>1)
+    cov_tag <- row$covariate_tested
+    cov_df <- 1L
+    if (!is.na(cov_tag) && nchar(cov_tag) > 0) {
+      cov_name <- tryCatch(extract_covariate_name_from_tag(cov_tag), error = function(e) NA)
+      if (!is.na(cov_name)) {
+        cov_df <- tryCatch(
+          calculate_covariate_df(cov_name, search_state$covariate_search),
+          error = function(e) 1L
+        )
+      }
+    }
+    actual_forward_threshold <- pvalue_to_threshold(forward_p_value, df = cov_df)
+
     # Check OFV improvement
-    ofv_good <- delta_ofv > threshold_ofv
+    ofv_good <- delta_ofv > actual_forward_threshold
 
     # Check RSE
     rse_good <- is.na(rse_max) || rse_max < threshold_rse
 
     # Generate appropriate comment
     if (!ofv_good && !rse_good) {
-      comment <- sprintf("OFV (%.2f ≤ %.2f) and high RSE (%.1f%% > %d%%)",
-                         delta_ofv, threshold_ofv, rse_max, threshold_rse)
+      comment <- sprintf("OFV (%.2f ≤ %.2f, df=%d) and high RSE (%.1f%% > %d%%)",
+                         delta_ofv, actual_forward_threshold, cov_df, rse_max, threshold_rse)
       return(list(selected = "NO", comment = comment))
     } else if (!ofv_good) {
-      comment <- sprintf("Insufficient OFV improvement (%.2f ≤ %.2f)",
-                         delta_ofv, threshold_ofv)
+      comment <- sprintf("Insufficient OFV improvement (%.2f ≤ %.2f, df=%d)",
+                         delta_ofv, actual_forward_threshold, cov_df)
       return(list(selected = "NO", comment = comment))
     } else if (!rse_good) {
       comment <- sprintf("RSE too high (%.1f%% > %d%%)",
@@ -132,17 +166,19 @@ create_scm_results_table <- function(search_state) {
       return(list(selected = "NO", comment = comment))
     } else {
       # Both criteria met - check if this is the best in the step
-      step_best <- step_models[step_models$delta_ofv > threshold_ofv &
+      step_best <- step_models[step_models$delta_ofv > actual_forward_threshold &
                                  (is.na(step_models$rse_max) | step_models$rse_max < threshold_rse), ]
 
       if (nrow(step_best) > 0) {
         best_ofv <- max(step_best$delta_ofv, na.rm = TRUE)
-        if (abs(delta_ofv - best_ofv) < 0.01) {  # Account for rounding
+        if (abs(delta_ofv - best_ofv) < 0.01) {
           return(list(selected = "BEST",
-                      comment = sprintf("Best model (ΔOFV=%.2f, RSE=%.1f%%)", delta_ofv, rse_max)))
+                      comment = sprintf("Best model (ΔOFV=%.2f, df=%d, RSE=%.1f%%)",
+                                        delta_ofv, cov_df, rse_max)))
         } else {
           return(list(selected = "YES",
-                      comment = sprintf("Meets criteria (ΔOFV=%.2f, RSE=%.1f%%)", delta_ofv, rse_max)))
+                      comment = sprintf("Meets criteria (ΔOFV=%.2f, df=%d, RSE=%.1f%%)",
+                                        delta_ofv, cov_df, rse_max)))
         }
       }
     }
@@ -273,7 +309,12 @@ create_scm_results_table <- function(search_state) {
 #' @export
 print_scm_results_table <- function(search_state, show_rse = TRUE, truncate_covariates = 35) {
 
-  results <- create_scm_results_table(search_state)
+  # Accept either a pre-built results data.frame or a search_state/result list
+  if (is.data.frame(search_state)) {
+    results <- search_state
+  } else {
+    results <- create_scm_results_table(search_state)
+  }
 
   if (nrow(results) == 0) {
     cat("No results to display\n")

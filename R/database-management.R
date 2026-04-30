@@ -18,6 +18,8 @@
 #' @param timecol Character. Time column name (default: "TIME")
 #' @param idcol Character. ID column name (default: "ID")
 #' @param threads Integer. Number of threads for execution (default: 60)
+#' @param lookup_file Character or NULL. Optional path to lookup YAML for
+#'   categorical labels. If NULL, defaults to data/spec/lookup.yaml.
 #' @return List containing search state with discovered models
 #' @export
 load_existing_search <- function(base_model_path,
@@ -26,7 +28,8 @@ load_existing_search <- function(base_model_path,
                                  models_folder = "models",
                                  timecol = "TIME",
                                  idcol = "ID",
-                                 threads = 60) {
+                                 threads = 60,
+                                 lookup_file = NULL) {
 
   cat("📂 Loading EXISTING Covariate Search (Discovery Mode)...\n")
 
@@ -51,9 +54,15 @@ load_existing_search <- function(base_model_path,
       models_folder = models_folder,
       timecol = timecol,
       idcol = idcol,
-      threads = threads,
-      discover_existing = TRUE
+      threads = threads
     )
+
+    if (!is.null(lookup_file)) {
+      if (is.null(search_state$search_config)) {
+        search_state$search_config <- list()
+      }
+      search_state$search_config$lookup_file <- lookup_file
+    }
 
     cat("✅ EXISTING search loaded successfully\n")
     cat(sprintf("📊 Database: %d models discovered, Counter: %d\n",
@@ -63,7 +72,7 @@ load_existing_search <- function(base_model_path,
     if (nrow(search_state$search_database) > 0) {
       cat("📋 Discovered models:\n")
       discovered <- search_state$search_database[, c("model_name", "covariate_tested")]
-      for (i in 1:min(5, nrow(discovered))) {
+      for (i in seq_len(min(5, nrow(discovered)))) {
         cat(sprintf("  - %s: %s\n", discovered$model_name[i],
                     ifelse(is.na(discovered$covariate_tested[i]), "Base", discovered$covariate_tested[i])))
       }
@@ -123,44 +132,6 @@ save_search_state <- function(search_state, filename) {
   invisible(search_state)
 }
 
-#' Ensure Base Model in Database (FIXED SCHEMA CONSISTENCY)
-#' @param search_state List containing search state
-#' @return Updated search_state with base model added if missing
-#' @export
-ensure_base_model_in_database <- function(search_state) {
-  if (search_state$base_model %in% search_state$search_database$model_name) {
-    cat(sprintf("Base model '%s' already in database\n", search_state$base_model))
-    return(search_state)
-  }
-
-  # FIXED: Create base row with COMPLETE schema that matches initialize_search_database_core
-  base_row <- data.frame(
-    model_name = search_state$base_model,
-    step_number = 0L,
-    parent_model = NA_character_,
-    covariate_tested = "Base Model",
-    action = "base_model",
-    ofv = NA_real_,
-    delta_ofv = NA_real_,
-    rse_max = NA_real_,
-    status = "unknown",
-    tags = I(list(character(0))),
-    submission_time = as.POSIXct(NA),
-    completion_time = as.POSIXct(NA),
-    retry_attempt = 0L,
-    original_model = NA_character_,
-    estimation_issue = NA_character_,
-    excluded_from_step = FALSE,
-    step_description = "Base Model",  # ← Correct! Single string value (length 1)
-    phase = "base",                  # ← Correct! Single string value (length 1)
-    stringsAsFactors = FALSE
-  )
-
-  search_state$search_database <- dplyr::bind_rows(search_state$search_database, base_row)
-  cat(sprintf("✅ Base model '%s' added to database\n", search_state$base_model))
-
-  return(search_state)
-}
 
 #' Load Search State from File
 #'

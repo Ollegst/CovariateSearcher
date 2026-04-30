@@ -4,6 +4,7 @@
 .RData
 .Ruserdata
 *.Rproj
+.lintr
 
 # Package build artifacts
 /src/*.o
