@@ -71,8 +71,19 @@ extract_params <- function(lines, block_tag, remove_prefix = FALSE) {
 
   # Process each block header found
   params <- purrr::map_dfr(block_starts, function(start_idx) {
+
+    # NEW: extract the remainder of the header line (after the $TAG token)
+    header_remainder <- stringr::str_remove(
+      lines[start_idx],
+      stringr::regex(paste0("^\\$", block_tag, "\\S*\\s*"), ignore_case = TRUE)
+    )
+
     # Get the lines after the header
-    sub_lines <- lines[(start_idx + 1):length(lines)]
+    sub_lines <- if (start_idx < length(lines)) {
+      lines[(start_idx + 1):length(lines)]
+    } else {
+      character(0)
+    }
 
     # The block ends when the next line starting with "$" is encountered
     end_idx <- dplyr::if_else(
@@ -81,9 +92,25 @@ extract_params <- function(lines, block_tag, remove_prefix = FALSE) {
       length(sub_lines)
     )
 
-    block_lines <- sub_lines[1:end_idx] %>%
-      # Remove blank lines
+    block_lines <- if (length(sub_lines) > 0 && end_idx > 0) {
+      sub_lines[1:end_idx]
+    } else {
+      character(0)
+    }
+
+    # NEW: prepend the header remainder if it contains content
+    if (stringr::str_detect(header_remainder, "\\S")) {
+      block_lines <- c(header_remainder, block_lines)
+    }
+
+    # Remove blank lines
+    block_lines <- block_lines %>%
       purrr::keep(~ stringr::str_detect(.x, "\\S"))
+
+    # If nothing left, return empty tibble
+    if (length(block_lines) == 0) {
+      return(tibble::tibble(param = character(0), trans = character(0)))
+    }
 
     # Create a tibble and split each line by semicolon
     tibble::tibble(line = block_lines) %>%
@@ -98,7 +125,6 @@ extract_params <- function(lines, block_tag, remove_prefix = FALSE) {
         param = stringr::str_trim(param),
         trans = stringr::str_trim(transformation)
       ) %>%
-      # Remove numeric prefix for theta blocks if requested
       dplyr::mutate(
         param = if (remove_prefix) stringr::str_remove(param, "^[0-9]+_") else param
       ) %>%
@@ -156,9 +182,9 @@ extract_model_params <- function(model_name, models_folder = "models") {
 #' @return Numeric condition number, Inf for near-singular matrices, or NA if
 #' computation is not possible
 #' @keywords internal
-calculate_condition_number <- function(model_number,
-                                       models_folder = "models",
-                                       tolerance = 1e-10) {
+calculate_condition_number<- function(model_number,
+                                      models_folder = "models",
+                                      tolerance = 1e-10) {
   model_path <- file.path(models_folder, model_number)
   matrix_file <- NA_character_
   if (file.exists(file.path(model_path, paste0(model_number, ".cor")))) {
@@ -172,10 +198,41 @@ calculate_condition_number <- function(model_number,
   }
 
   lines <- readLines(matrix_file, warn = FALSE)
-  numeric_tokens <- stringr::str_extract_all(
+
+  # --- NEW: keep only the last TABLE block ---
+  table_starts <- which(stringr::str_detect(lines, "^TABLE NO"))
+  if (length(table_starts) > 0) {
+    last_start <- table_starts[length(table_starts)]
+    lines <- lines[(last_start + 1):length(lines)]
+  }
+
+  # --- NEW: drop the column-header row (NAME THETA1 THETA2 ...) ---
+  lines <- lines[!stringr::str_detect(lines, "^\\s*NAME\\s")]
+
+  # --- NEW: keep only rows that start with a parameter label ---
+  data_rows_mask <- stringr::str_detect(
     lines,
-    "[-+]?(?:\\d*\\.?\\d+)(?:[Ee][-+]?\\d+)?"
-  )[[1]]
+    "^\\s*(THETA|OMEGA|SIGMA)"
+  )
+  data_lines <- lines[data_rows_mask]
+
+  if (length(data_lines) == 0) {
+    return(NA_real_)
+  }
+
+  # --- NEW: strip the first token (the row label) before number extraction ---
+  data_lines <- stringr::str_replace(
+    data_lines,
+    "^\\s*\\S+\\s+",
+    ""
+  )
+
+  numeric_tokens <- unlist(
+    stringr::str_extract_all(
+      data_lines,
+      "[-+]?(?:\\d*\\.?\\d+)(?:[Ee][-+]?\\d+)?"
+    )
+  )
   values <- suppressWarnings(as.numeric(numeric_tokens))
   values <- values[is.finite(values)]
 
@@ -249,6 +306,7 @@ calculate_condition_number <- function(model_number,
 
   max_ev / min_ev
 }
+
 
 
 #' Get Model Parameters and Statistics
@@ -339,7 +397,7 @@ get_param2 <- function(model_number,
         TRUE ~ stderr                         # Keep original for others
       )
     ) %>%
-    dplyr::filter(!(.data$parameter_names2 == "SIGMA(1,1)" & .data$fixed == TRUE)) %>%
+    dplyr::filter(!(parameter_names2 == "SIGMA(1,1)" & fixed == TRUE)) %>%
     dplyr::mutate(
       Parameter = dplyr::case_when(
         is.na(random_effect_sd) & trans == "RATIO" ~ estimate,
@@ -566,7 +624,6 @@ get_param2 <- function(model_number,
 
   return(param_est)
 }
-
 
 
 # FINAL CORRECTED model_report WITH COMPLETE ERROR HANDLING

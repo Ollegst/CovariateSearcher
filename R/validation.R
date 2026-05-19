@@ -570,20 +570,51 @@ update_all_model_statuses <- function(search_state, show_progress = TRUE) {
         required_cols_for_summary <- c("model_name", "delta_ofv", "covariate_tested")
         if (all(required_cols_for_summary %in% names(search_state$search_database))) {
 
-          # FIXED: Safe filtering without dplyr pipe operations
-          db_filtered <- search_state$search_database[
+          # Use dynamic threshold from config instead of hardcoded 3.84
+          forward_p_value <- search_state$search_config$forward_p_value %||% 0.05
+
+          # First filter by newly completed models
+          db_candidates <- search_state$search_database[
             search_state$search_database$model_name %in% status_changes$newly_completed &
-              !is.na(search_state$search_database$delta_ofv) &
-              search_state$search_database$delta_ofv > 3.84, ]
+              !is.na(search_state$search_database$delta_ofv), ]
 
-          if (nrow(db_filtered) > 0) {
-            # FIXED: Safe ordering without dplyr
-            order_idx <- order(db_filtered$delta_ofv, decreasing = TRUE)
-            significant_new <- db_filtered[order_idx, ]
+          # Now check each model with its covariate-specific threshold
+          if (nrow(db_candidates) > 0) {
+            significant_rows <- logical(nrow(db_candidates))
+            
+            for (j in seq_len(nrow(db_candidates))) {
+              cov_tag <- db_candidates$covariate_tested[j]
+              cov_df <- 1L
+              
+              # Extract covariate-specific df if available
+              if (!is.na(cov_tag) && nchar(cov_tag) > 0) {
+                cov_name <- tryCatch(
+                  extract_covariate_name_from_tag(cov_tag),
+                  error = function(e) NA
+                )
+                if (!is.na(cov_name)) {
+                  cov_df <- tryCatch(
+                    calculate_covariate_df(cov_name, search_state$covariate_search),
+                    error = function(e) 1L
+                  )
+                }
+              }
+              
+              # Calculate threshold for this specific covariate
+              threshold_for_cov <- pvalue_to_threshold(forward_p_value, df = cov_df)
+              significant_rows[j] <- db_candidates$delta_ofv[j] > threshold_for_cov
+            }
+            
+            db_filtered <- db_candidates[significant_rows, ]
 
-            cat("⭐ New significant improvements:\n")
-            for (i in 1:nrow(significant_new)) {
-              row <- significant_new[i, ]
+            if (nrow(db_filtered) > 0) {
+              # FIXED: Safe ordering without dplyr
+              order_idx <- order(db_filtered$delta_ofv, decreasing = TRUE)
+              significant_new <- db_filtered[order_idx, ]
+
+              cat("⭐ New significant improvements:\n")
+              for (i in seq_len(nrow(significant_new))) {
+                row <- significant_new[i, ]
               # FIXED: Comprehensive validation for covariate display
               covariate_display <- tryCatch({
                 cov_val <- row$covariate_tested
@@ -610,6 +641,7 @@ update_all_model_statuses <- function(search_state, show_progress = TRUE) {
 
               cat(sprintf("   %s (%s): ΔOFV = %s\n",
                           as.character(row$model_name), covariate_display, delta_val))
+            }
             }
           }
         }
