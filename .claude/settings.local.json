@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(awk '/^COMMIT$/{if\\(length\\(a\\)>1\\){for\\(i in a\\)for\\(j in a\\)if\\(i<j\\)print a[i]\"|\"a[j]};delete a;next}{a[$0]=$0}END{if\\(length\\(a\\)>1\\)for\\(i in a\\)for\\(j in a\\)if\\(i<j\\)print a[i]\"|\"a[j]}')",
+      "Bash(git log *)",
+      "Bash(python -c ' *)",
+      "Bash(py -c ' *)",
+      "Bash(python3 -c ' *)",
+      "Bash(Rscript -e ' *)",
+      "Bash(awk 'BEGIN{n=0} /^---/{ if\\(n>1\\){ for\\(i=0;i<n;i++\\) for\\(j=i+1;j<n;j++\\) print arr[i] \"  vs  \" arr[j] }; n=0; next } /^R\\\\//{ arr[n++]=$0 } END{ if\\(n>1\\){ for\\(i=0;i<n;i++\\) for\\(j=i+1;j<n;j++\\) print arr[i] \"  vs  \" arr[j] } }' /tmp/cochange.txt)"
+    ]
+  }
+}

@@ -465,85 +465,116 @@ run_scm_selective_forward <- function(search_state,
   # REDEMPTION PHASE - Test remaining covariates
   # ===================================================================
 
-  # Find the final best model from main selective forward steps
+  # Find the final best model from main selective forward steps (including base model)
+  # Scope: base model + all main-loop steps, but exclude redemption/future steps
   all_main_models <- search_state$search_database[
     search_state$search_database$status == "completed" &
-      !is.na(search_state$search_database$ofv) &  # Changed from delta_ofv to ofv
-      search_state$search_database$step_number > 0 &
-      search_state$search_database$step_number <= last_main_step, ]
+      !is.na(search_state$search_database$ofv) &
+      (is.na(search_state$search_database$step_number) |  # Base model has NA step
+       search_state$search_database$step_number <= last_main_step), ]  # or main-loop step
 
   if (nrow(all_main_models) > 0) {
     # Find model with LOWEST absolute OFV (best fit)
     final_best_model <- current_best_model
     final_best_idx <- which(all_main_models$model_name == final_best_model)
-    final_best_step <- all_main_models$step_number[final_best_idx]
-    final_best_ofv <- all_main_models$ofv[final_best_idx]
-
-    cat("\n", paste(rep("=", 60), collapse=""), "\n")
-    cat("🔄 REDEMPTION PHASE CHECK\n")
-    cat(paste(rep("=", 60), collapse=""), "\n")
-    cat(sprintf("Best model: %s (from Step %d, OFV=%.2f)\n",
-                final_best_model, final_best_step, final_best_ofv))
-    cat(sprintf("Last completed step: %d\n", last_main_step))
-
-    # Determine redemption strategy based on where best model came from
-    redemption_needed <- FALSE
-    redemption_covariates <- character(0)
-
-    # Get all available covariates including excluded
-    all_available_tags <- names(search_state$tags)[grepl("^beta_", names(search_state$tags))]
-
-    # Get covariates in best model with error handling
-    best_model_covariates <- tryCatch({
-      get_model_covariates_from_db(search_state, final_best_model)
-    }, error = function(e) {
-      cat(sprintf("⚠️  Warning: Could not get covariates for %s: %s\n",
-                  final_best_model, e$message))
-      character(0)
-    })
-
-    # Convert to tags
-    best_model_tags <- character(0)
-    for (cov_name in best_model_covariates) {
-      matching_tags <- names(search_state$tags)[sapply(search_state$tags, function(x) x == cov_name)]
-      if (length(matching_tags) > 0) {
-        best_model_tags <- c(best_model_tags, matching_tags)
+    
+    # GUARD 1: Handle case where current best model not found in filtered table
+    if (length(final_best_idx) == 0) {
+      cat(sprintf("\n⚠️  WARNING: Current best model '%s' not found in completed models\n", final_best_model))
+      cat("This may occur if the model failed, is still running, or has an invalid OFV\n")
+      cat("Attempting fallback: Finding best model from available completed rows...\n")
+      
+      # Fallback: Find model with best (lowest) OFV from all available main models
+      if (nrow(all_main_models) > 0) {
+        best_ofv_idx <- which.min(all_main_models$ofv)
+        final_best_model <- all_main_models$model_name[best_ofv_idx]
+        final_best_idx <- best_ofv_idx
+        cat(sprintf("✅ Fallback model selected: %s\n", final_best_model))
+      } else {
+        cat("❌ No valid completed models available for redemption - skipping redemption phase\n")
+        final_best_idx <- integer(0)
       }
     }
+    
+    # GUARD 2: If still no valid model found, skip redemption gracefully
+    if (length(final_best_idx) == 0) {
+      cat("🛑 Redemption phase preconditions not met - skipping\n")
+      # Redemption phase will be skipped
+      
+    } else {
+      # Proceed with redemption using valid model
+      final_best_step <- all_main_models$step_number[final_best_idx]
+      final_best_ofv <- all_main_models$ofv[final_best_idx]
 
-    if (final_best_step < last_main_step) {
-      # Scenario B: Best model from earlier step
-      cat("📋 Scenario B: Best model from earlier step - avoiding duplicates\n")
+      cat("\n", paste(rep("=", 60), collapse=""), "\n")
+      cat("🔄 REDEMPTION PHASE CHECK\n")
+      cat(paste(rep("=", 60), collapse=""), "\n")
+      cat(sprintf("Best model: %s (from Step %d, OFV=%.2f)\n",
+                  final_best_model, final_best_step, final_best_ofv))
+      cat(sprintf("Last completed step: %d\n", last_main_step))
 
-      # Remove covariates already in best model
-      redemption_covariates <- setdiff(all_available_tags, best_model_tags)
+      # Determine redemption strategy based on where best model came from
+      redemption_needed <- FALSE
+      redemption_covariates <- character(0)
 
-      # Ensure last_step_covariates_tested is valid
-      if (length(last_step_covariates_tested) > 0) {
-        # Remove covariates tested in last step to avoid duplicates
-        redemption_covariates <- setdiff(redemption_covariates, last_step_covariates_tested)
-        cat(sprintf("Excluding %d covariates tested in Step %d\n",
-                    length(last_step_covariates_tested), last_main_step))
+      # Get all available covariates including excluded
+      all_available_tags <- names(search_state$tags)[grepl("^beta_", names(search_state$tags))]
+
+      # Get covariates in best model with error handling
+      best_model_covariates <- tryCatch({
+        get_model_covariates_from_db(search_state, final_best_model)
+      }, error = function(e) {
+        cat(sprintf("⚠️  Warning: Could not get covariates for %s: %s\n",
+                    final_best_model, e$message))
+        character(0)
+      })
+
+      # Convert to tags
+      best_model_tags <- character(0)
+      for (cov_name in best_model_covariates) {
+        matching_tags <- names(search_state$tags)[sapply(search_state$tags, function(x) x == cov_name)]
+        if (length(matching_tags) > 0) {
+          best_model_tags <- c(best_model_tags, matching_tags)
+        }
       }
 
-      cat(sprintf("Covariates to test: All except those in best model and tested in Step %d\n",
-                  last_main_step))
-      redemption_needed <- length(redemption_covariates) > 0
+      # GUARD 3: Ensure final_best_step is non-empty before comparison
+      if (length(final_best_step) == 0) {
+        cat("⚠️  WARNING: Unable to determine step number for best model - skipping scenario branching\n")
+        redemption_needed <- FALSE
+      } else if (final_best_step < last_main_step) {
+        # Scenario B: Best model from earlier step
+        cat("📋 Scenario B: Best model from earlier step - avoiding duplicates\n")
 
-    } else if (final_best_step == last_main_step) {
-      # Scenario A: Best model from last step
-      cat("📋 Scenario A: Best model from last step - test all remaining\n")
+        # Remove covariates already in best model
+        redemption_covariates <- setdiff(all_available_tags, best_model_tags)
 
-      # Test all covariates not in best model
-      redemption_covariates <- setdiff(all_available_tags, best_model_tags)
+        # Ensure last_step_covariates_tested is valid
+        if (length(last_step_covariates_tested) > 0) {
+          # Remove covariates tested in last step to avoid duplicates
+          redemption_covariates <- setdiff(redemption_covariates, last_step_covariates_tested)
+          cat(sprintf("Excluding %d covariates tested in Step %d\n",
+                      length(last_step_covariates_tested), last_main_step))
+        }
 
-      cat("Covariates to test: All not in best model (including excluded)\n")
-      redemption_needed <- length(redemption_covariates) > 0
-    }
+        cat(sprintf("Covariates to test: All except those in best model and tested in Step %d\n",
+                    last_main_step))
+        redemption_needed <- length(redemption_covariates) > 0
 
-    if (redemption_needed) {
-      cat(sprintf("\n🎯 STARTING REDEMPTION TESTING\n"))
-      cat(sprintf("Found %d covariates for redemption testing\n", length(redemption_covariates)))
+      } else if (final_best_step == last_main_step) {
+        # Scenario A: Best model from last step
+        cat("📋 Scenario A: Best model from last step - test all remaining\n")
+
+        # Test all covariates not in best model
+        redemption_covariates <- setdiff(all_available_tags, best_model_tags)
+
+        cat("Covariates to test: All not in best model (including excluded)\n")
+        redemption_needed <- length(redemption_covariates) > 0
+      }
+
+      if (redemption_needed) {
+        cat(sprintf("\n🎯 STARTING REDEMPTION TESTING\n"))
+        cat(sprintf("Found %d covariates for redemption testing\n", length(redemption_covariates)))
 
       # Convert to names for display
       redemption_names <- sapply(redemption_covariates, function(tag) {
@@ -722,8 +753,9 @@ run_scm_selective_forward <- function(search_state,
       }
 
       cat("\n✅ Redemption phase complete!\n")
-    } else {
-      cat("\n✅ No redemption needed - no remaining covariates to test\n")
+      } else {
+        cat("\n✅ No redemption needed - no remaining covariates to test\n")
+      }
     }
   }
 
