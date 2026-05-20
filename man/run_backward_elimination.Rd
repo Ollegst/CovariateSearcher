@@ -9,7 +9,8 @@ run_backward_elimination(
   starting_model,
   backward_p_value = NULL,
   auto_submit = TRUE,
-  auto_retry = TRUE
+  auto_retry = TRUE,
+  rse_threshold = NULL
 )
 }
 \arguments{
@@ -22,6 +23,9 @@ run_backward_elimination(
 \item{auto_submit}{Logical. Whether to automatically submit models (default: TRUE)}
 
 \item{auto_retry}{Logical. Whether to enable automatic retry (default: TRUE)}
+
+\item{rse_threshold}{Numeric. Maximum RSE threshold as percentage.
+If NULL, uses search_state$search_config$max_rse_threshold (default: 50)}
 }
 \value{
 List with backward elimination results and updated search_state

@@ -9,7 +9,8 @@ evaluate_removal_impacts(
   base_model,
   removal_models,
   completed_models,
-  backward_p_value
+  backward_p_value,
+  rse_threshold = NULL
 )
 }
 \arguments{
@@ -22,6 +23,9 @@ evaluate_removal_impacts(
 \item{completed_models}{Character vector. Successfully completed models}
 
 \item{backward_p_value}{Numeric. P-value for backward elimination}
+
+\item{rse_threshold}{Numeric. Maximum RSE threshold as percentage.
+If NULL, uses search_state$search_config$max_rse_threshold (default: 50)}
 }
 \value{
 List with evaluation results and covariate to remove

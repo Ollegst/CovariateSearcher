@@ -115,14 +115,24 @@ create_scm_results_table <- function(search_state) {
         }
       }
       actual_threshold <- pvalue_to_threshold(backward_p_value, df = cov_df)
-      if (abs(delta_ofv) > actual_threshold) {
+      rse_good <- is.na(rse_max) || rse_max < threshold_rse
+      if (abs(delta_ofv) > actual_threshold && !rse_good) {
+        return(list(selected = "KEPT",
+                    comment = sprintf("Removal blocked: OFV %.2f > %.2f (df=%d) and high RSE (%.1f%% > %d%%)",
+                                      abs(delta_ofv), actual_threshold, cov_df, rse_max, threshold_rse)))
+      } else if (abs(delta_ofv) > actual_threshold) {
         return(list(selected = "KEPT",
                     comment = sprintf("Removal would worsen OFV by %.2f (threshold %.2f, df=%d)",
                                       abs(delta_ofv), actual_threshold, cov_df)))
+      } else if (!rse_good) {
+        return(list(selected = "KEPT",
+                    comment = sprintf("Removal blocked by high RSE (%.1f%% > %d%%)",
+                                      rse_max, threshold_rse)))
       } else {
+        rse_display <- if (is.na(rse_max)) "NA" else sprintf("%.1f%%", rse_max)
         return(list(selected = "REMOVED",
-                    comment = sprintf("Removal acceptable (ΔOFV=%.2f < %.2f, df=%d)",
-                                      abs(delta_ofv), actual_threshold, cov_df)))
+                    comment = sprintf("Removal acceptable (ΔOFV=%.2f < %.2f, df=%d, RSE=%s)",
+                                      abs(delta_ofv), actual_threshold, cov_df, rse_display)))
       }
     }
 

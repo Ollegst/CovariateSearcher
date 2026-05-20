@@ -177,7 +177,8 @@ run_automated_scm_testing <- function(search_state,
         starting_model = current_model,
         backward_p_value = backward_p_value,
         auto_submit = auto_submit,
-        auto_retry = auto_retry
+        auto_retry = auto_retry,
+        rse_threshold = rse_threshold
       )
     }, error = function(e) {
       initial_backward_error <<- e$message
@@ -328,7 +329,8 @@ run_automated_scm_testing <- function(search_state,
         starting_model = current_model,
         backward_p_value = backward_p_value,
         auto_submit = auto_submit,
-        auto_retry = auto_retry
+        auto_retry = auto_retry,
+        rse_threshold = rse_threshold
       )
     }, error = function(e) {
       final_backward_error <<- e$message
