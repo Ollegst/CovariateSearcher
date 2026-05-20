@@ -295,6 +295,7 @@ ft_with_spec
 **Model selected if BOTH**:
 1. ΔOFV > threshold
 2. RSE < threshold (default: 50%)
+  - In backward elimination, NA RSE is accepted
 
 **Thresholds**:
 - Forward: ΔOFV > 3.84 (p=0.05)
@@ -422,7 +423,8 @@ require_cov_step = FALSE   # Skip covariance step check
 search_state <- load_search_state("scm_auto_forward_complete.rds")
 results <- run_backward_elimination(
   search_state,
-  starting_model = "run85"
+  starting_model = "run85",
+  rse_threshold = 50
 )
 ```
 

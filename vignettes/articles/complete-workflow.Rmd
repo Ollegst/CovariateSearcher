@@ -129,6 +129,11 @@ Models are selected if they meet BOTH criteria:
 
 ## Step 4: Backward Elimination
 
+Backward elimination keeps/removes covariates using both criteria:
+- Removal must satisfy backward ΔOFV criterion (`backward_p_value`)
+- Removal must satisfy RSE criterion (`rse_threshold`)
+- If RSE is not available (NA), it is accepted
+
 ```{r backward-elimination}
 results <- run_automated_scm_testing(
   search_state = search_state,

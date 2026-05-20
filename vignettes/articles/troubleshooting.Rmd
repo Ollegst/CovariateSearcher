@@ -80,6 +80,9 @@ Consider:
 
 **Cause**: Threshold too low or covariates not truly significant
 
+Note: Backward elimination now evaluates both ΔOFV and RSE. Removals can also be blocked by high RSE.
+If RSE is unavailable (NA), that is treated as acceptable.
+
 **Solution**: Use more stringent backward threshold (6.63 vs 3.84)
 
 ## Data Issues

@@ -153,6 +153,7 @@ Models are selected if they meet **BOTH** criteria:
    - Backward: ΔOFV > 6.63 (p < 0.01)
 
 2. **RSE < threshold** (default: 50%)
+  - For backward elimination, NA RSE is accepted (for workflows without covariance/RSE output)
 
 ---
 
