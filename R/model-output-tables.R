@@ -408,11 +408,11 @@ get_param2 <- function(model_number,
       RSE = dplyr::case_when(
         is.na(random_effect_sd) & trans == "RATIO" ~ abs((stderr/estimate) * 100),
         is.na(random_effect_sd) & trans == "LOG" ~ abs(stderr) * 100,
-        diag == TRUE ~ 100 * stderr * exp(estimate) / (2 * exp(estimate) - 1),
+        diag == TRUE ~  100 * stderr * exp(estimate) / (2 * (exp(estimate) - 1)),
         diag == FALSE ~ 100 * stderr / estimate
       )
     ) %>%
-    dplyr::select(-.data$parameter_names2)
+    dplyr::select(-"parameter_names2")
 
   # Extract shrinkage for diagonal elements
   shrinkage_df <- dplyr::filter(param_est, diag == TRUE) %>%
