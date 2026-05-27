@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">CovariateSearcher</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.15</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.24</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -102,12 +102,12 @@ flextable output</p>
 <p>The <code><a href="../reference/model_report.html">model_report()</a></code> function expects <code>spec_pk</code>
 to be an in-memory R object (list-like), not a file path string.</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/Ollegst/CovariateSearcher" class="external-link">CovariateSearcher</a></span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">CovariateSearcher</span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://here.r-lib.org/" class="external-link">here</a></span><span class="op">)</span></span>
-<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/vubiostat/r-yaml/" class="external-link">yaml</a></span><span class="op">)</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://yaml.r-lib.org" class="external-link">yaml</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Load parameter specification into an R object</span></span>
-<span><span class="va">spec_pk</span> <span class="op">&lt;-</span> <span class="fu">yaml</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/yaml/man/read_yaml.html" class="external-link">read_yaml</a></span><span class="op">(</span><span class="fu">here</span><span class="fu">::</span><span class="fu"><a href="https://here.r-lib.org/reference/here.html" class="external-link">here</a></span><span class="op">(</span><span class="st">"data"</span>, <span class="st">"spec"</span>, <span class="st">"pk-extend.yml"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">spec_pk</span> <span class="op">&lt;-</span> <span class="fu">yaml</span><span class="fu">::</span><span class="fu"><a href="https://yaml.r-lib.org/reference/read_yaml.html" class="external-link">read_yaml</a></span><span class="op">(</span><span class="fu">here</span><span class="fu">::</span><span class="fu">here</span><span class="op">(</span><span class="st">"data"</span>, <span class="st">"spec"</span>, <span class="st">"pk-extend.yml"</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Then pass the object to model_report(spec_pk = spec_pk)</span></span></code></pre></div>
 <p><strong>What’s in pk-extend.yml?</strong> This file defines how
@@ -329,12 +329,12 @@ in separate column - Format:
 <h3 id="complete-example">🎯 Complete Example<a class="anchor" aria-label="anchor" href="#complete-example"></a>
 </h3>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/Ollegst/CovariateSearcher" class="external-link">CovariateSearcher</a></span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">CovariateSearcher</span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://here.r-lib.org/" class="external-link">here</a></span><span class="op">)</span></span>
-<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/vubiostat/r-yaml/" class="external-link">yaml</a></span><span class="op">)</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://yaml.r-lib.org" class="external-link">yaml</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># 1. Load YAML specification into an R object</span></span>
-<span><span class="va">spec_pk</span> <span class="op">&lt;-</span> <span class="fu">yaml</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/yaml/man/read_yaml.html" class="external-link">read_yaml</a></span><span class="op">(</span><span class="fu">here</span><span class="fu">::</span><span class="fu"><a href="https://here.r-lib.org/reference/here.html" class="external-link">here</a></span><span class="op">(</span><span class="st">"data"</span>, <span class="st">"spec"</span>, <span class="st">"pk-extend.yml"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">spec_pk</span> <span class="op">&lt;-</span> <span class="fu">yaml</span><span class="fu">::</span><span class="fu"><a href="https://yaml.r-lib.org/reference/read_yaml.html" class="external-link">read_yaml</a></span><span class="op">(</span><span class="fu">here</span><span class="fu">::</span><span class="fu">here</span><span class="op">(</span><span class="st">"data"</span>, <span class="st">"spec"</span>, <span class="st">"pk-extend.yml"</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># 2. Generate report for final models</span></span>
 <span><span class="va">final_models</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"run85"</span>, <span class="st">"run90"</span>, <span class="st">"run95"</span><span class="op">)</span></span>
@@ -348,13 +348,13 @@ in separate column - Format:
 <span><span class="va">pk_res</span></span>
 <span></span>
 <span><span class="co"># 4. Save to Word document (optional)</span></span>
-<span><span class="fu">flextable</span><span class="fu">::</span><span class="fu"><a href="https://davidgohel.github.io/flextable/reference/save_as_docx.html" class="external-link">save_as_docx</a></span><span class="op">(</span></span>
+<span><span class="fu">flextable</span><span class="fu">::</span><span class="fu">save_as_docx</span><span class="op">(</span></span>
 <span>  <span class="va">pk_res</span>, </span>
 <span>  path <span class="op">=</span> <span class="st">"output/parameter_table.docx"</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># 5. Save to PowerPoint (optional)</span></span>
-<span><span class="fu">flextable</span><span class="fu">::</span><span class="fu"><a href="https://davidgohel.github.io/flextable/reference/save_as_pptx.html" class="external-link">save_as_pptx</a></span><span class="op">(</span></span>
+<span><span class="fu">flextable</span><span class="fu">::</span><span class="fu">save_as_pptx</span><span class="op">(</span></span>
 <span>  <span class="va">pk_res</span>,</span>
 <span>  path <span class="op">=</span> <span class="st">"output/parameter_table.pptx"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -416,7 +416,7 @@ formatted labels - No units</p>
 </h4>
 <div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># With YAML specification</span></span>
-<span><span class="va">spec_pk</span> <span class="op">&lt;-</span> <span class="fu">yaml</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/yaml/man/read_yaml.html" class="external-link">read_yaml</a></span><span class="op">(</span><span class="fu">here</span><span class="fu">::</span><span class="fu"><a href="https://here.r-lib.org/reference/here.html" class="external-link">here</a></span><span class="op">(</span><span class="st">"data"</span>, <span class="st">"spec"</span>, <span class="st">"pk-extend.yml"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">spec_pk</span> <span class="op">&lt;-</span> <span class="fu">yaml</span><span class="fu">::</span><span class="fu"><a href="https://yaml.r-lib.org/reference/read_yaml.html" class="external-link">read_yaml</a></span><span class="op">(</span><span class="fu">here</span><span class="fu">::</span><span class="fu">here</span><span class="op">(</span><span class="st">"data"</span>, <span class="st">"spec"</span>, <span class="st">"pk-extend.yml"</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">pk_res</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/model_report.html">model_report</a></span><span class="op">(</span></span>
 <span>  model_names <span class="op">=</span> <span class="st">"run28"</span>,</span>
@@ -446,10 +446,10 @@ it:</p>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Customize the table</span></span>
-<span><span class="va">pk_res</span> <span class="op">&lt;-</span> <span class="va">pk_res</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu">flextable</span><span class="fu">::</span><span class="fu"><a href="https://davidgohel.github.io/flextable/reference/fontsize.html" class="external-link">fontsize</a></span><span class="op">(</span>size <span class="op">=</span> <span class="fl">10</span>, part <span class="op">=</span> <span class="st">"all"</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu">flextable</span><span class="fu">::</span><span class="fu"><a href="https://davidgohel.github.io/flextable/reference/color.html" class="external-link">color</a></span><span class="op">(</span>color <span class="op">=</span> <span class="st">"darkblue"</span>, part <span class="op">=</span> <span class="st">"header"</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu">flextable</span><span class="fu">::</span><span class="fu"><a href="https://davidgohel.github.io/flextable/reference/add_header_lines.html" class="external-link">add_header_lines</a></span><span class="op">(</span></span>
+<span><span class="va">pk_res</span> <span class="op">&lt;-</span> <span class="va">pk_res</span> <span class="op">%&gt;%</span></span>
+<span>  <span class="fu">flextable</span><span class="fu">::</span><span class="fu">fontsize</span><span class="op">(</span>size <span class="op">=</span> <span class="fl">10</span>, part <span class="op">=</span> <span class="st">"all"</span><span class="op">)</span> <span class="op">%&gt;%</span></span>
+<span>  <span class="fu">flextable</span><span class="fu">::</span><span class="fu">color</span><span class="op">(</span>color <span class="op">=</span> <span class="st">"darkblue"</span>, part <span class="op">=</span> <span class="st">"header"</span><span class="op">)</span> <span class="op">%&gt;%</span></span>
+<span>  <span class="fu">flextable</span><span class="fu">::</span><span class="fu">add_header_lines</span><span class="op">(</span></span>
 <span>    values <span class="op">=</span> <span class="st">"Population PK Parameter Estimates"</span></span>
 <span>  <span class="op">)</span></span>
 <span></span>
@@ -460,25 +460,25 @@ it:</p>
 </h4>
 <div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># To Word</span></span>
-<span><span class="fu">flextable</span><span class="fu">::</span><span class="fu"><a href="https://davidgohel.github.io/flextable/reference/save_as_docx.html" class="external-link">save_as_docx</a></span><span class="op">(</span></span>
+<span><span class="fu">flextable</span><span class="fu">::</span><span class="fu">save_as_docx</span><span class="op">(</span></span>
 <span>  <span class="va">pk_res</span>, </span>
 <span>  path <span class="op">=</span> <span class="st">"tables/parameters.docx"</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># To PowerPoint</span></span>
-<span><span class="fu">flextable</span><span class="fu">::</span><span class="fu"><a href="https://davidgohel.github.io/flextable/reference/save_as_pptx.html" class="external-link">save_as_pptx</a></span><span class="op">(</span></span>
+<span><span class="fu">flextable</span><span class="fu">::</span><span class="fu">save_as_pptx</span><span class="op">(</span></span>
 <span>  <span class="va">pk_res</span>,</span>
 <span>  path <span class="op">=</span> <span class="st">"tables/parameters.pptx"</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># To HTML</span></span>
-<span><span class="fu">flextable</span><span class="fu">::</span><span class="fu"><a href="https://davidgohel.github.io/flextable/reference/save_as_html.html" class="external-link">save_as_html</a></span><span class="op">(</span></span>
+<span><span class="fu">flextable</span><span class="fu">::</span><span class="fu">save_as_html</span><span class="op">(</span></span>
 <span>  <span class="va">pk_res</span>,</span>
 <span>  path <span class="op">=</span> <span class="st">"tables/parameters.html"</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># To image</span></span>
-<span><span class="fu">flextable</span><span class="fu">::</span><span class="fu"><a href="https://davidgohel.github.io/flextable/reference/save_as_image.html" class="external-link">save_as_image</a></span><span class="op">(</span></span>
+<span><span class="fu">flextable</span><span class="fu">::</span><span class="fu">save_as_image</span><span class="op">(</span></span>
 <span>  <span class="va">pk_res</span>,</span>
 <span>  path <span class="op">=</span> <span class="st">"tables/parameters.png"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -545,7 +545,7 @@ Formatted parameter name - <code>label</code>: Full description -
 </h4>
 <div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># ✅ Good - formatted output</span></span>
-<span><span class="va">spec_pk</span> <span class="op">&lt;-</span> <span class="fu">yaml</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/yaml/man/read_yaml.html" class="external-link">read_yaml</a></span><span class="op">(</span><span class="fu">here</span><span class="fu">::</span><span class="fu"><a href="https://here.r-lib.org/reference/here.html" class="external-link">here</a></span><span class="op">(</span><span class="st">"data"</span>, <span class="st">"spec"</span>, <span class="st">"pk-extend.yml"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">spec_pk</span> <span class="op">&lt;-</span> <span class="fu">yaml</span><span class="fu">::</span><span class="fu"><a href="https://yaml.r-lib.org/reference/read_yaml.html" class="external-link">read_yaml</a></span><span class="op">(</span><span class="fu">here</span><span class="fu">::</span><span class="fu">here</span><span class="op">(</span><span class="st">"data"</span>, <span class="st">"spec"</span>, <span class="st">"pk-extend.yml"</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="va">pk_res</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/model_report.html">model_report</a></span><span class="op">(</span>model_names <span class="op">=</span> <span class="st">"run28"</span>, spec_pk <span class="op">=</span> <span class="va">spec_pk</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># ❌ Less ideal - raw parameter names</span></span>
@@ -623,7 +623,7 @@ and solutions</li>
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.1.1.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
 </div>
 
     </footer>

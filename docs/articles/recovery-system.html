@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">CovariateSearcher</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.15</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.24</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -126,20 +126,20 @@ SUCCESSFUL”</li>
 </h4>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Step 1: Original model (run11) fails</span></span>
-<span><span class="va">search_state</span><span class="op">$</span><span class="va">search_database</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">model_name</span> <span class="op">==</span> <span class="st">"run11"</span><span class="op">)</span></span>
+<span><span class="va">search_state</span><span class="op">$</span><span class="va">search_database</span> <span class="op">%&gt;%</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/stats/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">model_name</span> <span class="op">==</span> <span class="st">"run11"</span><span class="op">)</span></span>
 <span><span class="co">#   model_name  status  estimation_issue</span></span>
 <span><span class="co">#   run11       failed  OFV &gt; 10^10</span></span>
 <span></span>
 <span><span class="co"># Step 2: Retry created automatically (run11001)</span></span>
-<span><span class="va">search_state</span><span class="op">$</span><span class="va">search_database</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">model_name</span> <span class="op">==</span> <span class="st">"run11001"</span><span class="op">)</span></span>
+<span><span class="va">search_state</span><span class="op">$</span><span class="va">search_database</span> <span class="op">%&gt;%</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/stats/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">model_name</span> <span class="op">==</span> <span class="st">"run11001"</span><span class="op">)</span></span>
 <span><span class="co">#   model_name  status       phase</span></span>
 <span><span class="co">#   run11001    in_progress  retry</span></span>
 <span></span>
 <span><span class="co"># Step 3: If retry succeeds</span></span>
-<span><span class="va">search_state</span><span class="op">$</span><span class="va">search_database</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">model_name</span> <span class="op">==</span> <span class="st">"run11001"</span><span class="op">)</span></span>
+<span><span class="va">search_state</span><span class="op">$</span><span class="va">search_database</span> <span class="op">%&gt;%</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/stats/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">model_name</span> <span class="op">==</span> <span class="st">"run11001"</span><span class="op">)</span></span>
 <span><span class="co">#   model_name  status     ofv      delta_ofv</span></span>
 <span><span class="co">#   run11001    completed  1234.5   -5.2</span></span></code></pre></div>
 </div>
@@ -185,9 +185,9 @@ type</li>
 </h4>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># View all retry models</span></span>
-<span><span class="va">retries</span> <span class="op">&lt;-</span> <span class="va">search_state</span><span class="op">$</span><span class="va">search_database</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">phase</span> <span class="op">==</span> <span class="st">"retry"</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/arrange.html" class="external-link">arrange</a></span><span class="op">(</span><span class="va">parent_model</span>, <span class="va">model_name</span><span class="op">)</span></span>
+<span><span class="va">retries</span> <span class="op">&lt;-</span> <span class="va">search_state</span><span class="op">$</span><span class="va">search_database</span> <span class="op">%&gt;%</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/stats/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">phase</span> <span class="op">==</span> <span class="st">"retry"</span><span class="op">)</span> <span class="op">%&gt;%</span></span>
+<span>  <span class="fu">arrange</span><span class="op">(</span><span class="va">parent_model</span>, <span class="va">model_name</span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">retries</span><span class="op">)</span></span></code></pre></div>
 </div>
@@ -196,10 +196,10 @@ type</li>
 </h4>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Calculate recovery success rate</span></span>
-<span><span class="va">recovery_stats</span> <span class="op">&lt;-</span> <span class="va">search_state</span><span class="op">$</span><span class="va">search_database</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">phase</span> <span class="op">==</span> <span class="st">"retry"</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/count.html" class="external-link">count</a></span><span class="op">(</span><span class="va">status</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html" class="external-link">mutate</a></span><span class="op">(</span>rate <span class="op">=</span> <span class="va">n</span> <span class="op">/</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">n</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">recovery_stats</span> <span class="op">&lt;-</span> <span class="va">search_state</span><span class="op">$</span><span class="va">search_database</span> <span class="op">%&gt;%</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/stats/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">phase</span> <span class="op">==</span> <span class="st">"retry"</span><span class="op">)</span> <span class="op">%&gt;%</span></span>
+<span>  <span class="fu">count</span><span class="op">(</span><span class="va">status</span><span class="op">)</span> <span class="op">%&gt;%</span></span>
+<span>  <span class="fu">mutate</span><span class="op">(</span>rate <span class="op">=</span> <span class="va">n</span> <span class="op">/</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">n</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">recovery_stats</span><span class="op">)</span></span></code></pre></div>
 </div>
@@ -235,8 +235,8 @@ type</li>
 <p>For complex cases, you can implement custom recovery:</p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># 1. Identify problematic models</span></span>
-<span><span class="va">failed</span> <span class="op">&lt;-</span> <span class="va">search_state</span><span class="op">$</span><span class="va">search_database</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">status</span> <span class="op">==</span> <span class="st">"failed"</span>, <span class="va">phase</span> <span class="op">!=</span> <span class="st">"retry"</span><span class="op">)</span></span>
+<span><span class="va">failed</span> <span class="op">&lt;-</span> <span class="va">search_state</span><span class="op">$</span><span class="va">search_database</span> <span class="op">%&gt;%</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/stats/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">status</span> <span class="op">==</span> <span class="st">"failed"</span>, <span class="va">phase</span> <span class="op">!=</span> <span class="st">"retry"</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># 2. For each failure, create custom retry</span></span>
 <span><span class="kw">for</span> <span class="op">(</span><span class="va">model</span> <span class="kw">in</span> <span class="va">failed</span><span class="op">$</span><span class="va">model_name</span><span class="op">)</span> <span class="op">{</span></span>
@@ -278,22 +278,22 @@ are reasonable</li>
 <p>Track recovery performance across your search:</p>
 <div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Summary of all models</span></span>
-<span><span class="va">summary_stats</span> <span class="op">&lt;-</span> <span class="va">search_state</span><span class="op">$</span><span class="va">search_database</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/group_by.html" class="external-link">group_by</a></span><span class="op">(</span><span class="va">phase</span>, <span class="va">status</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/summarise.html" class="external-link">summarize</a></span><span class="op">(</span></span>
-<span>    count <span class="op">=</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/context.html" class="external-link">n</a></span><span class="op">(</span><span class="op">)</span>,</span>
+<span><span class="va">summary_stats</span> <span class="op">&lt;-</span> <span class="va">search_state</span><span class="op">$</span><span class="va">search_database</span> <span class="op">%&gt;%</span></span>
+<span>  <span class="fu">group_by</span><span class="op">(</span><span class="va">phase</span>, <span class="va">status</span><span class="op">)</span> <span class="op">%&gt;%</span></span>
+<span>  <span class="fu">summarize</span><span class="op">(</span></span>
+<span>    count <span class="op">=</span> <span class="fu">n</span><span class="op">(</span><span class="op">)</span>,</span>
 <span>    .groups <span class="op">=</span> <span class="st">"drop"</span></span>
 <span>  <span class="op">)</span></span>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">summary_stats</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Successful recovery rate</span></span>
-<span><span class="va">successful_retries</span> <span class="op">&lt;-</span> <span class="va">search_state</span><span class="op">$</span><span class="va">search_database</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">phase</span> <span class="op">==</span> <span class="st">"retry"</span>, <span class="va">status</span> <span class="op">==</span> <span class="st">"completed"</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
+<span><span class="va">successful_retries</span> <span class="op">&lt;-</span> <span class="va">search_state</span><span class="op">$</span><span class="va">search_database</span> <span class="op">%&gt;%</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/stats/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">phase</span> <span class="op">==</span> <span class="st">"retry"</span>, <span class="va">status</span> <span class="op">==</span> <span class="st">"completed"</span><span class="op">)</span> <span class="op">%&gt;%</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">total_retries</span> <span class="op">&lt;-</span> <span class="va">search_state</span><span class="op">$</span><span class="va">search_database</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">phase</span> <span class="op">==</span> <span class="st">"retry"</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
+<span><span class="va">total_retries</span> <span class="op">&lt;-</span> <span class="va">search_state</span><span class="op">$</span><span class="va">search_database</span> <span class="op">%&gt;%</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/stats/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">phase</span> <span class="op">==</span> <span class="st">"retry"</span><span class="op">)</span> <span class="op">%&gt;%</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"Recovery success rate:"</span>, </span>
@@ -318,9 +318,9 @@ resume at any time:</p>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># 2. Check status of recovery</span></span>
-<span><span class="va">retries_completed</span> <span class="op">&lt;-</span> <span class="va">search_state</span><span class="op">$</span><span class="va">search_database</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">phase</span> <span class="op">==</span> <span class="st">"retry"</span>, <span class="va">status</span> <span class="op">==</span> <span class="st">"completed"</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/arrange.html" class="external-link">arrange</a></span><span class="op">(</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/desc.html" class="external-link">desc</a></span><span class="op">(</span><span class="va">model_name</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">retries_completed</span> <span class="op">&lt;-</span> <span class="va">search_state</span><span class="op">$</span><span class="va">search_database</span> <span class="op">%&gt;%</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/stats/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">phase</span> <span class="op">==</span> <span class="st">"retry"</span>, <span class="va">status</span> <span class="op">==</span> <span class="st">"completed"</span><span class="op">)</span> <span class="op">%&gt;%</span></span>
+<span>  <span class="fu">arrange</span><span class="op">(</span><span class="fu">desc</span><span class="op">(</span><span class="va">model_name</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">retries_completed</span><span class="op">)</span></span>
 <span></span>
@@ -345,11 +345,11 @@ resume at any time:</p>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># 2. Identify problematic covariate</span></span>
-<span><span class="va">persistent_failures</span> <span class="op">&lt;-</span> <span class="va">search_state</span><span class="op">$</span><span class="va">search_database</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">status</span> <span class="op">==</span> <span class="st">"failed"</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/group_by.html" class="external-link">group_by</a></span><span class="op">(</span><span class="va">covariate</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/summarise.html" class="external-link">summarize</a></span><span class="op">(</span>failure_count <span class="op">=</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/context.html" class="external-link">n</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/arrange.html" class="external-link">arrange</a></span><span class="op">(</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/desc.html" class="external-link">desc</a></span><span class="op">(</span><span class="va">failure_count</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">persistent_failures</span> <span class="op">&lt;-</span> <span class="va">search_state</span><span class="op">$</span><span class="va">search_database</span> <span class="op">%&gt;%</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/stats/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">status</span> <span class="op">==</span> <span class="st">"failed"</span><span class="op">)</span> <span class="op">%&gt;%</span></span>
+<span>  <span class="fu">group_by</span><span class="op">(</span><span class="va">covariate</span><span class="op">)</span> <span class="op">%&gt;%</span></span>
+<span>  <span class="fu">summarize</span><span class="op">(</span>failure_count <span class="op">=</span> <span class="fu">n</span><span class="op">(</span><span class="op">)</span><span class="op">)</span> <span class="op">%&gt;%</span></span>
+<span>  <span class="fu">arrange</span><span class="op">(</span><span class="fu">desc</span><span class="op">(</span><span class="va">failure_count</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">persistent_failures</span><span class="op">)</span></span>
 <span></span>
@@ -446,7 +446,7 @@ elimination), you can:</p>
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.1.1.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
 </div>
 
     </footer>

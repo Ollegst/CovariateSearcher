@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">CovariateSearcher</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.18</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.24</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -82,18 +82,27 @@ start to finish.</p>
 <div class="section level3">
 <h3 id="overview">Overview<a class="anchor" aria-label="anchor" href="#overview"></a>
 </h3>
-<p>The stepwise covariate modeling (SCM/SCM+) process consists of: 0.
-<strong>Backward elimination</strong> :Remove non-significant covariates
-(optional) 1. <strong>Forward Selection</strong>: Add covariates that
-improve model fit 2. <strong>Backward Elimination</strong>: Remove
-non-significant covariates 3. <strong>Final Model</strong>: Select the
-best parsimonious model</p>
+<p>The stepwise covariate modeling (SCM/SCM+) process consists of:</p>
+<ol start="0" style="list-style-type: decimal">
+<li>
+<strong>Backward elimination</strong>: Remove non-significant
+covariates (optional)</li>
+<li>
+<strong>Forward Selection</strong>: Add covariates that improve
+model fit</li>
+<li>
+<strong>Backward Elimination</strong>: Remove non-significant
+covariates</li>
+<li>
+<strong>Final Model</strong>: Select the best parsimonious
+model</li>
+</ol>
 </div>
 <div class="section level3">
 <h3 id="prerequisites">Prerequisites<a class="anchor" aria-label="anchor" href="#prerequisites"></a>
 </h3>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/Ollegst/CovariateSearcher" class="external-link">CovariateSearcher</a></span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">CovariateSearcher</span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://dplyr.tidyverse.org" class="external-link">dplyr</a></span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level3">
@@ -102,10 +111,18 @@ best parsimonious model</p>
 <div class="section level4">
 <h4 id="nonmem-dataset">NONMEM Dataset<a class="anchor" aria-label="anchor" href="#nonmem-dataset"></a>
 </h4>
-<p>Your dataset should include: - <code>ID</code>: Subject identifier -
-<code>TIME</code>: Time points - <code>DV</code>: Dependent variable
-(concentrations) - <code>EVID</code>: Event ID (0=observation, 1=dose) -
-Covariates (WT, AGE, SEX, etc.)</p>
+<p>Your dataset should include:</p>
+<ul>
+<li>
+<code>ID</code>: Subject identifier</li>
+<li>
+<code>TIME</code>: Time points</li>
+<li>
+<code>DV</code>: Dependent variable (concentrations)</li>
+<li>
+<code>EVID</code>: Event ID (0=observation, 1=dose)</li>
+<li>Covariates (WT, AGE, SEX, etc.)</li>
+</ul>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Example dataset structure</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">nonmem_data</span><span class="op">)</span></span>
@@ -120,7 +137,7 @@ Covariates (WT, AGE, SEX, etc.)</p>
 <p>Create a CSV file defining which covariates to test:</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Example: covariate_search.csv</span></span>
-<span><span class="va">covariate_config</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://tibble.tidyverse.org/reference/tribble.html" class="external-link">tribble</a></span><span class="op">(</span></span>
+<span><span class="va">covariate_config</span> <span class="op">&lt;-</span> <span class="fu">tribble</span><span class="op">(</span></span>
 <span>  <span class="op">~</span><span class="va">PARAMETER</span>, <span class="op">~</span><span class="va">COVARIATE</span>, <span class="op">~</span><span class="va">STATUS</span>,        <span class="op">~</span><span class="va">FORMULA</span>, <span class="op">~</span><span class="va">LEVELS</span>, <span class="op">~</span><span class="va">REFERENCE</span>,</span>
 <span>  <span class="st">"CL"</span>,       <span class="st">"WT"</span>,        <span class="st">"con"</span>,          <span class="st">"power"</span>,      <span class="cn">NA</span>,         <span class="fl">70</span>,</span>
 <span>  <span class="st">"CL"</span>,       <span class="st">"AGE"</span>,       <span class="st">"con"</span>,         <span class="st">"linear"</span>,      <span class="cn">NA</span>,         <span class="fl">50</span>,</span>
@@ -195,6 +212,14 @@ precise</p>
 <div class="section level3">
 <h3 id="step-4-backward-elimination">Step 4: Backward Elimination<a class="anchor" aria-label="anchor" href="#step-4-backward-elimination"></a>
 </h3>
+<p>Backward elimination keeps/removes covariates using both
+criteria:</p>
+<ul>
+<li>Removal must satisfy backward ΔOFV criterion
+(<code>backward_p_value</code>)</li>
+<li>Removal must satisfy RSE criterion (<code>rse_threshold</code>)</li>
+<li>If RSE is not available (NA), it is accepted</li>
+</ul>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_automated_scm_testing.html">run_automated_scm_testing</a></span><span class="op">(</span></span>
 <span>  search_state <span class="op">=</span> <span class="va">search_state</span>,</span>
@@ -276,7 +301,7 @@ examples</li>
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.1.1.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
 </div>
 
     </footer>

@@ -18,7 +18,8 @@ This comprehensive guide walks through a complete SCM analysis from start to fin
 ## Overview
 
 The stepwise covariate modeling (SCM/SCM+) process consists of:
-0. **Backward elimination** :Remove non-significant covariates (optional)
+
+0. **Backward elimination**: Remove non-significant covariates (optional)
 1. **Forward Selection**: Add covariates that improve model fit
 2. **Backward Elimination**: Remove non-significant covariates
 3. **Final Model**: Select the best parsimonious model
@@ -34,6 +35,7 @@ library(dplyr)
 
 ### NONMEM Dataset
 Your dataset should include:
+
 - `ID`: Subject identifier
 - `TIME`: Time points
 - `DV`: Dependent variable (concentrations)
@@ -130,6 +132,7 @@ Models are selected if they meet BOTH criteria:
 ## Step 4: Backward Elimination
 
 Backward elimination keeps/removes covariates using both criteria:
+
 - Removal must satisfy backward ΔOFV criterion (`backward_p_value`)
 - Removal must satisfy RSE criterion (`rse_threshold`)
 - If RSE is not available (NA), it is accepted

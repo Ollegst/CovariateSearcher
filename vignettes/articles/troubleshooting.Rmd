@@ -29,6 +29,7 @@ print(retries)
 ```
 
 If retries also failed, you may need to:
+
 1. Adjust initial estimates in base model
 2. Simplify the covariate relationship
 3. Check for collinearity between covariates
@@ -36,6 +37,7 @@ If retries also failed, you may need to:
 ### Issue: "Error 134" or Singular Matrix
 
 **Solution**: This indicates numerical issues. The recovery system will:
+
 1. Create retry model with different THETA sign
 2. Try alternative parameterization
 
@@ -73,6 +75,7 @@ step2_models %>%
 ```
 
 Consider:
+
 - Lowering RSE threshold if needed
 - Checking if covariates are too correlated
 
