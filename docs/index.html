@@ -7,8 +7,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <title>Stepwise Covariate Modeling with NONMEM/bbi Integration • CovariateSearcher</title>
 <script src="deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<link href="deps/bootstrap-5.3.1/bootstrap.min.css" rel="stylesheet">
-<script src="deps/bootstrap-5.3.1/bootstrap.bundle.min.js"></script><link href="deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
+<link href="deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet">
+<script src="deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
 <script src="deps/headroom-0.11.0/headroom.min.js"></script><script src="deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="deps/search-1.0.0/fuse.min.js"></script><script src="deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="pkgdown.js"></script><meta property="og:title" content="Stepwise Covariate Modeling with NONMEM/bbi Integration">
 <meta name="description" content="Functional R package for automated stepwise covariate modeling (SCM) with NONMEM integration via bbi/bbr. Provides complete SCM workflow automation, parallel model execution, statistical evaluation, automatic recovery from estimation failures, and comprehensive progress monitoring.">
@@ -22,7 +22,7 @@
 
     <a class="navbar-brand me-2" href="index.html">CovariateSearcher</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.15</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.25</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -64,15 +64,15 @@
   <main id="main" class="col-md-9"><div class="section level1">
 <div class="page-header"><h1 id="covariatesearcher-quick-reference">CovariateSearcher: Quick Reference<a class="anchor" aria-label="anchor" href="#covariatesearcher-quick-reference"></a>
 </h1></div>
-<p>CovariateSearcher Package 2026-04-22</p>
+<p>CovariateSearcher Package 2026-05-27</p>
 <div class="section level2">
 <h2 id="rocket-minimal-working-example">🚀 Minimal Working Example<a class="anchor" aria-label="anchor" href="#rocket-minimal-working-example"></a>
 </h2>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Install from GitHub</span></span>
-<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu"><a href="https://remotes.r-lib.org/reference/install_github.html" class="external-link">install_github</a></span><span class="op">(</span><span class="st">"Ollegst/CovariateSearcher"</span>, ref <span class="op">=</span> <span class="st">"feature/prepare-search-base-model"</span>, dependencies <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"Ollegst/CovariateSearcher"</span>, ref <span class="op">=</span> <span class="st">"main"</span>, dependencies <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span></span>
-<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/Ollegst/CovariateSearcher" class="external-link">CovariateSearcher</a></span><span class="op">)</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">CovariateSearcher</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># 1. Initialize</span></span>
 <span><span class="va">search_state</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/initialize_covariate_search.html">initialize_covariate_search</a></span><span class="op">(</span></span>
@@ -88,7 +88,7 @@
 <span><span class="va">result</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/run_automated_scm_testing.html">run_automated_scm_testing</a></span><span class="op">(</span></span>
 <span>        search_state <span class="op">=</span> <span class="va">search_state</span>,</span>
 <span>        scm_type <span class="op">=</span> <span class="st">"selective"</span>,                     <span class="co"># or "standard"  </span></span>
-<span>    starting_phase <span class="op">=</span> <span class="st">"backward"</span>,                <span class="co"># Starting phase</span></span>
+<span>    starting_phase <span class="op">=</span> <span class="st">"forward"</span>,                 <span class="co"># Starting phase forward/backward</span></span>
 <span>    full_scm <span class="op">=</span> <span class="cn">TRUE</span>,                            <span class="co"># Run complete workflow </span></span>
 <span>    forward_p_value <span class="op">=</span> <span class="fl">0.05</span>,                       <span class="co"># p-value for the forward selection   </span></span>
 <span>    backward_p_value <span class="op">=</span> <span class="fl">0.01</span>,                    <span class="co"># p-value for the backward elimination</span></span>
@@ -110,13 +110,13 @@
 <h2 id="or-if-you-need-to-create-model-with-multiple-covariates-as-base-model">Or if you need to create model with multiple covariates as base model<a class="anchor" aria-label="anchor" href="#or-if-you-need-to-create-model-with-multiple-covariates-as-base-model"></a>
 </h2>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/Ollegst/CovariateSearcher" class="external-link">CovariateSearcher</a></span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">CovariateSearcher</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">data_file_path</span> <span class="op">=</span> <span class="st">"data/test.csv"</span></span>
 <span><span class="va">covariate_search_path</span> <span class="op">=</span> <span class="st">"data/derived/covariate_search.csv"</span></span>
 <span></span>
-<span><span class="va">data_file</span> <span class="op">&lt;-</span> <span class="fu">readr</span><span class="fu">::</span><span class="fu"><a href="https://readr.tidyverse.org/reference/read_delim.html" class="external-link">read_csv</a></span><span class="op">(</span><span class="va">data_file_path</span>, show_col_types <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
-<span><span class="va">covariate_search</span> <span class="op">&lt;-</span> <span class="fu">readr</span><span class="fu">::</span><span class="fu"><a href="https://readr.tidyverse.org/reference/read_delim.html" class="external-link">read_csv</a></span><span class="op">(</span><span class="va">covariate_search_path</span>, show_col_types <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
+<span><span class="va">data_file</span> <span class="op">&lt;-</span> <span class="fu">readr</span><span class="fu">::</span><span class="fu">read_csv</span><span class="op">(</span><span class="va">data_file_path</span>, show_col_types <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
+<span><span class="va">covariate_search</span> <span class="op">&lt;-</span> <span class="fu">readr</span><span class="fu">::</span><span class="fu">read_csv</span><span class="op">(</span><span class="va">covariate_search_path</span>, show_col_types <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">covariate_search</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/validate_covariate_search_table.html">validate_covariate_search_table</a></span><span class="op">(</span></span>
 <span>  covariate_search <span class="op">=</span> <span class="va">covariate_search</span>,</span>
@@ -137,8 +137,8 @@
 <span>  idcol <span class="op">=</span> <span class="st">"ID"</span></span>
 <span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">mod</span> <span class="op">&lt;-</span> <span class="fu">bbr</span><span class="fu">::</span><span class="fu"><a href="https://metrumresearchgroup.github.io/bbr/reference/read_model.html" class="external-link">read_model</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="st">"models"</span>, <span class="va">prep</span><span class="op">$</span><span class="va">model_name</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="fu">bbr</span><span class="fu">::</span><span class="fu"><a href="https://metrumresearchgroup.github.io/bbr/reference/submit_model.html" class="external-link">submit_model</a></span><span class="op">(</span><span class="va">mod</span>, .bbi_args <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>threads <span class="op">=</span> <span class="fl">4</span><span class="op">)</span>, .overwrite <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span><span class="va">mod</span> <span class="op">&lt;-</span> <span class="fu">bbr</span><span class="fu">::</span><span class="fu">read_model</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="st">"models"</span>, <span class="va">prep</span><span class="op">$</span><span class="va">model_name</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="fu">bbr</span><span class="fu">::</span><span class="fu">submit_model</span><span class="op">(</span><span class="va">mod</span>, .bbi_args <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>threads <span class="op">=</span> <span class="fl">4</span><span class="op">)</span>, .overwrite <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># 2. Initialize</span></span>
 <span><span class="va">search_state</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/initialize_covariate_search.html">initialize_covariate_search</a></span><span class="op">(</span></span>
@@ -272,6 +272,7 @@
 </tr>
 </tbody>
 </table>
+<p><strong>FORMULA options for continuous covariates (<code>STATUS = "con"</code>):</strong> - <code>linear</code>: <code>PARAM * (1 + (COV - REF) * THETA)</code> - <code>power</code>: <code>PARAM * (COV / REF) ** THETA</code> - <code>power1</code>: <code>PARAM * (COV / REF) ** THETA</code> with THETA fixed to 1 - <code>power0.75</code>: <code>PARAM * (COV / REF) ** THETA</code> with THETA fixed to 0.75 - <code>exponential</code>: <code>PARAM * EXP(THETA * (COV - REF))</code></p>
 <hr>
 </div>
 <div class="section level3">
@@ -436,7 +437,7 @@
 <div class="section level2">
 <h2 id="chart_with_upwards_trend-model-selection-criteria">📈 Model Selection Criteria<a class="anchor" aria-label="anchor" href="#chart_with_upwards_trend-model-selection-criteria"></a>
 </h2>
-<p><strong>Model selected if BOTH</strong>: 1. ΔOFV &gt; threshold 2. RSE &lt; threshold (default: 50%)</p>
+<p><strong>Model selected if BOTH</strong>: 1. ΔOFV &gt; threshold 2. RSE &lt; threshold (default: 50%) - In backward elimination, NA RSE is accepted</p>
 <p><strong>Thresholds</strong>: - Forward: ΔOFV &gt; 3.84 (p=0.05) - Backward: ΔOFV &gt; 6.63 (p=0.01)</p>
 <hr>
 </div>
@@ -561,7 +562,8 @@
 <code class="sourceCode R"><span><span class="va">search_state</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/load_search_state.html">load_search_state</a></span><span class="op">(</span><span class="st">"scm_auto_forward_complete.rds"</span><span class="op">)</span></span>
 <span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/run_backward_elimination.html">run_backward_elimination</a></span><span class="op">(</span></span>
 <span>  <span class="va">search_state</span>,</span>
-<span>  starting_model <span class="op">=</span> <span class="st">"run85"</span></span>
+<span>  starting_model <span class="op">=</span> <span class="st">"run85"</span>,</span>
+<span>  rse_threshold <span class="op">=</span> <span class="fl">50</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <hr>
 </div>
@@ -606,7 +608,7 @@
 <div class="developers">
 <h2 data-toc-skip>Developers</h2>
 <ul class="list-unstyled">
-<li>Oleg Stepanov <br><small class="roles"> Author, maintainer </small> <a href="https://orcid.org/0000-0001-6129-6499" target="orcid.widget" aria-label="ORCID" class="external-link"><span class="fab fa-orcid orcid" aria-hidden="true"></span></a> </li>
+<li>Oleg Stepanov <br><small class="roles"> Author, maintainer </small> <a href="https://orcid.org/0000-0001-6129-6499" target="orcid.widget" aria-label="ORCID" class="external-link"><span class="fab fa-orcid orcid" aria-hidden="true"></span></a>  </li>
 </ul>
 </div>
 
@@ -621,7 +623,7 @@
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.1.1.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
 </div>
 
     </footer>
