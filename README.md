@@ -13,7 +13,7 @@ output: github_document
   
 ```r
 # Install from GitHub
-remotes::install_github("Ollegst/CovariateSearcher", ref = "feature/prepare-search-base-model", dependencies = TRUE)
+remotes::install_github("Ollegst/CovariateSearcher", ref = "main", dependencies = TRUE)
 
 library(CovariateSearcher)
 
