@@ -124,7 +124,8 @@ model_report(
   model_names,               # Character vector of model names
   shrinkage = "etasd",      # Type of shrinkage ("etasd", "etavr", "ebvsd", "ebvvr")
   models_folder = "models", # Path to models folder
-  spec_pk = NULL             # Optional R object with parameter metadata
+  spec_pk = NULL,            # Optional R object with parameter metadata
+  lookup = NULL              # Optional covariate lookup spec for decoding categorical levels
 )
 ```
 
@@ -132,10 +133,11 @@ model_report(
 
 | Parameter       | Description                          | Default    | Required    |
 |-----------------|--------------------------------------|------------|-------------|
-| `model_names`   | Model name(s) without file extension | -          | ✅ Yes |    | 
+| `model_names`   | Model name(s) without file extension | -          | ✅ Yes |    |
 | `shrinkage`     | Type of shrinkage to report          | `"etasd"`  | No          |
 | `models_folder` | Directory containing models          | `"models"` | No          |
 | `spec_pk`       | R object (list-like) for formatting metadata | `NULL` | Recommended |
+| `lookup`        | R object (list-like) with covariate `values`/`decode` for decoding categorical levels | `NULL` | Optional |
 
 ### Shrinkage Options
 
@@ -143,6 +145,42 @@ model_report(
 - `"etavr"` - ETA-based variance
 - `"ebvsd"` - EBV-based SD
 - `"ebvvr"` - EBV-based variance
+
+---
+
+## 🏷️ Decoding Categorical Covariate Levels
+
+For categorical covariates, a separate THETA is estimated per non-reference level
+(e.g. `beta_SEXN_V_2`). By default the table labels these by their raw level value:
+
+| parameter_names    | label                                          |
+|--------------------|------------------------------------------------|
+| SEXN level 2~Vc/F  | Effect of SEXN level 2 on Apparent central volume |
+
+Pass a `lookup` object (the same `lookup.yaml`-shaped spec used elsewhere, where each
+covariate entry carries `values` and `decode`) to replace the generic level number with
+the decoded category name:
+
+```{r decode_levels}
+# lookup.yaml contains, e.g.:
+#   SEXN:
+#     values: [1, 2]
+#     decode: ["Male", "Female"]
+lookup <- yaml::read_yaml(here::here("data", "spec", "lookup.yaml"))
+
+pk_res <- model_report(
+  model_names = "run28",
+  spec_pk = spec_pk,
+  lookup = lookup
+)
+```
+
+| parameter_names    | label                                          |
+|--------------------|------------------------------------------------|
+| SEXN Female~Vc/F   | Effect of Female (SEXN) on Apparent central volume |
+
+When `lookup` is `NULL`, or a covariate/level is not found in it, the original
+"level N" label is used, so existing reports are unaffected.
 
 ---
 

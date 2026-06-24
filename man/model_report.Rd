@@ -8,7 +8,8 @@ model_report(
   model_names,
   shrinkage = "etasd",
   models_folder = "models",
-  spec_pk = NULL
+  spec_pk = NULL,
+  lookup = NULL
 )
 }
 \arguments{
@@ -19,6 +20,12 @@ model_report(
 \item{models_folder}{Path to models folder}
 
 \item{spec_pk}{Optional yspec object for parameter formatting}
+
+\item{lookup}{Optional covariate lookup spec used to decode categorical covariate
+levels in the table labels. A \code{lookup.yaml}-shaped list (e.g.
+\code{yaml::read_yaml("data/spec/lookup.yaml")}) where each covariate entry carries
+\code{values} and \code{decode}. When \code{NULL} (default) or when a covariate/level has no
+usable decode, the generic "level N" label is used.}
 }
 \value{
 flextable object with formatted parameter table

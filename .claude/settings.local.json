@@ -7,7 +7,16 @@
       "Bash(py -c ' *)",
       "Bash(python3 -c ' *)",
       "Bash(Rscript -e ' *)",
-      "Bash(awk 'BEGIN{n=0} /^---/{ if\\(n>1\\){ for\\(i=0;i<n;i++\\) for\\(j=i+1;j<n;j++\\) print arr[i] \"  vs  \" arr[j] }; n=0; next } /^R\\\\//{ arr[n++]=$0 } END{ if\\(n>1\\){ for\\(i=0;i<n;i++\\) for\\(j=i+1;j<n;j++\\) print arr[i] \"  vs  \" arr[j] } }' /tmp/cochange.txt)"
+      "Bash(awk 'BEGIN{n=0} /^---/{ if\\(n>1\\){ for\\(i=0;i<n;i++\\) for\\(j=i+1;j<n;j++\\) print arr[i] \"  vs  \" arr[j] }; n=0; next } /^R\\\\//{ arr[n++]=$0 } END{ if\\(n>1\\){ for\\(i=0;i<n;i++\\) for\\(j=i+1;j<n;j++\\) print arr[i] \"  vs  \" arr[j] } }' /tmp/cochange.txt)",
+      "Bash(grep -r 'search_state\\\\$search_database' '/c/Users/kdgc151/OneDrive - AZCollaboration/CovariateSearcher/CovariateSearcher/R' --files-with-matches)",
+      "Bash(grep -h 'search_state$search_database$[a-zA-Z_]' '/c/Users/kdgc151/OneDrive - AZCollaboration/CovariateSearcher/CovariateSearcher/R/*.R')",
+      "Bash(sed -E 's/.*search_database\\\\$\\([a-zA-Z_]+\\).*/\\\\1/')",
+      "Bash(grep -c \"search_state\\\\|search_database\\\\|state\\\\$\" R/model-output-tables.R)",
+      "Bash(ls -la tests/)",
+      "Bash(ls -la testthat/)",
+      "Bash(grep -rln 'spec_pk\\\\|short =\\\\|decode\\\\|$values' tests vignettes inst)",
+      "PowerShell($rs = \"C:\\\\Users\\\\kdgc151\\\\AppData\\\\Local\\\\Programs\\\\R\\\\R-4.4.2\\\\bin\\\\Rscript.exe\"; & $rs \"C:\\\\Users\\\\kdgc151\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-kdgc151-OneDrive---AZCollaboration-CovariateSearcher-CovariateSearcher\\\\eb864748-ad1e-4d6a-8b36-b7246d7ac05c\\\\scratchpad\\\\check_decode.R\")",
+      "PowerShell($rs = \"C:\\\\Users\\\\kdgc151\\\\AppData\\\\Local\\\\Programs\\\\R\\\\R-4.4.2\\\\bin\\\\Rscript.exe\"; & $rs -e \"pkgs <- c\\('devtools','roxygen2','pkgdown','rmarkdown','knitr'\\); for \\(p in pkgs\\) cat\\(sprintf\\('%-12s %s\\\\n', p, requireNamespace\\(p, quietly=TRUE\\)\\)\\)\")"
     ]
   }
 }

@@ -9,7 +9,8 @@ get_param2(
   count_model,
   shrinkage = "etasd",
   models_folder = "models",
-  spec_pk = NULL
+  spec_pk = NULL,
+  lookup = NULL
 )
 }
 \arguments{
@@ -22,6 +23,9 @@ get_param2(
 \item{models_folder}{Character string. Path to models folder}
 
 \item{spec_pk}{List. Optional parameter specifications with labels and units}
+
+\item{lookup}{List. Optional covariate lookup spec (each entry carrying \code{values}
+and \code{decode}) used to decode categorical covariate levels in labels}
 }
 \value{
 A formatted data frame with model parameters and statistics

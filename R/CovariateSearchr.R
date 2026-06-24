@@ -60,6 +60,7 @@ utils::globalVariables(c(
 
   # From get_param2 function
   "random_effect_sd", "random_effect_sdse", "parameter_names",
+  "parameter_names2",
   "Parameter", "RSE", "SHRINKAGE", "fixed", "label", "model",
   "diag", "estimate", "stderr", "shrinkage", "comment",
 

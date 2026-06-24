@@ -102,12 +102,12 @@ flextable output</p>
 <p>The <code><a href="../reference/model_report.html">model_report()</a></code> function expects <code>spec_pk</code>
 to be an in-memory R object (list-like), not a file path string.</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/Ollegst/CovariateSearcher" class="external-link">CovariateSearcher</a></span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">CovariateSearcher</span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://here.r-lib.org/" class="external-link">here</a></span><span class="op">)</span></span>
-<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/vubiostat/r-yaml/" class="external-link">yaml</a></span><span class="op">)</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://yaml.r-lib.org" class="external-link">yaml</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Load parameter specification into an R object</span></span>
-<span><span class="va">spec_pk</span> <span class="op">&lt;-</span> <span class="fu">yaml</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/yaml/man/read_yaml.html" class="external-link">read_yaml</a></span><span class="op">(</span><span class="fu">here</span><span class="fu">::</span><span class="fu"><a href="https://here.r-lib.org/reference/here.html" class="external-link">here</a></span><span class="op">(</span><span class="st">"data"</span>, <span class="st">"spec"</span>, <span class="st">"pk-extend.yml"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">spec_pk</span> <span class="op">&lt;-</span> <span class="fu">yaml</span><span class="fu">::</span><span class="fu"><a href="https://yaml.r-lib.org/reference/read_yaml.html" class="external-link">read_yaml</a></span><span class="op">(</span><span class="fu">here</span><span class="fu">::</span><span class="fu">here</span><span class="op">(</span><span class="st">"data"</span>, <span class="st">"spec"</span>, <span class="st">"pk-extend.yml"</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Then pass the object to model_report(spec_pk = spec_pk)</span></span></code></pre></div>
 <p><strong>What’s in pk-extend.yml?</strong> This file defines how
@@ -263,7 +263,8 @@ in separate column - Format:
 <span>  <span class="va">model_names</span>,               <span class="co"># Character vector of model names</span></span>
 <span>  shrinkage <span class="op">=</span> <span class="st">"etasd"</span>,      <span class="co"># Type of shrinkage ("etasd", "etavr", "ebvsd", "ebvvr")</span></span>
 <span>  models_folder <span class="op">=</span> <span class="st">"models"</span>, <span class="co"># Path to models folder</span></span>
-<span>  spec_pk <span class="op">=</span> <span class="cn">NULL</span>             <span class="co"># Optional R object with parameter metadata</span></span>
+<span>  spec_pk <span class="op">=</span> <span class="cn">NULL</span>,            <span class="co"># Optional R object with parameter metadata</span></span>
+<span>  lookup <span class="op">=</span> <span class="cn">NULL</span>              <span class="co"># Optional covariate lookup spec for decoding categorical levels</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <div class="section level4">
 <h4 id="parameters-explained">Parameters Explained<a class="anchor" aria-label="anchor" href="#parameters-explained"></a>
@@ -306,6 +307,14 @@ in separate column - Format:
 <td><code>NULL</code></td>
 <td>Recommended</td>
 </tr>
+<tr class="odd">
+<td><code>lookup</code></td>
+<td>R object (list-like) with covariate
+<code>values</code>/<code>decode</code> for decoding categorical
+levels</td>
+<td><code>NULL</code></td>
+<td>Optional</td>
+</tr>
 </tbody>
 </table>
 </div>
@@ -326,15 +335,70 @@ in separate column - Format:
 </div>
 </div>
 <div class="section level3">
+<h3 id="decoding-categorical-covariate-levels">🏷️ Decoding Categorical Covariate Levels<a class="anchor" aria-label="anchor" href="#decoding-categorical-covariate-levels"></a>
+</h3>
+<p>For categorical covariates, a separate THETA is estimated per
+non-reference level (e.g. <code>beta_SEXN_V_2</code>). By default the
+table labels these by their raw level value:</p>
+<table class="table">
+<colgroup>
+<col width="29%">
+<col width="70%">
+</colgroup>
+<thead><tr class="header">
+<th>parameter_names</th>
+<th>label</th>
+</tr></thead>
+<tbody><tr class="odd">
+<td>SEXN level 2~Vc/F</td>
+<td>Effect of SEXN level 2 on Apparent central volume</td>
+</tr></tbody>
+</table>
+<p>Pass a <code>lookup</code> object (the same
+<code>lookup.yaml</code>-shaped spec used elsewhere, where each
+covariate entry carries <code>values</code> and <code>decode</code>) to
+replace the generic level number with the decoded category name:</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># lookup.yaml contains, e.g.:</span></span>
+<span><span class="co">#   SEXN:</span></span>
+<span><span class="co">#     values: [1, 2]</span></span>
+<span><span class="co">#     decode: ["Male", "Female"]</span></span>
+<span><span class="va">lookup</span> <span class="op">&lt;-</span> <span class="fu">yaml</span><span class="fu">::</span><span class="fu"><a href="https://yaml.r-lib.org/reference/read_yaml.html" class="external-link">read_yaml</a></span><span class="op">(</span><span class="fu">here</span><span class="fu">::</span><span class="fu">here</span><span class="op">(</span><span class="st">"data"</span>, <span class="st">"spec"</span>, <span class="st">"lookup.yaml"</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">pk_res</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/model_report.html">model_report</a></span><span class="op">(</span></span>
+<span>  model_names <span class="op">=</span> <span class="st">"run28"</span>,</span>
+<span>  spec_pk <span class="op">=</span> <span class="va">spec_pk</span>,</span>
+<span>  lookup <span class="op">=</span> <span class="va">lookup</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<table class="table">
+<colgroup>
+<col width="29%">
+<col width="70%">
+</colgroup>
+<thead><tr class="header">
+<th>parameter_names</th>
+<th>label</th>
+</tr></thead>
+<tbody><tr class="odd">
+<td>SEXN Female~Vc/F</td>
+<td>Effect of Female (SEXN) on Apparent central volume</td>
+</tr></tbody>
+</table>
+<p>When <code>lookup</code> is <code>NULL</code>, or a covariate/level
+is not found in it, the original “level N” label is used, so existing
+reports are unaffected.</p>
+<hr>
+</div>
+<div class="section level3">
 <h3 id="complete-example">🎯 Complete Example<a class="anchor" aria-label="anchor" href="#complete-example"></a>
 </h3>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/Ollegst/CovariateSearcher" class="external-link">CovariateSearcher</a></span><span class="op">)</span></span>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">CovariateSearcher</span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://here.r-lib.org/" class="external-link">here</a></span><span class="op">)</span></span>
-<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/vubiostat/r-yaml/" class="external-link">yaml</a></span><span class="op">)</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://yaml.r-lib.org" class="external-link">yaml</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># 1. Load YAML specification into an R object</span></span>
-<span><span class="va">spec_pk</span> <span class="op">&lt;-</span> <span class="fu">yaml</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/yaml/man/read_yaml.html" class="external-link">read_yaml</a></span><span class="op">(</span><span class="fu">here</span><span class="fu">::</span><span class="fu"><a href="https://here.r-lib.org/reference/here.html" class="external-link">here</a></span><span class="op">(</span><span class="st">"data"</span>, <span class="st">"spec"</span>, <span class="st">"pk-extend.yml"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">spec_pk</span> <span class="op">&lt;-</span> <span class="fu">yaml</span><span class="fu">::</span><span class="fu"><a href="https://yaml.r-lib.org/reference/read_yaml.html" class="external-link">read_yaml</a></span><span class="op">(</span><span class="fu">here</span><span class="fu">::</span><span class="fu">here</span><span class="op">(</span><span class="st">"data"</span>, <span class="st">"spec"</span>, <span class="st">"pk-extend.yml"</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># 2. Generate report for final models</span></span>
 <span><span class="va">final_models</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"run85"</span>, <span class="st">"run90"</span>, <span class="st">"run95"</span><span class="op">)</span></span>
@@ -368,7 +432,7 @@ process.</p>
 <div class="section level4">
 <h4 id="example-some-models-fail">Example: Some Models Fail<a class="anchor" aria-label="anchor" href="#example-some-models-fail"></a>
 </h4>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># run1 doesn't exist, but others do</span></span>
 <span><span class="va">pk_res</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/model_report.html">model_report</a></span><span class="op">(</span></span>
 <span>  model_names <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"run1"</span>, <span class="st">"run28"</span>, <span class="st">"run45"</span><span class="op">)</span>,</span>
@@ -401,7 +465,7 @@ only - ✅ Footer note shows excluded models</p>
 <div class="section level4">
 <h4 id="without-spec_pk-basic">Without spec_pk (Basic)<a class="anchor" aria-label="anchor" href="#without-spec_pk-basic"></a>
 </h4>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># No YAML specification</span></span>
 <span><span class="va">pk_res</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/model_report.html">model_report</a></span><span class="op">(</span></span>
 <span>  model_names <span class="op">=</span> <span class="st">"run28"</span>,</span>
@@ -414,9 +478,9 @@ formatted labels - No units</p>
 <div class="section level4">
 <h4 id="with-spec_pk-formatted">With spec_pk (Formatted)<a class="anchor" aria-label="anchor" href="#with-spec_pk-formatted"></a>
 </h4>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># With YAML specification</span></span>
-<span><span class="va">spec_pk</span> <span class="op">&lt;-</span> <span class="fu">yaml</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/yaml/man/read_yaml.html" class="external-link">read_yaml</a></span><span class="op">(</span><span class="fu">here</span><span class="fu">::</span><span class="fu"><a href="https://here.r-lib.org/reference/here.html" class="external-link">here</a></span><span class="op">(</span><span class="st">"data"</span>, <span class="st">"spec"</span>, <span class="st">"pk-extend.yml"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">spec_pk</span> <span class="op">&lt;-</span> <span class="fu">yaml</span><span class="fu">::</span><span class="fu"><a href="https://yaml.r-lib.org/reference/read_yaml.html" class="external-link">read_yaml</a></span><span class="op">(</span><span class="fu">here</span><span class="fu">::</span><span class="fu">here</span><span class="op">(</span><span class="st">"data"</span>, <span class="st">"spec"</span>, <span class="st">"pk-extend.yml"</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">pk_res</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/model_report.html">model_report</a></span><span class="op">(</span></span>
 <span>  model_names <span class="op">=</span> <span class="st">"run28"</span>,</span>
@@ -439,7 +503,7 @@ professional output!</p>
 </h4>
 <p>The output is a <code>flextable</code> object, so you can customize
 it:</p>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pk_res</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/model_report.html">model_report</a></span><span class="op">(</span></span>
 <span>  model_names <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"run28"</span>, <span class="st">"run45"</span><span class="op">)</span>,</span>
 <span>  spec_pk <span class="op">=</span> <span class="va">spec_pk</span></span>
@@ -458,7 +522,7 @@ it:</p>
 <div class="section level4">
 <h4 id="export-options">Export Options<a class="anchor" aria-label="anchor" href="#export-options"></a>
 </h4>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># To Word</span></span>
 <span><span class="fu">flextable</span><span class="fu">::</span><span class="fu"><a href="https://davidgohel.github.io/flextable/reference/save_as_docx.html" class="external-link">save_as_docx</a></span><span class="op">(</span></span>
 <span>  <span class="va">pk_res</span>, </span>
@@ -543,9 +607,9 @@ Formatted parameter name - <code>label</code>: Full description -
 <div class="section level4">
 <h4 id="always-use-yaml-specification">1. Always Use YAML Specification<a class="anchor" aria-label="anchor" href="#always-use-yaml-specification"></a>
 </h4>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># ✅ Good - formatted output</span></span>
-<span><span class="va">spec_pk</span> <span class="op">&lt;-</span> <span class="fu">yaml</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/yaml/man/read_yaml.html" class="external-link">read_yaml</a></span><span class="op">(</span><span class="fu">here</span><span class="fu">::</span><span class="fu"><a href="https://here.r-lib.org/reference/here.html" class="external-link">here</a></span><span class="op">(</span><span class="st">"data"</span>, <span class="st">"spec"</span>, <span class="st">"pk-extend.yml"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">spec_pk</span> <span class="op">&lt;-</span> <span class="fu">yaml</span><span class="fu">::</span><span class="fu"><a href="https://yaml.r-lib.org/reference/read_yaml.html" class="external-link">read_yaml</a></span><span class="op">(</span><span class="fu">here</span><span class="fu">::</span><span class="fu">here</span><span class="op">(</span><span class="st">"data"</span>, <span class="st">"spec"</span>, <span class="st">"pk-extend.yml"</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="va">pk_res</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/model_report.html">model_report</a></span><span class="op">(</span>model_names <span class="op">=</span> <span class="st">"run28"</span>, spec_pk <span class="op">=</span> <span class="va">spec_pk</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># ❌ Less ideal - raw parameter names</span></span>
@@ -554,7 +618,7 @@ Formatted parameter name - <code>label</code>: Full description -
 <div class="section level4">
 <h4 id="check-models-exist-first">2. Check Models Exist First<a class="anchor" aria-label="anchor" href="#check-models-exist-first"></a>
 </h4>
-<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Check which models exist</span></span>
 <span><span class="va">available_models</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.files.html" class="external-link">list.files</a></span><span class="op">(</span><span class="st">"models"</span>, pattern <span class="op">=</span> <span class="st">"^run.*\\.yaml$"</span><span class="op">)</span></span>
 <span><span class="va">available_models</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">gsub</a></span><span class="op">(</span><span class="st">"\\.yaml$"</span>, <span class="st">""</span>, <span class="va">available_models</span><span class="op">)</span></span>
@@ -568,7 +632,7 @@ Formatted parameter name - <code>label</code>: Full description -
 <div class="section level4">
 <h4 id="compare-similar-models">3. Compare Similar Models<a class="anchor" aria-label="anchor" href="#compare-similar-models"></a>
 </h4>
-<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Good - compare base model with covariate models</span></span>
 <span><span class="va">pk_res</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/model_report.html">model_report</a></span><span class="op">(</span></span>
 <span>  model_names <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"run10"</span>, <span class="st">"run11"</span>, <span class="st">"run12"</span><span class="op">)</span>,  <span class="co"># Base, +WT, +AGE</span></span>
@@ -581,7 +645,7 @@ Formatted parameter name - <code>label</code>: Full description -
 <div class="section level4">
 <h4 id="save-intermediate-results">4. Save Intermediate Results<a class="anchor" aria-label="anchor" href="#save-intermediate-results"></a>
 </h4>
-<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Save for later use</span></span>
 <span><span class="va">pk_res</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/model_report.html">model_report</a></span><span class="op">(</span></span>
 <span>  model_names <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"run85"</span>, <span class="st">"run90"</span><span class="op">)</span>,</span>
@@ -623,7 +687,7 @@ and solutions</li>
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.1.1.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
 </div>
 
     </footer>
