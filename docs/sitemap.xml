@@ -1,5 +1,7 @@
 <urlset xmlns = 'http://www.sitemaps.org/schemas/sitemap/0.9'>
 <url><loc>https://ollegst.github.io/CovariateSearcher/404.html</loc></url>
+<url><loc>https://ollegst.github.io/CovariateSearcher/LICENSE-text.html</loc></url>
+<url><loc>https://ollegst.github.io/CovariateSearcher/LICENSE.html</loc></url>
 <url><loc>https://ollegst.github.io/CovariateSearcher/articles/complete-workflow.html</loc></url>
 <url><loc>https://ollegst.github.io/CovariateSearcher/articles/index.html</loc></url>
 <url><loc>https://ollegst.github.io/CovariateSearcher/articles/model-report-usage.html</loc></url>
@@ -9,8 +11,7 @@
 <url><loc>https://ollegst.github.io/CovariateSearcher/articles/yaml-specification-files.html</loc></url>
 <url><loc>https://ollegst.github.io/CovariateSearcher/authors.html</loc></url>
 <url><loc>https://ollegst.github.io/CovariateSearcher/index.html</loc></url>
-<url><loc>https://ollegst.github.io/CovariateSearcher/LICENSE-text.html</loc></url>
-<url><loc>https://ollegst.github.io/CovariateSearcher/LICENSE.html</loc></url>
+<url><loc>https://ollegst.github.io/CovariateSearcher/reference/CovariateSearcher-package.html</loc></url>
 <url><loc>https://ollegst.github.io/CovariateSearcher/reference/add_covariate_to_model.html</loc></url>
 <url><loc>https://ollegst.github.io/CovariateSearcher/reference/adjust_theta_for_covariate.html</loc></url>
 <url><loc>https://ollegst.github.io/CovariateSearcher/reference/analyze_existing_models_yaml.html</loc></url>
@@ -19,7 +20,6 @@
 <url><loc>https://ollegst.github.io/CovariateSearcher/reference/calculate_condition_number.html</loc></url>
 <url><loc>https://ollegst.github.io/CovariateSearcher/reference/calculate_covariate_df.html</loc></url>
 <url><loc>https://ollegst.github.io/CovariateSearcher/reference/clean_dir.html</loc></url>
-<url><loc>https://ollegst.github.io/CovariateSearcher/reference/CovariateSearcher-package.html</loc></url>
 <url><loc>https://ollegst.github.io/CovariateSearcher/reference/create_comprehensive_table.html</loc></url>
 <url><loc>https://ollegst.github.io/CovariateSearcher/reference/create_model_info_log.html</loc></url>
 <url><loc>https://ollegst.github.io/CovariateSearcher/reference/create_retry_model.html</loc></url>
@@ -43,8 +43,8 @@
 <url><loc>https://ollegst.github.io/CovariateSearcher/reference/generate_step_description.html</loc></url>
 <url><loc>https://ollegst.github.io/CovariateSearcher/reference/generate_step_display.html</loc></url>
 <url><loc>https://ollegst.github.io/CovariateSearcher/reference/generate_tags_from_covariate_search.html</loc></url>
-<url><loc>https://ollegst.github.io/CovariateSearcher/reference/get_covariates_from_models.html</loc></url>
 <url><loc>https://ollegst.github.io/CovariateSearcher/reference/get_covariate_tag_from_name.html</loc></url>
+<url><loc>https://ollegst.github.io/CovariateSearcher/reference/get_covariates_from_models.html</loc></url>
 <url><loc>https://ollegst.github.io/CovariateSearcher/reference/get_dropped_covariates.html</loc></url>
 <url><loc>https://ollegst.github.io/CovariateSearcher/reference/get_excluded_covariates.html</loc></url>
 <url><loc>https://ollegst.github.io/CovariateSearcher/reference/get_fixed_covariates.html</loc></url>

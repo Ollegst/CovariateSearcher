@@ -1,5 +1,5 @@
-pandoc: 3.9.0.2
-pkgdown: 2.2.0
+pandoc: '3.3'
+pkgdown: 2.1.1
 pkgdown_sha: ~
 articles:
   articles/complete-workflow: complete-workflow.html
@@ -8,7 +8,7 @@ articles:
   articles/recovery-system: recovery-system.html
   articles/troubleshooting: troubleshooting.html
   articles/yaml-specification-files: yaml-specification-files.html
-last_built: 2026-05-27T10:38Z
+last_built: 2026-05-27T11:19Z
 urls:
   reference: https://ollegst.github.io/CovariateSearcher/reference
   article: https://ollegst.github.io/CovariateSearcher/articles
