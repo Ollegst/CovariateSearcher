@@ -241,12 +241,16 @@ RUV_PROP:
 ## 🎯 How CovariateSearcher Uses YAML Files
 
 ### 1. Variable Decoding
-Categorical variables are automatically decoded in output tables:
+Categorical covariate levels are decoded in `model_report()` output tables when you
+pass the lookup spec as the `lookup` argument (`model_report(..., lookup = lookup)`):
 
 ```
-Instead of: RACE = 1, 2, 3
-Shows:      RACE = White, Black or African American, Asian
+Instead of: Effect of SEXN level 2 on Apparent central volume
+Shows:      Effect of Female (SEXN) on Apparent central volume
 ```
+
+Decoding uses each covariate's `values`/`decode` entries (e.g. `RACE` → White, Black or
+African American, Asian). Without a `lookup`, the generic "level N" label is shown.
 
 ### 2. Parameter Formatting
 Output tables show formatted parameter names:

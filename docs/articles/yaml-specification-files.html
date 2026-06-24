@@ -327,9 +327,16 @@ Parameter-Covariate relationships Residual variability</p>
 <div class="section level4">
 <h4 id="variable-decoding">1. Variable Decoding<a class="anchor" aria-label="anchor" href="#variable-decoding"></a>
 </h4>
-<p>Categorical variables are automatically decoded in output tables:</p>
-<pre><code>Instead of: RACE = 1, 2, 3
-Shows:      RACE = White, Black or African American, Asian</code></pre>
+<p>Categorical covariate levels are decoded in
+<code><a href="../reference/model_report.html">model_report()</a></code> output tables when you pass the lookup spec
+as the <code>lookup</code> argument
+(<code>model_report(..., lookup = lookup)</code>):</p>
+<pre><code>Instead of: Effect of SEXN level 2 on Apparent central volume
+Shows:      Effect of Female (SEXN) on Apparent central volume</code></pre>
+<p>Decoding uses each covariate’s
+<code>values</code>/<code>decode</code> entries (e.g. <code>RACE</code>
+→ White, Black or African American, Asian). Without a
+<code>lookup</code>, the generic “level N” label is shown.</p>
 </div>
 <div class="section level4">
 <h4 id="parameter-formatting">2. Parameter Formatting<a class="anchor" aria-label="anchor" href="#parameter-formatting"></a>

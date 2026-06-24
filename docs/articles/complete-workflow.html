@@ -137,7 +137,7 @@ model</li>
 <p>Create a CSV file defining which covariates to test:</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Example: covariate_search.csv</span></span>
-<span><span class="va">covariate_config</span> <span class="op">&lt;-</span> <span class="fu">tribble</span><span class="op">(</span></span>
+<span><span class="va">covariate_config</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://tibble.tidyverse.org/reference/tribble.html" class="external-link">tribble</a></span><span class="op">(</span></span>
 <span>  <span class="op">~</span><span class="va">PARAMETER</span>, <span class="op">~</span><span class="va">COVARIATE</span>, <span class="op">~</span><span class="va">STATUS</span>,        <span class="op">~</span><span class="va">FORMULA</span>, <span class="op">~</span><span class="va">LEVELS</span>, <span class="op">~</span><span class="va">REFERENCE</span>,</span>
 <span>  <span class="st">"CL"</span>,       <span class="st">"WT"</span>,        <span class="st">"con"</span>,          <span class="st">"power"</span>,      <span class="cn">NA</span>,         <span class="fl">70</span>,</span>
 <span>  <span class="st">"CL"</span>,       <span class="st">"AGE"</span>,       <span class="st">"con"</span>,         <span class="st">"linear"</span>,      <span class="cn">NA</span>,         <span class="fl">50</span>,</span>

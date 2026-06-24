@@ -308,6 +308,26 @@ calculate_condition_number<- function(model_number,
 }
 
 
+#' Decode a categorical covariate level to its human-readable label
+#'
+#' @description Internal helper. Given a covariate name and a numeric level, returns
+#'   the decoded category name from a `lookup.yaml`-shaped list (each covariate entry
+#'   carrying `values` and `decode`). Returns `NA_character_` if no usable decode is
+#'   available, so callers can fall back to the generic "level N" label.
+#' @param cov_name Character string. Covariate name (e.g. "SEXN").
+#' @param level Character/numeric. The level value as parsed from the THETA name.
+#' @param lookup List or NULL. Lookup spec keyed by covariate name.
+#' @return Decoded category name, or `NA_character_` when not decodable.
+#' @keywords internal
+decode_cov_level <- function(cov_name, level, lookup) {
+  if (is.null(lookup) || is.null(lookup[[cov_name]])) return(NA_character_)
+  entry <- lookup[[cov_name]]
+  if (is.null(entry$values) || is.null(entry$decode)) return(NA_character_)
+  idx <- match(as.character(level), as.character(unlist(entry$values)))
+  if (is.na(idx) || idx > length(entry$decode)) return(NA_character_)
+  as.character(entry$decode[[idx]])
+}
+
 
 #' Get Model Parameters and Statistics
 #'
@@ -317,13 +337,16 @@ calculate_condition_number<- function(model_number,
 #' @param shrinkage Character string. Type of shrinkage to report ("etasd", "etavr", "ebvsd", "ebvvr")
 #' @param models_folder Character string. Path to models folder
 #' @param spec_pk List. Optional parameter specifications with labels and units
+#' @param lookup List. Optional covariate lookup spec (each entry carrying `values`
+#'   and `decode`) used to decode categorical covariate levels in labels
 #' @return A formatted data frame with model parameters and statistics
 #' @keywords internal
 get_param2 <- function(model_number,
                        count_model,
                        shrinkage = "etasd",
                        models_folder = "models",
-                       spec_pk = NULL) {
+                       spec_pk = NULL,
+                       lookup = NULL) {
 
   # Read model using bbr
   model_path <- file.path(models_folder, model_number)
@@ -479,11 +502,18 @@ get_param2 <- function(model_number,
                 param_name <- paste(param_parts, collapse = "_")
                 level <- last_part
 
-                # Look up parameter in spec_pk
-                if (param_name %in% names(spec_pk)) {
-                  paste0("Effect of ", cov_name, " level ", level, " on ", spec_pk[[param_name]]$label)
+                # Decode the level to a category name when a lookup is available
+                decoded <- decode_cov_level(cov_name, level, lookup)
+                param_label <- if (param_name %in% names(spec_pk)) {
+                  spec_pk[[param_name]]$label
                 } else {
-                  paste0("Effect of ", cov_name, " level ", level, " on ", param_name)
+                  param_name
+                }
+
+                if (!is.na(decoded)) {
+                  paste0("Effect of ", decoded, " (", cov_name, ") on ", param_label)
+                } else {
+                  paste0("Effect of ", cov_name, " level ", level, " on ", param_label)
                 }
               } else {
                 # No level: beta_AGE_CL
@@ -526,10 +556,17 @@ get_param2 <- function(model_number,
                 param_name <- paste(param_parts, collapse = "_")
                 level <- last_part
 
-                if (param_name %in% names(spec_pk)) {
-                  paste0(cov_name, " level ", level, "~", spec_pk[[param_name]]$short)
+                decoded <- decode_cov_level(cov_name, level, lookup)
+                param_short <- if (param_name %in% names(spec_pk)) {
+                  spec_pk[[param_name]]$short
                 } else {
-                  paste0(cov_name, " level ", level, "~", param_name)
+                  param_name
+                }
+
+                if (!is.na(decoded)) {
+                  paste0(cov_name, " ", decoded, "~", param_short)
+                } else {
+                  paste0(cov_name, " level ", level, "~", param_short)
                 }
               } else {
                 # No level
@@ -635,12 +672,18 @@ get_param2 <- function(model_number,
 #' @param shrinkage Type of shrinkage to report ("etasd", "etavr", "ebvsd", "ebvvr")
 #' @param models_folder Path to models folder
 #' @param spec_pk Optional yspec object for parameter formatting
+#' @param lookup Optional covariate lookup spec used to decode categorical covariate
+#'   levels in the table labels. A `lookup.yaml`-shaped list (e.g.
+#'   `yaml::read_yaml("data/spec/lookup.yaml")`) where each covariate entry carries
+#'   `values` and `decode`. When `NULL` (default) or when a covariate/level has no
+#'   usable decode, the generic "level N" label is used.
 #' @return flextable object with formatted parameter table
 #' @export
 model_report <- function(model_names,
                          shrinkage = "etasd",
                          models_folder = "models",
-                         spec_pk = NULL) {
+                         spec_pk = NULL,
+                         lookup = NULL) {
 
   if (length(model_names) == 0) {
     stop("At least one model name must be provided")
@@ -648,7 +691,7 @@ model_report <- function(model_names,
 
   count_model <- length(model_names)
 
-  cat(sprintf("\n📊 Generating report for %d model(s)...\n", count_model))
+  cat(sprintf("\n Generating report for %d model(s)...\n", count_model))
 
   # Try to generate parameter table for each model with error handling
   param_results <- list()
@@ -664,7 +707,8 @@ model_report <- function(model_names,
         count_model = count_model,
         shrinkage = shrinkage,
         models_folder = models_folder,
-        spec_pk = spec_pk
+        spec_pk = spec_pk,
+        lookup = lookup
       )
       cat("✓\n")
       list(success = TRUE, data = param_table, model = model_name)
