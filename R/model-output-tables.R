@@ -634,12 +634,15 @@ get_param2 <- function(model_number,
       dplyr::mutate(
         model = dplyr::case_when(
           fixed == TRUE ~ paste(Parameter, "FIX"),
-          is.na(SHRINKAGE) & !is.na(Parameter) & !is.na(RSE) ~
-            paste0(Parameter, " (", RSE, "%)"),
-          !is.na(SHRINKAGE) & !is.na(Parameter) & !is.na(RSE) ~
+          parameter_names %in% c("OFV", "Conditional number") ~ as.character(Parameter),
+          !is.na(Parameter) & !is.na(RSE) & !is.na(SHRINKAGE) ~
             paste0(Parameter, " (", RSE, "%)", " [", SHRINKAGE, "%]"),
-          is.na(SHRINKAGE) & !is.na(Parameter) & is.na(RSE) & is.na(fixed) ~
-            as.character(Parameter),
+          !is.na(Parameter) & !is.na(RSE) & is.na(SHRINKAGE) ~
+            paste0(Parameter, " (", RSE, "%)", " [NA%]"),
+          !is.na(Parameter) & is.na(RSE) & !is.na(SHRINKAGE) ~
+            paste0(Parameter, " (NA%)", " [", SHRINKAGE, "%]"),
+          !is.na(Parameter) & is.na(RSE) & is.na(SHRINKAGE) ~
+            paste0(Parameter, " (NA%) [NA%]"),
 
           TRUE ~ NA_character_
         )
