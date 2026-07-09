@@ -51,6 +51,15 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag,
     stop("No matching covariate definition found for: ", covariate_name)
   }
 
+  validate_covariate_parameter_mapping(
+    covariate_search = search_state$covariate_search,
+    model_name = base_model_id,
+    models_folder = search_state$models_folder,
+    covariate_tags = matching_cov$cov_to_test[1],
+    strict = TRUE,
+    verbose = FALSE
+  )
+
   # STEP 2: Calculate model name and prepare for creation
   original_counter <- search_state$model_counter
   search_state$model_counter <- search_state$model_counter + 1
@@ -538,7 +547,16 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
     log_function(paste("Modified line:", modelcode[linetu]))
     log_function(paste("✓ Line", linetu, "modified successfully"))
   } else {
-    log_function(paste("ERROR: Parameter line not found for pattern:", search_pattern))
+    msg <- paste(
+      "Parameter line not found for pattern:",
+      search_pattern,
+      "for covariate",
+      cov_on_param,
+      "in model",
+      ref_model
+    )
+    log_function(paste("ERROR:", msg))
+    stop(msg)
   }
 
   # Add THETA line
@@ -789,6 +807,15 @@ prepare_search_base_model <- function(base_model_path,
   if (length(invalid_tags) > 0) {
     stop("Unknown covariate tag(s): ", paste(invalid_tags, collapse = ", "))
   }
+
+  validate_covariate_parameter_mapping(
+    covariate_search = covariate_search,
+    model_name = base_model_path,
+    models_folder = models_folder,
+    covariate_tags = covariate_tags,
+    strict = TRUE,
+    verbose = TRUE
+  )
 
   covariate_tags <- unique(covariate_tags)
   covariate_values <- unname(unlist(tags[covariate_tags]))

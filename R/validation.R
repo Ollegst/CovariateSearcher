@@ -1117,4 +1117,101 @@ validate_base_model_parameters <- function(base_model_path,
 }
 
 
+#' Validate Covariate-Parameter Mapping Against Model Code
+#'
+#' @title Ensure covariate search parameters exist in model code
+#' @description Verifies that each PARAMETER from covariate search can be found
+#'   in the model control stream before covariate addition is attempted.
+#' @param covariate_search Data frame. Covariate search table.
+#' @param model_name Character. Model name (e.g., "run1").
+#' @param models_folder Character. Models directory (default: "models").
+#' @param covariate_tags Character vector or NULL. Optional subset of
+#'   `cov_to_test` entries to validate.
+#' @param strict Logical. If TRUE, stop on validation failure.
+#' @param verbose Logical. If TRUE, print progress messages.
+#' @return Data frame with validation results for each tested mapping.
+validate_covariate_parameter_mapping <- function(covariate_search,
+                                                 model_name,
+                                                 models_folder = "models",
+                                                 covariate_tags = NULL,
+                                                 strict = TRUE,
+                                                 verbose = TRUE) {
+
+  if (!is.data.frame(covariate_search)) {
+    stop("covariate_search must be a data.frame")
+  }
+
+  required_cols <- c("cov_to_test", "COVARIATE", "PARAMETER")
+  missing_cols <- setdiff(required_cols, names(covariate_search))
+  if (length(missing_cols) > 0) {
+    stop("covariate_search missing required columns: ", paste(missing_cols, collapse = ", "))
+  }
+
+  if (!is.character(model_name) || length(model_name) != 1 || nchar(model_name) == 0) {
+    stop("model_name must be a single non-empty character value")
+  }
+
+  cov_table <- covariate_search
+
+  if (!is.null(covariate_tags)) {
+    unknown_tags <- setdiff(covariate_tags, cov_table$cov_to_test)
+    if (length(unknown_tags) > 0) {
+      stop("Unknown covariate tag(s) for mapping validation: ", paste(unknown_tags, collapse = ", "))
+    }
+    cov_table <- cov_table[cov_table$cov_to_test %in% covariate_tags, , drop = FALSE]
+  }
+
+  if (nrow(cov_table) == 0) {
+    stop("No covariate rows available for parameter mapping validation")
+  }
+
+  model_file <- find_model_file(file.path(models_folder, model_name))
+  if (is.null(model_file)) {
+    stop("Model file not found for mapping validation: ", file.path(models_folder, model_name))
+  }
+
+  modelcode <- readLines(model_file, warn = FALSE)
+  code_lines <- modelcode[!grepl("^\\s*;", modelcode)]
+
+  has_parameter_assignment <- function(param_name) {
+    tv_pattern <- paste0("^\\s*TV_", param_name, "\\b")
+    assign_pattern <- paste0("^\\s*", param_name, "\\b\\s*=")
+    plain_pattern <- paste0("^\\s*", param_name, "\\b")
+
+    any(grepl(tv_pattern, code_lines)) ||
+      any(grepl(assign_pattern, code_lines)) ||
+      any(grepl(plain_pattern, code_lines))
+  }
+
+  unique_map <- unique(cov_table[, c("cov_to_test", "COVARIATE", "PARAMETER"), drop = FALSE])
+  unique_map$parameter_found <- vapply(unique_map$PARAMETER, has_parameter_assignment, logical(1))
+
+  missing_map <- unique_map[!unique_map$parameter_found, , drop = FALSE]
+
+  if (verbose) {
+    cat(sprintf("Checked %d covariate-parameter mapping(s) against %s\n", nrow(unique_map), basename(model_file)))
+  }
+
+  if (nrow(missing_map) > 0) {
+    missing_desc <- paste(
+      paste0(missing_map$cov_to_test, " -> ", missing_map$PARAMETER),
+      collapse = ", "
+    )
+    msg <- paste0(
+      "Parameter mapping validation failed. These covariates reference parameters not found in model code: ",
+      missing_desc,
+      ". Check PARAMETER values in covariate_search and model assignments (e.g., TV_PARAM or PARAM = ...)."
+    )
+
+    if (strict) {
+      stop(msg)
+    } else {
+      warning(msg)
+    }
+  }
+
+  return(unique_map)
+}
+
+
 

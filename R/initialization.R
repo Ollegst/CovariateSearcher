@@ -470,6 +470,15 @@ validate_setup <- function(search_state) {
     covariate_search = search_state$covariate_search,
     data_file = search_state$data_file
   )
+
+  validate_covariate_parameter_mapping(
+    covariate_search = search_state$covariate_search,
+    model_name = search_state$base_model,
+    models_folder = search_state$models_folder,
+    strict = TRUE,
+    verbose = TRUE
+  )
+
   cat("All validation checks passed!\n")
   search_state
 }
