@@ -1,7 +1,7 @@
 Package: CovariateSearcher
 Type: Package
 Title: Stepwise Covariate Modeling with NONMEM/bbi Integration
-Version: 0.1.26
+Version: 0.1.28
 Authors@R: 
     person("Oleg", "Stepanov", email ="oleg.stepanov@astrazeneca.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0001-6129-6499"))
@@ -39,4 +39,5 @@ Config/testthat/edition: 3
 URL: https://github.com/Ollegst/CovariateSearcher,
     https://ollegst.github.io/CovariateSearcher
 BugReports: https://github.com/Ollegst/CovariateSearcher/issues
+
 
