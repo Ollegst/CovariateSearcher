@@ -391,6 +391,7 @@ get_param2 <- function(model_number,
 
   # Extract parameter definitions from control file
   params_list <- extract_model_params(model_number, models_folder)
+  omega_param_names <- params_list$OMEGAS$param
 
   # Get parameter estimates
   param_est <- model_stats %>%
@@ -437,8 +438,12 @@ get_param2 <- function(model_number,
     ) %>%
     dplyr::select(-"parameter_names2")
 
-  # Extract shrinkage for diagonal elements
-  shrinkage_df <- dplyr::filter(param_est, diag == TRUE) %>%
+  # Extract shrinkage for diagonal OMEGA elements only
+  shrinkage_df <- dplyr::filter(
+    param_est,
+    diag == TRUE,
+    parameter_names %in% omega_param_names
+  ) %>%
     dplyr::select(parameter_names, shrinkage) %>%
     dplyr::rename(SHRINKAGE = shrinkage) %>%
     dplyr::mutate(SHRINKAGE = shrinkage_value[dplyr::row_number()])
@@ -449,7 +454,10 @@ get_param2 <- function(model_number,
     dplyr::left_join(shrinkage_df, by = "parameter_names") %>%
     dplyr::bind_rows(OFV, COND_NUM) %>%
     dplyr::rowwise() %>%
-    dplyr::mutate(RSE = ifelse(fixed == TRUE, NA, RSE))
+    dplyr::mutate(
+      RSE = ifelse(fixed == TRUE, NA, RSE),
+      is_omega = parameter_names %in% omega_param_names
+    )
 
   # Add labels and comments if spec_pk is provided
   if (!is.null(spec_pk)) {
@@ -635,14 +643,18 @@ get_param2 <- function(model_number,
         model = dplyr::case_when(
           fixed == TRUE ~ paste(Parameter, "FIX"),
           parameter_names %in% c("OFV", "Conditional number") ~ as.character(Parameter),
-          !is.na(Parameter) & !is.na(RSE) & !is.na(SHRINKAGE) ~
+          !is.na(Parameter) & !is.na(RSE) & is_omega & !is.na(SHRINKAGE) ~
             paste0(Parameter, " (", RSE, "%)", " [", SHRINKAGE, "%]"),
-          !is.na(Parameter) & !is.na(RSE) & is.na(SHRINKAGE) ~
+          !is.na(Parameter) & !is.na(RSE) & is_omega & is.na(SHRINKAGE) ~
             paste0(Parameter, " (", RSE, "%)", " [NA%]"),
-          !is.na(Parameter) & is.na(RSE) & !is.na(SHRINKAGE) ~
+          !is.na(Parameter) & !is.na(RSE) & !is_omega ~
+            paste0(Parameter, " (", RSE, "%)"),
+          !is.na(Parameter) & is.na(RSE) & is_omega & !is.na(SHRINKAGE) ~
             paste0(Parameter, " (NA%)", " [", SHRINKAGE, "%]"),
-          !is.na(Parameter) & is.na(RSE) & is.na(SHRINKAGE) ~
+          !is.na(Parameter) & is.na(RSE) & is_omega & is.na(SHRINKAGE) ~
             paste0(Parameter, " (NA%) [NA%]"),
+          !is.na(Parameter) & is.na(RSE) & !is_omega ~
+            paste0(Parameter, " (NA%)"),
 
           TRUE ~ NA_character_
         )
