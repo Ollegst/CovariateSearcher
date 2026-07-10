@@ -671,7 +671,7 @@ get_param2 <- function(model_number,
           TRUE ~ as.character(Parameter)
         )
       ) %>%
-      dplyr::select(-fixed)
+      dplyr::select(-fixed, -is_omega)
   }
 
   return(param_est)
