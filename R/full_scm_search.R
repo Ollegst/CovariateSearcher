@@ -24,7 +24,7 @@
 #' @param forward_p_value Numeric. P-value for forward selection significance testing.
 #'   If NULL, uses search_state$search_config$forward_p_value (default: 0.05)
 #' @param backward_p_value Numeric. P-value for backward elimination significance testing.
-#'   If NULL, uses search_state$search_config$backward_p_value (default: 0.01, more stringent)
+#'   If NULL, uses search_state$search_config$backward_p_value (default: 0.001, more stringent)
 #' @param rse_threshold Numeric. Maximum RSE threshold as percentage.
 #'   If NULL, uses search_state$search_config$max_rse_threshold (default: 50)
 #' @param require_cov_step Logical. Whether to require a successful covariance step
@@ -110,7 +110,7 @@ run_automated_scm_testing <- function(search_state,
     forward_p_value <- search_state$search_config$forward_p_value %||% 0.05
   }
   if (is.null(backward_p_value)) {
-    backward_p_value <- search_state$search_config$backward_p_value %||% 0.01
+    backward_p_value <- search_state$search_config$backward_p_value %||% 0.001
   }
   if (is.null(rse_threshold)) {
     rse_threshold <- search_state$search_config$max_rse_threshold %||% 50

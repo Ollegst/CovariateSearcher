@@ -18,7 +18,7 @@ create_scm_results_table <- function(search_state) {
 
   # Get thresholds from search_state config
   forward_p_value <- search_state$search_config$forward_p_value %||% 0.05
-  backward_p_value <- search_state$search_config$backward_p_value %||% 0.01
+  backward_p_value <- search_state$search_config$backward_p_value %||% 0.001
   forward_threshold <- pvalue_to_threshold(forward_p_value, df = 1)
   backward_threshold <- pvalue_to_threshold(backward_p_value, df = 1)
   rse_threshold <- search_state$search_config$max_rse_threshold %||% 50

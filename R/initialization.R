@@ -595,7 +595,7 @@ initialize_search_config <- function(search_state, lookup_file = NULL) {
 
   search_state$search_config <- list(
     forward_p_value = 0.05,        # p-value for forward selection
-    backward_p_value = 0.01,       # p-value for backward elimination (more stringent)
+    backward_p_value = 0.001,      # default p-value for backward elimination (stricter; overridden by a user-supplied value)
     max_rse_threshold = 50,
     timeout_minutes = 3600,
     threads = search_state$threads,
