@@ -10,3 +10,5 @@
 ^pkgdown$
 ^vignettes/articles$
 ^\.github$
+^FUNCTIONS\.md$
+^\.claude$
