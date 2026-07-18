@@ -21,7 +21,7 @@
 | `recovery-detection.R`, `recovery-actions.R` | `recovery.R` |
 | `reporting.R`, `scm-results.R`, `model-output-tables.R` (tables/plots) | `reporting.R` |
 | (new) covariate formula catalogue | `covariate-formula.R` |
-| 7 sim files (`sample-theta-uncertainty.R` … `covariate-boxplots.R`) | `forest-plots.R` |
+| `sample-theta-uncertainty.R`, `covariate-table.R`, `simulate-scenario-profiles.R`, `plot-exposure-forest.R` | `forest-plots.R` (**done**); `apply-covariate-model.R` + `build-scenario-parameters.R` + `covariate-boxplots.R` kept separate |
 
 ---
 
@@ -29,9 +29,9 @@
 
 **Duplicate implementations (merge targets — but preserve contracts):**
 - **`.ext` readers ×3:** `read_nonmem_ext` (file-io.R → `found/ofv/parameters`, FINAL `-1e9` line, flat+subdir), `read_ext_file` (monitoring-files.R → `status/current_ofv/iterations/has_estimation_issues/…`, last/current line, subdir-only), `read_ext_iterations` (plot_nonmem_iterations.R → tidy data.frame, consumed positionally by the sim sampler). **Different OFV semantics + file locations — do not conflate.**
-- **`.cov`/`.cor` matrix parsers ×2:** `calculate_condition_number` (model-output-tables.R, reconstructs lower-triangular) vs `.read_nonmem_matrix` (sample-theta-uncertainty.R, assumes labelled square).
+- **`.cov`/`.cor` matrix parsers ×2:** `calculate_condition_number` (model-output-tables.R, reconstructs lower-triangular) vs `.read_nonmem_matrix` (forest-plots.R, assumes labelled square).
 - **`$THETA` name/trans parsers ×3:** `extract_params`/`extract_model_params` (model-output-tables.R) vs inline in `apply_covariate_model` vs inline in `create_covariate_table`.
-- **Categorical-level decode ×2+:** `decode_cov_level` (model-output-tables.R, the only unit-tested fn) vs nested `decode_level` (covariate-table.R) vs the inline decode in `model_add_cov`.
+- **Categorical-level decode ×2+:** `decode_cov_level` (model-output-tables.R, the only unit-tested fn) vs nested `decode_level` (forest-plots.R) vs the inline decode in `model_add_cov`.
 - **Covariate formula algebra ×2 (highest risk):** `model_add_cov` *writes* NONMEM factors; `apply_covariate_model` *reconstructs the same math in R*. Must stay in sync. Also, `model_add_cov`'s formula block is **duplicated verbatim within itself** (~L404-408 and ~L490-494).
 - **name→tag idiom** `names(tags)[tags==name]` repeated ~6× in scm-selective-forward.R + full_scm_search.R; overlaps `get_covariate_tag_from_name`.
 - **"Get covariates" family (names lie about source):** `get_model_covariates_from_db` (reads **bbr files**, returns tag **values**), `get_model_covariates_from_files` (reads bbr files, returns tag **names**), `get_covariates_from_models` (DB, many models). **Do not collapse blindly.**
@@ -355,7 +355,7 @@ _Reads NONMEM `.ext` iteration history and plots parameter/OBJ trajectories. (He
 
 _Data flow: `sample_individual_thetas` → `create_covariate_table` → `apply_covariate_model` (via `build_scenario_parameters`) → `simulate_scenario_profiles` → `plot_exposure_forest`. `create_covariate_boxplots` is a separate branch._
 
-### R/sample-theta-uncertainty.R
+### R/forest-plots.R — theta uncertainty sampling
 | Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
 |---|---|---|---|---|---|---|
 | `sample_individual_thetas(model, models_folder="models", Nsamples=1e5, seed=1234)` | ✓(not in NAMESPACE) | Draw `Nsamples` THETA vectors from estimation uncertainty → absolute scale | model, N, seed | `data.frame(ID, THETA1..n)` + attr `sampling_method` | **`mvtnorm::rmvnorm`** (undeclared); `set.seed`; `stop`/`warning` | calls `.find_model_component`, `read_ext_iterations`, `.read_theta_cov`, `.make_psd`, `extract_model_params` |
@@ -366,7 +366,7 @@ _Data flow: `sample_individual_thetas` → `create_covariate_table` → `apply_c
 
 **Notes:** Dup targets: `.read_nonmem_matrix` vs `calculate_condition_number`; uses `extract_model_params` for `$THETA` trans. `@export` present, **not in NAMESPACE**.
 
-### R/covariate-table.R
+### R/forest-plots.R — covariate scenario table
 | Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
 |---|---|---|---|---|---|---|
 | `create_covariate_table(model_name, covariate_search, data, percentiles=c(0.05,0.95), models_folder="models", id_col="ID", lookup=NULL, wrap_width=30)` | ✓(in NAMESPACE) | Null-patient + single-covariate-variation scenario table | search table, data, percentiles | `data.frame`: col1 `Scenario` + one col per covariate; row1 all-reference | `readLines`; `stats::quantile`; `warning`/`stop` | nested helpers; called-by `build_scenario_parameters` |
@@ -389,14 +389,14 @@ _Data flow: `sample_individual_thetas` → `create_covariate_table` → `apply_c
 
 **Notes:** Pure orchestration. `@export` present, **not in NAMESPACE**. Hardcoded default RDS output path (cwd).
 
-### R/simulate-scenario-profiles.R
+### R/forest-plots.R — simulate scenario profiles
 | Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
 |---|---|---|---|---|---|---|
 | `simulate_scenario_profiles(param_sets, mod, dose, start=0, end=24, delta=0.1)` | ✓(not in NAMESPACE) | Simulate every sample of every scenario under a common dose; stack + tag by scenario | param_sets, mrgsolve `mod`, `ev` dose | `data.frame` (Scenario ordered factor, ID, time, captured cols) | **`mrgsolve::mrgsim`** (undeclared); `purrr::imap_dfr`; `stop` | upstream `build_scenario_parameters`; downstream `plot_exposure_forest` |
 
 **Notes:** `mrgsolve` undeclared. `inherits(dose,"ev")` couples to mrgsolve. `@export`, **not in NAMESPACE**. Caller builds `mod`/`dose`.
 
-### R/plot-exposure-forest.R
+### R/forest-plots.R — exposure forest plot
 | Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
 |---|---|---|---|---|---|---|
 | `plot_exposure_forest(data, metric=c("AUC","Cmax","Cmin"), ss=TRUE, ClinicalRelevanceLow=0.8, ClinicalRelevanceHigh=1.25, reference="Typical subject", scenario_order=NULL, fontsize=9, title=NULL, filename=NULL, output_format=c("emf","png"), width, height)` | ✓(not in NAMESPACE) | Forest plot of one metric normalised to typical-subject median (box 2.5/25/50/75/97.5) | data, metric, bands, filename | `ggplot` (invisibly; saved if `filename`) | **file write** `ggsave` — **`devEMF::emf`**(undeclared)/png; `tools::file_path_sans_ext`; `stats::`; `dplyr::` | calls `theme_forest`, `boxquantile`; upstream `simulate_scenario_profiles` |
