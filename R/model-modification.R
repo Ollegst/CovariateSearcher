@@ -486,14 +486,6 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
     #}
   }
 
-  # Generate formula based on FLAG
-  if(FLAG == "2") formule <- paste0(' * (',cova,'/',ref,')**THETA(', newtheta ,')')
-  if(FLAG == "3") formule <- paste0(' * (1 + (',cova,'-',ref, ') * THETA(',newtheta ,'))')
-  if(FLAG == "4") formule <- paste0(" * EXP(THETA(", newtheta, ") * (", cova, "-", ref, "))")
-  if(FLAG == "5") formule <- paste0(' * (',cova,'/',ref,')** THETA(', newtheta ,')')
-  if(FLAG == "6") formule <- paste0(' * (',cova,'/',ref,')** THETA(', newtheta ,')')
-
-
   log_function(paste("Generated formula:", formule))
 
   # Check if time-dependent
