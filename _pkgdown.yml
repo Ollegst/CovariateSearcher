@@ -78,7 +78,6 @@ reference:
   - validate_covariate_search_table
   - validate_base_model_parameters
   - validate_parameter_blocks
-  - validate_search_inputs
 
 - title: State Management
   desc: Functions for saving and loading search state
@@ -142,8 +141,6 @@ reference:
   - initialize_search_config
   - initialize_search_database_core
   - load_existing_search
-  - load_search_config
-  - load_search_data
   - load_tags
   - model_add_cov
   - model_report

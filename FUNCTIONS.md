@@ -14,7 +14,7 @@
 |---|---|
 | `CovariateSearchr.R`, `imports.R`, `utilities.R` | `utils.R` (+ package scaffolding stays) |
 | `file-io.R`, `monitoring-files.R`, `plot_nonmem_iterations.R` (ext reader), `model-output-tables.R` (matrix/`$THETA` parsers) | `nonmem-io.R` |
-| `initialization.R`, `database-management.R`, `data-operations.R`, `model-discovery.R`, `validation.R` | `search-state.R` |
+| `initialization.R`, `database-management.R`, `model-discovery.R`, `validation.R` | `search-state.R` |
 | `model-modification.R` | `model-modification.R` |
 | `full_scm_search.R`, `scm-algorithm.R`, `scm-execution.R`, `scm-evaluation.R` | `scm-engine.R` |
 | `scm-selective-forward.R`, `scm-backward.R` | `scm-method-*.R` (+ engine bits) |
@@ -54,7 +54,7 @@
 
 **Undeclared deps (block a clean install / R CMD check):** `mvtnorm` (sample-theta), `mrgsolve` (simulate-scenario), `devEMF` (forest + boxplots); base-priority `tools`/`grid`/`grDevices` used un-declared. **5 sim `@export`s not in NAMESPACE** (`sample_individual_thetas`, `build_scenario_parameters`, `simulate_scenario_profiles`, `plot_exposure_forest`+`theme_forest`, `create_covariate_boxplots`).
 
-**Dead / legacy / exported-unused:** `data-operations.R` (3 exported, unused by main flow, config drift) · `analyze_model_covariates_yaml`, `get_model_parent_yaml`, `get_dropped_covariates` (no in-repo callers).
+**Dead / legacy / exported-unused:** `analyze_model_covariates_yaml`, `get_model_parent_yaml`, `get_dropped_covariates` (no in-repo callers). *(`data-operations.R` and its 3 exported functions were removed on `feature/package-rebuild`.)*
 
 **`<<-` scope hazards (break if extracted into functions):** `submit_and_wait_for_step` error callbacks (scm-execution.R L298, L578; success path uses `<-`) · error handlers in `full_scm_search.R` · log accumulators in model-modification/recovery.
 
@@ -97,17 +97,6 @@ _Main entry point: builds `search_state`, loads CSV/YAML inputs, validates, auto
 | `update_tags_yaml(search_state=NULL, covariate_search=NULL, tags_yaml_path="data/spec/tags.yaml", verbose=TRUE)` | ✓ | Thin wrapper choosing df/path source | either arg | logical | `stop()` | calls `generate_tags_from_covariate_search` |
 
 **Notes:** `cov_to_test = beta_<COV>_<PARAM>` computed in two places here + in `validate_covariate_search_table` (dup). FORMULA vocab inconsistent: validation allows `c(linear,power,power1,power0.75,exponential)` but the per-entry comment builder recognizes `c(linear,power,exponential,logistic)`. No schema/`action`/`phase` writes here.
-
-### R/data-operations.R
-_Legacy standalone loaders/validators (parallel to init; unused by main flow) → deprecate, don't delete (all exported)._
-
-| Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
-|---|---|---|---|---|---|---|
-| `load_search_data(data_file_path, covariate_search_path)` | ✓ | Read both CSVs + sibling `../spec/tags.yaml` | two CSV paths | `list(data_file, covariate_search, tags)` | `readr::read_csv`; `yaml::read_yaml` | — |
-| `load_search_config()` | ✓ | Hardcoded default config | none | `list(forward_p_value=0.05, backward_p_value=0.01, max_rse_threshold=50, threads=4)` | — | — |
-| `validate_search_inputs(base_model_path, data_file_path, covariate_search_path)` | ✓ | Assert data + covariate CSVs exist | three paths | `TRUE` or `stop()` | `stop()` | — |
-
-**Notes:** Not wired into `initialize_covariate_search`. `load_search_config` hardcodes `threads=4` (conflicts w/ default 60) and omits config fields → schema drift. `validate_search_inputs` never checks `base_model_path`. Good source for the future `default_search_config()`.
 
 ---
 
