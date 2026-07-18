@@ -1,7 +1,7 @@
 Package: CovariateSearcher
 Type: Package
 Title: Stepwise Covariate Modeling with NONMEM/bbi Integration
-Version: 0.1.30
+Version: 0.1.31
 Authors@R: 
     person("Oleg", "Stepanov", email ="oleg.stepanov@astrazeneca.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0001-6129-6499"))
@@ -29,11 +29,15 @@ Imports:
     tidyr,
     rlang,
     bbr (>= 1.0.0),
-    ggplot2
+    ggplot2,
+    yspec,
+    mvtnorm
 Suggests:
     testthat (>= 3.0.0),
     knitr,
-    rmarkdown
+    rmarkdown,
+    mrgsolve,
+    devEMF
 VignetteBuilder: knitr
 Config/testthat/edition: 3
 URL: https://github.com/Ollegst/CovariateSearcher,
