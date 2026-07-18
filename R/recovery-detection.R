@@ -85,7 +85,7 @@ generate_recovery_report <- function(search_state) {
     dplyr::mutate(percentage = n * 100.0 / nrow(search_state$search_database))
 
   # Retry statistics
-  retry_models <- search_state$search_database[grepl("\\d{3}$", search_state$search_database$model_name), ]
+  retry_models <- search_state$search_database[grepl("^run\\d+001$", search_state$search_database$model_name), ]
   retry_stats <- list(
     total_retries = nrow(retry_models),
     successful_retries = sum(retry_models$status == "completed", na.rm = TRUE),

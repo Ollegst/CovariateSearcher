@@ -34,7 +34,7 @@
 - **Categorical-level decode ×2+:** `decode_cov_level` (model-output-tables.R, the only unit-tested fn) vs nested `decode_level` (covariate-table.R) vs the inline decode in `model_add_cov`.
 - **Covariate formula algebra ×2 (highest risk):** `model_add_cov` *writes* NONMEM factors; `apply_covariate_model` *reconstructs the same math in R*. Must stay in sync. Also, `model_add_cov`'s formula block is **duplicated verbatim within itself** (~L404-408 and ~L490-494).
 - **name→tag idiom** `names(tags)[tags==name]` repeated ~6× in scm-selective-forward.R + full_scm_search.R; overlaps `get_covariate_tag_from_name`.
-- **"Get covariates" family (names lie about source):** `get_model_covariates` (DB `covariate_tested`, single value), `get_model_covariates_from_db` (reads **bbr files**, returns tag **values**), `get_model_covariates_from_files` (reads bbr files, returns tag **names**), `get_covariates_from_models` (DB, many models), `analyze_model_covariates_yaml` (YAML). **Do not collapse blindly.**
+- **"Get covariates" family (names lie about source):** `get_model_covariates_from_db` (reads **bbr files**, returns tag **values**), `get_model_covariates_from_files` (reads bbr files, returns tag **names**), `get_covariates_from_models` (DB, many models). **Do not collapse blindly.**
 
 **Schema declared in 5 places (must all stay in sync / all get `stage`):** canonical `initialize_search_database_core` (18 cols) · self-heal `required_cols` in `validation.R` (13-col subset) · self-heal in `scm-selective-forward.R` · `model-discovery.R` rebuilds the 18-col row by hand · row-builders `add_covariate_to_model`/`remove_covariate_from_model` (`bind_rows`) + `create_retry_model` (**order-sensitive `rbind` on a blanked `db[1,]` template**).
 
@@ -44,17 +44,16 @@
 - Display generators (`generate_step_display`/`_changes_display`/`_step_description`) only recognize `{base_model, add_covariate, remove_covariate, retry}` → **everything else renders "Unknown: X"**.
 
 **Confirmed bugs (fix during the relevant phase):**
-- `run_univariate_step` tryCatch **error handler** records failures with `<-` in its own scope → thrown-error failures silently dropped from tracking (scm-execution.R ~L151-155).
-- `resume_selective_forward`: uses `ofv_threshold` before assignment (L1127) + trailing-comma empty arg (L1189-1193). **Exported, zero callers.**
-- `remove_covariate_from_model` writes `action="remove_single_covariate"` → "Unknown" in tables; only *patched* on the backward path by `scm-backward.R:155` overwriting to `"remove_covariate"`. Manual removal still breaks.
-- Retry misclassification: `grepl("\\d{3}$", model)` flags `run100` as a retry (recovery-detection.R, process_estimation_issues, `analyze_model_from_logic`).
+- ~~`run_univariate_step` error handler `<-`~~ **FIXED 2026-07-18**: error handler used `<-` (handler-local) → thrown-error failures dropped from tracking → now `<<-` (scm-execution.R:153-154), matching the file's existing `<<-` callbacks.
+- ~~`remove_covariate_from_model` action label~~ **FIXED 2026-07-18** (A1): wrote `action="remove_single_covariate"` → "Unknown" in tables (backward path was only patched by `scm-backward.R:155`); now writes `"remove_covariate"` at root so manual removal displays correctly.
+- ~~Retry misclassification~~ **FIXED 2026-07-18**: `grepl("\\d{3}$")` flagged `run100`+ as retries → now `grepl("^run\\d+001$")` (was 6 sites; the 2 yaml-analysis helpers later removed in the dead-code sweep — remaining: `process_estimation_issues`, `update_model_counter`, `generate_recovery_report`, `discover_models`). Residual false positives only for normal models ending in `001` (run1001…).
 - Excluded-covariate "final testing" block in `full_scm_search.R` is **dead** (filters `phase=="forward"` which is never written; also gated by `run_forward && !run_final_backward`, false for `full_scm`). → retire (owner dropped `excluded_only`).
 - `model_add_cov` FLAG: `cat+power` collides with `con+power` (both FLAG "2") → cat power is silently treated as continuous power.
-- `generate_phase` (database-management.R) unused/dead.
+- ~~`generate_phase`~~ **removed 2026-07-18** (dead, unexported).
 
 **Undeclared deps (block a clean install / R CMD check):** `mvtnorm` (sample-theta), `mrgsolve` (simulate-scenario), `devEMF` (forest + boxplots); base-priority `tools`/`grid`/`grDevices` used un-declared. **5 sim `@export`s not in NAMESPACE** (`sample_individual_thetas`, `build_scenario_parameters`, `simulate_scenario_profiles`, `plot_exposure_forest`+`theme_forest`, `create_covariate_boxplots`).
 
-**Dead / legacy / exported-unused:** `analyze_model_covariates_yaml`, `get_model_parent_yaml`, `get_dropped_covariates` (no in-repo callers). *(`data-operations.R` and its 3 exported functions were removed on `feature/package-rebuild`.)*
+**Removed on `feature/package-rebuild`:** `analyze_model_covariates_yaml`, `analyze_model_from_logic`, `get_model_parent_yaml`, `get_dropped_covariates`, `generate_phase`, `get_model_covariates`, `read_model_yaml` (dead-code sweep 2026-07-18, last two are cascade orphans); `resume_selective_forward` (2026-07-18); `data-operations.R` + its 3 exported functions.
 
 **`<<-` scope hazards (break if extracted into functions):** `submit_and_wait_for_step` error callbacks (scm-execution.R L298, L578; success path uses `<-`) · error handlers in `full_scm_search.R` · log accumulators in model-modification/recovery.
 
@@ -113,7 +112,6 @@ _Search-database schema/self-heal, RDS save/load, model-lookup accessors, model 
 | `initialize_search_database_core(search_state)` | ✓ | Create empty 18-col search DB (**canonical schema**) | `search_state` | updated `search_state` | `cat` | called-by `initialize_covariate_search`, `discover_existing_models` |
 | `get_model_status(search_state, model_name)` | ✓ | DB status lookup | state, name | char status or `"not_found"` | — | — |
 | `get_model_ofv_from_database(search_state, model_name)` | ✓ | Cached OFV lookup | state, name | numeric or `NA_real_` | — | — |
-| `get_model_covariates(search_state, model_name)` | ✓ | Single `covariate_tested` from DB row | state, name | char or `character(0)` | — | called-by `get_dropped_covariates` |
 | `get_model_covariates_from_db(search_state, model_name)` | ✓ | Read **bbr tags**, intersect w/ `beta_*` tag **values** | state, name | char or `character(0)` | `bbr::read_model` | called widely (forward/backward/selective) |
 | `update_model_counter(search_state)` | ✓ | Set `model_counter` to last non-retry run number | `search_state` | updated `search_state` | `cat` | called-by `initialize_covariate_search` |
 | `create_comprehensive_table(search_state, use_separate_columns=TRUE)` | ✓ | Build display df (parent/type/step/changes/status/ofv/delta/param) | `search_state` | `data.frame` | `stop()` | calls `generate_step_display`/`_changes_display`/`_step_description`; called-by `view_comprehensive_table` |
@@ -121,7 +119,6 @@ _Search-database schema/self-heal, RDS save/load, model-lookup accessors, model 
 | `view_comprehensive_table(search_state, use_separate_columns=TRUE)` | ✓ | Print comprehensive table | `search_state` | `invisible(df)` | `cat`; `print` | calls `create_comprehensive_table` |
 | `generate_changes_display(action, covariate_tested)` | · | "Add/Remove/Retry X" | vectors | char vector | — | called-by `create_comprehensive_table` |
 | `generate_step_description(step_number, action, covariate_tested)` | · | "Step N: Add X" | vectors | char vector | — | called-by `create_comprehensive_table` |
-| `generate_phase(step_number, action)` | · | Phase mapper (compat) | vectors | char vector | — | **unused/dead** |
 
 **Notes:** **Canonical schema (18 cols):** `model_name, step_description, phase, step_number, parent_model, covariate_tested, action, ofv, delta_ofv, rse_max, status, tags (I(list())), submission_time, completion_time (POSIXct), retry_attempt, original_model, estimation_issue, excluded_from_step`. Display generators branch on `action ∈ {base_model, add_covariate, remove_covariate, retry}` → discovered/manual/`*_single_*` rows fall through to "Unknown". No `action`/`phase` **written** here (display only).
 
@@ -241,12 +238,11 @@ _Standard forward SCM + covariate-set helpers + exclusion-status printer._
 | Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
 |---|---|---|---|---|---|---|
 | `get_remaining_covariates(search_state, base_model_id, include_excluded=TRUE)` | ✓ | `^beta_` tags not yet in model, optionally minus excluded | state, base, flag | `character()` tags | `cat` | calls `get_model_covariates_from_db`, `get_excluded_covariates`; called-by forward drivers |
-| `get_dropped_covariates(search_state, current_model_id, tested_covariates)` | ✓ | Tags tested but not in current model | `tested_covariates` | `character()` | — | calls `get_model_covariates`; **no in-repo callers** |
 | `get_excluded_covariates(search_state, return_details=FALSE, phase_filter=NULL)` | ✓ | Covariates flagged `excluded_from_step==TRUE` | flags | `character()` or details `data.frame` | — | called-by `get_remaining_covariates`, `run_univariate_step`, `view_exclusion_status`, orchestrator |
 | `run_stepwise_covariate_modeling(search_state, base_model_id=NULL, auto_submit=TRUE, forward_p_value=NULL, rse_threshold=NULL)` | ✓ | **Standard forward SCM:** univariate step 1 then iterative forward until no improvement | base, p-value, rse | `list(search_state, status, base_model, final_model, steps_completed, step_results, total_time_minutes, final_covariates)` | reads `.ext`/`.yaml`; `cat` | calls `get_remaining_covariates`, `run_univariate_step`, `submit_and_wait_for_step`, `select_best_model`, `get_model_covariates_from_db`, `read_nonmem_ext`, `pvalue_to_threshold`; called-by orchestrator |
 | `view_exclusion_status(search_state)` | ✓ | Pretty-print exclusion table | `search_state` | `invisible(NULL)` | `cat` | calls `get_excluded_covariates` |
 
-**Notes:** Roxygen advertises "final testing of dropped covariates" but body only does forward steps (that phase is in the orchestrator). Step numbers derived from `max(step_number)+1`. `get_dropped_covariates` uses the odd `get_model_covariates` accessor and is unused.
+**Notes:** Roxygen advertises "final testing of dropped covariates" but body only does forward steps (that phase is in the orchestrator). Step numbers derived from `max(step_number)+1`.
 
 ### R/scm-execution.R
 _One univariate SCM step (create candidates) + submit-and-monitor loop with auto-retry._
@@ -275,9 +271,7 @@ _Selective forward (propagate only covariates from significant models) + redempt
 | `get_significant_models_from_step(search_state, step_number, p_value, rse_threshold=NULL)` | ✓ | Models in a step clearing per-covariate threshold + RSE | step, p-value | `character()` model names | `warning()` on missing cols | calls `extract_covariate_name_from_tag`, `calculate_covariate_df`, `pvalue_to_threshold`; called-by selective + resume |
 | `get_covariates_from_models(search_state, model_names)` | ✓ | Unique valid `^beta_` tags tested in given models | `model_names` | `character()` tags | verbose `cat` | called-by selective + resume |
 | `run_scm_selective_forward(search_state, base_model_id=NULL, forward_p_value=NULL, rse_threshold=NULL, auto_submit=TRUE, auto_retry=TRUE)` | ✓ | **Selective forward:** step 1 = all covariates; later steps = only covariates from prior significant models; then redemption | base, p-value, rse | `list(search_state, status, final_best_model, step_results, total_time_minutes)` | `save_search_state()`→`scm_selective_step_<N>.rds`/`scm_redemption_<N>.rds`/`scm_selective_complete.rds` (cwd); `cat` | calls `get_remaining_covariates`, `get_significant_models_from_step`, `get_covariates_from_models`, `get_model_covariates_from_db`, `run_univariate_step`, `submit_and_wait_for_step`, `select_best_model`, `pvalue_to_threshold`, `save_search_state`; called-by orchestrator |
-| `resume_selective_forward(checkpoint_file, forward_p_value=NULL, rse_threshold=NULL, auto_submit=TRUE, auto_retry=TRUE, continue_forward=TRUE)` | ✓ | Reload RDS checkpoint, refresh statuses, resubmit incomplete, recommend next action | checkpoint path | `list(search_state, status, best_model, ...)` | `readRDS`; `save_search_state()`→`scm_resumed_step_<N>.rds`; `stop()`; `cat` | calls `update_model_status_from_files`, `submit_and_wait_for_step`, `get_significant_models_from_step`, `get_covariates_from_models`, `pvalue_to_threshold`, `save_search_state` |
-
-**Notes:** `run_scm_selective_forward` = the biggest fn (main loop + Scenario A/B redemption). **`resume_selective_forward` = exported, ZERO callers, two bugs:** (1) L1127 passes `p_value = ofv_threshold` before `ofv_threshold` exists (assigned later at L1188) → lazy-eval error; (2) L1189-1193 trailing comma → empty 4th arg. Name→tag idiom duplicated ~6× (overlaps `get_covariate_tag_from_name`). → retire into `continue_search()`.
+**Notes:** `run_scm_selective_forward` = the biggest fn (main loop + Scenario A/B redemption). `resume_selective_forward` was **removed** (redundant with `run_automated_scm_testing`, which is parameterized over both method and phase; the old fn was forward-only, broken, and had zero callers). Resume path: rerun models → `update_model_status_from_files(force=TRUE)` → `save_search_state` → `run_automated_scm_testing(scm_type, starting_phase)`.
 
 ### R/scm-backward.R
 _Backward elimination + removal-impact evaluator + covariate name/tag/FIX helpers._
@@ -300,10 +294,6 @@ _YAML/model-name helpers + SCM statistics (p-value→ΔOFV thresholds, covariate
 
 | Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
 |---|---|---|---|---|---|---|
-| `read_model_yaml(model_name, models_folder="models")` | ✓ | Locate & parse a model's `.yaml`/`.yml` | name, folder | `list(found_yaml, yaml_file?, tags, based_on, model_type)` | — | calls `yaml::read_yaml`; called-by `analyze_model_covariates_yaml`, `get_model_parent_yaml` |
-| `analyze_model_covariates_yaml(model_name, models_folder="models", tags_list=list())` | ✓ | Classify a model's covariates from YAML tags | name, folder | `character()` tags or `"BASE_MODEL"`/`"RETRY_MODEL"`/`"NO_COVARIATES"` | — | calls `read_model_yaml`, `analyze_model_from_logic`; **no in-repo callers** |
-| `get_model_parent_yaml(model_name, models_folder="models")` | ✓ | First `based_on` parent from YAML | name, folder | parent name or `NA_character_` | — | calls `read_model_yaml`; **no in-repo callers** |
-| `analyze_model_from_logic(model_name)` | · | Fallback classifier by name regex | name | `"BASE_MODEL"`/`"RETRY_MODEL"`/`"UNKNOWN"` | — | called-by `analyze_model_covariates_yaml` |
 | `clean_dir(models_folder="models")` | ✓ | Delete all `WK_*` NONMEM working files | folder | `integer(1)` count | **file deletion** (`file.remove`); `cat` | — |
 | `extract_covariate_name_from_tag(tag)` | ✓ | Covariate name from `beta_COV_PARAM` | tag | `character(1)` or `NA` | `warning` | called by evaluation/selection/validation |
 | `pvalue_to_threshold(p_value, df=1)` | ✓ | p-value → χ² ΔOFV threshold via `qchisq` | p, df | `numeric(1)` | `stop()` | called widely |

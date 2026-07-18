@@ -150,8 +150,8 @@ run_univariate_step <- function(search_state, base_model_id, covariates_to_test 
 
     }, error = function(e) {
       cat(sprintf("✗ Error: %s\n", e$message))
-      failed_covariates <- c(failed_covariates, cov_tag)
-      failure_reasons[[cov_tag]] <- e$message
+      failed_covariates <<- c(failed_covariates, cov_tag)
+      failure_reasons[[cov_tag]] <<- e$message
     })
   }
 

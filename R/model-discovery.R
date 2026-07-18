@@ -135,7 +135,7 @@ discover_existing_models <- function(search_state) {
       tags = I(list(model_tags)),
       submission_time = as.POSIXct(NA),
       completion_time = if (status == "completed") Sys.time() else as.POSIXct(NA),
-      retry_attempt = ifelse(grepl("\\d{3}$", model_name), 1L, NA_integer_),
+      retry_attempt = ifelse(grepl("^run\\d+001$", model_name), 1L, NA_integer_),
       original_model = NA_character_,
       estimation_issue = NA_character_,
       excluded_from_step = FALSE,

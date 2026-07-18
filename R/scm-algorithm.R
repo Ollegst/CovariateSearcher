@@ -76,24 +76,6 @@ get_remaining_covariates <- function(search_state, base_model_id, include_exclud
 }
 
 
-#' Get Dropped Covariates from Previous Steps
-#'
-#' @title Get covariates that were tested but not selected in previous steps
-#' @description Identifies covariates that were tested in earlier SCM steps
-#'   but not included in the current best model.
-#' @param search_state List containing covariate search state and configuration
-#' @param current_model_id Character. Current best model
-#' @param tested_covariates Character vector. All covariate tags tested so far
-#' @return Character vector of covariate tags that were dropped
-#' @export
-get_dropped_covariates <- function(search_state, current_model_id, tested_covariates) {
-  current_covs <- get_model_covariates(search_state, current_model_id)
-  dropped_covs <- setdiff(tested_covariates, current_covs)
-
-  return(dropped_covs)
-}
-
-
 
 #' Get Excluded Covariates
 #'

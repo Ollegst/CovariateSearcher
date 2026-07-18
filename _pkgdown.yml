@@ -68,7 +68,6 @@ reference:
   - update_model_status_from_files
   - get_param2
   - get_significant_models_from_step
-  - get_model_covariates
   - get_model_covariates_from_db
 
 - title: Validation
@@ -106,8 +105,6 @@ reference:
   contents:
   - CovariateSearcher-package
   - adjust_theta_for_covariate
-  - analyze_model_covariates_yaml
-  - analyze_model_from_logic
   - calculate_covariate_df
   - clean_dir
   - create_comprehensive_table
@@ -122,20 +119,17 @@ reference:
   - fix_theta_renumbering
   - force_update_models
   - generate_changes_display
-  - generate_phase
   - generate_recovery_report
   - generate_step_description
   - generate_step_display
   - generate_tags_from_covariate_search
   - get_covariate_tag_from_name
   - get_covariates_from_models
-  - get_dropped_covariates
   - get_excluded_covariates
   - get_fixed_covariates
   - get_model_covariates_from_files
   - get_model_max_rse
   - get_model_ofv_from_database
-  - get_model_parent_yaml
   - get_remaining_covariates
   - handle_failed_retry
   - initialize_search_config
@@ -152,10 +146,8 @@ reference:
   - read_ext_file
   - read_ext_iterations
   - read_model_file
-  - read_model_yaml
   - read_nonmem_ext
   - read_nonmem_lst
-  - resume_selective_forward
   - run_univariate_step
   - submit_and_wait_for_step
   - theme_pps_table

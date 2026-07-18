@@ -228,32 +228,6 @@ get_model_ofv_from_database  <- function(search_state, model_name) {
 
 
 
-#' Get Model Covariates
-#'
-#' @title Get list of covariates in a model from database
-#' @description Returns covariates currently in the specified model
-#' @param search_state List containing search state
-#' @param model_name Character. Model name
-#' @return Character vector. Covariate names in the model
-#' @export
-get_model_covariates <- function(search_state, model_name) {
-
-  model_row <- search_state$search_database[
-    search_state$search_database$model_name == model_name, ]
-
-  if (nrow(model_row) == 0) {
-    return(character(0))
-  }
-
-  # For now, return the single covariate tested
-  # In full implementation, this would track cumulative covariates
-  covariate <- model_row$covariate_tested[1]
-  if (is.na(covariate)) {
-    return(character(0))
-  }
-
-  return(covariate)
-}
 
 
 
@@ -319,7 +293,7 @@ update_model_counter <- function(search_state) {
     all_model_names <- search_state$search_database$model_name
 
     # Filter out retry models (ending with 3 digits)
-    main_models <- all_model_names[!grepl("\\d{3}$", all_model_names)]
+    main_models <- all_model_names[!grepl("^run\\d+001$", all_model_names)]
 
     if (length(main_models) > 0) {
       model_numbers <- as.numeric(gsub("run", "", main_models))
@@ -590,27 +564,6 @@ generate_step_description <- function(step_number, action, covariate_tested) {
                   ifelse(action == "retry", sprintf("Step %d: Retry %s", step_number, covariate_tested),
                          ifelse(action == "unknown", sprintf("Step %d: Unknown", step_number),
                                 sprintf("Step %d: %s", step_number, action)))))
-  )
-
-  return(result)
-}
-
-
-#' Generate Phase (VECTORIZED VERSION - KEPT FOR COMPATIBILITY)
-#' @param step_number Integer vector of step numbers
-#' @param action Character vector of action types
-#' @return Character vector of phases
-generate_phase <- function(step_number, action) {
-  # Input validation and cleaning
-  step_number <- ifelse(is.na(step_number) | is.null(step_number), 0, step_number)
-  action <- ifelse(is.na(action) | is.null(action), "unknown", action)
-
-  # Vectorized case_when equivalent using ifelse
-  result <- ifelse(
-    action == "base_model", "base",
-    ifelse(action == "retry", "retry",
-           ifelse(step_number == 1, "initial_testing",
-                  ifelse(step_number > 1, "forward_selection", "unknown")))
   )
 
   return(result)

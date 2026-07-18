@@ -396,7 +396,7 @@ process_estimation_issues <- function(search_state, models_with_issues) {
     cat(sprintf("\n🔍 Processing %s (issue: %s)\n", model_name, issue_info$issue_type))
 
     # Check if this is already a retry model (ends with 3 digits)
-    is_retry <- grepl("\\d{3}$", model_name)
+    is_retry <- grepl("^run\\d+001$", model_name)
 
     if (is_retry) {
       cat("  This is a retry model - excluding covariate from forward steps\n")
