@@ -13,6 +13,7 @@ initialize_covariate_search(
   idcol = "ID",
   threads = 60,
   validate_parameters = TRUE,
+  require_base_run = TRUE,
   lookup_file = NULL,
   starting_model_number = NULL
 )
@@ -33,6 +34,12 @@ initialize_covariate_search(
 \item{threads}{Integer. Number of threads for execution (default: 60)}
 
 \item{validate_parameters}{Logical. Validate parameter block formatting (default: TRUE)}
+
+\item{require_base_run}{Logical. Require the base model to have a completed run
+(readable \code{.lst}/\code{.ext} with an OFV) before initializing (default: TRUE). Set
+to FALSE for SETUP/TESTING only -- it skips the run/OFV check so you can build
+the search_state and exercise covariate add/remove on control streams without
+running NONMEM. A real search still needs a completed base model OFV.}
 
 \item{lookup_file}{Character or NULL. Optional path to lookup YAML for
 categorical covariate labels. If NULL, defaults to data/spec/lookup.yaml.}

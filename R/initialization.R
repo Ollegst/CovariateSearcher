@@ -20,6 +20,11 @@
 #' @param idcol Character. ID column name (default: "ID")
 #' @param threads Integer. Number of threads for execution (default: 60)
 #' @param validate_parameters Logical. Validate parameter block formatting (default: TRUE)
+#' @param require_base_run Logical. Require the base model to have a completed run
+#'   (readable `.lst`/`.ext` with an OFV) before initializing (default: TRUE). Set
+#'   to FALSE for SETUP/TESTING only -- it skips the run/OFV check so you can build
+#'   the search_state and exercise covariate add/remove on control streams without
+#'   running NONMEM. A real search still needs a completed base model OFV.
 #' @param lookup_file Character or NULL. Optional path to lookup YAML for
 #'   categorical covariate labels. If NULL, defaults to data/spec/lookup.yaml.
 #' @param starting_model_number Optional integer. Sets the model counter manually.
@@ -38,6 +43,7 @@ initialize_covariate_search <- function(base_model_path,
                                         idcol = "ID",
                                         threads = 60,
                                         validate_parameters = TRUE,
+                                        require_base_run = TRUE,
                                         lookup_file = NULL,
                                         starting_model_number = NULL) {
 
@@ -172,10 +178,23 @@ initialize_covariate_search <- function(base_model_path,
   }
 
   cat("Checking base model results...\n")
-  validate_base_model_for_search(
-    base_model_path = search_state$base_model,
-    models_folder = search_state$models_folder
-  )
+  if (isTRUE(require_base_run)) {
+    validate_base_model_for_search(
+      base_model_path = search_state$base_model,
+      models_folder = search_state$models_folder
+    )
+  } else {
+    # SETUP/TESTING mode: skip the run/OFV requirement, but still confirm the
+    # base control stream exists so covariate add/remove have something to read.
+    mp <- file.path(search_state$models_folder, search_state$base_model)
+    if (!file.exists(paste0(mp, ".ctl")) && !file.exists(paste0(mp, ".mod"))) {
+      stop("Base model control stream not found: ", mp, " (.ctl or .mod)")
+    }
+    cat("⚠️  require_base_run = FALSE: skipping base-model run/OFV check.\n",
+        "   This search_state is for SETUP/TESTING (build + add/remove control\n",
+        "   streams) only — a real search cannot run without a completed base OFV.\n",
+        sep = "")
+  }
   # Load tags and run validations
   search_state <- load_tags(search_state)
   search_state <- validate_setup(search_state)
