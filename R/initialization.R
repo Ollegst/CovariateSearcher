@@ -264,6 +264,201 @@ load_tags <- function(search_state) {
 
 
 
+#' Build a covariate parameter-search reference table
+#'
+#' @description
+#' Combines a user-specified Parameter/Covariate/Category/Formula mapping with
+#' subject-level longitudinal data to automatically compute reference values
+#' (median for continuous covariates, most prevalent level for categorical
+#' covariates) and detected levels from baseline (Time == 0) data, cross-check
+#' categorical levels against a YAML covariate specification, and determine
+#' whether each covariate is time-dependent using the FULL dataset (not just
+#' baseline). The result is a long table ready for
+#' \code{\link{validate_covariate_search_table}} /
+#' \code{\link{initialize_covariate_search}}.
+#'
+#' @param data      A data.frame containing subject-level longitudinal data,
+#'   including an ID column, a time column, and all covariates referenced in
+#'   \code{Covariate}.
+#' @param id        Name (string) of the subject identifier column in \code{data}.
+#' @param time      Name (string) of the time column in \code{data}.
+#' @param Parameter Character vector naming the PK/PD parameter for each row
+#'   (e.g. "CL", "CL", "V"), aligned by position with the other spec vectors.
+#' @param Covariate Character vector naming the covariate for each row.
+#' @param Category  Character vector, one of "con" or "cat" per row.
+#' @param Formula   Character vector. Per row, either a built-in shortcut --
+#'   continuous: \code{"linear"}, \code{"power"}, \code{"exponential"};
+#'   categorical: \code{"linear"} (per-level) or \code{"power"} (numeric levels)
+#'   -- or a single-factor expression written in the reserved symbols \code{cov}
+#'   (the covariate) and \code{ref} (its REFERENCE) plus one symbol per estimated
+#'   THETA, e.g. \code{"EMAX*cov/(EC50+cov)"}. (\code{"power1"}/\code{"power0.75"}
+#'   were removed: use \code{"power"} with a fixed \code{INIT} such as
+#'   \code{"1 FIX"} / \code{"0.75 FIX"}.)
+#' @param yaml_data A named list (parsed YAML) where each categorical
+#'   covariate has a \code{values} element listing its valid numeric codes.
+#' @param INIT      Optional character vector, aligned by position with the spec
+#'   vectors, giving the initial \code{$THETA} value per row (e.g. \code{"0.1"},
+#'   \code{"(0, 0.5, 2)"}, \code{"1 FIX"}, or a named spec for multi-parameter
+#'   expressions such as \code{"EMAX=0.5; EC50=10"}). \code{NULL} (default) omits
+#'   the column, so every beta uses the formula default (\code{0.1}).
+#'
+#' @return A data.frame with columns PARAMETER, COVARIATE, STATUS, FORMULA,
+#'   LEVELS, REFERENCE, TIME_DEPENDENT (and INIT when supplied) -- one row per
+#'   (Parameter, Covariate) pair, matching the input spec order.
+#'
+#' @seealso \code{\link{validate_covariate_search_table}},
+#'   \code{\link{initialize_covariate_search}}
+#' @importFrom rlang .data
+#' @export
+build_covariate_reference_table <- function(data, id, time,
+                                            Parameter, Covariate, Category, Formula,
+                                            yaml_data, INIT = NULL) {
+
+  builtin_con <- c("linear", "power", "exponential")
+  builtin_cat <- c("linear", "power")  # cat.linear (per-level) + cat.power (numeric levels)
+
+  # ---- Step 1: build & validate spec ------------------------------------
+  n <- length(Parameter)
+  if (length(Covariate) != n || length(Category) != n || length(Formula) != n) {
+    stop("Parameter, Covariate, Category, and Formula must all be the same length.")
+  }
+  if (!is.null(INIT) && length(INIT) != n) {
+    stop("INIT must be NULL or the same length as Parameter (", n, ").")
+  }
+
+  spec_df <- data.frame(
+    PARAMETER = Parameter,
+    COVARIATE = Covariate,
+    STATUS    = Category,
+    FORMULA   = Formula,
+    stringsAsFactors = FALSE
+  )
+  if (!is.null(INIT)) spec_df$INIT <- as.character(INIT)
+
+  bad_category <- unique(spec_df$STATUS[!spec_df$STATUS %in% c("con", "cat")])
+  if (length(bad_category) > 0) {
+    stop("Category must be 'con' or 'cat'. Invalid value(s): ",
+         paste(bad_category, collapse = ", "))
+  }
+
+  # A FORMULA is valid if it is a built-in shortcut for its STATUS, or a
+  # single-factor expression that parses AND actually references `cov`. This
+  # mirrors the package's own acceptance (built-in OR parseable expression, see
+  # generate_tags_from_covariate_search / model_add_cov) and rejects removed
+  # names like power1/power0.75, and typos, with an actionable message.
+  formula_ok <- function(status, f) {
+    f_chr    <- tolower(trimws(as.character(f)))
+    builtins <- if (status == "con") builtin_con else builtin_cat
+    if (f_chr %in% builtins) return(TRUE)
+    d <- parse_covariate_expression(f)
+    !is.null(d) && "cov" %in% all.vars(d$expr)
+  }
+  bad_idx <- which(!mapply(formula_ok, spec_df$STATUS, spec_df$FORMULA))
+  if (length(bad_idx) > 0) {
+    stop(
+      "Invalid FORMULA at row(s) ", paste(bad_idx, collapse = ", "), ": ",
+      paste(unique(as.character(spec_df$FORMULA[bad_idx])), collapse = ", "),
+      ".\n  Use a built-in shortcut (continuous: ",
+      paste(builtin_con, collapse = "/"), "; categorical: ",
+      paste(builtin_cat, collapse = "/"),
+      ") or a single-factor expression in cov/ref + parameter names",
+      " (e.g. \"EMAX*cov/(EC50+cov)\").",
+      "\n  Note: power1/power0.75 were removed — use \"power\" with a fixed",
+      " INIT such as \"1 FIX\" or \"0.75 FIX\"."
+    )
+  }
+
+  # Each covariate must have a single consistent Category across all its rows
+  # (e.g. WT cannot be "con" under CL and "cat" under V).
+  cov_category_counts <- tapply(spec_df$STATUS, spec_df$COVARIATE, function(x) length(unique(x)))
+  inconsistent_covs <- names(cov_category_counts)[cov_category_counts > 1]
+  if (length(inconsistent_covs) > 0) {
+    stop("Covariate(s) have inconsistent Category (con vs cat) across rows: ",
+         paste(inconsistent_covs, collapse = ", "))
+  }
+
+  unique_covs <- unique(spec_df$COVARIATE)
+  missing_cols <- setdiff(unique_covs, colnames(data))
+  if (length(missing_cols) > 0) {
+    stop("Covariate column(s) not found in 'data': ", paste(missing_cols, collapse = ", "))
+  }
+  if (!(id %in% colnames(data)))   stop("ID column '", id, "' not found in 'data'.")
+  if (!(time %in% colnames(data))) stop("Time column '", time, "' not found in 'data'.")
+
+  cov_status <- setNames(spec_df$STATUS[match(unique_covs, spec_df$COVARIATE)], unique_covs)
+
+  # ---- Step 2: baseline data (Time == 0), first row per ID --------------
+  baseline <- data %>%
+    dplyr::group_by(.data[[id]]) %>%
+    dplyr::filter(.data[[time]] == 0) %>%
+    dplyr::slice(1) %>%
+    dplyr::ungroup()
+
+  # ---- Step 3: REFERENCE + LEVELS per unique covariate -------------------
+  compute_ref_levels <- function(cov) {
+    status <- cov_status[[cov]]
+    x <- baseline[[cov]]
+    x <- x[!is.na(x)]
+
+    if (status == "con") {
+      list(reference = as.character(round(median(x), 2)), levels = NA_character_)
+    } else {
+      tab <- table(x)
+      levels_found <- sort(unique(as.character(x)))
+      most_prevalent <- names(tab)[which.max(tab)]
+      list(reference = most_prevalent, levels = paste(levels_found, collapse = ";"))
+    }
+  }
+
+  ref_levels <- lapply(unique_covs, compute_ref_levels)
+  names(ref_levels) <- unique_covs
+
+  # ---- Step 4: YAML level check (categorical covariates only) -----------
+  for (cov in unique_covs) {
+    if (cov_status[[cov]] != "cat") next
+
+    if (is.null(yaml_data[[cov]])) {
+      stop("Covariate '", cov, "' not found in yaml_data specification.")
+    }
+
+    yaml_values  <- as.character(yaml_data[[cov]]$values)
+    data_levels  <- strsplit(ref_levels[[cov]]$levels, ";")[[1]]
+
+    extra_in_data <- setdiff(data_levels, yaml_values)
+    if (length(extra_in_data) > 0) {
+      stop("Covariate '", cov, "': level(s) found in baseline data not defined in yaml_data: ",
+           paste(extra_in_data, collapse = ", "))
+    }
+
+    extra_in_yaml <- setdiff(yaml_values, data_levels)
+    if (length(extra_in_yaml) > 0) {
+      warning("Covariate '", cov, "': yaml_data defines level(s) never observed in baseline data: ",
+              paste(extra_in_yaml, collapse = ", "))
+    }
+  }
+
+  # ---- Step 5: TIME_DEPENDENT from FULL data -----------------------------
+  compute_time_dependent <- function(cov) {
+    df <- data[!is.na(data[[cov]]), c(id, cov)]
+    n_distinct_per_id <- tapply(df[[cov]], df[[id]], function(v) length(unique(v)))
+    if (any(n_distinct_per_id > 1)) "Yes" else "No"
+  }
+
+  time_dep <- setNames(vapply(unique_covs, compute_time_dependent, character(1)), unique_covs)
+
+  # ---- Step 6: assemble final long table ---------------------------------
+  spec_df$LEVELS         <- vapply(spec_df$COVARIATE, function(cov) ref_levels[[cov]]$levels, character(1))
+  spec_df$REFERENCE      <- vapply(spec_df$COVARIATE, function(cov) ref_levels[[cov]]$reference, character(1))
+  spec_df$TIME_DEPENDENT <- unname(time_dep[spec_df$COVARIATE])
+
+  out_cols <- c("PARAMETER", "COVARIATE", "STATUS", "FORMULA", "LEVELS", "REFERENCE", "TIME_DEPENDENT")
+  if (!is.null(INIT)) out_cols <- c(out_cols, "INIT")
+  spec_df[, out_cols]
+}
+
+
+
+
 #' Validate covariate search table
 #'
 #' Performs reusable checks on the covariate search table and returns the
