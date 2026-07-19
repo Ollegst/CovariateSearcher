@@ -196,18 +196,24 @@ apply_covariate_model <- function(model_name,
       }
       factor <- 1 + result[[beta_col]]
     } else {
-      # Single factor: reconstruct via the registry's r_eval (con.* and cat.power).
-      n <- theta_index[[tag]]
-      beta_col <- paste0("THETA", n)
-      if (is.na(n) || !beta_col %in% names(result)) {
-        warning("Beta theta for '", tag, "' missing; skipped.")
-        next
-      }
+      # Single factor. A single-parameter form (built-in or 1-parameter expression)
+      # owns the base tag beta_<COV>_<PARAM>; a multi-parameter expression owns one
+      # tag per parameter, beta_<COV>_<PARAM>_<name>. Gather the beta(s) in
+      # parameter order and hand to the registry's r_eval (scalar/vector for one,
+      # list-of-N for many).
       if (is.null(cov_def)) {
         warning("Unknown FORMULA '", formula, "' for '", cov, "'; skipped.")
         next
       }
-      th <- result[[beta_col]]
+      tns  <- cov_def$theta_names
+      need <- if (length(tns) > 1L) paste0(tag, "_", tns) else tag
+      kk   <- theta_index[need]
+      bcol <- paste0("THETA", kk)
+      if (any(is.na(kk)) || !all(bcol %in% names(result))) {
+        warning("Beta theta(s) for '", tag, "' missing; skipped.")
+        next
+      }
+      th <- if (length(tns) > 1L) lapply(bcol, function(b) result[[b]]) else result[[bcol]]
       factor <- cov_def$r_eval(cov_val, ref, th)
     }
 

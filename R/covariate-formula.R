@@ -130,8 +130,15 @@ parse_covariate_expression <- function(formula) {
       paste0(" * (", .translate_expr_to_nonmem(expr, cova, ref, thetas, n), ")")
     },
     r_eval = function(cov_val, ref, th) {
+      # `th` holds the estimated beta(s). For one parameter it is the beta itself
+      # (a scalar or a per-sample vector); for several it is a list, one element
+      # per parameter (in theta_names order), each a scalar or per-sample vector.
       env <- list(cov = cov_val, ref = ref)
-      for (i in seq_along(thetas)) env[[thetas[i]]] <- th[i]
+      if (length(thetas) == 1L) {
+        env[[thetas[1L]]] <- th
+      } else {
+        for (i in seq_along(thetas)) env[[thetas[i]]] <- th[[i]]
+      }
       eval(expr, envir = env)
     }
   )
@@ -159,6 +166,27 @@ parse_covariate_expression <- function(formula) {
   }
   s <- paste(deparse(walk(expr), width.cutoff = 500L), collapse = " ")
   gsub("\\^", "**", s)
+}
+
+# Parse a per-parameter INIT spec ("EMAX=0.1; EC50=(0,10,1000)") into a character
+# vector of $THETA init strings aligned to `theta_names`; missing entries default
+# to "0.1". Names must match the expression's parameter names.
+#' @keywords internal
+#' @noRd
+parse_named_init <- function(init_str, theta_names) {
+  out <- stats::setNames(rep("0.1", length(theta_names)), theta_names)
+  if (length(init_str) != 1L || is.na(init_str) ||
+      trimws(as.character(init_str)) == "") {
+    return(unname(out))
+  }
+  for (part in strsplit(as.character(init_str), ";", fixed = TRUE)[[1]]) {
+    part <- trimws(part)
+    if (part == "" || !grepl("=", part, fixed = TRUE)) next
+    nm  <- trimws(sub("=.*$", "", part))
+    val <- trimws(sub("^[^=]*=", "", part))
+    if (nm %in% theta_names && val != "") out[[nm]] <- val
+  }
+  unname(out)
 }
 
 # ---- Built-in continuous forms (byte-exact mirror of legacy output) -----------

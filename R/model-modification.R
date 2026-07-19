@@ -606,6 +606,19 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
     newthetaline <- paste0(newthetalines, collapse = '\n')
 
     log_function(paste("Adding", nrow(thetanmulti), "THETA lines for categorical levels"))
+  } else if (length(cov_formula_def$theta_names) > 1L) {
+    # Multi-parameter single-factor expression (Emax/Imax/Hill): one THETA per
+    # parameter, named beta_<COV>_<PARAM>_<parameter> and initialised from the
+    # named INIT spec ("EMAX=0.1; EC50=10"), defaulting to 0.1. Order matches the
+    # parameter order the nonmem renderer used for THETA(newtheta), THETA(newtheta+1)...
+    tn <- cov_formula_def$theta_names
+    init_per_theta <- parse_named_init(table_init, tn)
+    newthetalines <- vapply(seq_along(tn), function(i) {
+      paste0(init_per_theta[i], ' ; ', cov_on_param, "_", tn[i], ' ;  ; RATIO')
+    }, character(1))
+    newthetaline <- paste0(newthetalines, collapse = '\n')
+
+    log_function(paste("Adding", length(tn), "THETA lines for multi-parameter expression"))
   } else {
     # Single THETA for binary or continuous covariates
     newthetaline <- paste0(initialValuethetacov, ' ; ', cov_on_param, ' ;  ; RATIO')
@@ -978,6 +991,44 @@ prepare_search_base_model <- function(base_model_path,
 }
 
 
+# Strip covariate factors from a $PK/$PRED parameter line: remove any top-level
+# ' * <factor>' whose factor references one of `theta_nums` (balanced-paren aware),
+# leaving the structural term and other covariates' factors intact. Handles the
+# built-ins (power/linear/exp), user expressions, and multi-parameter forms in one
+# place, replacing four brittle per-shape regexes.
+#' @keywords internal
+#' @noRd
+strip_covariate_factors <- function(line, theta_nums) {
+  semi    <- regexpr(";", line, fixed = TRUE)
+  code    <- if (semi > 0) substring(line, 1, semi - 1) else line
+  comment <- if (semi > 0) substring(line, semi) else ""
+  eq <- regexpr("=", code, fixed = TRUE)
+  if (eq <= 0 || !grepl("THETA\\(", code)) return(line)
+  lhs <- substring(code, 1, eq)
+  rhs <- substring(code, eq + 1)
+  chars <- strsplit(rhs, "")[[1]]; n <- length(chars)
+  if (n == 0L) return(line)
+  depth <- 0L; splits <- integer(0)
+  for (i in seq_len(n)) {
+    ch <- chars[i]
+    if (ch == "(") depth <- depth + 1L
+    else if (ch == ")") depth <- depth - 1L
+    else if (ch == "*" && depth == 0L &&
+             !(i > 1L && chars[i - 1L] == "*") &&
+             !(i < n  && chars[i + 1L] == "*")) splits <- c(splits, i)
+  }
+  if (length(splits) == 0L) return(line)
+  starts <- c(1L, splits); ends <- c(splits - 1L, n)
+  segs <- vapply(seq_along(starts),
+                 function(k) paste(chars[starts[k]:ends[k]], collapse = ""), character(1))
+  theta_re <- paste0("THETA\\(\\s*(", paste(theta_nums, collapse = "|"), ")\\s*\\)")
+  keep <- rep(TRUE, length(segs))
+  if (length(segs) >= 2L) for (j in 2:length(segs)) if (grepl(theta_re, segs[j])) keep[j] <- FALSE
+  if (all(keep)) return(line)
+  paste0(lhs, paste(segs[keep], collapse = ""), comment)
+}
+
+
 #' Remove Covariate from Model (Clean Interface)
 #'
 #' @title Remove covariate using tag name with functional state update
@@ -1107,45 +1158,23 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
   theta_numbers_to_remove <- sort(theta_numbers_to_remove)
   log_msg(paste("THETA numbers to remove:", paste(theta_numbers_to_remove, collapse = ", "))) # nolint: line_length_linter.
 
-  # Step 5: Remove covariate effects from parameter equations
+  # Step 5: Remove covariate effects from parameter equations. Two factor shapes:
+  #   (a) categorical -> a ' * beta_<COV>_<PARAM>' variable factor (its per-level
+  #       THETAs live in the IF/ELSEIF block removed below); and
+  #   (b) everything else -> a ' * (...)' factor referencing one of the removed
+  #       THETAs. strip_covariate_factors() handles (b) uniformly for the built-ins
+  #       (power/linear/exp), user expressions, and multi-parameter forms -- this
+  #       replaces four per-shape regexes that missed linear and expressions.
+  cat_var_re <- paste0("\\s*\\*\\s*", covariate_to_remove, "\\b")
   lines_modified <- 0
-  for (i in 1:length(modelcode)) {
+  for (i in seq_along(modelcode)) {
     line <- modelcode[i]
-
-    if (grepl(cova, line)) {
-      original_line <- line
-      modified_line <- line
-      line_changed <- FALSE
-
-      for (theta_num in theta_numbers_to_remove) {
-        # Pattern 1: * (1 + COVARIATE * THETA(X))
-        pattern1 <- paste0("\\s*\\*\\s*\\(1\\s*\\+\\s*", cova, "\\s*\\*\\s*THETA\\(", theta_num, "\\)\\)")
-        # Pattern 2: * (COVARIATE/REF)**THETA(X)
-        pattern2 <- paste0("\\s*\\*\\s*\\(", cova, "/[0-9\\.]+\\)\\*\\*THETA\\(", theta_num, "\\)")
-        # Pattern 3: * COVARIATE_VARIABLE
-        pattern3 <- paste0("\\s*\\*\\s*", covariate_to_remove, "\\b")
-        # Pattern 4: * EXP(THETA(X) * (COVARIATE-REF))
-        pattern4 <- paste0("\\s*\\*\\s*EXP\\(THETA\\(", theta_num, "\\)\\s*\\*\\s*\\(", cova, "-[0-9\\.]+\\)\\)")
-
-        if (grepl(pattern1, modified_line)) {
-          modified_line <- gsub(pattern1, "", modified_line)
-          line_changed <- TRUE
-        } else if (grepl(pattern2, modified_line)) {
-          modified_line <- gsub(pattern2, "", modified_line)
-          line_changed <- TRUE
-        } else if (grepl(pattern3, modified_line)) {
-          modified_line <- gsub(pattern3, "", modified_line)
-          line_changed <- TRUE
-        } else if (grepl(pattern4, modified_line)) {
-          modified_line <- gsub(pattern4, "", modified_line)
-          line_changed <- TRUE
-        }
-      }
-
-      if (line_changed) {
-        modelcode[i] <- modified_line
-        lines_modified <- lines_modified + 1
-      }
+    if (!grepl("=", line)) next
+    modified_line <- gsub(cat_var_re, "", line)                                       # (a)
+    modified_line <- strip_covariate_factors(modified_line, theta_numbers_to_remove)  # (b)
+    if (!identical(modified_line, line)) {
+      modelcode[i] <- modified_line
+      lines_modified <- lines_modified + 1
     }
   }
 
