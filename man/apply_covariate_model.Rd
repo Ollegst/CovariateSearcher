@@ -16,8 +16,8 @@ apply_covariate_model(
 \item{model_name}{Character. Model name without extension, e.g. "run28".}
 
 \item{covariate_search}{Data frame with columns \code{COVARIATE}, \code{PARAMETER},
-\code{STATUS} ("con"/"cat"), \code{FORMULA} ("power"/"power1"/"power0.75"/"linear"/
-"exponential"/...), and \code{REFERENCE}. A \code{cov_to_test} column is derived from
+\code{STATUS} ("con"/"cat"), \code{FORMULA} ("power"/"linear"/"exponential"/...),
+and \code{REFERENCE}. A \code{cov_to_test} column is derived from
 \code{COVARIATE}/\code{PARAMETER} when absent.}
 
 \item{individual_thetas}{Data frame whose columns are named \code{THETA1},

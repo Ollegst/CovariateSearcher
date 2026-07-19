@@ -47,7 +47,7 @@ Note: True SCM should always include both forward and backward phases (default: 
 If NULL, uses search_state$search_config$forward_p_value (default: 0.05)}
 
 \item{backward_p_value}{Numeric. P-value for backward elimination significance testing.
-If NULL, uses search_state$search_config$backward_p_value (default: 0.01, more stringent)}
+If NULL, uses search_state$search_config$backward_p_value (default: 0.001, more stringent)}
 
 \item{rse_threshold}{Numeric. Maximum RSE threshold as percentage.
 If NULL, uses search_state$search_config$max_rse_threshold (default: 50)}
