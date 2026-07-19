@@ -397,24 +397,28 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
 
   log_function(paste("Covariate type:", cov_status, "Formula:", cov_formula))
 
-  FLAG <- dplyr::case_when(
-    length(cov_status) == 0 | length(cov_formula) == 0 ~ "ERROR: Missing covariate info",
-    cov_status == "cat" & cov_formula == "linear" ~ "1",
-    cov_status == "cat" & cov_formula == "power" ~ "2",
-    cov_status == "con" & cov_formula == "linear" ~ "3",
-    cov_status == "con" & cov_formula == "power" ~ "2",
-    cov_status == "con" & cov_formula == "exponential" ~ "4",
-    .default = "Please check covariate status and formula"
-  )
-
-  log_function(paste("Covariate FLAG:", FLAG))
+  # Look up the covariate-effect form in the registry (single source of truth for
+  # the NONMEM factor + the R reconstruction, so the two can't drift). cat.linear
+  # is flagged categorical and keeps its per-level IF/ELSEIF block below; every
+  # other form is a single factor rendered from the registry.
+  if (length(cov_status) == 0 || length(cov_formula) == 0) {
+    stop("Missing covariate STATUS/FORMULA for '", cova, "'")
+  }
+  cov_formula_def <- get_covariate_formula(cov_status, cov_formula)
+  if (is.null(cov_formula_def)) {
+    stop("Unknown covariate formula '", cov_formula, "' (status '", cov_status,
+         "'). Registered forms: ", paste(list_covariate_formulas(), collapse = ", "))
+  }
+  is_categorical <- isTRUE(cov_formula_def$categorical)
+  log_function(paste("Covariate form:", cov_status, "/", cov_formula,
+                     if (is_categorical) "(categorical, per-level)" else "(single-factor)"))
 
   # Initial THETA value: prefer an explicit INIT from the covariate_search table
   # (per covariate-parameter row); fall back to the formula-derived default when
   # INIT is absent, NA, or blank. Backward-compatible: tables without an INIT
   # column behave exactly as before. Applies to the single-THETA path below;
   # categorical per-level thetas keep their own default.
-  formula_default_init <- "0.1"
+  formula_default_init <- cov_formula_def$init
 
   table_init <- if ("INIT" %in% names(temp_cov)) {
     temp_cov$INIT[temp_cov$COVARIATE == cova]
@@ -433,14 +437,13 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   log_function(paste("Initial THETA value:", initialValuethetacov,
                      if (identical(initialValuethetacov, formula_default_init)) "(formula default)" else "(from INIT column)"))
 
-  # Generate formula based on FLAG
-  if(FLAG == "2") formule <- paste0(' * (',cova,'/',ref,')**THETA(', newtheta ,')')
-  if(FLAG == "3") formule <- paste0(' * (1 + (',cova,'-',ref, ') * THETA(',newtheta ,'))')
-  if(FLAG == "4") formule <- paste0(" * EXP(THETA(", newtheta, ") * (", cova, "-", ref, "))")
-
-  # Handle categorical covariates (simplified for core module)
+  # Generate the covariate factor: single-factor forms render from the registry
+  # (byte-identical to the legacy strings); cat.linear keeps the per-level
+  # IF/ELSEIF block that follows.
   thetanmulti <- tibble()
-  if(FLAG == "1"){
+  if (!is_categorical) {
+    formule <- cov_formula_def$nonmem(cova, ref, newtheta)
+  } else {
     # Try to load lookup YAML for categorical labels (optional)
     lookup_values <- NULL
     if (!is.null(resolved_lookup_file) && file.exists(resolved_lookup_file)) {

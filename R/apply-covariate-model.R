@@ -165,6 +165,7 @@ apply_covariate_model <- function(model_name,
     status <- tolower(as.character(cov_search$STATUS[r]))
     formula <- tolower(as.character(cov_search$FORMULA[r]))
     ref    <- suppressWarnings(as.numeric(cov_search$REFERENCE[r]))
+    cov_def <- get_covariate_formula(status, formula)
 
     if (!cov %in% names(covariates)) {
       warning("Covariate '", cov, "' not in `covariates`; skipped.")
@@ -179,7 +180,11 @@ apply_covariate_model <- function(model_name,
     }
     cov_val <- as.numeric(covariates[[cov]])
 
-    if (status == "cat") {
+    # Per-level categorical (cat.linear) reads the level->theta mapping from the
+    # $PK IF/ELSEIF block. Every other form (including cat.power) is a single
+    # factor reconstructed from the SAME registry entry model_add_cov wrote from,
+    # so the write and read sides cannot drift.
+    if (!is.null(cov_def) && isTRUE(cov_def$categorical)) {
       # Multi-level safe: pick the theta for the covariate's level (ref -> 1).
       lvl_theta <- cat_level_theta(tag, cov)
       k <- lvl_theta[as.character(cov_val)]
@@ -191,25 +196,19 @@ apply_covariate_model <- function(model_name,
       }
       factor <- 1 + result[[beta_col]]
     } else {
-      # Continuous: reconstruct the model_add_cov factor from STATUS/FORMULA.
+      # Single factor: reconstruct via the registry's r_eval (con.* and cat.power).
       n <- theta_index[[tag]]
       beta_col <- paste0("THETA", n)
       if (is.na(n) || !beta_col %in% names(result)) {
         warning("Beta theta for '", tag, "' missing; skipped.")
         next
       }
+      if (is.null(cov_def)) {
+        warning("Unknown FORMULA '", formula, "' for '", cov, "'; skipped.")
+        next
+      }
       th <- result[[beta_col]]
-      factor <- switch(
-        formula,
-        "power"       = (cov_val / ref) ^ th,
-        "linear"      = 1 + (cov_val - ref) * th,
-        "exponential" = exp(th * (cov_val - ref)),
-        {
-          warning("Unknown continuous FORMULA '", formula, "' for '", cov,
-                  "'; skipped.")
-          next
-        }
-      )
+      factor <- cov_def$r_eval(cov_val, ref, th)
     }
 
     result[[struct_col]] <- result[[struct_col]] * factor
