@@ -324,6 +324,9 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id = NULL,
   current_base_model <- step1_selection$best_model
   cat(sprintf("🎯 Step %d complete - new base model: %s\n", current_step_number, current_base_model))
 
+  # Save progress after each step (resume point for continue_search)
+  save_search_state(search_state, sprintf("scm_forward_step_%d.rds", current_step_number))
+
   # ITERATIVE FORWARD STEPS (continue from current step)
   while (TRUE) {
 
@@ -414,6 +417,9 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id = NULL,
     # Update current base model
     current_base_model <- step_selection$best_model
     cat(sprintf("🎯 Step %d complete - new base model: %s\n", current_step_number, current_base_model))
+
+    # Save progress after each step (resume point for continue_search)
+    save_search_state(search_state, sprintf("scm_forward_step_%d.rds", current_step_number))
   }
 
 

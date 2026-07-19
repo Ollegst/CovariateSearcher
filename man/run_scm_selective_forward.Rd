@@ -10,7 +10,8 @@ run_scm_selective_forward(
   forward_p_value = NULL,
   rse_threshold = NULL,
   auto_submit = TRUE,
-  auto_retry = TRUE
+  auto_retry = TRUE,
+  resume = FALSE
 )
 }
 \arguments{
@@ -25,6 +26,12 @@ run_scm_selective_forward(
 \item{auto_submit}{Logical. Whether to automatically submit models (default: TRUE)}
 
 \item{auto_retry}{Logical. Whether to enable automatic retry (default: TRUE)}
+
+\item{resume}{Logical. If TRUE, treat this call as a continuation (used by
+\code{\link{continue_search}}): the first loop pass skips the "test all"
+step and goes straight to selective narrowing, reconstructing the previous
+step from the database via \code{\link{get_step_models}}. Fresh runs use
+FALSE (default) and begin by testing all available covariates.}
 }
 \value{
 List with updated search_state and forward selection results

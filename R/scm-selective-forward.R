@@ -80,6 +80,84 @@ get_significant_models_from_step <- function(search_state, step_number, p_value,
 
   return(significant_model_names)
 }
+
+
+#' Identify the Models Tested in an SCM Step (with their base model)
+#'
+#' @title Reconstruct one SCM step from the database
+#' @description Supportive lookup used by both selective forward selection and
+#'   \code{\link{continue_search}}. Given a step number, it returns the models
+#'   tested in that step, the base (parent) model they were built from, which
+#'   completed, which were significant, and the step winner — all read from the
+#'   search database, so a step can be reconstructed with no in-memory run state.
+#'   This is what makes selective forward resume-safe: the "test only covariates
+#'   from the previous step's significant models" narrowing is recovered from the
+#'   database rather than a local variable.
+#' @param search_state List containing covariate search state and configuration
+#' @param step_number Integer. Step number to reconstruct
+#' @param p_value Numeric. P-value for significance (uses forward config if NULL)
+#' @param rse_threshold Numeric. RSE threshold (uses config if NULL)
+#' @return List with: \code{exists} (logical), \code{step_number},
+#'   \code{base_model} (common parent), \code{models} (all tested),
+#'   \code{completed_models}, \code{significant_models}, and \code{best_model}
+#'   (highest-ΔOFV significant model, or NULL).
+#' @export
+get_step_models <- function(search_state, step_number, p_value = NULL, rse_threshold = NULL) {
+  db <- search_state$search_database
+  empty <- list(
+    exists = FALSE, step_number = step_number, base_model = NA_character_,
+    models = character(0), completed_models = character(0),
+    significant_models = character(0), best_model = NULL
+  )
+  if (is.null(db) || nrow(db) == 0) return(empty)
+
+  rows <- db[!is.na(db$step_number) & db$step_number == step_number, , drop = FALSE]
+
+  # Exclude the base model: it carries phase "base" and can share a step number,
+  # but it is not a covariate model tested during this step.
+  if ("phase" %in% names(rows)) {
+    rows <- rows[is.na(rows$phase) | rows$phase != "base", , drop = FALSE]
+  }
+  if (nrow(rows) == 0) return(empty)
+
+  if (is.null(p_value)) {
+    p_value <- search_state$search_config$forward_p_value %||% 0.05
+  }
+
+  # Base model = the common parent of this step's models
+  parents <- rows$parent_model[!is.na(rows$parent_model)]
+  base_model <- if (length(parents) > 0) {
+    names(sort(table(parents), decreasing = TRUE))[1]
+  } else {
+    NA_character_
+  }
+
+  completed_models <- rows$model_name[!is.na(rows$status) & rows$status == "completed"]
+
+  significant_models <- get_significant_models_from_step(
+    search_state, step_number, p_value, rse_threshold
+  )
+
+  best_model <- NULL
+  if (length(significant_models) > 0) {
+    sig_rows <- db[db$model_name %in% significant_models, , drop = FALSE]
+    if (nrow(sig_rows) > 0 && any(!is.na(sig_rows$delta_ofv))) {
+      best_model <- sig_rows$model_name[which.max(sig_rows$delta_ofv)]
+    }
+  }
+
+  list(
+    exists = TRUE,
+    step_number = step_number,
+    base_model = base_model,
+    models = rows$model_name,
+    completed_models = completed_models,
+    significant_models = significant_models,
+    best_model = best_model
+  )
+}
+
+
 #' Get Covariates from Models
 #'
 #' @title Extract covariate names from specific models
@@ -152,6 +230,11 @@ get_covariates_from_models <- function(search_state, model_names) {
 #' @param rse_threshold Numeric. Maximum RSE threshold (uses config if NULL)
 #' @param auto_submit Logical. Whether to automatically submit models (default: TRUE)
 #' @param auto_retry Logical. Whether to enable automatic retry (default: TRUE)
+#' @param resume Logical. If TRUE, treat this call as a continuation (used by
+#'   \code{\link{continue_search}}): the first loop pass skips the "test all"
+#'   step and goes straight to selective narrowing, reconstructing the previous
+#'   step from the database via \code{\link{get_step_models}}. Fresh runs use
+#'   FALSE (default) and begin by testing all available covariates.
 #' @return List with updated search_state and forward selection results
 #' @export
 run_scm_selective_forward <- function(search_state,
@@ -159,7 +242,8 @@ run_scm_selective_forward <- function(search_state,
                                       forward_p_value = NULL,
                                       rse_threshold = NULL,
                                       auto_submit = TRUE,
-                                      auto_retry = TRUE) {
+                                      auto_retry = TRUE,
+                                      resume = FALSE) {
   if (is.null(base_model_id)) {
     base_model_id <- search_state$base_model
   }
@@ -186,11 +270,15 @@ run_scm_selective_forward <- function(search_state,
     last_step <- 0
   }
   current_step <- last_step + 1
-  forward_iteration <- 1
   current_best_model <- base_model_id
   forward_selection_active <- TRUE
   step_results <- list()
   last_step_covariates_tested <- character(0)  # Track for deduplication
+
+  # Fresh run (resume = FALSE): first step tests ALL covariates.
+  # Resume (resume = TRUE): first step continues selectively from the previous
+  # step reconstructed from the database. Every later pass is a continuation.
+  is_continuation <- isTRUE(resume)
 
   # Main selective forward selection loop
   while (forward_selection_active) {
@@ -201,11 +289,15 @@ run_scm_selective_forward <- function(search_state,
     # Initialize significant_models outside if/else
     significant_models <- NULL
 
-    # Determine covariates to test for this step
-    if (forward_iteration == 1) {
-      # First iteration: Test ALL available covariates
+    # Determine covariates to test for this step.
+    #   is_continuation == FALSE -> first step of a fresh run: test ALL covariates.
+    #   is_continuation == TRUE  -> a continuation (a later step, or a
+    #     continue_search resume): narrow to covariates from the previous step's
+    #     significant models, reconstructed from the database via get_step_models().
+    if (!is_continuation) {
+      # First step: Test ALL available covariates
       current_best_model <- base_model_id
-      cat(sprintf("First selective forward iteration: Starting from base model %s\n", current_best_model))
+      cat(sprintf("First selective forward step: Starting from base model %s\n", current_best_model))
       cat("Strategy: Test ALL available covariates\n")
 
       covariates_to_test <- get_remaining_covariates(
@@ -217,23 +309,28 @@ run_scm_selective_forward <- function(search_state,
       step_base_model <- current_best_model
 
     } else {
-      # Subsequent iterations: Test only covariates from significant models in previous step
-      cat(sprintf("Iteration %d: Selective testing from significant Step %d models\n",
-                  forward_iteration, current_step - 1))
+      # Continuation: test only covariates from the previous step's significant models
+      prev_step <- get_step_models(
+        search_state, current_step - 1,
+        p_value = forward_p_value, rse_threshold = rse_threshold
+      )
 
-      # This prevents infinite loops and duplicate models
-      previous_step_results <- step_results[[sprintf("step_%d", current_step - 1)]]
+      if (!isTRUE(prev_step$exists)) {
+        cat(sprintf("❌ No covariate models found for previous Step %d\n", current_step - 1))
+        forward_selection_active <- FALSE
+        break
+      }
 
-      if (!is.null(previous_step_results) &&
-          !is.null(previous_step_results$selection) &&
-          !is.null(previous_step_results$selection$best_model)) {
-        # Use the winner from the previous step
-        current_best_model <- previous_step_results$selection$best_model
-        cat(sprintf("📍 Using Step %d winner as base: %s\n", current_step - 1, current_best_model))
-      } else {
-        # Fallback: find best model from all previous steps
+      cat(sprintf("Selective testing from significant Step %d models\n", current_step - 1))
+
+      # Base model = previous step's winner (reconstructed from the database)
+      current_best_model <- prev_step$best_model
+
+      if (is.null(current_best_model) || is.na(current_best_model)) {
+        # Fallback: overall best (highest ΔOFV) among completed previous models
         all_previous_models <- search_state$search_database[
-          search_state$search_database$step_number < current_step &
+          !is.na(search_state$search_database$step_number) &
+            search_state$search_database$step_number < current_step &
             search_state$search_database$status == "completed" &
             !is.na(search_state$search_database$delta_ofv), ]
 
@@ -245,18 +342,14 @@ run_scm_selective_forward <- function(search_state,
 
         overall_best_idx <- which.max(all_previous_models$delta_ofv)
         current_best_model <- all_previous_models$model_name[overall_best_idx]
-        best_step <- all_previous_models$step_number[overall_best_idx]
         cat(sprintf("📍 Using overall best model as base: %s (from Step %d)\n",
-                    current_best_model, best_step))
+                    current_best_model, all_previous_models$step_number[overall_best_idx]))
+      } else {
+        cat(sprintf("📍 Using Step %d winner as base: %s\n", current_step - 1, current_best_model))
       }
 
-      # Get significant models from previous step only
-
-      significant_models <- get_significant_models_from_step(
-        search_state = search_state,
-        step_number = current_step - 1,
-        p_value = forward_p_value
-      )
+      # Significant models from the previous step (read from the database)
+      significant_models <- prev_step$significant_models
 
       if (length(significant_models) == 0) {
         cat(sprintf("❌ No significant models found in Step %d\n", current_step - 1))
@@ -451,9 +544,9 @@ run_scm_selective_forward <- function(search_state,
 
     cat(sprintf("\n✅ Step %d completed successfully!\n", current_step))
 
-    # Update for next iteration
+    # Update for next iteration (every pass after the first is a continuation)
     current_step <- current_step + 1
-    forward_iteration <- forward_iteration + 1
+    is_continuation <- TRUE
     # Save progress after each step
     save_search_state(search_state, sprintf("scm_selective_step_%d.rds", current_step - 1))
   }
