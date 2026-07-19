@@ -508,7 +508,9 @@ get_param2 <- function(model_number,
                   paste0("Effect of ", cov_name, " level ", level, " on ", param_label)
                 }
               } else if (length(extra) > 0) {
-                paste0("Effect of ", cov_name, " on ", param_label, " (", paste(extra, collapse = "_"), ")")
+                # multi-theta: the theta name(s) attach to the covariate side (e.g.
+                # WT_EMAX), matching how categorical levels attach to the covariate.
+                paste0("Effect of ", paste(c(cov_name, extra), collapse = "_"), " on ", param_label)
               } else {
                 paste0("Effect of ", cov_name, " on ", param_label)
               }
@@ -544,7 +546,9 @@ get_param2 <- function(model_number,
                   paste0(cov_name, " level ", level, "~", param_short)
                 }
               } else if (length(extra) > 0) {
-                paste0(cov_name, "~", param_short, " (", paste(extra, collapse = "_"), ")")
+                # multi-theta: theta name(s) attach to the covariate side (WT_EMAX);
+                # parameter stays after '~'.
+                paste0(paste(c(cov_name, extra), collapse = "_"), "~", param_short)
               } else {
                 paste0(cov_name, "~", param_short)
               }
