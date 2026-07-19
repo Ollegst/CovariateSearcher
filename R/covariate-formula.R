@@ -73,10 +73,12 @@ register_covariate_formula <- function(status, formula, nonmem = NULL,
 # combination is not registered (callers decide how to handle that).
 get_covariate_formula <- function(status, formula) {
   key <- paste(tolower(as.character(status)), tolower(as.character(formula)), sep = ".")
-  if (!exists(key, envir = .covariate_formula_registry, inherits = FALSE)) {
-    return(NULL)
+  if (exists(key, envir = .covariate_formula_registry, inherits = FALSE)) {
+    return(get(key, envir = .covariate_formula_registry, inherits = FALSE))
   }
-  get(key, envir = .covariate_formula_registry, inherits = FALSE)
+  # Not a built-in name: treat FORMULA as a single-factor expression
+  # (e.g. "IMAX*cov/(IC50+cov)"). Returns NULL if it is not a valid expression.
+  parse_covariate_expression(formula)
 }
 
 #' List Registered Covariate Formulas
@@ -87,6 +89,76 @@ get_covariate_formula <- function(status, formula) {
 #' @export
 list_covariate_formulas <- function() {
   sort(ls(.covariate_formula_registry))
+}
+
+# ---- Expression formulas ------------------------------------------------------
+# A FORMULA that is not a built-in name is treated as a single-factor expression
+# written in terms of reserved symbols `cov` (the covariate) and optionally `ref`
+# (its REFERENCE); EVERY other symbol is an estimated parameter (a THETA).
+# Example: "IMAX*cov/(IC50+cov)" -> thetas IMAX, IC50 (order of appearance).
+
+# Operators + math functions an expression may contain. Anything else -- including
+# `if`/`ifelse` -- is rejected, which keeps expressions strictly single-factor.
+.COV_EXPR_ALLOWED <- c("(", "+", "-", "*", "/", "^",
+                       "exp", "log", "log10", "sqrt")
+
+#' Parse a covariate-effect expression into a formula def (or NULL if invalid).
+#' @keywords internal
+#' @noRd
+parse_covariate_expression <- function(formula) {
+  formula <- trimws(as.character(formula))
+  if (length(formula) != 1L || is.na(formula) || formula == "") return(NULL)
+
+  expr <- tryCatch(parse(text = formula)[[1]], error = function(e) NULL)
+  if (is.null(expr)) return(NULL)
+
+  syms   <- all.vars(expr)
+  thetas <- setdiff(syms, c("cov", "ref"))
+  if (length(thetas) == 0L) return(NULL)                  # no estimated parameter
+
+  used <- setdiff(unique(all.names(expr)), syms)          # function/operator names
+  if (length(setdiff(used, .COV_EXPR_ALLOWED)) > 0L) return(NULL)  # disallowed fn
+
+  list(
+    status      = NA_character_,
+    formula     = formula,
+    expr        = expr,
+    theta_names = thetas,
+    categorical = FALSE,
+    init        = "0.1",
+    nonmem = function(cova, ref, n) {
+      paste0(" * (", .translate_expr_to_nonmem(expr, cova, ref, thetas, n), ")")
+    },
+    r_eval = function(cov_val, ref, th) {
+      env <- list(cov = cov_val, ref = ref)
+      for (i in seq_along(thetas)) env[[thetas[i]]] <- th[i]
+      eval(expr, envir = env)
+    }
+  )
+}
+
+# Render a parsed expression to a NONMEM factor string: cov -> covariate variable,
+# ref -> its numeric value, parameter symbols -> THETA(n), THETA(n+1), ...,
+# math functions -> uppercase, and `^` -> `**`.
+.translate_expr_to_nonmem <- function(expr, cova, ref, thetas, n) {
+  walk <- function(node) {
+    if (is.symbol(node)) {
+      nm <- as.character(node)
+      if (nm == "cov") return(as.symbol(cova))
+      if (nm == "ref") return(ref)
+      idx <- match(nm, thetas)
+      if (!is.na(idx)) return(str2lang(paste0("THETA(", n + idx - 1L, ")")))
+      return(node)
+    }
+    if (is.call(node)) {
+      fn     <- as.character(node[[1]])
+      fn_out <- if (fn %in% c("exp", "log", "log10", "sqrt")) toupper(fn) else fn
+      return(as.call(c(as.symbol(fn_out), lapply(as.list(node)[-1], walk))))
+    }
+    node
+  }
+  s <- paste(deparse(walk(expr), width.cutoff = 500L), collapse = " ")
+  gsub("\\^", "**", s)
 }
 
 # ---- Built-in continuous forms (byte-exact mirror of legacy output) -----------

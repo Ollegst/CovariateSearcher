@@ -413,6 +413,16 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   log_function(paste("Covariate form:", cov_status, "/", cov_formula,
                      if (is_categorical) "(categorical, per-level)" else "(single-factor)"))
 
+  # Single-factor expressions with more than one parameter (e.g. Emax/Imax) parse
+  # correctly but need multi-THETA allocation + per-theta tags, which is a later
+  # build step. Guard here so we never write a half-allocated model.
+  if (length(cov_formula_def$theta_names) > 1L) {
+    stop("Multi-theta formula '", cov_formula, "' (",
+         length(cov_formula_def$theta_names), " parameters: ",
+         paste(cov_formula_def$theta_names, collapse = ", "),
+         ") is not yet supported — multi-THETA allocation lands in a later step.")
+  }
+
   # Initial THETA value: prefer an explicit INIT from the covariate_search table
   # (per covariate-parameter row); fall back to the formula-derived default when
   # INIT is absent, NA, or blank. Backward-compatible: tables without an INIT

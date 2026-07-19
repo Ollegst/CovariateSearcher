@@ -655,16 +655,24 @@ generate_tags_from_covariate_search <- function(covariate_search,
     stop(sprintf("Missing required columns: %s", paste(missing_cols, collapse = ", ")))
   }
 
-  # Validate FORMULA values for continuous covariates
-  valid_con_formulas <- c("linear", "power", "exponential")
-  invalid_formulas <- covariate_search_df %>%
-    dplyr::filter(.data$STATUS == "con" & !tolower(.data$FORMULA) %in% valid_con_formulas)
+  # Validate FORMULA for continuous covariates: each must be a built-in shortcut
+  # (linear/power/exponential) OR a valid single-factor expression written in
+  # cov/ref + parameter names (e.g. "EMAX*cov/(EC50+cov)").
+  builtin_con <- c("linear", "power", "exponential")
+  con_idx <- which(tolower(as.character(covariate_search_df$STATUS)) == "con")
+  invalid_formulas <- character(0)
+  for (i in con_idx) {
+    f <- covariate_search_df$FORMULA[i]
+    ok <- tolower(as.character(f)) %in% builtin_con ||
+      !is.null(parse_covariate_expression(f))
+    if (!ok) invalid_formulas <- c(invalid_formulas, as.character(f))
+  }
 
-  if (nrow(invalid_formulas) > 0) {
+  if (length(invalid_formulas) > 0) {
     stop(sprintf(
-      "Invalid FORMULA value(s) for continuous covariates: %s\nValid options are: %s",
-      paste(unique(invalid_formulas$FORMULA), collapse = ", "),
-      paste(valid_con_formulas, collapse = ", ")
+      "Invalid FORMULA for continuous covariate(s): %s\nUse a built-in (%s) or a valid expression in cov/ref + parameter names.",
+      paste(unique(invalid_formulas), collapse = ", "),
+      paste(builtin_con, collapse = ", ")
     ))
   }
 
