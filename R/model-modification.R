@@ -416,8 +416,9 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   # Initial THETA value: prefer an explicit INIT from the covariate_search table
   # (per covariate-parameter row); fall back to the formula-derived default when
   # INIT is absent, NA, or blank. Backward-compatible: tables without an INIT
-  # column behave exactly as before. Applies to the single-THETA path below;
-  # categorical per-level thetas keep their own default.
+  # column behave exactly as before. Used for the single-THETA path and, as one
+  # shared value, for every categorical per-level theta (per-level DIFFERENT
+  # inits are the multi-value INIT, a later step).
   formula_default_init <- cov_formula_def$init
 
   table_init <- if ("INIT" %in% names(temp_cov)) {
@@ -590,7 +591,7 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
     # Multiple THETAs for categorical with >2 levels (excluding reference)
     newthetalines <- purrr::map_chr(1:nrow(thetanmulti), ~ {
       # Use the label from thetanmulti which now contains lookup values or numbers
-      paste0('0.1 ; ', cov_on_param, "_", thetanmulti$label[[.x]], ';  ; RATIO')
+      paste0(initialValuethetacov, ' ; ', cov_on_param, "_", thetanmulti$label[[.x]], ';  ; RATIO')
     })
     newthetaline <- paste0(newthetalines, collapse = '\n')
 
