@@ -33,8 +33,13 @@ frame whose names are covariate columns (e.g. one row of
 }
 \value{
 A \code{data.frame} with an \code{ID} column and only the structural (non-beta)
-theta columns, each already multiplied by the model's covariate factors for
-the supplied scenario. One row per row of \code{individual_thetas}.
+theta columns, each with the model's covariate factors applied for the supplied
+scenario, on the \strong{natural scale}: a log-parameterised parameter (its \verb{$PK}
+value line begins with \code{EXP(...)}, e.g. \code{CL = EXP(TV_CL + ETA)}) is exponentiated
+so \code{natural = EXP(theta) * factors}; normal-scale parameters are unchanged. The
+consuming mrgsolve model must therefore treat these \code{THETA} columns as
+natural-scale structural parameters (no \code{EXP}, no covariate terms). One row per
+row of \code{individual_thetas}.
 }
 \description{
 Reproduces, in R, the covariate transformations written in a NONMEM model and

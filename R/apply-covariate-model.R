@@ -41,8 +41,13 @@
 #' @param models_folder Character. Folder containing the model. Default "models".
 #'
 #' @return A `data.frame` with an `ID` column and only the structural (non-beta)
-#'   theta columns, each already multiplied by the model's covariate factors for
-#'   the supplied scenario. One row per row of `individual_thetas`.
+#'   theta columns, each with the model's covariate factors applied for the supplied
+#'   scenario, on the **natural scale**: a log-parameterised parameter (its `$PK`
+#'   value line begins with `EXP(...)`, e.g. `CL = EXP(TV_CL + ETA)`) is exponentiated
+#'   so `natural = EXP(theta) * factors`; normal-scale parameters are unchanged. The
+#'   consuming mrgsolve model must therefore treat these `THETA` columns as
+#'   natural-scale structural parameters (no `EXP`, no covariate terms). One row per
+#'   row of `individual_thetas`.
 #' @export
 apply_covariate_model <- function(model_name,
                                   covariate_search,
@@ -143,6 +148,19 @@ apply_covariate_model <- function(model_name,
     out
   }
 
+  # A structural parameter is on the LOG scale (natural value = EXP(theta)) when its
+  # $PK value line begins with EXP(...) -- covering EXP(TV+ETA), EXP(THETA), and
+  # EXP(THETA)*EXP(ETA). Normal forms (TV*EXP(ETA), bare THETA) and logit-style forms
+  # (1/(1+EXP(...))) do not, so they are left untransformed. Equation-based on
+  # purpose: the $THETA ;LOG/;RATIO annotation is unreliable (can disagree with the
+  # actual parameterisation, e.g. a ;RATIO-labelled EXP(TV+ETA) parameter).
+  structural_theta_is_log <- function(param) {
+    ln <- pk[grepl(paste0("^\\s*", param, "\\b\\s*="), pk)]
+    if (length(ln) == 0L) return(FALSE)
+    rhs <- trimws(sub(";.*$", "", sub("^[^=]*=", "", ln[length(ln)])))
+    grepl("^EXP\\s*\\(", rhs, ignore.case = TRUE)
+  }
+
   # ---- Derive the join key on the covariate-search table --------------------
   cov_search <- covariate_search
   if (!"cov_to_test" %in% names(cov_search)) {
@@ -152,6 +170,19 @@ apply_covariate_model <- function(model_name,
   beta_names <- theta_names[grepl("^beta_", theta_names)]
 
   result <- individual_thetas
+
+  # Put log-scale structural parameters on the natural scale BEFORE applying
+  # covariate factors, so natural = EXP(theta) * factors. (EXP of an additive-log
+  # covariate term equals its multiplicative factor, so the SAME r_eval factors
+  # apply whether the covariate was written multiplicatively or additively.)
+  # Normal-scale parameters are unchanged. Applies to covariate-free structural
+  # parameters too, so every returned column is natural scale.
+  for (m in structural_idx) {
+    scol <- paste0("THETA", m)
+    if (scol %in% names(result) && structural_theta_is_log(theta_names[m])) {
+      result[[scol]] <- exp(result[[scol]])
+    }
+  }
 
   # ---- Apply each covariate relationship that is present in the model -------
   for (r in seq_len(nrow(cov_search))) {
