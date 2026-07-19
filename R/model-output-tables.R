@@ -483,60 +483,34 @@ get_param2 <- function(model_number,
         ),
         label = dplyr::case_when(
           grepl("^beta_", parameter_names) ~ {
-            # Split the parameter name
+            # Fixed-slot tag: beta_<COV>_<PARAM>[_<theta name(s)> | _<level>].
+            # COV = parts[2], PARAM = parts[3] (single tokens); a trailing NUMERIC
+            # token is a categorical level, otherwise trailing token(s) are the
+            # multi-theta parameter name(s), e.g. beta_WT_CL_EMAX.
             parts <- strsplit(parameter_names, "_")[[1]]
 
-            # beta_COV_PARAM or beta_COV_PARAM_LEVEL
-            # parts[1] = "beta"
-            # parts[2] = covariate name (e.g., "SMOKING")
-            # parts[3:n-1] = parameter name (e.g., "F1" or "CL" or "V")
-            # parts[n] = level (optional, if categorical with >2 levels)
-
             if (length(parts) < 3) {
-              # Malformed name
               NA_character_
             } else {
-              # Check if last part is a numeric level
-              last_part <- parts[length(parts)]
-              is_level <- !is.na(suppressWarnings(as.numeric(last_part)))
+              cov_name    <- parts[2]
+              param_name  <- parts[3]
+              extra       <- if (length(parts) >= 4) parts[4:length(parts)] else character(0)
+              last_part   <- if (length(extra) > 0) extra[length(extra)] else NA_character_
+              is_level    <- !is.na(last_part) && !is.na(suppressWarnings(as.numeric(last_part)))
+              param_label <- if (param_name %in% names(spec_pk)) spec_pk[[param_name]]$label else param_name
 
-              if (is_level && length(parts) >= 4) {
-                # Has level: beta_SMOKING_F1_2
-                # Covariate: parts[2] = "SMOKING"
-                # Parameter: parts[3:(length-1)] = "F1"
-                # Level: parts[length] = "2"
-                cov_name <- parts[2]
-                param_parts <- parts[3:(length(parts)-1)]
-                param_name <- paste(param_parts, collapse = "_")
-                level <- last_part
-
-                # Decode the level to a category name when a lookup is available
+              if (is_level) {
+                level   <- last_part
                 decoded <- decode_cov_level(cov_name, level, lookup)
-                param_label <- if (param_name %in% names(spec_pk)) {
-                  spec_pk[[param_name]]$label
-                } else {
-                  param_name
-                }
-
                 if (!is.na(decoded)) {
                   paste0("Effect of ", decoded, " (", cov_name, ") on ", param_label)
                 } else {
                   paste0("Effect of ", cov_name, " level ", level, " on ", param_label)
                 }
+              } else if (length(extra) > 0) {
+                paste0("Effect of ", cov_name, " on ", param_label, " (", paste(extra, collapse = "_"), ")")
               } else {
-                # No level: beta_AGE_CL
-                # Covariate: parts[2] = "AGE"
-                # Parameter: parts[3:end] = "CL"
-                cov_name <- parts[2]
-                param_parts <- parts[3:length(parts)]
-                param_name <- paste(param_parts, collapse = "_")
-
-                # Look up parameter in spec_pk
-                if (param_name %in% names(spec_pk)) {
-                  paste0("Effect of ", cov_name, " on ", spec_pk[[param_name]]$label)
-                } else {
-                  paste0("Effect of ", cov_name, " on ", param_name)
-                }
+                paste0("Effect of ", cov_name, " on ", param_label)
               }
             }
           },
@@ -548,45 +522,31 @@ get_param2 <- function(model_number,
         ),
         parameter_names = dplyr::case_when(
           grepl("^beta_", parameter_names) ~ {
-            # Same parsing logic for short name
+            # Same fixed-slot parsing for the short name.
             parts <- strsplit(parameter_names, "_")[[1]]
 
             if (length(parts) < 3) {
               parameter_names
             } else {
-              last_part <- parts[length(parts)]
-              is_level <- !is.na(suppressWarnings(as.numeric(last_part)))
+              cov_name    <- parts[2]
+              param_name  <- parts[3]
+              extra       <- if (length(parts) >= 4) parts[4:length(parts)] else character(0)
+              last_part   <- if (length(extra) > 0) extra[length(extra)] else NA_character_
+              is_level    <- !is.na(last_part) && !is.na(suppressWarnings(as.numeric(last_part)))
+              param_short <- if (param_name %in% names(spec_pk)) spec_pk[[param_name]]$short else param_name
 
-              if (is_level && length(parts) >= 4) {
-                # Has level
-                cov_name <- parts[2]
-                param_parts <- parts[3:(length(parts)-1)]
-                param_name <- paste(param_parts, collapse = "_")
-                level <- last_part
-
+              if (is_level) {
+                level   <- last_part
                 decoded <- decode_cov_level(cov_name, level, lookup)
-                param_short <- if (param_name %in% names(spec_pk)) {
-                  spec_pk[[param_name]]$short
-                } else {
-                  param_name
-                }
-
                 if (!is.na(decoded)) {
                   paste0(cov_name, " ", decoded, "~", param_short)
                 } else {
                   paste0(cov_name, " level ", level, "~", param_short)
                 }
+              } else if (length(extra) > 0) {
+                paste0(cov_name, "~", param_short, " (", paste(extra, collapse = "_"), ")")
               } else {
-                # No level
-                cov_name <- parts[2]
-                param_parts <- parts[3:length(parts)]
-                param_name <- paste(param_parts, collapse = "_")
-
-                if (param_name %in% names(spec_pk)) {
-                  paste0(cov_name, "~", spec_pk[[param_name]]$short)
-                } else {
-                  paste0(cov_name, "~", param_name)
-                }
+                paste0(cov_name, "~", param_short)
               }
             }
           },
