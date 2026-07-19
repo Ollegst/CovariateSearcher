@@ -8,7 +8,8 @@ remove_covariate_from_model(
   search_state,
   model_name,
   covariate_tag,
-  save_as_new_model = TRUE
+  save_as_new_model = TRUE,
+  step_number = NULL
 )
 }
 \arguments{
@@ -19,6 +20,10 @@ remove_covariate_from_model(
 \item{covariate_tag}{Character. Covariate tag to remove (e.g., "cov_cl_race")}
 
 \item{save_as_new_model}{Logical. Whether to create new model (default: TRUE)}
+
+\item{step_number}{Integer or NULL. Optional step number for the new model's
+database row. NULL (default) auto-calculates as the parent model's step + 1,
+so covariates removed from the same parent share a step (one round).}
 }
 \value{
 List with updated search_state and operation details

@@ -29,18 +29,17 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag,
   covariate_name <- search_state$tags[[covariate_tag]]
   cat(sprintf("  Covariate: %s\n", covariate_name))
 
-  # Calculate step number BEFORE incrementing counter
-  final_step_number <- if (!is.null(step_number)) {
-    step_number  # Use provided step_number
-  } else {
-    # Auto-calculate for manual additions
-    if (is.null(search_state$search_database) || nrow(search_state$search_database) == 0) {
-      1L
-    } else {
-      current_max <- max(search_state$search_database$step_number, na.rm = TRUE)
-      if (is.na(current_max) || is.infinite(current_max)) 1L else current_max + 1L
-    }
+  # Step number is REQUIRED. The automated search passes it (the phase's current
+  # step); a manual addition must supply it explicitly, because the correct step
+  # depends on which phase/round the user is building into and cannot be guessed
+  # from the parent alone (a model from forward selection must not be silently
+  # assigned to the next backward step, and vice versa).
+  if (is.null(step_number)) {
+    stop("step_number is required. Provide the step number this model belongs to ",
+         "(e.g. the current forward/backward step you are extending). The automated ",
+         "search supplies this for you; manual add/remove must set it explicitly.")
   }
+  final_step_number <- as.integer(step_number)
   cat(sprintf("  Step number: %d\n", final_step_number))
 
   # Find covariate definition
@@ -314,6 +313,61 @@ create_model_info_log <- function(search_state, model_name, parent_model, covari
   )
 
   # Write log file
+  writeLines(log_content, log_file)
+  cat(sprintf("  📝 Model info log created: %s\n", basename(log_file)))
+}
+
+#' Create Removal Info Log File
+#'
+#' @title Create structured info file for a covariate-removal model
+#' @description Writes the same \code{<model>_info.txt} summary as
+#'   \code{\link{create_model_info_log}}, but for a model created by REMOVING a
+#'   covariate: which covariate was removed, which THETA(s) were dropped, and the
+#'   covariates remaining in the model.
+#' @param search_state List containing search state.
+#' @param model_name Character. New (removal) model name.
+#' @param parent_model Character. Parent model name.
+#' @param covariate_name Character. Covariate removed (e.g. "WT_CL").
+#' @param cov_info Data.frame row. Covariate information from search definition.
+#' @param theta_removed Numeric. THETA numbers that were removed.
+#' @param remaining_tags Character. Covariate tags remaining in the new model.
+#' @return NULL (side effect: creates \code{<model>_info.txt}).
+#' @export
+create_removal_info_log <- function(search_state, model_name, parent_model,
+                                    covariate_name, cov_info,
+                                    theta_removed = integer(0),
+                                    remaining_tags = character(0)) {
+
+  timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
+  log_file <- file.path(search_state$models_folder, paste0(model_name, "_info.txt"))
+
+  relationship_type <- dplyr::case_when(
+    cov_info$STATUS == "con" & cov_info$FORMULA == "power" ~ "power relationship",
+    cov_info$STATUS == "con" & cov_info$FORMULA == "linear" ~ "linear relationship",
+    cov_info$STATUS == "con" & cov_info$FORMULA == "exponential" ~ "exponential relationship",
+    cov_info$STATUS == "cat" & cov_info$FORMULA == "linear" ~ "categorical relationship",
+    TRUE ~ paste(cov_info$STATUS, cov_info$FORMULA, "relationship")
+  )
+
+  theta_str     <- if (length(theta_removed) > 0)  paste(theta_removed, collapse = ", ")  else "none"
+  remaining_str <- if (length(remaining_tags) > 0) paste(remaining_tags, collapse = ", ") else "none"
+
+  log_content <- c(
+    sprintf("[%s] Model %s created from %s", timestamp, model_name, parent_model),
+    sprintf("[%s] Removed covariate: %s (%s)", timestamp, covariate_name, relationship_type),
+    sprintf("[%s] Parameter: %s, Covariate: %s", timestamp, cov_info$PARAMETER, cov_info$COVARIATE),
+    sprintf("[%s] THETA(s) removed: %s (remaining THETAs renumbered)", timestamp, theta_str),
+    sprintf("[%s] Status: created (covariate removed)", timestamp),
+    "",
+    "Model Details:",
+    sprintf("- Model file: %s", basename(find_model_file(file.path(search_state$models_folder, model_name)) %||% paste0(model_name, ".ctl"))),
+    sprintf("- BBR YAML: %s.yaml", model_name),
+    sprintf("- Parent model: %s", parent_model),
+    sprintf("- Creation time: %s", timestamp),
+    sprintf("- Covariate type: %s (%s)", cov_info$STATUS, cov_info$FORMULA),
+    sprintf("- Remaining covariates: %s", remaining_str)
+  )
+
   writeLines(log_content, log_file)
   cat(sprintf("  📝 Model info log created: %s\n", basename(log_file)))
 }
@@ -1094,11 +1148,24 @@ strip_covariate_factors <- function(line, theta_nums) {
 #' @param model_name Character. Model name to modify
 #' @param covariate_tag Character. Covariate tag to remove (e.g., "cov_cl_race")
 #' @param save_as_new_model Logical. Whether to create new model (default: TRUE)
+#' @param step_number Integer or NULL. Optional step number for the new model's
+#'   database row. NULL (default) auto-calculates as the parent model's step + 1,
+#'   so covariates removed from the same parent share a step (one round).
 #' @return List with updated search_state and operation details
 #' @export
-remove_covariate_from_model <- function(search_state, model_name, covariate_tag, save_as_new_model = TRUE) {
+remove_covariate_from_model <- function(search_state, model_name, covariate_tag, save_as_new_model = TRUE, step_number = NULL) {
 
   cat(sprintf("[-] Removing covariate %s from model %s", covariate_tag, model_name))
+
+  # Step number is REQUIRED (same contract as add_covariate_to_model): the automated
+  # search supplies it (the current backward step); a manual removal must set it
+  # explicitly rather than have it guessed from the parent, which cannot know the
+  # intended phase/round.
+  if (is.null(step_number)) {
+    stop("step_number is required. Provide the step number this model belongs to ",
+         "(e.g. the current backward step). The automated search supplies this for ",
+         "you; manual add/remove must set it explicitly.")
+  }
 
   # Step 1: Convert tag to beta format (consistent with add_covariate)
   if (!covariate_tag %in% names(search_state$tags)) {
@@ -1344,7 +1411,7 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
       model_name = new_model_name,
       step_description = sprintf("Remove %s", covariate_value),
       phase = "covariate_removal",
-      step_number = max(search_state$search_database$step_number, na.rm = TRUE) + 1,
+      step_number = as.integer(step_number),
       parent_model = model_name,
       covariate_tested = covariate_to_remove,
       action = "remove_covariate",
@@ -1375,6 +1442,17 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
   log_msg(paste("✓ Covariate", covariate_value, "successfully removed"))
   log_msg(paste("Final model:", final_model_name))
   log_msg(paste("Database updated: now has", nrow(search_state$search_database), "models"))
+
+  # Human-readable removal summary (<model>_info.txt), matching the add-side info
+  # log. Only for a newly created model; non-critical -> never abort on failure.
+  if (save_as_new_model) {
+    tryCatch(
+      create_removal_info_log(search_state, final_model_name, model_name,
+                              covariate_value, cov_info,
+                              theta_numbers_to_remove, remaining_tags),
+      error = function(e) cat(sprintf("  Could not write model info log: %s\n", e$message))
+    )
+  }
 
   return(list(
     status = "success",

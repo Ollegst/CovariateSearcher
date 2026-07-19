@@ -136,7 +136,8 @@ run_backward_elimination <- function(search_state,
             search_state = search_state,
             model_name = current_base_model,
             covariate_tag = covariate_tag,
-            save_as_new_model = TRUE
+            save_as_new_model = TRUE,
+            step_number = current_step
           )
         )
       }, error = function(e) {
