@@ -211,6 +211,14 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag,
 
     cat(sprintf("[OK] Model %s created successfully\n", new_model_name))
 
+    # Human-readable creation/change summary (<model>_info.txt), alongside the
+    # technical step-log written above. Non-critical: never abort creation on failure.
+    tryCatch(
+      create_model_info_log(search_state, new_model_name, base_model_id,
+                            covariate_name, matching_cov[1, ]),
+      error = function(e) cat(sprintf("  Could not write model info log: %s\n", e$message))
+    )
+
     return(list(
       status = "success",
       model_name = new_model_name,
@@ -258,21 +266,32 @@ create_model_info_log <- function(search_state, model_name, parent_model, covari
   relationship_type <- dplyr::case_when(
     cov_info$STATUS == "con" & cov_info$FORMULA == "power" ~ "power relationship",
     cov_info$STATUS == "con" & cov_info$FORMULA == "linear" ~ "linear relationship",
+    cov_info$STATUS == "con" & cov_info$FORMULA == "exponential" ~ "exponential relationship",
     cov_info$STATUS == "cat" & cov_info$FORMULA == "linear" ~ "categorical relationship",
     TRUE ~ paste(cov_info$STATUS, cov_info$FORMULA, "relationship")
   )
 
   # Generate formula for display
   if (cov_info$STATUS == "con" & cov_info$FORMULA == "power") {
-    formula_display <- sprintf("* (%s/%s)**THETA(3)", cov_info$COVARIATE, cov_info$REFERENCE)
+    formula_display <- sprintf("* (%s/%s)**THETA(n)", cov_info$COVARIATE, cov_info$REFERENCE)
   } else if (cov_info$STATUS == "con" & cov_info$FORMULA == "linear") {
-    formula_display <- sprintf("* (1 + (%s-%s) * THETA(3))", cov_info$COVARIATE, cov_info$REFERENCE)
+    formula_display <- sprintf("* (1 + (%s-%s) * THETA(n))", cov_info$COVARIATE, cov_info$REFERENCE)
   } else if (cov_info$STATUS == "con" & cov_info$FORMULA == "exponential") {
-    formula_display <- sprintf("* EXP(THETA(N) * (%s-%s))", cov_info$COVARIATE, cov_info$REFERENCE)
+    formula_display <- sprintf("* EXP(THETA(n) * (%s-%s))", cov_info$COVARIATE, cov_info$REFERENCE)
   } else if (cov_info$STATUS == "cat") {
     formula_display <- sprintf("* beta_%s_%s", cov_info$COVARIATE, cov_info$PARAMETER)
   } else {
     formula_display <- "See model file for details"
+  }
+
+  # Initial value for the THETA: use the INIT column when provided, else default.
+  init_display <- if (!is.null(cov_info$INIT) &&
+                      length(cov_info$INIT) == 1 &&
+                      !is.na(cov_info$INIT) &&
+                      trimws(as.character(cov_info$INIT)) != "") {
+    trimws(as.character(cov_info$INIT))
+  } else {
+    "0.1"
   }
 
   # Create log content
@@ -282,7 +301,7 @@ create_model_info_log <- function(search_state, model_name, parent_model, covari
     sprintf("[%s] Parameter: %s, Covariate: %s", timestamp, cov_info$PARAMETER, cov_info$COVARIATE),
     sprintf("[%s] Reference value: %s", timestamp, cov_info$REFERENCE),
     sprintf("[%s] Formula: %s", timestamp, formula_display),
-    sprintf("[%s] THETA added with initial value: 0.1", timestamp),
+    sprintf("[%s] THETA added with initial value: %s", timestamp, init_display),
     sprintf("[%s] Status: created", timestamp),
     "",
     "Model Details:",
@@ -384,28 +403,40 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
     cov_status == "cat" & cov_formula == "power" ~ "2",
     cov_status == "con" & cov_formula == "linear" ~ "3",
     cov_status == "con" & cov_formula == "power" ~ "2",
-    cov_status == "con" & cov_formula == "power1" ~ "5",
-    cov_status == "con" & cov_formula == "power0.75" ~ "6",
     cov_status == "con" & cov_formula == "exponential" ~ "4",
     .default = "Please check covariate status and formula"
   )
 
   log_function(paste("Covariate FLAG:", FLAG))
 
-  initialValuethetacov <- dplyr::case_when(
-    FLAG == "5" ~ "1 FIX",
-    FLAG == "6" ~ "0.75 FIX",
-    .default = "0.1"
-  )
+  # Initial THETA value: prefer an explicit INIT from the covariate_search table
+  # (per covariate-parameter row); fall back to the formula-derived default when
+  # INIT is absent, NA, or blank. Backward-compatible: tables without an INIT
+  # column behave exactly as before. Applies to the single-THETA path below;
+  # categorical per-level thetas keep their own default.
+  formula_default_init <- "0.1"
 
-  log_function(paste("Initial THETA value:", initialValuethetacov))
+  table_init <- if ("INIT" %in% names(temp_cov)) {
+    temp_cov$INIT[temp_cov$COVARIATE == cova]
+  } else {
+    NA_character_
+  }
+
+  initialValuethetacov <- if (length(table_init) == 1 &&
+                              !is.na(table_init) &&
+                              trimws(as.character(table_init)) != "") {
+    trimws(as.character(table_init))
+  } else {
+    formula_default_init
+  }
+
+  log_function(paste("Initial THETA value:", initialValuethetacov,
+                     if (identical(initialValuethetacov, formula_default_init)) "(formula default)" else "(from INIT column)"))
 
   # Generate formula based on FLAG
   if(FLAG == "2") formule <- paste0(' * (',cova,'/',ref,')**THETA(', newtheta ,')')
   if(FLAG == "3") formule <- paste0(' * (1 + (',cova,'-',ref, ') * THETA(',newtheta ,'))')
   if(FLAG == "4") formule <- paste0(" * EXP(THETA(", newtheta, ") * (", cova, "-", ref, "))")
-  if(FLAG == "5") formule <- paste0(' * (',cova,'/',ref,')** THETA(', newtheta ,')')
-  if(FLAG == "6") formule <- paste0(' * (',cova,'/',ref,')** THETA(', newtheta ,')')
 
   # Handle categorical covariates (simplified for core module)
   thetanmulti <- tibble()

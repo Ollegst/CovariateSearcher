@@ -28,8 +28,8 @@
 #'
 #' @param model_name Character. Model name without extension, e.g. "run28".
 #' @param covariate_search Data frame with columns `COVARIATE`, `PARAMETER`,
-#'   `STATUS` ("con"/"cat"), `FORMULA` ("power"/"power1"/"power0.75"/"linear"/
-#'   "exponential"/...), and `REFERENCE`. A `cov_to_test` column is derived from
+#'   `STATUS` ("con"/"cat"), `FORMULA` ("power"/"linear"/"exponential"/...),
+#'   and `REFERENCE`. A `cov_to_test` column is derived from
 #'   `COVARIATE`/`PARAMETER` when absent.
 #' @param individual_thetas Data frame whose columns are named `THETA1`,
 #'   `THETA2`, ... (population + ETA values already combined). Beta columns hold
@@ -202,8 +202,6 @@ apply_covariate_model <- function(model_name,
       factor <- switch(
         formula,
         "power"       = (cov_val / ref) ^ th,
-        "power1"      = (cov_val / ref) ^ th,
-        "power0.75"   = (cov_val / ref) ^ th,
         "linear"      = 1 + (cov_val - ref) * th,
         "exponential" = exp(th * (cov_val - ref)),
         {

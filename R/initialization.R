@@ -656,7 +656,7 @@ generate_tags_from_covariate_search <- function(covariate_search,
   }
 
   # Validate FORMULA values for continuous covariates
-  valid_con_formulas <- c("linear", "power", "power1", "power0.75", "exponential")
+  valid_con_formulas <- c("linear", "power", "exponential")
   invalid_formulas <- covariate_search_df %>%
     dplyr::filter(.data$STATUS == "con" & !tolower(.data$FORMULA) %in% valid_con_formulas)
 
