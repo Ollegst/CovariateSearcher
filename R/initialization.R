@@ -674,8 +674,85 @@ validate_setup <- function(search_state) {
     verbose = TRUE
   )
 
+  validate_param_transformations(
+    covariate_search = search_state$covariate_search,
+    data_file        = search_state$data_file,
+    id_col           = search_state$idcol,
+    model_name       = search_state$base_model,
+    models_folder    = search_state$models_folder
+  )
+
   cat("All validation checks passed!\n")
   search_state
+}
+
+#' Validate parameter transformations for population covariates
+#'
+#' @description
+#' For every parameter that will receive a POPULATION (time-constant) covariate,
+#' checks that the base model writes it in a recognised form -- normal-scale
+#' \code{PARAM = TV * EXP(ETA)} or log-scale \code{PARAM = EXP(TV + ETA)} -- so
+#' \code{model_add_cov} knows whether to render the covariate multiplicatively
+#' (\code{*}) or additively (\code{+}). Fails fast at initialization on any
+#' parameter whose parameterization cannot be classified. Time-varying covariates
+#' are placed on the individual parameter line (always multiplicative) and so do
+#' not require classification.
+#'
+#' @param covariate_search data.frame with COVARIATE, PARAMETER, TIME_DEPENDENT.
+#' @param data_file data.frame with the analysis dataset (for the time-varying check).
+#' @param id_col Character. Subject identifier column name.
+#' @param model_name Character. Base model name (without extension).
+#' @param models_folder Character. Folder containing the model (default "models").
+#' @return Invisibly \code{TRUE} if all population parameters are classifiable.
+#' @export
+validate_param_transformations <- function(covariate_search, data_file, id_col,
+                                           model_name, models_folder = "models") {
+
+  model_path <- file.path(models_folder, model_name)
+  ctl <- if (file.exists(paste0(model_path, ".ctl"))) {
+    paste0(model_path, ".ctl")
+  } else if (file.exists(paste0(model_path, ".mod"))) {
+    paste0(model_path, ".mod")
+  } else {
+    NULL
+  }
+  if (is.null(ctl)) return(invisible(TRUE))   # base-model existence checked elsewhere
+  modelcode <- readLines(ctl, warn = FALSE)
+
+  # A covariate is placed at population level (and thus needs a classifiable
+  # transform) when it is time-CONSTANT: at most one distinct value per subject.
+  # Mirror the data-based check model_add_cov uses.
+  is_time_varying <- function(cov) {
+    if (!cov %in% names(data_file) || !id_col %in% names(data_file)) return(FALSE)
+    lv <- tapply(data_file[[cov]], data_file[[id_col]],
+                 function(x) length(unique(x[!is.na(x)])))
+    isTRUE(max(lv, na.rm = TRUE) > 1)
+  }
+
+  pop_params <- character(0)
+  for (i in seq_len(nrow(covariate_search))) {
+    if (!is_time_varying(as.character(covariate_search$COVARIATE[i]))) {
+      pop_params <- c(pop_params, as.character(covariate_search$PARAMETER[i]))
+    }
+  }
+  pop_params <- unique(pop_params)
+
+  bad <- pop_params[vapply(
+    pop_params,
+    function(p) identical(detect_param_transform(modelcode, p), "unknown"),
+    logical(1)
+  )]
+
+  if (length(bad) > 0) {
+    stop(
+      "Cannot determine the parameterization of parameter(s): ",
+      paste(bad, collapse = ", "),
+      ". Population (time-constant) covariates require the base model to write the ",
+      "parameter as normal-scale '", bad[1], " = TV * EXP(ETA)' or log-scale '",
+      bad[1], " = EXP(TV + ETA)'. Adjust the base model or covariate table."
+    )
+  }
+  invisible(TRUE)
 }
 
 #' Validate base model readiness for covariate search

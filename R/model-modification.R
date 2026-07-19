@@ -448,13 +448,73 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   log_function(paste("Initial THETA value:", initialValuethetacov,
                      if (identical(initialValuethetacov, formula_default_init)) "(formula default)" else "(from INIT column)"))
 
-  # Generate the covariate factor: single-factor forms render from the registry
-  # (byte-identical to the legacy strings); cat.linear keeps the per-level
-  # IF/ELSEIF block that follows.
+  # ---- Placement (population vs individual) & rendering mode -------------------
+  # A time-varying covariate (changes within a subject) is an individual-level
+  # effect -> its factor goes on the individual PARAM line and is ALWAYS
+  # multiplicative (correct for any parameterization). A time-constant covariate
+  # is a population effect -> it goes on the typical-value (TV_) line and is
+  # rendered per the parameter's transformation: multiplicative for a normal-scale
+  # parameter (PARAM = TV*EXP(ETA)), additive for a log-scale one
+  # (PARAM = EXP(TV+ETA)) so the effect is not multiplied into a log value.
+  max_levels <- max(tapply(data_file[[cova]], data_file[[id_var]],
+                           function(x) length(unique(x))), na.rm = TRUE)
+  if (is.infinite(max_levels)) {
+    log_function("WARNING: Could not determine time-varying status - defaulting to non-time-varying")
+    max_levels <- 1
+  }
+  time_varying <- max_levels > 1
+  log_function(paste("Time-varying check:", time_varying, "(max levels:", max_levels, ")"))
+
+  if (time_varying) {
+    op_mode <- "mult"                          # individual level -> multiplicative
+    log_function("Placement: individual level (time-varying) -> multiplicative")
+  } else {
+    param_transform <- detect_param_transform(modelcode, param)
+    log_function(paste("Parameter transformation:", param_transform))
+    if (identical(param_transform, "log")) {
+      op_mode <- "add"
+    } else if (identical(param_transform, "normal")) {
+      op_mode <- "mult"
+    } else {
+      stop("Cannot determine the parameterization of parameter '", param,
+           "' in model '", ref_model, "'. Expected normal-scale '", param,
+           " = TV * EXP(ETA)' or log-scale '", param, " = EXP(TV + ETA)'. ",
+           "Covariate rendering for other parameterizations is not supported.")
+    }
+    log_function(paste("Placement: population level ->",
+                       if (op_mode == "add") "additive (log-scale parameter)" else "multiplicative"))
+  }
+
+  # Generate the covariate factor/term per op_mode: single-factor built-ins render
+  # from the registry -- multiplicative nonmem() for "mult", additive nonmem_log()
+  # for "add". A user expression has no additive form -> it is inserted
+  # multiplicatively (its correctness on a log scale is the user's responsibility).
+  # cat.linear keeps the per-level IF/ELSEIF block below, with the assignment and
+  # join operator switched to the additive form when op_mode is "add".
   thetanmulti <- tibble()
   if (!is_categorical) {
-    formule <- cov_formula_def$nonmem(cova, ref, newtheta)
+    if (op_mode == "add" && !is.null(cov_formula_def$nonmem_log)) {
+      formule <- cov_formula_def$nonmem_log(cova, ref, newtheta)
+    } else {
+      if (op_mode == "add") {
+        log_function(paste0("WARNING: user expression on log-scale parameter '", param,
+                            "' inserted as a multiplicative factor; ensure the expression ",
+                            "is written correctly for the log scale."))
+      }
+      formule <- cov_formula_def$nonmem(cova, ref, newtheta)
+    }
   } else {
+    # Additive (log) categorical uses beta = 0 / THETA and joins with '+';
+    # multiplicative uses beta = 1 / 1+THETA and joins with '*'.
+    if (op_mode == "add") {
+      cat_ref_assign <- "0"
+      cat_nonref_fn  <- function(k) paste0("THETA(", k, ")")
+      combine_op     <- " + "
+    } else {
+      cat_ref_assign <- "1"
+      cat_nonref_fn  <- function(k) paste0("1 + THETA(", k, ")")
+      combine_op     <- " * "
+    }
     # Try to load lookup YAML for categorical labels (optional)
     lookup_values <- NULL
     if (!is.null(resolved_lookup_file) && file.exists(resolved_lookup_file)) {
@@ -484,8 +544,8 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
     }
     uniqueval <- unique(data_file[[cova]])
     newvari <- cov_on_param
-    formule <- paste0(' * ', newvari)
-    ifelcode <- paste0('IF(', cova, '.EQ.', temp_cov$REFERENCE,')THEN\n', newvari, ' = 1\n' )
+    formule <- paste0(combine_op, newvari)
+    ifelcode <- paste0('IF(', cova, '.EQ.', temp_cov$REFERENCE,')THEN\n', newvari, ' = ', cat_ref_assign, '\n' )
 
     uniqueval_with_freq <- data_file %>%
       dplyr::count(!!rlang::parse_expr(cova)) %>%
@@ -521,7 +581,7 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
 
       ifelcode <- paste0(ifelcode,
                          'ELSEIF(', cova, '.EQ.', current_level, ')THEN\n',
-                         newvari, ' = 1 + THETA(', theta_num, ')\n')
+                         newvari, ' = ', cat_nonref_fn(theta_num), '\n')
 
       log_function(paste("Added ELSEIF for", cova, "=", current_level,
                          "using THETA(", theta_num, ")"))
@@ -532,17 +592,6 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   }
 
   log_function(paste("Generated formula:", formule))
-
-  # Check if time-dependent
-  max_levels <- max(tapply(data_file[[cova]], data_file[[id_var]],
-                           function(x) length(unique(x))), na.rm = TRUE)
-  if (is.infinite(max_levels)) {
-    log_function("WARNING: Could not determine time-varying status - defaulting to non-time-varying")
-    max_levels <- 1
-  }
-  time_varying <- max_levels > 1
-
-  log_function(paste("Time-varying check:", time_varying, "(max levels:", max_levels, ")"))
 
   if(time_varying == FALSE) {
     # First try to find TV_ prefixed parameter (typical values)
@@ -1008,15 +1057,22 @@ strip_covariate_factors <- function(line, theta_nums) {
   rhs <- substring(code, eq + 1)
   chars <- strsplit(rhs, "")[[1]]; n <- length(chars)
   if (n == 0L) return(line)
-  depth <- 0L; splits <- integer(0)
+  # Scan at paren depth 0 for additive '+' separators (covariate terms on a
+  # LOG-scale typical value) and multiplicative '*' separators (factors on a
+  # normal-scale value; the '**' power operator is skipped). A parameter line is
+  # one style or the other; if both appear (an additive term that is itself a
+  # product), '+' wins so whole additive terms are split rather than broken apart.
+  depth <- 0L; plus <- integer(0); star <- integer(0)
   for (i in seq_len(n)) {
     ch <- chars[i]
     if (ch == "(") depth <- depth + 1L
     else if (ch == ")") depth <- depth - 1L
-    else if (ch == "*" && depth == 0L &&
+    else if (depth == 0L && ch == "+") plus <- c(plus, i)
+    else if (depth == 0L && ch == "*" &&
              !(i > 1L && chars[i - 1L] == "*") &&
-             !(i < n  && chars[i + 1L] == "*")) splits <- c(splits, i)
+             !(i < n  && chars[i + 1L] == "*")) star <- c(star, i)
   }
+  splits <- if (length(plus) > 0L) plus else star
   if (length(splits) == 0L) return(line)
   starts <- c(1L, splits); ends <- c(splits - 1L, n)
   segs <- vapply(seq_along(starts),
@@ -1159,13 +1215,14 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
   log_msg(paste("THETA numbers to remove:", paste(theta_numbers_to_remove, collapse = ", "))) # nolint: line_length_linter.
 
   # Step 5: Remove covariate effects from parameter equations. Two factor shapes:
-  #   (a) categorical -> a ' * beta_<COV>_<PARAM>' variable factor (its per-level
-  #       THETAs live in the IF/ELSEIF block removed below); and
-  #   (b) everything else -> a ' * (...)' factor referencing one of the removed
-  #       THETAs. strip_covariate_factors() handles (b) uniformly for the built-ins
-  #       (power/linear/exp), user expressions, and multi-parameter forms -- this
-  #       replaces four per-shape regexes that missed linear and expressions.
-  cat_var_re <- paste0("\\s*\\*\\s*", covariate_to_remove, "\\b")
+  #   (a) categorical -> a ' * beta_<COV>_<PARAM>' (normal) or ' + beta_<COV>_<PARAM>'
+  #       (log) variable term (its per-level THETAs live in the IF/ELSEIF block
+  #       removed below); and
+  #   (b) everything else -> a ' * (...)' factor (normal scale) or ' + ...' term
+  #       (log scale) referencing one of the removed THETAs. strip_covariate_factors()
+  #       handles (b) uniformly across built-ins (power/linear/exp), user
+  #       expressions, and both multiplicative and additive placements.
+  cat_var_re <- paste0("\\s*[*+]\\s*", covariate_to_remove, "\\b")
   lines_modified <- 0
   for (i in seq_along(modelcode)) {
     line <- modelcode[i]

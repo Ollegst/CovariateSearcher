@@ -11,7 +11,8 @@ register_covariate_formula(
   nonmem = NULL,
   r_eval = NULL,
   init = "0.1",
-  categorical = FALSE
+  categorical = FALSE,
+  nonmem_log = NULL
 )
 }
 \arguments{
@@ -21,7 +22,7 @@ register_covariate_formula(
 \code{"exponential"}, or a user name such as \code{"logit"}.}
 
 \item{nonmem}{Function \code{(cova, ref, n)} returning the NONMEM factor
-string appended to the structural parameter (e.g.
+string appended MULTIPLICATIVELY to a normal-scale typical value (e.g.
 \code{" * (WT/70)**THETA(5)"}). \code{cova} is the covariate column name,
 \code{ref} the reference value, \code{n} the THETA number.}
 
@@ -35,6 +36,13 @@ beta \code{th}. Must reproduce the math in \code{nonmem}.}
 \item{categorical}{Logical. \code{TRUE} only for multi-level categorical
 forms written as a \code{$PK} \code{IF/ELSEIF} block (\code{nonmem}/
 \code{r_eval} are then unused). Default \code{FALSE}.}
+
+\item{nonmem_log}{Function \code{(cova, ref, n)} returning the ADDITIVE term
+appended to a LOG-scale typical value (e.g. \code{" + THETA(5)*LOG(WT/70)"}),
+used when a time-constant covariate lands on a log-parameterized parameter
+(\code{PARAM = EXP(TV + ETA)}). \code{NULL} (the default, and for user
+expressions) means no additive form is available, so the covariate is written
+multiplicatively regardless of scale.}
 }
 \value{
 Invisibly, the registry key.

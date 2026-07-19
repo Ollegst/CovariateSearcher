@@ -39,7 +39,7 @@
 #' @param formula Character. Formula name, e.g. \code{"power"}, \code{"linear"},
 #'   \code{"exponential"}, or a user name such as \code{"logit"}.
 #' @param nonmem Function \code{(cova, ref, n)} returning the NONMEM factor
-#'   string appended to the structural parameter (e.g.
+#'   string appended MULTIPLICATIVELY to a normal-scale typical value (e.g.
 #'   \code{" * (WT/70)**THETA(5)"}). \code{cova} is the covariate column name,
 #'   \code{ref} the reference value, \code{n} the THETA number.
 #' @param r_eval Function \code{(cov_val, ref, th)} returning the numeric factor
@@ -50,11 +50,17 @@
 #' @param categorical Logical. \code{TRUE} only for multi-level categorical
 #'   forms written as a \code{$PK} \code{IF/ELSEIF} block (\code{nonmem}/
 #'   \code{r_eval} are then unused). Default \code{FALSE}.
+#' @param nonmem_log Function \code{(cova, ref, n)} returning the ADDITIVE term
+#'   appended to a LOG-scale typical value (e.g. \code{" + THETA(5)*LOG(WT/70)"}),
+#'   used when a time-constant covariate lands on a log-parameterized parameter
+#'   (\code{PARAM = EXP(TV + ETA)}). \code{NULL} (the default, and for user
+#'   expressions) means no additive form is available, so the covariate is written
+#'   multiplicatively regardless of scale.
 #' @return Invisibly, the registry key.
 #' @export
 register_covariate_formula <- function(status, formula, nonmem = NULL,
                                         r_eval = NULL, init = "0.1",
-                                        categorical = FALSE) {
+                                        categorical = FALSE, nonmem_log = NULL) {
   status  <- tolower(as.character(status))
   formula <- tolower(as.character(formula))
   key <- paste(status, formula, sep = ".")
@@ -64,7 +70,8 @@ register_covariate_formula <- function(status, formula, nonmem = NULL,
     nonmem      = nonmem,
     r_eval      = r_eval,
     init        = init,
-    categorical = categorical
+    categorical = categorical,
+    nonmem_log  = nonmem_log
   ), envir = .covariate_formula_registry)
   invisible(key)
 }
@@ -89,6 +96,51 @@ get_covariate_formula <- function(status, formula) {
 #' @export
 list_covariate_formulas <- function() {
   sort(ls(.covariate_formula_registry))
+}
+
+# ---- Parameter transformation detection ---------------------------------------
+# Classify how a structural parameter carries its between-subject random effect,
+# which decides whether a population (time-constant) covariate is written
+# multiplicatively or additively:
+#   "normal" -> PARAM = TV * EXP(ETA)          (typical value on natural scale)
+#   "log"    -> PARAM = EXP(TV + ETA)          (typical value on log scale)
+#   "unknown"-> an ETA that is neither (exotic; callers reject it)
+# Robust to models that already carry covariates: it inspects the EXP() that
+# directly wraps the parameter's ETA and asks whether a typical-value term
+# (anything besides ETA) sits inside that SAME EXP.
+
+# Return the content inside the first EXP(...) whose body contains an ETA(...),
+# paren-balanced; NA if the parameter's ETA is not wrapped in an EXP at all.
+.exp_inner_containing_eta <- function(rhs) {
+  starts <- gregexpr("EXP\\(", rhs, ignore.case = TRUE)[[1]]
+  if (length(starts) == 0L || starts[1] == -1L) return(NA_character_)
+  chars <- strsplit(rhs, "")[[1]]; n <- length(chars)
+  for (s in starts) {
+    open  <- s + 3L                          # position of '(' in "EXP("
+    depth <- 0L; end <- NA_integer_
+    for (i in open:n) {
+      if (chars[i] == "(") depth <- depth + 1L
+      else if (chars[i] == ")") { depth <- depth - 1L; if (depth == 0L) { end <- i; break } }
+    }
+    if (is.na(end)) next
+    inner <- paste(chars[(open + 1L):(end - 1L)], collapse = "")
+    if (grepl("\\bETA\\(", inner)) return(inner)   # \b so THETA( is not matched as ETA(
+  }
+  NA_character_
+}
+
+# Classify parameter `param`'s transformation from the model code lines.
+detect_param_transform <- function(modelcode, param) {
+  idx <- grep(paste0("^\\s*", param, "\\b\\s*=.*\\bETA\\("), modelcode)
+  if (length(idx) == 0L) return("normal")    # no IIV on this parameter -> multiplicative default
+  line  <- modelcode[idx[length(idx)]]
+  rhs   <- trimws(sub(";.*$", "", sub("^[^=]*=", "", line)))
+  inner <- .exp_inner_containing_eta(rhs)
+  if (is.na(inner)) return("unknown")        # ETA present but not inside EXP() -> exotic
+  # Is there a typical-value term (anything besides ETA) inside the same EXP?
+  wo <- gsub("\\bETA\\(\\s*\\d+\\s*\\)", "", inner)
+  wo <- gsub("[-+*/^() \t]", "", wo)
+  if (nzchar(wo)) "log" else "normal"
 }
 
 # ---- Expression formulas ------------------------------------------------------
@@ -191,24 +243,31 @@ parse_named_init <- function(init_str, theta_names) {
 
 # ---- Built-in continuous forms (byte-exact mirror of legacy output) -----------
 
-# power:   * (COV/ref)**THETA(n)      init "0.1"
+# For a log-scale (population) parameter the same effect is written ADDITIVELY on
+# the log typical value: multiplicative factor f -> additive term LOG(f), which
+# for the built-ins simplifies to the closed forms below.
+# power:   normal  * (COV/ref)**THETA(n)   |  log  + THETA(n)*LOG(COV/ref)
 .cov_pow_nonmem <- function(cova, ref, n) paste0(' * (', cova, '/', ref, ')**THETA(', n, ')')
+.cov_pow_logadd <- function(cova, ref, n) paste0(' + THETA(', n, ')*LOG(', cova, '/', ref, ')')
 .cov_pow_reval  <- function(cov_val, ref, th) (cov_val / ref) ^ th
 register_covariate_formula("con", "power",
-                           nonmem = .cov_pow_nonmem, r_eval = .cov_pow_reval, init = "0.1")
+                           nonmem = .cov_pow_nonmem, r_eval = .cov_pow_reval, init = "0.1",
+                           nonmem_log = .cov_pow_logadd)
 
-# linear:   * (1 + (COV-ref) * THETA(n))      init "0.1"
+# linear:   normal  * (1 + (COV-ref) * THETA(n))   |  log  + LOG(1 + (COV-ref) * THETA(n))
 register_covariate_formula(
   "con", "linear",
-  nonmem = function(cova, ref, n) paste0(' * (1 + (', cova, '-', ref, ') * THETA(', n, '))'),
+  nonmem     = function(cova, ref, n) paste0(' * (1 + (', cova, '-', ref, ') * THETA(', n, '))'),
+  nonmem_log = function(cova, ref, n) paste0(' + LOG(1 + (', cova, '-', ref, ') * THETA(', n, '))'),
   r_eval = function(cov_val, ref, th) 1 + (cov_val - ref) * th,
   init   = "0.1"
 )
 
-# exponential:   * EXP(THETA(n) * (COV-ref))     init "0.1"
+# exponential:   normal  * EXP(THETA(n) * (COV-ref))   |  log  + THETA(n) * (COV-ref)
 register_covariate_formula(
   "con", "exponential",
-  nonmem = function(cova, ref, n) paste0(' * EXP(THETA(', n, ') * (', cova, '-', ref, '))'),
+  nonmem     = function(cova, ref, n) paste0(' * EXP(THETA(', n, ') * (', cova, '-', ref, '))'),
+  nonmem_log = function(cova, ref, n) paste0(' + THETA(', n, ') * (', cova, '-', ref, ')'),
   r_eval = function(cov_val, ref, th) exp(th * (cov_val - ref)),
   init   = "0.1"
 )
@@ -218,7 +277,8 @@ register_covariate_formula(
 # Identical rendering to con.power and NOT categorical -- this is what keeps the
 # read side (apply_covariate_model) from mistreating it as an IF/ELSEIF block.
 register_covariate_formula("cat", "power",
-                           nonmem = .cov_pow_nonmem, r_eval = .cov_pow_reval, init = "0.1")
+                           nonmem = .cov_pow_nonmem, r_eval = .cov_pow_reval, init = "0.1",
+                           nonmem_log = .cov_pow_logadd)
 
 # cat.linear: multi-level categorical written as a $PK IF/ELSEIF per-level block
 # (one beta per non-reference level). Flagged categorical; the per-level logic
