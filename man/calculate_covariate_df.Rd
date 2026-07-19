@@ -12,7 +12,7 @@ calculate_covariate_df(covariate_name, covariate_search)
 \item{covariate_search}{Data frame. Covariate search configuration}
 }
 \value{
-Integer. Degrees of freedom (>= 1).
+Integer. Degrees of freedom (0 for a fully-FIX covariate).
 }
 \description{
 Degrees of freedom = the number of ESTIMATED (non-FIX) parameters
@@ -24,10 +24,9 @@ and user expressions): the number of non-FIX thetas the formula
 declares (1 for the built-ins; N for an N-parameter expression such as
 \code{EMAX*cov/(EC50+cov)}), minus any marked \code{FIX} in \code{INIT}.
 }
-A fully-FIX covariate has a true df of 0 (its effect adds no estimated
-parameter, so it should be judged by direct OFV comparison rather than the
-chi-square p-value test); until that path exists it is clamped to df=1 here so
-the p-value threshold call does not fail.
+A fully-FIX covariate has df 0 (it adds no estimated parameter): it is then
+selected by DIRECT OFV comparison — \code{pvalue_to_threshold(df = 0)} returns
+a threshold of 0, so it is kept whenever the model improves (any ΔOFV > 0).
 }
 \details{
 Calculate Degrees of Freedom for Covariate

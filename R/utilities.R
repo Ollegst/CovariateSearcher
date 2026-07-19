@@ -93,8 +93,11 @@ extract_covariate_name_from_tag <- function(tag) {
 #'   - Categorical covariates: df = number of levels - 1
 #'
 #' @param p_value Numeric. Significance level (e.g., 0.05, 0.01)
-#' @param df Integer. Degrees of freedom for chi-square test (default: 1)
-#' @return Numeric. Chi-square critical value (ΔOFV threshold)
+#' @param df Integer. Degrees of freedom for chi-square test (default: 1).
+#'   \code{df = 0} (a fully-FIX covariate that adds no estimated parameter) returns
+#'   a threshold of 0, so the covariate is selected by direct OFV comparison
+#'   (kept if the model improves, i.e. any ΔOFV > 0).
+#' @return Numeric. Chi-square critical value (ΔOFV threshold); 0 when df = 0.
 #' @examples
 #' # Standard forward selection (p = 0.05, df = 1)
 #' pvalue_to_threshold(0.05, df = 1)  # Returns 3.84
@@ -114,8 +117,15 @@ pvalue_to_threshold <- function(p_value, df = 1) {
   if (p_value <= 0 || p_value >= 1) {
     stop("p_value must be between 0 and 1")
   }
-  if (!is.numeric(df) || length(df) != 1 || df < 1) {
-    stop("df must be a positive integer")
+  if (!is.numeric(df) || length(df) != 1 || df < 0) {
+    stop("df must be a non-negative integer")
+  }
+
+  # df == 0: a fully-FIX covariate adds no estimated parameter, so it is judged by
+  # direct OFV comparison (kept if the model improves) -> threshold 0, i.e. any
+  # ΔOFV > 0 counts. Consistent with qchisq(1 - p, df) -> 0 as df -> 0.
+  if (df == 0) {
+    return(0)
   }
 
   # Convert p-value to chi-square critical value
@@ -137,13 +147,12 @@ pvalue_to_threshold <- function(p_value, df = 1) {
 #'           declares (1 for the built-ins; N for an N-parameter expression such as
 #'           \code{EMAX*cov/(EC50+cov)}), minus any marked \code{FIX} in \code{INIT}.
 #'   }
-#'   A fully-FIX covariate has a true df of 0 (its effect adds no estimated
-#'   parameter, so it should be judged by direct OFV comparison rather than the
-#'   chi-square p-value test); until that path exists it is clamped to df=1 here so
-#'   the p-value threshold call does not fail.
+#'   A fully-FIX covariate has df 0 (it adds no estimated parameter): it is then
+#'   selected by DIRECT OFV comparison — \code{pvalue_to_threshold(df = 0)} returns
+#'   a threshold of 0, so it is kept whenever the model improves (any ΔOFV > 0).
 #' @param covariate_name Character. Name of the covariate
 #' @param covariate_search Data frame. Covariate search configuration
-#' @return Integer. Degrees of freedom (>= 1).
+#' @return Integer. Degrees of freedom (0 for a fully-FIX covariate).
 #' @export
 calculate_covariate_df <- function(covariate_name, covariate_search) {
 
@@ -181,7 +190,7 @@ calculate_covariate_df <- function(covariate_name, covariate_search) {
     init_fix <- !is.na(table_init) && trimws(table_init) != "" &&
                 grepl("FIX", table_init, ignore.case = TRUE)
     df <- if (init_fix) 0L else (n_levels - 1L)
-    return(max(1L, as.integer(df)))
+    return(as.integer(df))
   }
 
   # Single-factor form: count the non-FIX thetas the formula declares. Built-in
@@ -201,6 +210,6 @@ calculate_covariate_df <- function(covariate_name, covariate_search) {
   }
   n_fix <- sum(grepl("FIX", init_vals, ignore.case = TRUE))
   df    <- n_thetas - n_fix
-  return(max(1L, as.integer(df)))
+  return(as.integer(df))
 }
 

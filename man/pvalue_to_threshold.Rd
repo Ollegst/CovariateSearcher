@@ -9,10 +9,13 @@ pvalue_to_threshold(p_value, df = 1)
 \arguments{
 \item{p_value}{Numeric. Significance level (e.g., 0.05, 0.01)}
 
-\item{df}{Integer. Degrees of freedom for chi-square test (default: 1)}
+\item{df}{Integer. Degrees of freedom for chi-square test (default: 1).
+\code{df = 0} (a fully-FIX covariate that adds no estimated parameter) returns
+a threshold of 0, so the covariate is selected by direct OFV comparison
+(kept if the model improves, i.e. any ΔOFV > 0).}
 }
 \value{
-Numeric. Chi-square critical value (ΔOFV threshold)
+Numeric. Chi-square critical value (ΔOFV threshold); 0 when df = 0.
 }
 \description{
 Converts a p-value to the corresponding chi-square ΔOFV threshold
