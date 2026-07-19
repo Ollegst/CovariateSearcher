@@ -66,17 +66,17 @@ extract_covariate_name_from_tag <- function(tag) {
     return(NA_character_)
   }
 
-  # Expected format: beta_COVARIATE_PARAMETER
-  # Split by underscore
+  # Fixed-slot tag: beta_<COV>_<PARAM>[_<theta names> | _<level>]. COVARIATE is
+  # always parts[2] (COV/PARAM are single tokens, enforced at validation), so this
+  # works for the base tag (beta_COV_PARAM), a categorical per-level tag
+  # (beta_COV_PARAM_LEVEL) and a multi-theta tag (beta_COV_PARAM_THETANAME).
   parts <- strsplit(tag, "_")[[1]]
 
-  # Should have 3 parts: "beta", "COVARIATE", "PARAMETER"
-  if (length(parts) != 3) {
-    warning(sprintf("Tag format unexpected: %s (expected beta_COVARIATE_PARAMETER)", tag))
+  if (length(parts) < 3) {
+    warning(sprintf("Tag format unexpected: %s (expected beta_COVARIATE_PARAMETER...)", tag))
     return(NA_character_)
   }
 
-  # Return the middle part (covariate name)
   return(parts[2])
 }
 
@@ -127,13 +127,23 @@ pvalue_to_threshold <- function(p_value, df = 1) {
 
 #' Calculate Degrees of Freedom for Covariate
 #'
-#' @title Determine degrees of freedom based on covariate type
-#' @description Calculates the degrees of freedom for a covariate based on whether
-#'   it is continuous or categorical. For categorical covariates, df equals the
-#'   number of levels minus 1.
+#' @title Determine degrees of freedom for a covariate's likelihood-ratio test
+#' @description Degrees of freedom = the number of ESTIMATED (non-FIX) parameters
+#'   the covariate adds:
+#'   \itemize{
+#'     \item per-level categorical (cat.linear): number of levels - 1;
+#'     \item single-factor forms (continuous power/linear/exponential, cat.power,
+#'           and user expressions): the number of non-FIX thetas the formula
+#'           declares (1 for the built-ins; N for an N-parameter expression such as
+#'           \code{EMAX*cov/(EC50+cov)}), minus any marked \code{FIX} in \code{INIT}.
+#'   }
+#'   A fully-FIX covariate has a true df of 0 (its effect adds no estimated
+#'   parameter, so it should be judged by direct OFV comparison rather than the
+#'   chi-square p-value test); until that path exists it is clamped to df=1 here so
+#'   the p-value threshold call does not fail.
 #' @param covariate_name Character. Name of the covariate
 #' @param covariate_search Data frame. Covariate search configuration
-#' @return Integer. Degrees of freedom (1 for continuous, n_levels-1 for categorical)
+#' @return Integer. Degrees of freedom (>= 1).
 #' @export
 calculate_covariate_df <- function(covariate_name, covariate_search) {
 
@@ -149,33 +159,48 @@ calculate_covariate_df <- function(covariate_name, covariate_search) {
   # Get first matching row (in case of multiple parameters)
   cov_row <- cov_row[1, ]
 
-  # Check if categorical
-  if (cov_row$STATUS == "cat") {
-    # Parse levels (format: "0;1;2")
+  status  <- tolower(as.character(cov_row$STATUS))
+  formula <- as.character(cov_row$FORMULA)
+  def     <- tryCatch(get_covariate_formula(status, formula), error = function(e) NULL)
+  if (is.null(def)) {
+    warning(sprintf("Unknown formula for covariate %s, defaulting to df=1", covariate_name))
+    return(1L)
+  }
+
+  table_init <- if ("INIT" %in% names(cov_row)) as.character(cov_row$INIT) else NA_character_
+
+  # Per-level categorical (cat.linear): one theta per non-reference level.
+  if (isTRUE(def$categorical)) {
     levels_str <- cov_row$LEVELS
-    if (is.na(levels_str) || levels_str == "") {
+    if (is.na(levels_str) || trimws(levels_str) == "") {
       warning(sprintf("Categorical covariate %s has no levels specified, defaulting to df=1",
                       covariate_name))
       return(1L)
     }
-
-    # Count levels
-    levels_vec <- strsplit(levels_str, ";")[[1]]
-    n_levels <- length(levels_vec)
-
-    # df = number of levels - 1
-    df <- n_levels - 1L
-
-    if (df < 1) {
-      warning(sprintf("Categorical covariate %s has only 1 level, defaulting to df=1", covariate_name))
-      return(1L)
-    }
-
-    return(df)
-
-  } else {
-    # Continuous covariate: df = 1
-    return(1L)
+    n_levels <- length(strsplit(levels_str, ";")[[1]])
+    init_fix <- !is.na(table_init) && trimws(table_init) != "" &&
+                grepl("FIX", table_init, ignore.case = TRUE)
+    df <- if (init_fix) 0L else (n_levels - 1L)
+    return(max(1L, as.integer(df)))
   }
+
+  # Single-factor form: count the non-FIX thetas the formula declares. Built-in
+  # power/linear/exponential/cat.power declare no theta_names -> they are single
+  # theta; an expression declares one name per estimated parameter.
+  theta_names <- def$theta_names
+  if (is.null(theta_names) || length(theta_names) == 0L) {
+    n_thetas  <- 1L
+    init_vals <- if (!is.na(table_init) && trimws(table_init) != "") table_init else (def$init %||% "0.1")
+  } else {
+    n_thetas  <- length(theta_names)
+    init_vals <- if (n_thetas == 1L) {
+      if (!is.na(table_init) && trimws(table_init) != "") table_init else "0.1"
+    } else {
+      parse_named_init(table_init, theta_names)
+    }
+  }
+  n_fix <- sum(grepl("FIX", init_vals, ignore.case = TRUE))
+  df    <- n_thetas - n_fix
+  return(max(1L, as.integer(df)))
 }
 

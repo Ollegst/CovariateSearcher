@@ -523,6 +523,23 @@ validate_covariate_search_table <- function(covariate_search, data_file) {
     stop("covariate_search contains missing or empty values in PARAMETER")
   }
 
+  # Single-token COVARIATE / PARAMETER: the beta_<COV>_<PARAM>[_<theta|level>] tag
+  # convention is positional (parts[2]=covariate, parts[3]=parameter, trailing
+  # tokens = theta names or a numeric level), so names must not contain underscores
+  # or they cannot be parsed back unambiguously.
+  bad_cov <- unique(as.character(covariate_search$COVARIATE)[grepl("_", covariate_search$COVARIATE)])
+  bad_par <- unique(as.character(covariate_search$PARAMETER)[grepl("_", covariate_search$PARAMETER)])
+  if (length(bad_cov) > 0 || length(bad_par) > 0) {
+    stop(
+      "COVARIATE and PARAMETER must be single tokens without underscores ",
+      "(the beta_<COV>_<PARAM> tag convention is positional). Offending ",
+      if (length(bad_cov) > 0) paste0("COVARIATE(s): ", paste(bad_cov, collapse = ", ")) else "",
+      if (length(bad_cov) > 0 && length(bad_par) > 0) "; " else "",
+      if (length(bad_par) > 0) paste0("PARAMETER(s): ", paste(bad_par, collapse = ", ")) else "",
+      "."
+    )
+  }
+
   if (!"cov_to_test" %in% names(covariate_search)) {
     covariate_search$cov_to_test <- paste0(
       "beta_",

@@ -2,7 +2,7 @@
 % Please edit documentation in R/utilities.R
 \name{calculate_covariate_df}
 \alias{calculate_covariate_df}
-\title{Determine degrees of freedom based on covariate type}
+\title{Determine degrees of freedom for a covariate's likelihood-ratio test}
 \usage{
 calculate_covariate_df(covariate_name, covariate_search)
 }
@@ -12,12 +12,22 @@ calculate_covariate_df(covariate_name, covariate_search)
 \item{covariate_search}{Data frame. Covariate search configuration}
 }
 \value{
-Integer. Degrees of freedom (1 for continuous, n_levels-1 for categorical)
+Integer. Degrees of freedom (>= 1).
 }
 \description{
-Calculates the degrees of freedom for a covariate based on whether
-it is continuous or categorical. For categorical covariates, df equals the
-number of levels minus 1.
+Degrees of freedom = the number of ESTIMATED (non-FIX) parameters
+the covariate adds:
+\itemize{
+\item per-level categorical (cat.linear): number of levels - 1;
+\item single-factor forms (continuous power/linear/exponential, cat.power,
+and user expressions): the number of non-FIX thetas the formula
+declares (1 for the built-ins; N for an N-parameter expression such as
+\code{EMAX*cov/(EC50+cov)}), minus any marked \code{FIX} in \code{INIT}.
+}
+A fully-FIX covariate has a true df of 0 (its effect adds no estimated
+parameter, so it should be judged by direct OFV comparison rather than the
+chi-square p-value test); until that path exists it is clamped to df=1 here so
+the p-value threshold call does not fail.
 }
 \details{
 Calculate Degrees of Freedom for Covariate
