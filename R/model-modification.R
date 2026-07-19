@@ -210,14 +210,6 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag,
 
     cat(sprintf("[OK] Model %s created successfully\n", new_model_name))
 
-    # Human-readable creation/change summary (<model>_info.txt), alongside the
-    # technical step-log written above. Non-critical: never abort creation on failure.
-    tryCatch(
-      create_model_info_log(search_state, new_model_name, base_model_id,
-                            covariate_name, matching_cov[1, ]),
-      error = function(e) cat(sprintf("  Could not write model info log: %s\n", e$message))
-    )
-
     return(list(
       status = "success",
       model_name = new_model_name,
@@ -244,132 +236,6 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag,
     ))
   })
 
-}
-#' Create Model Info Log File
-#'
-#' @title Create detailed log file for model creation
-#' @description Creates a timestamped log file with model creation details
-#' @param search_state List containing search state
-#' @param model_name Character. New model name
-#' @param parent_model Character. Parent model name
-#' @param covariate_name Character. Covariate added
-#' @param cov_info Data.frame. Covariate information from search definition
-#' @return NULL (side effect: creates log file)
-#' @export
-create_model_info_log <- function(search_state, model_name, parent_model, covariate_name, cov_info) {
-
-  timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
-  log_file <- file.path(search_state$models_folder, paste0(model_name, "_info.txt"))
-
-  # Determine relationship type
-  relationship_type <- dplyr::case_when(
-    cov_info$STATUS == "con" & cov_info$FORMULA == "power" ~ "power relationship",
-    cov_info$STATUS == "con" & cov_info$FORMULA == "linear" ~ "linear relationship",
-    cov_info$STATUS == "con" & cov_info$FORMULA == "exponential" ~ "exponential relationship",
-    cov_info$STATUS == "cat" & cov_info$FORMULA == "linear" ~ "categorical relationship",
-    TRUE ~ paste(cov_info$STATUS, cov_info$FORMULA, "relationship")
-  )
-
-  # Generate formula for display
-  if (cov_info$STATUS == "con" & cov_info$FORMULA == "power") {
-    formula_display <- sprintf("* (%s/%s)**THETA(n)", cov_info$COVARIATE, cov_info$REFERENCE)
-  } else if (cov_info$STATUS == "con" & cov_info$FORMULA == "linear") {
-    formula_display <- sprintf("* (1 + (%s-%s) * THETA(n))", cov_info$COVARIATE, cov_info$REFERENCE)
-  } else if (cov_info$STATUS == "con" & cov_info$FORMULA == "exponential") {
-    formula_display <- sprintf("* EXP(THETA(n) * (%s-%s))", cov_info$COVARIATE, cov_info$REFERENCE)
-  } else if (cov_info$STATUS == "cat") {
-    formula_display <- sprintf("* beta_%s_%s", cov_info$COVARIATE, cov_info$PARAMETER)
-  } else {
-    formula_display <- "See model file for details"
-  }
-
-  # Initial value for the THETA: use the INIT column when provided, else default.
-  init_display <- if (!is.null(cov_info$INIT) &&
-                      length(cov_info$INIT) == 1 &&
-                      !is.na(cov_info$INIT) &&
-                      trimws(as.character(cov_info$INIT)) != "") {
-    trimws(as.character(cov_info$INIT))
-  } else {
-    "0.1"
-  }
-
-  # Create log content
-  log_content <- c(
-    sprintf("[%s] Model %s created from %s", timestamp, model_name, parent_model),
-    sprintf("[%s] Added covariate: %s (%s)", timestamp, covariate_name, relationship_type),
-    sprintf("[%s] Parameter: %s, Covariate: %s", timestamp, cov_info$PARAMETER, cov_info$COVARIATE),
-    sprintf("[%s] Reference value: %s", timestamp, cov_info$REFERENCE),
-    sprintf("[%s] Formula: %s", timestamp, formula_display),
-    sprintf("[%s] THETA added with initial value: %s", timestamp, init_display),
-    sprintf("[%s] Status: created", timestamp),
-    "",
-    "Model Details:",
-    sprintf("- Model file: %s", basename(find_model_file(file.path(search_state$models_folder, model_name)) %||% paste0(model_name, ".ctl"))),
-    sprintf("- BBR YAML: %s.yaml", model_name),
-    sprintf("- Parent model: %s", parent_model),
-    sprintf("- Creation time: %s", timestamp),
-    sprintf("- Covariate type: %s (%s)", cov_info$STATUS, cov_info$FORMULA),
-    sprintf("- Time dependent: %s", cov_info$TIME_DEPENDENT)
-  )
-
-  # Write log file
-  writeLines(log_content, log_file)
-  cat(sprintf("  📝 Model info log created: %s\n", basename(log_file)))
-}
-
-#' Create Removal Info Log File
-#'
-#' @title Create structured info file for a covariate-removal model
-#' @description Writes the same \code{<model>_info.txt} summary as
-#'   \code{\link{create_model_info_log}}, but for a model created by REMOVING a
-#'   covariate: which covariate was removed, which THETA(s) were dropped, and the
-#'   covariates remaining in the model.
-#' @param search_state List containing search state.
-#' @param model_name Character. New (removal) model name.
-#' @param parent_model Character. Parent model name.
-#' @param covariate_name Character. Covariate removed (e.g. "WT_CL").
-#' @param cov_info Data.frame row. Covariate information from search definition.
-#' @param theta_removed Numeric. THETA numbers that were removed.
-#' @param remaining_tags Character. Covariate tags remaining in the new model.
-#' @return NULL (side effect: creates \code{<model>_info.txt}).
-#' @export
-create_removal_info_log <- function(search_state, model_name, parent_model,
-                                    covariate_name, cov_info,
-                                    theta_removed = integer(0),
-                                    remaining_tags = character(0)) {
-
-  timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
-  log_file <- file.path(search_state$models_folder, paste0(model_name, "_info.txt"))
-
-  relationship_type <- dplyr::case_when(
-    cov_info$STATUS == "con" & cov_info$FORMULA == "power" ~ "power relationship",
-    cov_info$STATUS == "con" & cov_info$FORMULA == "linear" ~ "linear relationship",
-    cov_info$STATUS == "con" & cov_info$FORMULA == "exponential" ~ "exponential relationship",
-    cov_info$STATUS == "cat" & cov_info$FORMULA == "linear" ~ "categorical relationship",
-    TRUE ~ paste(cov_info$STATUS, cov_info$FORMULA, "relationship")
-  )
-
-  theta_str     <- if (length(theta_removed) > 0)  paste(theta_removed, collapse = ", ")  else "none"
-  remaining_str <- if (length(remaining_tags) > 0) paste(remaining_tags, collapse = ", ") else "none"
-
-  log_content <- c(
-    sprintf("[%s] Model %s created from %s", timestamp, model_name, parent_model),
-    sprintf("[%s] Removed covariate: %s (%s)", timestamp, covariate_name, relationship_type),
-    sprintf("[%s] Parameter: %s, Covariate: %s", timestamp, cov_info$PARAMETER, cov_info$COVARIATE),
-    sprintf("[%s] THETA(s) removed: %s (remaining THETAs renumbered)", timestamp, theta_str),
-    sprintf("[%s] Status: created (covariate removed)", timestamp),
-    "",
-    "Model Details:",
-    sprintf("- Model file: %s", basename(find_model_file(file.path(search_state$models_folder, model_name)) %||% paste0(model_name, ".ctl"))),
-    sprintf("- BBR YAML: %s.yaml", model_name),
-    sprintf("- Parent model: %s", parent_model),
-    sprintf("- Creation time: %s", timestamp),
-    sprintf("- Covariate type: %s (%s)", cov_info$STATUS, cov_info$FORMULA),
-    sprintf("- Remaining covariates: %s", remaining_str)
-  )
-
-  writeLines(log_content, log_file)
-  cat(sprintf("  📝 Model info log created: %s\n", basename(log_file)))
 }
 #'
 #' @title Core functionality to add covariate to NONMEM model file with enhanced logging
@@ -1235,6 +1101,12 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
     log_msg(paste("Modifying existing model:", model_to_modify))
   }
 
+  # On any failure while editing the control stream (Steps 3-12), persist the log
+  # so far as <model>_remove_<cov>_error_log.txt (mirrors the add-side error log),
+  # then let the error propagate. withCallingHandlers writes without altering control
+  # flow, and search_state edits inside the block persist to the success return.
+  withCallingHandlers({
+
   # Step 3: Read and modify the model file
   modelcode <- read_model_file(search_state, model_to_modify)
   original_file_path <- attr(modelcode, "file_path")
@@ -1438,21 +1310,20 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
                         paste0(final_model_name, "_remove_", covariate_value, "_log.txt"))
   writeLines(log_messages, log_file)
 
+  }, error = function(e) {
+    err_file <- file.path(search_state$models_folder,
+                          paste0(model_to_modify, "_remove_", covariate_value, "_error_log.txt"))
+    tryCatch({
+      writeLines(c(log_messages, "", paste0("[ERROR] Covariate removal failed: ", e$message)),
+                 err_file)
+      cat(sprintf("  📝 Error log saved: %s\n", basename(err_file)))
+    }, error = function(e2) NULL)
+  })
+
   cat(" Complete. Created", final_model_name, "\n")
   log_msg(paste("✓ Covariate", covariate_value, "successfully removed"))
   log_msg(paste("Final model:", final_model_name))
   log_msg(paste("Database updated: now has", nrow(search_state$search_database), "models"))
-
-  # Human-readable removal summary (<model>_info.txt), matching the add-side info
-  # log. Only for a newly created model; non-critical -> never abort on failure.
-  if (save_as_new_model) {
-    tryCatch(
-      create_removal_info_log(search_state, final_model_name, model_name,
-                              covariate_value, cov_info,
-                              theta_numbers_to_remove, remaining_tags),
-      error = function(e) cat(sprintf("  Could not write model info log: %s\n", e$message))
-    )
-  }
 
   return(list(
     status = "success",
