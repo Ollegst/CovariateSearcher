@@ -121,9 +121,9 @@
 #' @param checkpoint Character or NULL. Full path to a per-step checkpoint
 #'   \code{.rds} to load when \code{search_state} is NULL (per-step files live in
 #'   \code{<models_folder>/scm_rds/}, e.g.
-#'   \code{models/scm_rds/scm_selective_step_3.rds},
-#'   \code{models/scm_rds/backward_step_5.rds},
-#'   \code{models/scm_rds/scm_forward_step_2.rds}).
+#'   \code{models/scm_rds/03_forward_done.rds},
+#'   \code{models/scm_rds/05_backward_done.rds},
+#'   \code{models/scm_rds/02_forward_created.rds}).
 #' @param scm_type Character or NULL. "standard" or "selective". Required for a
 #'   forward resume (the database does not record which forward method was used);
 #'   ignored for a backward resume.
@@ -156,7 +156,7 @@ continue_search <- function(search_state = NULL,
     if (!file.exists(checkpoint)) {
       stop(sprintf("continue_search(): checkpoint file not found: %s\n  ",
                    checkpoint),
-           "Pass a full path (e.g. models/scm_rds/scm_selective_step_3.rds) ",
+           "Pass a full path (e.g. models/scm_rds/03_forward_done.rds) ",
            "or the in-memory search_state.")
     }
     search_state <- load_search_state(checkpoint)

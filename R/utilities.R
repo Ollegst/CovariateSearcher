@@ -81,6 +81,24 @@ extract_covariate_name_from_tag <- function(tag) {
 }
 
 
+#' Standardised checkpoint filename: \code{NN_phase_event.rds}
+#'
+#' @description Zero-padded step number first so the \code{scm_rds/} folder sorts
+#'   chronologically and the highest \code{NN} is the latest checkpoint.
+#'   \code{phase} is "forward"/"backward"/"redemption"/"final"; \code{event} is
+#'   "created" (models made, pre-submit), "done" (step evaluated), "complete"
+#'   (phase/run end), "running" (mid-step snapshot) or "error".
+#' @param step Step number (coerced to a zero-padded integer; NA/non-finite → 00).
+#' @param phase,event Character labels (see description).
+#' @return A filename string like \code{"02_forward_done.rds"}.
+#' @keywords internal
+.scm_checkpoint_name <- function(step, phase, event) {
+  n <- suppressWarnings(as.integer(step))
+  if (length(n) != 1L || is.na(n)) n <- 0L
+  sprintf("%02d_%s_%s.rds", n, phase, event)
+}
+
+
 #' Convert P-Value to Chi-Square ΔOFV Threshold
 #'
 #' @title Calculate ΔOFV threshold from p-value for likelihood ratio test

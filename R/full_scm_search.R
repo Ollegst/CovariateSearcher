@@ -198,7 +198,9 @@ run_automated_scm_testing <- function(search_state,
     # current_model would be updated to the result of backward elimination
 
     if (save_checkpoints) {
-      checkpoint_file <- paste0(checkpoint_prefix, "_initial_backward_complete.rds")
+      checkpoint_file <- .scm_checkpoint_name(
+        suppressWarnings(max(search_state$search_database$step_number, na.rm = TRUE)),
+        "backward", "complete")
       save_search_state(search_state, checkpoint_file)
       checkpoint_files <- c(checkpoint_files, checkpoint_file)
     }
@@ -250,7 +252,9 @@ run_automated_scm_testing <- function(search_state,
     # Handle forward selection failure
     if (is.null(forward_results)) {
       if (save_checkpoints) {
-        error_file <- paste0(checkpoint_prefix, "_forward_error.rds")
+        error_file <- .scm_checkpoint_name(
+          suppressWarnings(max(search_state$search_database$step_number, na.rm = TRUE)),
+          "forward", "error")
         save_search_state(search_state, error_file)
         checkpoint_files <- c(checkpoint_files, error_file)
       }
@@ -289,7 +293,9 @@ run_automated_scm_testing <- function(search_state,
 
     # Save checkpoint after forward selection
     if (save_checkpoints) {
-      checkpoint_file <- paste0(checkpoint_prefix, "_forward_complete.rds")
+      checkpoint_file <- .scm_checkpoint_name(
+        suppressWarnings(max(search_state$search_database$step_number, na.rm = TRUE)),
+        "forward", "complete")
       save_search_state(search_state, checkpoint_file)
       checkpoint_files <- c(checkpoint_files, checkpoint_file)
       cat(sprintf("💾 Forward selection checkpoint saved: %s\n", checkpoint_file))
@@ -350,7 +356,9 @@ run_automated_scm_testing <- function(search_state,
       cat(sprintf("🎯 Final model after backward elimination: %s\n", current_model))
 
       if (save_checkpoints) {
-        checkpoint_file <- paste0(checkpoint_prefix, "_final_backward_complete.rds")
+        checkpoint_file <- .scm_checkpoint_name(
+          suppressWarnings(max(search_state$search_database$step_number, na.rm = TRUE)),
+          "backward", "complete")
         save_search_state(search_state, checkpoint_file)
         checkpoint_files <- c(checkpoint_files, checkpoint_file)
       }
@@ -523,7 +531,9 @@ run_automated_scm_testing <- function(search_state,
 
   # Save final checkpoint
   if (save_checkpoints) {
-    final_checkpoint <- paste0(checkpoint_prefix, "_final_complete.rds")
+    final_checkpoint <- .scm_checkpoint_name(
+      suppressWarnings(max(search_state$search_database$step_number, na.rm = TRUE)),
+      "final", "complete")
     save_search_state(search_state, final_checkpoint)
     checkpoint_files <- c(checkpoint_files, final_checkpoint)
     cat(sprintf("💾 Final checkpoint saved: %s\n", final_checkpoint))

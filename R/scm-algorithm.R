@@ -249,7 +249,7 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id = NULL,
 
   # Checkpoint the freshly-created step BEFORE submitting, so a crash while the
   # models are running still leaves this step's rows on disk for continue_search().
-  save_search_state(search_state, sprintf("scm_forward_step_%d_created.rds", current_step_number))
+  save_search_state(search_state, .scm_checkpoint_name(current_step_number, "forward", "created"))
 
   # Step 1b: Submit and wait for completion
   step1_completion <- submit_and_wait_for_step(
@@ -329,7 +329,7 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id = NULL,
   cat(sprintf("🎯 Step %d complete - new base model: %s\n", current_step_number, current_base_model))
 
   # Save progress after each step (resume point for continue_search)
-  save_search_state(search_state, sprintf("scm_forward_step_%d.rds", current_step_number))
+  save_search_state(search_state, .scm_checkpoint_name(current_step_number, "forward", "done"))
 
   # ITERATIVE FORWARD STEPS (continue from current step)
   while (TRUE) {
@@ -371,7 +371,7 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id = NULL,
     }
 
     # Checkpoint the freshly-created step BEFORE submitting (resume/reconstruct point).
-    save_search_state(search_state, sprintf("scm_forward_step_%d_created.rds", current_step_number))
+    save_search_state(search_state, .scm_checkpoint_name(current_step_number, "forward", "created"))
 
     # Submit and wait for completion
     step_completion <- submit_and_wait_for_step(
@@ -426,7 +426,7 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id = NULL,
     cat(sprintf("🎯 Step %d complete - new base model: %s\n", current_step_number, current_base_model))
 
     # Save progress after each step (resume point for continue_search)
-    save_search_state(search_state, sprintf("scm_forward_step_%d.rds", current_step_number))
+    save_search_state(search_state, .scm_checkpoint_name(current_step_number, "forward", "done"))
   }
 
 

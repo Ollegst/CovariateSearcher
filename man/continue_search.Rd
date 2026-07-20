@@ -24,9 +24,9 @@ Typically the state you just refreshed with
 \item{checkpoint}{Character or NULL. Full path to a per-step checkpoint
 \code{.rds} to load when \code{search_state} is NULL (per-step files live in
 \code{<models_folder>/scm_rds/}, e.g.
-\code{models/scm_rds/scm_selective_step_3.rds},
-\code{models/scm_rds/backward_step_5.rds},
-\code{models/scm_rds/scm_forward_step_2.rds}).}
+\code{models/scm_rds/03_forward_done.rds},
+\code{models/scm_rds/05_backward_done.rds},
+\code{models/scm_rds/02_forward_created.rds}).}
 
 \item{scm_type}{Character or NULL. "standard" or "selective". Required for a
 forward resume (the database does not record which forward method was used);

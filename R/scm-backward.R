@@ -176,7 +176,7 @@ run_backward_elimination <- function(search_state,
 
     # Checkpoint the freshly-created step BEFORE submitting, so a crash while the
     # models are running still leaves this step's rows on disk for continue_search().
-    save_search_state(search_state, sprintf("backward_step_%d_created.rds", current_step))
+    save_search_state(search_state, .scm_checkpoint_name(current_step, "backward", "created"))
 
     # Submit and monitor models
     cat(sprintf("\n🚀 Submitting Step %d models...\n", current_step))
@@ -258,8 +258,9 @@ run_backward_elimination <- function(search_state,
     }
 
     # Save progress
-    save_search_state(search_state, sprintf("backward_step_%d.rds", current_step - 1))
-    cat(sprintf("💾 Progress saved to: backward_step_%d.rds\n", current_step - 1))
+    save_search_state(search_state, .scm_checkpoint_name(current_step - 1, "backward", "done"))
+    cat(sprintf("💾 Progress saved to: %s\n",
+                .scm_checkpoint_name(current_step - 1, "backward", "done")))
   }
 
   # Calculate total time
@@ -302,8 +303,11 @@ run_backward_elimination <- function(search_state,
   }
 
   # Save final state
-  save_search_state(search_state, "backward_elimination_complete.rds")
-  cat("\n💾 Final state saved to: backward_elimination_complete.rds\n")
+  final_name <- .scm_checkpoint_name(
+    suppressWarnings(max(search_state$search_database$step_number, na.rm = TRUE)),
+    "backward", "complete")
+  save_search_state(search_state, final_name)
+  cat(sprintf("\n💾 Final state saved to: %s\n", final_name))
 
   cat(paste(rep("=", 60), collapse=""), "\n")
 

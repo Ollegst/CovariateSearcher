@@ -464,7 +464,7 @@ run_scm_selective_forward <- function(search_state,
 
     # Checkpoint the freshly-created step BEFORE submitting, so a crash while the
     # models are running still leaves this step's rows on disk for continue_search().
-    save_search_state(search_state, sprintf("scm_selective_step_%d_created.rds", current_step))
+    save_search_state(search_state, .scm_checkpoint_name(current_step, "forward", "created"))
 
     # Submit and monitor models
     cat(sprintf("\n🚀 Submitting Step %d models...\n", current_step))
@@ -552,7 +552,7 @@ run_scm_selective_forward <- function(search_state,
     current_step <- current_step + 1
     is_continuation <- TRUE
     # Save progress after each step
-    save_search_state(search_state, sprintf("scm_selective_step_%d.rds", current_step - 1))
+    save_search_state(search_state, .scm_checkpoint_name(current_step - 1, "forward", "done"))
   }
 
   # Store last step number from main loop
@@ -783,7 +783,7 @@ run_scm_selective_forward <- function(search_state,
         cat(sprintf("Created %d redemption models\n", redemption_result$successful_count))
 
         # Checkpoint the freshly-created step BEFORE submitting (resume/reconstruct point).
-        save_search_state(search_state, sprintf("scm_selective_step_%d_created.rds", current_step_number))
+        save_search_state(search_state, .scm_checkpoint_name(current_step_number, "redemption", "created"))
 
         # Submit redemption models
         redemption_submission <- submit_and_wait_for_step(
@@ -849,7 +849,7 @@ run_scm_selective_forward <- function(search_state,
         redemption_step <- redemption_step + 1
 
         # Save progress
-        save_search_state(search_state, sprintf("scm_redemption_%d.rds", redemption_step - 1))
+        save_search_state(search_state, .scm_checkpoint_name(current_step_number, "redemption", "done"))
       }
 
       cat("\n✅ Redemption phase complete!\n")
@@ -938,8 +938,11 @@ run_scm_selective_forward <- function(search_state,
   cat(sprintf("\n⏱️  Total time: %.1f minutes\n", forward_time))
 
   # Save final state
-  save_search_state(search_state, "scm_selective_complete.rds")
-  cat("\n💾 Final state saved to: scm_selective_complete.rds\n")
+  final_name <- .scm_checkpoint_name(
+    suppressWarnings(max(search_state$search_database$step_number, na.rm = TRUE)),
+    "forward", "complete")
+  save_search_state(search_state, final_name)
+  cat(sprintf("\n💾 Final state saved to: %s\n", final_name))
 
   return(list(
     search_state = search_state,

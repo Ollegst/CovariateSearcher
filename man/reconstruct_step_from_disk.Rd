@@ -30,7 +30,7 @@ in the database and have an OFV (needed to compute \code{delta_ofv}).}
 
 \item{checkpoint}{Character or NULL. Full path to a checkpoint \code{.rds} to
 load when \code{search_state} is NULL — you point it at the correct file
-(e.g. \code{models/scm_rds/scm_forward_step_1.rds}).}
+(e.g. \code{models/scm_rds/02_forward_created.rds}).}
 
 \item{models_folder}{Character or NULL. Override the models folder; defaults to
 the loaded state's \code{models_folder}.}

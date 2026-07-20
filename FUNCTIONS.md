@@ -315,6 +315,7 @@ _YAML/model-name helpers + SCM statistics (p-value→ΔOFV thresholds, covariate
 |---|---|---|---|---|---|---|
 | `clean_dir(models_folder="models")` | ✓ | Delete all `WK_*` NONMEM working files | folder | `integer(1)` count | **file deletion** (`file.remove`); `cat` | — |
 | `extract_covariate_name_from_tag(tag)` | ✓ | Covariate name from `beta_COV_PARAM` | tag | `character(1)` or `NA` | `warning` | called by evaluation/selection/validation |
+| `.scm_checkpoint_name(step, phase, event)` | · | `scm_rds/` checkpoint filename `NN_phase_event.rds` — zero-padded step first so the folder sorts chronologically and highest `NN` is the latest | step, phase, event | `character(1)` | none | called by every `save_search_state` site (fwd/bwd/selective/redemption/monitor/full-SCM) |
 | `pvalue_to_threshold(p_value, df=1)` | ✓ | p-value → χ² ΔOFV threshold via `qchisq` | p, df | `numeric(1)` | `stop()` | called widely |
 | `calculate_covariate_df(covariate_name, covariate_search)` | ✓ | df=1 continuous, n_levels−1 categorical (`LEVELS` split on `;`) | name, table | `integer(1)` | `warning` | called widely |
 

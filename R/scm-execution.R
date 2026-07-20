@@ -668,9 +668,18 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
       break  # THIS BREAK IS NOW INSIDE A LOOP!
     }
 
-    # Save intermediate state periodically
+    # Save intermediate state periodically (rolling within-step snapshot)
     if (update_count %% 5 == 0) {
-      save_search_state(search_state, sprintf("monitoring_update_%d.rds", update_count))
+      cur_step  <- suppressWarnings(max(search_state$search_database$step_number, na.rm = TRUE))
+      step_phase <- search_state$search_database$phase[
+        !is.na(search_state$search_database$step_number) &
+          search_state$search_database$step_number == cur_step]
+      phase_lbl <- if (any(grepl("backward|removal", step_phase, ignore.case = TRUE))) {
+        "backward"
+      } else {
+        "forward"
+      }
+      save_search_state(search_state, .scm_checkpoint_name(cur_step, phase_lbl, "running"))
       cat("💾 Progress saved\n")
     }
 

@@ -40,7 +40,7 @@
 #'   \code{base_model}) or "backward" (each model \emph{removes} one).
 #' @param checkpoint Character or NULL. Full path to a checkpoint \code{.rds} to
 #'   load when \code{search_state} is NULL — you point it at the correct file
-#'   (e.g. \code{models/scm_rds/scm_forward_step_1.rds}).
+#'   (e.g. \code{models/scm_rds/02_forward_created.rds}).
 #' @param models_folder Character or NULL. Override the models folder; defaults to
 #'   the loaded state's \code{models_folder}.
 #' @return The updated \code{search_state}, with the step's rows registered and
