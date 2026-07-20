@@ -62,6 +62,11 @@ elimination follows.
 \item \strong{Backward} — re-evaluates the last step's removal models and
 continues elimination from the winner.
 }
+If the interrupted step's models are on disk but missing from the loaded
+checkpoint (the run died before that step was saved), they are registered
+automatically first via \code{\link{reconstruct_step_from_disk}} — base
+model, direction and step number are detected from the files, so you still
+only supply \code{scm_type}/\code{full_scm}.
 The forward method (\code{scm_type}) and \code{full_scm} are passed as
 arguments — you choose them when you launch a run, and the database does not
 record which forward method was used. Thresholds default to the state's

@@ -110,6 +110,11 @@
 #'     \item \strong{Backward} — re-evaluates the last step's removal models and
 #'       continues elimination from the winner.
 #'   }
+#'   If the interrupted step's models are on disk but missing from the loaded
+#'   checkpoint (the run died before that step was saved), they are registered
+#'   automatically first via \code{\link{reconstruct_step_from_disk}} — base
+#'   model, direction and step number are detected from the files, so you still
+#'   only supply \code{scm_type}/\code{full_scm}.
 #'   The forward method (\code{scm_type}) and \code{full_scm} are passed as
 #'   arguments — you choose them when you launch a run, and the database does not
 #'   record which forward method was used. Thresholds default to the state's
@@ -177,6 +182,17 @@ continue_search <- function(search_state = NULL,
 
   cat("🔁 CONTINUE SEARCH\n")
   cat(paste(rep("=", 60), collapse = ""), "\n")
+
+  # ---- 2b. Auto-heal: if the interrupted step's models are on disk but missing
+  #          from the saved database, register them (base/direction/step are all
+  #          auto-detected from the files). Stops with a clear message if the
+  #          on-disk models are ambiguous, so nothing is mis-registered. --------
+  unregistered <- .scm_unregistered_models(search_state)
+  if (length(unregistered) > 0) {
+    cat(sprintf("\n🔧 %d model(s) on disk are not in the saved database — registering the interrupted step...\n",
+                length(unregistered)))
+    search_state <- reconstruct_step_from_disk(search_state = search_state)
+  }
 
   # ---- 3. Find the last recorded step and re-sync it from files -----------
   last_step <- suppressWarnings(max(search_state$search_database$step_number, na.rm = TRUE))

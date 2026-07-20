@@ -6,34 +6,32 @@
 \usage{
 reconstruct_step_from_disk(
   search_state = NULL,
-  step_number,
-  base_model,
-  direction = c("forward", "backward"),
+  step_number = NULL,
+  base_model = NULL,
+  direction = NULL,
   checkpoint = NULL,
   models_folder = NULL
 )
 }
 \arguments{
-\item{search_state}{List or NULL. The search state to augment (takes
-precedence) — typically loaded from the newest checkpoint that predates the
-crashed step. If NULL, \code{checkpoint} is loaded instead.}
+\item{search_state}{List or NULL. State to augment (takes precedence); if
+NULL, \code{checkpoint} is loaded.}
 
-\item{step_number}{Integer. The step number to assign to the reconstructed
-models (the interrupted step; e.g. the forward step after the last saved one).}
+\item{step_number}{Integer or NULL. Override the auto-detected step number
+(\code{max(step) + 1}).}
 
-\item{base_model}{Character. The model the step was built from — the forward
-base for an add-step, or the model being reduced for a removal-step. Must be
-in the database and have an OFV (needed to compute \code{delta_ofv}).}
+\item{base_model}{Character or NULL. Override the auto-detected base (the
+candidates' common \code{based_on} parent). Must be in the database.}
 
-\item{direction}{Character. "forward" (each model \emph{adds} one covariate to
-\code{base_model}) or "backward" (each model \emph{removes} one).}
+\item{direction}{"forward"/"backward" or NULL. Override the auto-detected
+direction.}
 
-\item{checkpoint}{Character or NULL. Full path to a checkpoint \code{.rds} to
-load when \code{search_state} is NULL — you point it at the correct file
-(e.g. \code{models/scm_rds/02_forward_created.rds}).}
+\item{checkpoint}{Character or NULL. Path to a checkpoint \code{.rds} to load
+when \code{search_state} is NULL (e.g.
+\code{models/scm_rds/03_forward_done.rds}).}
 
-\item{models_folder}{Character or NULL. Override the models folder; defaults to
-the loaded state's \code{models_folder}.}
+\item{models_folder}{Character or NULL. Override the models folder; defaults
+to the loaded state's \code{models_folder}.}
 }
 \value{
 The updated \code{search_state}, with the step's rows registered and
@@ -41,25 +39,31 @@ their results read from files. Models that do not read back as
 \code{"completed"} are reported so you can rerun them before resuming.
 }
 \description{
-Fallback for resuming a search whose interrupted step is present
-on disk but absent from every saved checkpoint (the run crashed before the
-step was checkpointed). It scans the models folder for model directories not
-yet in the database, keeps the ones that differ from \code{base_model} by
-exactly one covariate in the requested \code{direction}, inserts a database
-row for each (with the same \code{phase}/\code{action}/\code{covariate_tested}
-a live run would write), advances \code{model_counter} past everything on
-disk, and reads each model's results from its files (filling \code{ofv},
-\code{status} and \code{delta_ofv}). After this you can call
-\code{\link{continue_search}} on the returned state.
+Fallback for resuming a search whose interrupted step is on disk
+but missing from every saved checkpoint. It finds the model directories not
+yet in the database and, from the files alone, works out:
+\itemize{
+\item \strong{base_model} — the step's parent, from each model's recorded
+\code{based_on} (all candidates must share one parent);
+\item \strong{direction} — "forward" if the models \emph{add} a covariate
+versus the base, "backward" if they \emph{remove} one (all must agree);
+\item \strong{step_number} — \code{max(step) + 1}, the number the live
+search would assign next.
+}
+It inserts a database row per model (same \code{phase}/\code{action}/
+\code{covariate_tested} a live run writes), resets \code{model_counter}, and
+reads each model's results from its files (filling \code{ofv}/\code{status}/
+\code{delta_ofv}). \code{\link{continue_search}} calls this automatically
+when it detects such a gap, so you rarely call it directly.
 
-This is deliberately \strong{user-driven}: a technical/cluster failure can
-only be detected and fixed (rerun) by you, so you supply the \code{step_number},
-\code{base_model} and \code{direction} rather than have the function guess.
-The covariate each model tests is derived from its own \code{.yaml} tags
-(\code{setdiff} against the base), never from a display or checkpoint.
+Each detection can be overridden with the matching argument. If the
+candidates disagree (more than one parent, or a mix of add and remove) it
+stops and asks you to be explicit rather than guess. A cluster/technical
+failure still can't be detected from files, so you must rerun any dropped
+model before resuming.
 }
 \details{
-Re-register an SCM step's models from disk
+Re-register an SCM step's models from disk (auto-detected)
 }
 \seealso{
 \code{\link{continue_search}}
