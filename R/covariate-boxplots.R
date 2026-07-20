@@ -55,11 +55,21 @@ utils::globalVariables(c("y", "facet_grp", "xlev", "Freq"))
 #'   multi-page PDF containing every plot generated in this call (one page
 #'   per parameter type x covariate combination, in the order processed),
 #'   directly under `output_folder`. Filename is
-#'   "<drug>-<type1>-<type2>-...-<HHMM>.pdf", e.g.
+#'   "<prefix><drug>-<type1>-<type2>-...-<HHMM>.pdf", e.g.
 #'   "Camizestrant-AUC-Cmax-Cmin-1405.pdf", where HHMM is the current time.
+#' @param prefix optional string prepended to every output filename (both the
+#'   per-plot image files and the combined PDF), so different simulation runs
+#'   do not overwrite each other in the same folder. `NULL`/`""` (default) adds
+#'   nothing. E.g. `prefix = "run19"` gives
+#'   "run19-<drug>-<covariate>-<type>.emf".
+#' @param output_format character vector, subset of c("emf","png"); which
+#'   image format(s) to save each per-plot figure as. Default both. `.emf` is
+#'   written with [devEMF::emf()], `.png` with the [ggplot2::ggsave()] default
+#'   device. (The combined multi-page file is always a PDF.)
 #'
 #' @return A nested list: results[[type]][[covariate]] = the faceted ggplot
-#'   object (also saved to disk as .emf). Returned invisibly.
+#'   object (also saved to disk as .emf/.png per `output_format`). Returned
+#'   invisibly.
 #'
 #' @examples
 #' \dontrun{
@@ -98,9 +108,17 @@ create_covariate_boxplots <- function(data,
                                       height = NULL,
                                       base_size = 10,
                                       verbose = TRUE,
-                                      combined_pdf = TRUE) {
+                                      combined_pdf = TRUE,
+                                      prefix = NULL,
+                                      output_format = c("emf", "png")) {
 
   type <- match.arg(type, choices = c("AUC", "Cmax", "Cmin"), several.ok = TRUE)
+  output_format <- match.arg(output_format, choices = c("emf", "png"),
+                             several.ok = TRUE)
+
+  # Optional filename prefix so different simulation runs do not overwrite each
+  # other in the same folder (e.g. prefix = "run19" -> run19-<drug>-<cov>-<type>).
+  pfx <- if (is.null(prefix) || !nzchar(trimws(prefix))) "" else paste0(trimws(prefix), "-")
 
   if (is.null(con) && is.null(cat)) {
     stop("At least one of `con` or `cat` must be supplied.")
@@ -283,17 +301,22 @@ create_covariate_boxplots <- function(data,
 
       results[[t]][[covariate]] <- combined
 
-      fname <- file.path(output_folder, t, paste0(drug, "-", covariate, "-", t, ".emf"))
-      ggsave(
-        filename = fname,
-        plot     = combined,
-        device   = devEMF::emf,
-        width    = fig_w,
-        height   = fig_h
-      )
+      base_name <- paste0(pfx, drug, "-", covariate, "-", t)
+      saved <- character(0)
+      for (fmt in output_format) {
+        fname <- file.path(output_folder, t, paste0(base_name, ".", fmt))
+        if (fmt == "emf") {
+          ggsave(filename = fname, plot = combined, device = devEMF::emf,
+                 width = fig_w, height = fig_h)
+        } else {
+          ggsave(filename = fname, plot = combined,
+                 width = fig_w, height = fig_h)
+        }
+        saved <- c(saved, fname)
+      }
 
       if (verbose) {
-        cat(sprintf("    done -> %s\n", fname))
+        cat(sprintf("    done -> %s\n", paste(saved, collapse = ", ")))
         flush(stdout())
       }
     }
@@ -307,7 +330,7 @@ create_covariate_boxplots <- function(data,
 
   if (combined_pdf) {
     hhmm <- format(Sys.time(), "%H%M")
-    pdf_name <- paste0(drug, "-", paste(type, collapse = "-"), "-", hhmm, ".pdf")
+    pdf_name <- paste0(pfx, drug, "-", paste(type, collapse = "-"), "-", hhmm, ".pdf")
     pdf_path <- file.path(output_folder, pdf_name)
 
     if (verbose) {

@@ -18,7 +18,9 @@ create_covariate_boxplots(
   height = NULL,
   base_size = 10,
   verbose = TRUE,
-  combined_pdf = TRUE
+  combined_pdf = TRUE,
+  prefix = NULL,
+  output_format = c("emf", "png")
 )
 }
 \arguments{
@@ -65,12 +67,24 @@ parameter type / covariate combination is processed.}
 multi-page PDF containing every plot generated in this call (one page
 per parameter type x covariate combination, in the order processed),
 directly under \code{output_folder}. Filename is
-"\if{html}{\out{<drug>}}-\if{html}{\out{<type1>}}-\if{html}{\out{<type2>}}-...-\if{html}{\out{<HHMM>}}.pdf", e.g.
+"\if{html}{\out{<prefix>}}\if{html}{\out{<drug>}}-\if{html}{\out{<type1>}}-\if{html}{\out{<type2>}}-...-\if{html}{\out{<HHMM>}}.pdf", e.g.
 "Camizestrant-AUC-Cmax-Cmin-1405.pdf", where HHMM is the current time.}
+
+\item{prefix}{optional string prepended to every output filename (both the
+per-plot image files and the combined PDF), so different simulation runs
+do not overwrite each other in the same folder. \code{NULL}/\code{""} (default) adds
+nothing. E.g. \code{prefix = "run19"} gives
+"run19-\if{html}{\out{<drug>}}-\if{html}{\out{<covariate>}}-\if{html}{\out{<type>}}.emf".}
+
+\item{output_format}{character vector, subset of c("emf","png"); which
+image format(s) to save each per-plot figure as. Default both. \code{.emf} is
+written with \code{\link[devEMF:emf]{devEMF::emf()}}, \code{.png} with the \code{\link[ggplot2:ggsave]{ggplot2::ggsave()}} default
+device. (The combined multi-page file is always a PDF.)}
 }
 \value{
 A nested list: results[\link{type}][\link{covariate}] = the faceted ggplot
-object (also saved to disk as .emf). Returned invisibly.
+object (also saved to disk as .emf/.png per \code{output_format}). Returned
+invisibly.
 }
 \description{
 Builds boxplots of an exposure metric across covariate groups. Continuous
