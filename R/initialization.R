@@ -777,6 +777,33 @@ validate_param_transformations <- function(covariate_search, data_file, id_col,
   }
   pop_params <- unique(pop_params)
 
+  # A malformed parameter definition (unbalanced parentheses) silently mis-detects:
+  # e.g. `V1 = EXP(TV_V1 + EXP(ETA(2))` wraps ETA in its own EXP and never closes
+  # the outer EXP, so detect_param_transform reads it as "normal". Catch it here so
+  # the user fixes the model rather than getting a covariate placed on the wrong
+  # scale (NONMEM would reject the unbalanced stream too).
+  paren_unbalanced <- function(s) {
+    s <- sub(";.*$", "", s)
+    nchar(gsub("[^(]", "", s)) != nchar(gsub("[^)]", "", s))
+  }
+  malformed <- pop_params[vapply(pop_params, function(p) {
+    lines <- modelcode[grep(paste0("^\\s*(TV_)?", p, "\\b\\s*="), modelcode)]
+    length(lines) > 0L && any(vapply(lines, paren_unbalanced, logical(1)))
+  }, logical(1))]
+  if (length(malformed) > 0) {
+    p1 <- malformed[1]
+    bad_line <- grep(paste0("^\\s*", p1, "\\b\\s*=.*ETA\\("), modelcode, value = TRUE)
+    stop(
+      "Unbalanced parentheses in the definition of parameter(s): ",
+      paste(malformed, collapse = ", "), ".",
+      if (length(bad_line)) paste0("\n    ", trimws(bad_line[1])) else "",
+      "\nThe parameter equation is malformed (NONMEM would reject it too), so its ",
+      "transformation cannot be detected. Fix the base model, e.g.\n",
+      "    ", p1, " = EXP(TV_", p1, " + ETA(n))\n",
+      "then re-run."
+    )
+  }
+
   bad <- pop_params[vapply(
     pop_params,
     function(p) identical(detect_param_transform(modelcode, p), "unknown"),
