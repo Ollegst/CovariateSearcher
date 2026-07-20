@@ -174,6 +174,10 @@ run_backward_elimination <- function(search_state,
 
     cat(sprintf("✅ Created %d removal test models\n", length(removal_models)))
 
+    # Checkpoint the freshly-created step BEFORE submitting, so a crash while the
+    # models are running still leaves this step's rows on disk for continue_search().
+    save_search_state(search_state, sprintf("backward_step_%d_created.rds", current_step))
+
     # Submit and monitor models
     cat(sprintf("\n🚀 Submitting Step %d models...\n", current_step))
 

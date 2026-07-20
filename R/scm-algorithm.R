@@ -247,6 +247,10 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id = NULL,
     ))
   }
 
+  # Checkpoint the freshly-created step BEFORE submitting, so a crash while the
+  # models are running still leaves this step's rows on disk for continue_search().
+  save_search_state(search_state, sprintf("scm_forward_step_%d_created.rds", current_step_number))
+
   # Step 1b: Submit and wait for completion
   step1_completion <- submit_and_wait_for_step(
     search_state = search_state,
@@ -365,6 +369,9 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id = NULL,
       cat(sprintf("❌ Failed to create Step %d models\n", current_step_number))
       break
     }
+
+    # Checkpoint the freshly-created step BEFORE submitting (resume/reconstruct point).
+    save_search_state(search_state, sprintf("scm_forward_step_%d_created.rds", current_step_number))
 
     # Submit and wait for completion
     step_completion <- submit_and_wait_for_step(

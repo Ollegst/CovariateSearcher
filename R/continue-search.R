@@ -13,36 +13,6 @@
 }
 
 
-#' Current best forward model from the database
-#'
-#' @description Lowest-OFV completed covariate model whose ΔOFV clears its own
-#'   per-df forward threshold (mirrors the final selection in
-#'   \code{run_scm_selective_forward}). Falls back to the base model when nothing
-#'   qualifies.
-#' @keywords internal
-.scm_current_best_forward <- function(search_state, forward_p_value) {
-  db <- search_state$search_database
-  cand <- db[db$status == "completed" &
-               !is.na(db$ofv) & !is.na(db$delta_ofv) &
-               !is.na(db$step_number) & db$step_number > 0, , drop = FALSE]
-  if (nrow(cand) == 0) return(search_state$base_model)
-
-  passed <- vapply(seq_len(nrow(cand)), function(i) {
-    row <- cand[i, ]
-    cov_name <- tryCatch(extract_covariate_name_from_tag(row$covariate_tested),
-                         error = function(e) NA_character_)
-    cov_df <- tryCatch(calculate_covariate_df(cov_name, search_state$covariate_search),
-                       error = function(e) 1L)
-    threshold <- pvalue_to_threshold(forward_p_value, df = cov_df)
-    isTRUE(row$delta_ofv >= threshold)
-  }, logical(1))
-
-  cand <- cand[passed, , drop = FALSE]
-  if (nrow(cand) == 0) return(search_state$base_model)
-  cand$model_name[which.min(cand$ofv)]
-}
-
-
 #' Resume the backward-elimination phase from the last full step
 #'
 #' @description Re-evaluates the removal models already created in the last
@@ -264,12 +234,17 @@ continue_search <- function(search_state = NULL,
     }
     scm_type <- match.arg(scm_type, c("standard", "selective"))
 
-    current_best <- .scm_current_best_forward(search_state, forward_p_value)
+    # Winner + significance for the last completed step come from the SAME
+    # evaluator the live selective-forward loop uses (get_step_models →
+    # get_significant_models_from_step), so RSE and per-df thresholds are applied
+    # identically. If the step produced no significant model, forward has
+    # converged and we keep the model the step built on.
+    step_eval    <- get_step_models(search_state, last_step,
+                                    p_value = forward_p_value, rse_threshold = rse_threshold)
+    current_best <- step_eval$best_model %||% step_eval$base_model
+    if (is.null(current_best) || is.na(current_best)) current_best <- search_state$base_model
+    sig_last     <- step_eval$significant_models
     cat(sprintf("Current best forward model: %s\n", current_best))
-
-    # If the last forward step produced no significant model, forward has converged.
-    sig_last <- get_significant_models_from_step(search_state, last_step,
-                                                 forward_p_value, rse_threshold)
     cat(sprintf("Significant models in step %d: %d\n", last_step, length(sig_last)))
 
     if (length(sig_last) > 0 && last_step >= 1) {

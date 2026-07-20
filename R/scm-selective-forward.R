@@ -462,6 +462,10 @@ run_scm_selective_forward <- function(search_state,
     cat(sprintf("✅ Step %d: Created %d models successfully\n", current_step, step_result$successful_count))
     cat("Models created:", paste(step_result$models_created, collapse = ", "), "\n")
 
+    # Checkpoint the freshly-created step BEFORE submitting, so a crash while the
+    # models are running still leaves this step's rows on disk for continue_search().
+    save_search_state(search_state, sprintf("scm_selective_step_%d_created.rds", current_step))
+
     # Submit and monitor models
     cat(sprintf("\n🚀 Submitting Step %d models...\n", current_step))
 
@@ -777,6 +781,9 @@ run_scm_selective_forward <- function(search_state,
         }
 
         cat(sprintf("Created %d redemption models\n", redemption_result$successful_count))
+
+        # Checkpoint the freshly-created step BEFORE submitting (resume/reconstruct point).
+        save_search_state(search_state, sprintf("scm_selective_step_%d_created.rds", current_step_number))
 
         # Submit redemption models
         redemption_submission <- submit_and_wait_for_step(
