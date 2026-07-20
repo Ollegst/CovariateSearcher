@@ -822,6 +822,33 @@ validate_param_transformations <- function(covariate_search, data_file, id_col,
     )
   }
 
+  # A typical-value line written as `TV_<param> = EXP(THETA(n))` (with
+  # `<param> = TV_<param> * EXP(ETA)`) is a LOG parameterization DISGUISED in
+  # normal-IIV form: detect_param_transform inspects only the `<param> =` line,
+  # sees `TV * EXP(ETA)`, and reports "normal", so a population covariate is
+  # placed multiplicatively on a typical value that is really on the log scale.
+  # It is mathematically EXP(THETA) * EXP(ETA) == EXP(THETA + ETA); forbid it and
+  # require the canonical log form so the transform is detected unambiguously.
+  disguised <- pop_params[vapply(pop_params, function(p) {
+    ln <- grep(paste0("^\\s*TV_", p, "\\b"), modelcode, value = TRUE)
+    if (length(ln) == 0L) return(FALSE)
+    rhs <- trimws(sub(";.*$", "", sub("^[^=]*=", "", ln[length(ln)])))
+    grepl("\\bEXP\\s*\\(", rhs) && grepl("\\bTHETA\\b", rhs)
+  }, logical(1))]
+  if (length(disguised) > 0) {
+    p1 <- disguised[1]
+    stop(
+      "Typical-value line(s) written as 'TV_", p1, " = EXP(THETA(n))': ",
+      paste(disguised, collapse = ", "),
+      ". This is a log parameterization disguised in normal form (TV = EXP(THETA), ",
+      p1, " = TV * EXP(ETA)); the covariate would be placed multiplicatively on a ",
+      "log-scale typical value. Refactor the base model to the canonical log form:\n",
+      "    TV_", p1, " = THETA(n)\n",
+      "    ", p1, " = EXP(TV_", p1, " + ETA(n))\n",
+      "then re-run."
+    )
+  }
+
   invisible(TRUE)
 }
 
