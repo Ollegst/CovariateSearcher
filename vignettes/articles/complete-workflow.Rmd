@@ -168,8 +168,7 @@ results <- run_automated_scm_testing(
   require_cov_step = TRUE,
   auto_submit = TRUE,
   auto_retry = TRUE,
-  save_checkpoints = TRUE,
-  checkpoint_prefix = "scm_auto"
+  save_checkpoints = TRUE
 )
 ```
 

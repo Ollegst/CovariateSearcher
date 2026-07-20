@@ -32,7 +32,6 @@
 #' @param auto_submit Logical. Whether to automatically submit models to cluster (default: TRUE)
 #' @param auto_retry Logical. Whether to enable automatic retry for failed models (default: TRUE)
 #' @param save_checkpoints Logical. Whether to save state after each major step (default: TRUE)
-#' @param checkpoint_prefix Character. Prefix for checkpoint filenames (default: "scm_auto")
 #' @param final_testing Logical. Whether to test excluded covariates on final model (default: TRUE)
 #' @return List containing comprehensive SCM results
 #' @export
@@ -48,7 +47,6 @@ run_automated_scm_testing <- function(search_state,
                                       auto_submit = TRUE,
                                       auto_retry = TRUE,
                                       save_checkpoints = TRUE,
-                                      checkpoint_prefix = "scm_auto",
                                       final_testing = TRUE) {
 
   # FIXED: Input validation with proper match.arg()

@@ -17,7 +17,6 @@ run_automated_scm_testing(
   auto_submit = TRUE,
   auto_retry = TRUE,
   save_checkpoints = TRUE,
-  checkpoint_prefix = "scm_auto",
   final_testing = TRUE
 )
 }
@@ -60,8 +59,6 @@ If NULL, uses search_state$search_config$max_rse_threshold (default: 50)}
 \item{auto_retry}{Logical. Whether to enable automatic retry for failed models (default: TRUE)}
 
 \item{save_checkpoints}{Logical. Whether to save state after each major step (default: TRUE)}
-
-\item{checkpoint_prefix}{Character. Prefix for checkpoint filenames (default: "scm_auto")}
 
 \item{final_testing}{Logical. Whether to test excluded covariates on final model (default: TRUE)}
 }

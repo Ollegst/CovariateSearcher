@@ -34,7 +34,6 @@ result <- run_automated_scm_testing(
     auto_submit = TRUE,                         # if FALSE – only model creation 
     auto_retry = TRUE,                          # Retry model in case of failure
     save_checkpoints = TRUE,                    # Save each step
-    checkpoint_prefix = "scm_auto",
     final_testing = TRUE)                       # Test excluded covariates form failed model
 
 
@@ -99,7 +98,6 @@ result <- run_automated_scm_testing(
     auto_submit = TRUE,                         # if FALSE – only model creation 
     auto_retry = TRUE,                          # Retry model in case of failure
     save_checkpoints = TRUE,                    # Save each step
-    checkpoint_prefix = "scm_auto",
     final_testing = TRUE)                       # Test excluded covariates from failed model
 
 
