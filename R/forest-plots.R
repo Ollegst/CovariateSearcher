@@ -611,16 +611,21 @@ simulate_scenario_profiles <- function(param_sets,
   }
 
   # Simulate each scenario's samples as a population, tag with the scenario name.
+  # `output = "df"` makes mrgsim() return a plain data.frame directly: mrgsim()
+  # otherwise returns an S4 `mrgsims` object, and a bare as.data.frame() on it
+  # fails here because mrgsolve is only Suggested (used via ::), so inside this
+  # package's namespace as.data.frame resolves to base's S3 generic, which cannot
+  # dispatch to mrgsolve's S4 coercion method.
   profiles <- purrr::imap_dfr(param_sets, function(params, scenario) {
-    sim <- mrgsolve::mrgsim(
+    out <- mrgsolve::mrgsim(
       mod,
       idata  = params,
       events = dose,
       start  = start,
       end    = end,
-      delta  = delta
+      delta  = delta,
+      output = "df"
     )
-    out <- as.data.frame(sim)
     out$Scenario <- scenario
     out
   })
