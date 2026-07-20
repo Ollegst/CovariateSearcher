@@ -19,9 +19,11 @@
 # The built-ins below mirror the exact legacy output byte-for-byte. Users can
 # add continuous forms (e.g. logit) at load time with register_covariate_formula().
 #
-# NOTE: this file is additive infrastructure. Until model_add_cov and
-# apply_covariate_model are wired to get_covariate_formula(), nothing here is
-# exercised and behaviour is unchanged.
+# Both sides of the pipeline consume this registry: the NONMEM writer
+# (model_add_cov) via get_covariate_formula() / detect_param_transform() /
+# nonmem_log() / parse_named_init(), and the R reconstruction (apply_covariate_model)
+# via get_covariate_formula(). Register a form once here and it applies
+# consistently on both sides.
 # =============================================================================
 
 # Load-time registry: key "status.formula" -> entry list.
