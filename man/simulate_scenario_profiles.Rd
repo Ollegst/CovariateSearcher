@@ -10,7 +10,8 @@ simulate_scenario_profiles(
   dose,
   start = 0,
   end = 24,
-  delta = 0.1
+  delta = 0.1,
+  verbose = TRUE
 )
 }
 \arguments{
@@ -28,6 +29,10 @@ regimen, applied to every subject, e.g.
 \item{start, end, delta}{Numeric. Observation time grid for \code{\link[mrgsolve:mrgsim]{mrgsolve::mrgsim()}}.
 Defaults \code{0}, \code{24}, \code{0.1}. For AUC over one steady-state interval set \code{end}
 to one dosing interval (\code{ii}).}
+
+\item{verbose}{Logical. When \code{TRUE} (default) print a \verb{[i/n] Simulating
+scenario: <name>} progress line as each scenario is simulated. Set \code{FALSE}
+to silence.}
 }
 \value{
 A \code{data.frame} of stacked profiles - one row per

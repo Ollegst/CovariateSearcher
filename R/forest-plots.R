@@ -574,6 +574,9 @@ create_covariate_table <- function(model_name,
 #' @param start,end,delta Numeric. Observation time grid for [mrgsolve::mrgsim()].
 #'   Defaults `0`, `24`, `0.1`. For AUC over one steady-state interval set `end`
 #'   to one dosing interval (`ii`).
+#' @param verbose Logical. When `TRUE` (default) print a `[i/n] Simulating
+#'   scenario: <name>` progress line as each scenario is simulated. Set `FALSE`
+#'   to silence.
 #'
 #' @return A `data.frame` of stacked profiles - one row per
 #'   (scenario, sample, time) - with a `Scenario` column (an ordered factor, in
@@ -599,7 +602,8 @@ simulate_scenario_profiles <- function(param_sets,
                                         dose,
                                         start = 0,
                                         end = 24,
-                                        delta = 0.1) {
+                                        delta = 0.1,
+                                        verbose = TRUE) {
 
   if (!is.list(param_sets) || is.null(names(param_sets))) {
     stop("`param_sets` must be a named list ",
@@ -616,7 +620,12 @@ simulate_scenario_profiles <- function(param_sets,
   # fails here because mrgsolve is only Suggested (used via ::), so inside this
   # package's namespace as.data.frame resolves to base's S3 generic, which cannot
   # dispatch to mrgsolve's S4 coercion method.
+  n_scen <- length(param_sets)
   profiles <- purrr::imap_dfr(param_sets, function(params, scenario) {
+    if (verbose) {
+      message(sprintf("[%d/%d] Simulating scenario: %s",
+                      match(scenario, names(param_sets)), n_scen, scenario))
+    }
     out <- mrgsolve::mrgsim(
       mod,
       idata  = params,
