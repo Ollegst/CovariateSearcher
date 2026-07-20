@@ -43,7 +43,10 @@ List with status, model_name, model_path, log_file, covariates_added
 \description{
 Copies a parent model, adds multiple covariates into the same
 child model, writes one combined technical log, and returns metadata for
-later initialization. Does NOT require search_database.
+later initialization. Does NOT require search_database. Before adding, it
+validates the covariate->parameter mapping and each target parameter's
+transform (the same checks \code{initialize_covariate_search} runs, scoped
+to the covariates being added) so a mis-parameterized target fails fast.
 }
 \details{
 Prepare Search Base Model by Adding Multiple Covariates

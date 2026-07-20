@@ -748,7 +748,10 @@ fix_theta_renumbering <- function(modelcode, theta_numbers_to_remove, log_functi
 #' @title Create one prepared base model with multiple covariates
 #' @description Copies a parent model, adds multiple covariates into the same
 #'   child model, writes one combined technical log, and returns metadata for
-#'   later initialization. Does NOT require search_database.
+#'   later initialization. Does NOT require search_database. Before adding, it
+#'   validates the covariate->parameter mapping and each target parameter's
+#'   transform (the same checks \code{initialize_covariate_search} runs, scoped
+#'   to the covariates being added) so a mis-parameterized target fails fast.
 #'
 #' @param base_model_path Character. Parent/base model id, e.g. "run1"
 #' @param covariate_tags Character vector of covariate tags, e.g.
@@ -828,6 +831,18 @@ prepare_search_base_model <- function(base_model_path,
     covariate_tags = covariate_tags,
     strict = TRUE,
     verbose = TRUE
+  )
+
+  # Same transform / inline-log guardrail that initialize_covariate_search runs,
+  # scoped to the covariates being added here: model_add_cov below places each
+  # covariate per the target parameter's parameterization, so a log parameter
+  # written inline (no TV_ line) would get the additive term OUTSIDE the EXP.
+  validate_param_transformations(
+    covariate_search = covariate_search[covariate_search$cov_to_test %in% covariate_tags, , drop = FALSE],
+    data_file        = data_file,
+    id_col           = idcol,
+    model_name       = base_model_path,
+    models_folder    = models_folder
   )
 
   covariate_tags <- unique(covariate_tags)
