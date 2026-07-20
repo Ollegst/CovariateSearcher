@@ -730,9 +730,13 @@ validate_setup <- function(search_state) {
 #' \code{PARAM = TV * EXP(ETA)} or log-scale \code{PARAM = EXP(TV + ETA)} -- so
 #' \code{model_add_cov} knows whether to render the covariate multiplicatively
 #' (\code{*}) or additively (\code{+}). Fails fast at initialization on any
-#' parameter whose parameterization cannot be classified. Time-varying covariates
-#' are placed on the individual parameter line (always multiplicative) and so do
-#' not require classification.
+#' parameter whose parameterization cannot be classified. Also requires a
+#' log-parameterized population target to have a separate \code{TV_<param>} line
+#' (the additive covariate is written on it, inside the \code{EXP}); an inline
+#' \code{PARAM = EXP(THETA + ETA)} is rejected with a refactor message, because
+#' the additive term would otherwise land outside the \code{EXP}. Time-varying
+#' covariates are placed on the individual parameter line (always multiplicative)
+#' and so do not require either check.
 #'
 #' @param covariate_search data.frame with COVARIATE, PARAMETER, TIME_DEPENDENT.
 #' @param data_file data.frame with the analysis dataset (for the time-varying check).
@@ -788,6 +792,36 @@ validate_param_transformations <- function(covariate_search, data_file, id_col,
       bad[1], " = EXP(TV + ETA)'. Adjust the base model or covariate table."
     )
   }
+
+  # A population covariate on a LOG-parameterized parameter is written additively
+  # INSIDE the EXP, which model_add_cov does by appending to the TV_<param> line.
+  # An inline log form (PARAM = EXP(THETA + ETA), with no separate TV_ line) would
+  # receive the additive term OUTSIDE the EXP -> wrong. Require a TV_ line up front.
+  log_params <- pop_params[vapply(
+    pop_params,
+    function(p) identical(detect_param_transform(modelcode, p), "log"),
+    logical(1)
+  )]
+  no_tv <- log_params[vapply(
+    log_params,
+    function(p) length(grep(paste0("^\\s*TV_", p, "\\b"), modelcode)) == 0L,
+    logical(1)
+  )]
+  if (length(no_tv) > 0) {
+    p1 <- no_tv[1]
+    stop(
+      "Log-parameterized parameter(s) written inline without a TV_ line: ",
+      paste(no_tv, collapse = ", "),
+      ". A population (time-constant) covariate on a log parameter is added ",
+      "additively inside the EXP, which requires a typical-value line. Refactor ",
+      "the base model, e.g.\n",
+      "    TV_", p1, " = THETA(n)\n",
+      "    ", p1, " = EXP(TV_", p1, " + ETA(n))\n",
+      "then re-run. (An inline '", p1, " = EXP(THETA + ETA)' would place the ",
+      "covariate term outside the EXP.)"
+    )
+  }
+
   invisible(TRUE)
 }
 

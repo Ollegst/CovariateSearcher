@@ -32,7 +32,11 @@ checks that the base model writes it in a recognised form -- normal-scale
 \code{PARAM = TV * EXP(ETA)} or log-scale \code{PARAM = EXP(TV + ETA)} -- so
 \code{model_add_cov} knows whether to render the covariate multiplicatively
 (\code{*}) or additively (\code{+}). Fails fast at initialization on any
-parameter whose parameterization cannot be classified. Time-varying covariates
-are placed on the individual parameter line (always multiplicative) and so do
-not require classification.
+parameter whose parameterization cannot be classified. Also requires a
+log-parameterized population target to have a separate \code{TV_<param>} line
+(the additive covariate is written on it, inside the \code{EXP}); an inline
+\code{PARAM = EXP(THETA + ETA)} is rejected with a refactor message, because
+the additive term would otherwise land outside the \code{EXP}. Time-varying
+covariates are placed on the individual parameter line (always multiplicative)
+and so do not require either check.
 }
