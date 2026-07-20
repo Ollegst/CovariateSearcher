@@ -17,8 +17,10 @@
 #' @description
 #' Draws `Nsamples` vectors of the model's THETA parameters (structural
 #' parameters + covariate betas) from the NONMEM estimation uncertainty, and
-#' returns them **in absolute (natural) scale** so they can be fed directly into
-#' [apply_covariate_model()] and, later, a simulation engine.
+#' returns them **on the estimation scale exactly as NONMEM reports them** (a
+#' log-parameterised THETA stays on the log scale). [apply_covariate_model()]
+#' then evaluates the model's own `$PK` equations, whose `EXP(...)` performs the
+#' log -> natural transformation once, at the right place.
 #'
 #' Sampling is done on the estimation scale that the covariance matrix describes:
 #' \itemize{
@@ -28,13 +30,12 @@
 #'   \item If neither is available or usable, falls back to sampling each THETA
 #'         independently from its `.ext` standard error, with a warning.
 #' }
-#' After sampling, each THETA is mapped to absolute scale using its `$THETA`
-#' transformation field, read with the package's own `extract_model_params()`
-#' (the same reader used for the model output tables): a `LOG`-tagged parameter
-#' is exponentiated (`exp()`), while `RATIO`/untagged parameters are left
-#' unchanged. This yields a log-normal (always-positive) draw for log-estimated
-#' structural parameters. Covariate betas are written as `; RATIO`, so they pass
-#' through untouched.
+#' No scale transformation is applied here: the draws are returned raw so the
+#' back-transform lives in exactly one place (the `EXP(...)` in the model's `$PK`
+#' equation, evaluated by [apply_covariate_model()]). This avoids the double
+#' `exp()` that a tag-based back-transform here would cause. A correct log-normal
+#' (always-positive) draw for a log-estimated structural parameter therefore
+#' arises when its `$PK` line is evaluated downstream.
 #'
 #' @param model Character. Model name without extension, e.g. "run28".
 #' @param models_folder Character. Folder containing the model. Default "models".
@@ -44,7 +45,8 @@
 #' @param seed Integer. Random seed for reproducibility. Default 1234.
 #'
 #' @return A `data.frame` with `Nsamples` rows and columns `ID` (1:Nsamples) and
-#'   `THETA1`, `THETA2`, ..., `THETAn` in absolute scale, with THETA order
+#'   `THETA1`, `THETA2`, ..., `THETAn` on the **estimation scale** (raw `.ext`
+#'   scale; a log-parameterised THETA stays on the log scale), with THETA order
 #'   matching the model's `$THETA` block. The attribute `"sampling_method"` is
 #'   set to `"mvn"` or `"independent"` to record which path was used.
 #'
@@ -152,21 +154,11 @@ sample_individual_thetas <- function(model,
   }
   colnames(samples) <- theta_cols
 
-  # ---- Back-transform each THETA to absolute scale --------------------------
-  # Reuse the package's own $THETA reader (parameter name + transformation) -
-  # the same one that builds the model output tables. `trans` is per-THETA in
-  # $THETA order, so it aligns positionally with the .ext THETA columns exactly
-  # as `get_model_parameters_and_statistics()` relies on.
-  trans <- extract_model_params(model, models_folder)$THETAS$trans
-  if (length(trans) != n_theta) {
-    warning("Parsed ", length(trans), " $THETA transformation tag(s) but the ",
-            ".ext reports ", n_theta, " THETA(s); treating all as natural scale ",
-            "(no log back-transform).")
-    trans <- rep(NA_character_, n_theta)
-  }
-  for (j in which(trans == "LOG")) {
-    samples[, j] <- exp(samples[, j])
-  }
+  # ---- No scale transformation here -----------------------------------------
+  # Draws are returned on the estimation scale (raw .ext scale). The single
+  # log -> natural back-transform lives downstream in apply_covariate_model(),
+  # which evaluates the model's own EXP(...) $PK line. Doing it here as well
+  # (per the $THETA ;LOG tag) would double-exponentiate log parameters.
 
   # ---- Assemble the result --------------------------------------------------
   out <- data.frame(ID = seq_len(Nsamples), samples,

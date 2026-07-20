@@ -24,15 +24,18 @@ Both flat (\code{models/run28.ext}) and per-model-subfolder
 }
 \value{
 A \code{data.frame} with \code{Nsamples} rows and columns \code{ID} (1:Nsamples) and
-\code{THETA1}, \code{THETA2}, ..., \code{THETAn} in absolute scale, with THETA order
+\code{THETA1}, \code{THETA2}, ..., \code{THETAn} on the \strong{estimation scale} (raw \code{.ext}
+scale; a log-parameterised THETA stays on the log scale), with THETA order
 matching the model's \verb{$THETA} block. The attribute \code{"sampling_method"} is
 set to \code{"mvn"} or \code{"independent"} to record which path was used.
 }
 \description{
 Draws \code{Nsamples} vectors of the model's THETA parameters (structural
 parameters + covariate betas) from the NONMEM estimation uncertainty, and
-returns them \strong{in absolute (natural) scale} so they can be fed directly into
-\code{\link[=apply_covariate_model]{apply_covariate_model()}} and, later, a simulation engine.
+returns them \strong{on the estimation scale exactly as NONMEM reports them} (a
+log-parameterised THETA stays on the log scale). \code{\link[=apply_covariate_model]{apply_covariate_model()}}
+then evaluates the model's own \verb{$PK} equations, whose \code{EXP(...)} performs the
+log -> natural transformation once, at the right place.
 
 Sampling is done on the estimation scale that the covariance matrix describes:
 \itemize{
@@ -42,13 +45,12 @@ correlations (via \pkg{mvtnorm}).
 \item If neither is available or usable, falls back to sampling each THETA
 independently from its \code{.ext} standard error, with a warning.
 }
-After sampling, each THETA is mapped to absolute scale using its \verb{$THETA}
-transformation field, read with the package's own \code{extract_model_params()}
-(the same reader used for the model output tables): a \code{LOG}-tagged parameter
-is exponentiated (\code{exp()}), while \code{RATIO}/untagged parameters are left
-unchanged. This yields a log-normal (always-positive) draw for log-estimated
-structural parameters. Covariate betas are written as \verb{; RATIO}, so they pass
-through untouched.
+No scale transformation is applied here: the draws are returned raw so the
+back-transform lives in exactly one place (the \code{EXP(...)} in the model's \verb{$PK}
+equation, evaluated by \code{\link[=apply_covariate_model]{apply_covariate_model()}}). This avoids the double
+\code{exp()} that a tag-based back-transform here would cause. A correct log-normal
+(always-positive) draw for a log-estimated structural parameter therefore
+arises when its \verb{$PK} line is evaluated downstream.
 }
 \examples{
 \dontrun{

@@ -16,48 +16,35 @@ apply_covariate_model(
 \item{model_name}{Character. Model name without extension, e.g. "run28".}
 
 \item{covariate_search}{Data frame with columns \code{COVARIATE}, \code{PARAMETER},
-\code{STATUS} ("con"/"cat"), \code{FORMULA} ("power"/"linear"/"exponential"/...),
-and \code{REFERENCE}. A \code{cov_to_test} column is derived from
-\code{COVARIATE}/\code{PARAMETER} when absent.}
+\code{STATUS}, \code{FORMULA}, \code{REFERENCE}. \code{REFERENCE} supplies the value for any
+covariate an equation references that is not in \code{covariates}.}
 
-\item{individual_thetas}{Data frame whose columns are named \code{THETA1},
-\code{THETA2}, ... (population + ETA values already combined). Beta columns hold
-the covariate coefficients.}
+\item{individual_thetas}{Data frame whose columns are \code{THETA1}, \code{THETA2}, ...
+the sampled THETA draws on the \strong{estimation scale} (raw, as returned by
+\code{\link[=sample_individual_thetas]{sample_individual_thetas()}}; a log-parameterised THETA stays on the log
+scale -- the equation's \code{EXP} back-transforms it). One row per draw.}
 
 \item{covariates}{A single covariate scenario: a named vector or one-row data
-frame whose names are covariate columns (e.g. one row of
-\code{\link{create_covariate_table}} output). Applied to every row of
-\code{individual_thetas}. Extra names (such as \code{Scenario}) are ignored.}
+frame of covariate values (e.g. one row of \code{\link[=create_covariate_table]{create_covariate_table()}}).
+Applied to every draw. Extra names (such as \code{Scenario}) are ignored.}
 
 \item{models_folder}{Character. Folder containing the model. Default "models".}
 }
 \value{
-A \code{data.frame} with an \code{ID} column and only the structural (non-beta)
-theta columns, each with the model's covariate factors applied for the supplied
-scenario, on the \strong{natural scale}: a log-parameterised parameter (its \verb{$PK}
-value line begins with \code{EXP(...)}, e.g. \code{CL = EXP(TV_CL + ETA)}) is exponentiated
-so \code{natural = EXP(theta) * factors}; normal-scale parameters are unchanged. The
-consuming mrgsolve model must therefore treat these \code{THETA} columns as
-natural-scale structural parameters (no \code{EXP}, no covariate terms). One row per
-row of \code{individual_thetas}.
+A \code{data.frame} with an \code{ID} column and the structural (non-\code{beta_})
+THETA columns, each holding that parameter's value for the scenario on the
+\strong{natural scale}, obtained by evaluating the model's own \verb{$PK} equations
+with \code{ETA = 0}. One row per row of \code{individual_thetas}.
 }
 \description{
-Reproduces, in R, the covariate transformations written in a NONMEM model and
-applies them to a set of individual parameter values for one covariate
-scenario. Each structural parameter theta (e.g. \code{THETA2} = CL) is multiplied
-by the covariate factors defined in the model, using the covariate values in
-\code{covariates} and the covariate coefficients already present in
-\code{individual_thetas} (the beta thetas). Only the structural thetas are returned.
+Reproduces a NONMEM model's typical-subject structural parameters in R for one
+covariate scenario by \strong{evaluating the model's own \verb{$PK} equations} with the
+sampled THETA draws and \code{ETA = 0}. Covariate effects (already written into the
+equations) and any log/normal parameterization are handled automatically,
+because the actual equation is run: \code{CL = EXP(TV_CL + 0)} yields CL on the
+natural scale directly. There is no separate covariate-factor step and no
+transform detection, so the R result cannot drift from the NONMEM model.
 
-This replaces hand-written blocks such as
-\code{mutate(THETA2 = THETA2 * (DOSE/75)^THETA7 * (BWT/70)^THETA8 * ...)} by
-reconstructing the same factors from the model itself:
-\itemize{
-\item the beta coefficient's theta index comes from the \verb{$THETA} order,
-\item the structural parameter's theta index comes from its \verb{$PK}
-typical-value line (\verb{TV_<param>} or \verb{TV<param> = THETA(n)}),
-\item continuous formulas/reference values come from \code{covariate_search},
-\item categorical level -> theta mappings come from the \verb{$PK} \code{IF/ELSEIF}
-block (so multi-level categoricals are handled by the covariate value).
-}
+Categorical covariates (written as \verb{$PK} \code{IF/ELSEIF} blocks) are handled the
+same way -- the block is evaluated for the scenario's covariate value.
 }
