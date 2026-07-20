@@ -2,14 +2,12 @@
 % Please edit documentation in R/covariate-formula.R
 \name{register_covariate_formula}
 \alias{register_covariate_formula}
-\title{Register a covariate-effect formula usable by both the NONMEM writer
-and the R reconstruction}
+\title{Register a covariate-effect formula for the NONMEM writer}
 \usage{
 register_covariate_formula(
   status,
   formula,
   nonmem = NULL,
-  r_eval = NULL,
   init = "0.1",
   categorical = FALSE,
   nonmem_log = NULL
@@ -26,16 +24,12 @@ string appended MULTIPLICATIVELY to a normal-scale typical value (e.g.
 \code{" * (WT/70)**THETA(5)"}). \code{cova} is the covariate column name,
 \code{ref} the reference value, \code{n} the THETA number.}
 
-\item{r_eval}{Function \code{(cov_val, ref, th)} returning the numeric factor
-for a covariate value \code{cov_val}, reference \code{ref} and estimated
-beta \code{th}. Must reproduce the math in \code{nonmem}.}
-
 \item{init}{Character. Initial THETA value written for the beta
 (default \code{"0.1"}; may include \code{"FIX"}).}
 
 \item{categorical}{Logical. \code{TRUE} only for multi-level categorical
-forms written as a \code{$PK} \code{IF/ELSEIF} block (\code{nonmem}/
-\code{r_eval} are then unused). Default \code{FALSE}.}
+forms written as a \code{$PK} \code{IF/ELSEIF} block (\code{nonmem} is then
+unused). Default \code{FALSE}.}
 
 \item{nonmem_log}{Function \code{(cova, ref, n)} returning the ADDITIVE term
 appended to a LOG-scale typical value (e.g. \code{" + THETA(5)*LOG(WT/70)"}),
@@ -49,9 +43,9 @@ Invisibly, the registry key.
 }
 \description{
 Adds (or overrides) a covariate-effect form keyed on
-\code{(STATUS, FORMULA)}. Both \code{model_add_cov} (NONMEM write side) and
-\code{apply_covariate_model} (R read side) look the form up here, so a form
-registered once is applied consistently on both sides.
+\code{(STATUS, FORMULA)}, used by \code{model_add_cov} to write the covariate
+into the control stream (and by \code{calculate_covariate_df} for the LRT
+degrees of freedom).
 }
 \details{
 Register a Covariate Formula

@@ -3,27 +3,24 @@
 # File: R/covariate-formula.R
 # Part of CovariateSearcher Package
 #
-# Single source of truth for covariate-effect math. Each (STATUS, FORMULA)
-# entry bundles everything BOTH sides of the pipeline need, so the NONMEM write
-# side and the R reconstruction side can never drift apart:
-#   - nonmem      : renders the NONMEM factor string that model_add_cov appends
-#                   to the structural parameter (write side)
-#   - r_eval      : reconstructs the same factor numerically, used by
-#                   apply_covariate_model in the forest-plot pipeline (read side)
+# Source of truth for how model_add_cov writes covariate effects into NONMEM.
+# Each (STATUS, FORMULA) entry bundles what the writer needs:
+#   - nonmem      : the NONMEM factor string model_add_cov appends to a
+#                   normal-scale typical value (multiplicative)
+#   - nonmem_log  : the additive term for a log-scale typical value (see below)
 #   - init        : initial THETA value model_add_cov writes for the beta
 #   - categorical : TRUE only for forms written as a $PK IF/ELSEIF per-level
-#                   block (cat.linear). Those keep their bespoke per-level logic
-#                   in model_add_cov / apply_covariate_model; the registry only
-#                   flags them so both sides agree on which branch to take.
+#                   block (cat.linear), which keep their bespoke per-level logic
+#                   in model_add_cov; the registry just flags them.
 #
 # The built-ins below mirror the exact legacy output byte-for-byte. Users can
 # add continuous forms (e.g. logit) at load time with register_covariate_formula().
 #
-# Both sides of the pipeline consume this registry: the NONMEM writer
-# (model_add_cov) via get_covariate_formula() / detect_param_transform() /
-# nonmem_log() / parse_named_init(), and the R reconstruction (apply_covariate_model)
-# via get_covariate_formula(). Register a form once here and it applies
-# consistently on both sides.
+# Consumed by the WRITE side model_add_cov (via get_covariate_formula() /
+# detect_param_transform() / nonmem_log() / parse_named_init()) and by
+# calculate_covariate_df (theta count / INIT / categorical). The forest READ side
+# (apply_covariate_model) evaluates the model's $PK equations directly and no
+# longer uses this registry.
 # =============================================================================
 
 # Load-time registry: key "status.formula" -> entry list.
@@ -31,12 +28,11 @@
 
 #' Register a Covariate Formula
 #'
-#' @title Register a covariate-effect formula usable by both the NONMEM writer
-#'   and the R reconstruction
+#' @title Register a covariate-effect formula for the NONMEM writer
 #' @description Adds (or overrides) a covariate-effect form keyed on
-#'   \code{(STATUS, FORMULA)}. Both \code{model_add_cov} (NONMEM write side) and
-#'   \code{apply_covariate_model} (R read side) look the form up here, so a form
-#'   registered once is applied consistently on both sides.
+#'   \code{(STATUS, FORMULA)}, used by \code{model_add_cov} to write the covariate
+#'   into the control stream (and by \code{calculate_covariate_df} for the LRT
+#'   degrees of freedom).
 #' @param status Character. Covariate status, \code{"con"} or \code{"cat"}.
 #' @param formula Character. Formula name, e.g. \code{"power"}, \code{"linear"},
 #'   \code{"exponential"}, or a user name such as \code{"logit"}.
@@ -44,14 +40,11 @@
 #'   string appended MULTIPLICATIVELY to a normal-scale typical value (e.g.
 #'   \code{" * (WT/70)**THETA(5)"}). \code{cova} is the covariate column name,
 #'   \code{ref} the reference value, \code{n} the THETA number.
-#' @param r_eval Function \code{(cov_val, ref, th)} returning the numeric factor
-#'   for a covariate value \code{cov_val}, reference \code{ref} and estimated
-#'   beta \code{th}. Must reproduce the math in \code{nonmem}.
 #' @param init Character. Initial THETA value written for the beta
 #'   (default \code{"0.1"}; may include \code{"FIX"}).
 #' @param categorical Logical. \code{TRUE} only for multi-level categorical
-#'   forms written as a \code{$PK} \code{IF/ELSEIF} block (\code{nonmem}/
-#'   \code{r_eval} are then unused). Default \code{FALSE}.
+#'   forms written as a \code{$PK} \code{IF/ELSEIF} block (\code{nonmem} is then
+#'   unused). Default \code{FALSE}.
 #' @param nonmem_log Function \code{(cova, ref, n)} returning the ADDITIVE term
 #'   appended to a LOG-scale typical value (e.g. \code{" + THETA(5)*LOG(WT/70)"}),
 #'   used when a time-constant covariate lands on a log-parameterized parameter
@@ -61,7 +54,7 @@
 #' @return Invisibly, the registry key.
 #' @export
 register_covariate_formula <- function(status, formula, nonmem = NULL,
-                                        r_eval = NULL, init = "0.1",
+                                        init = "0.1",
                                         categorical = FALSE, nonmem_log = NULL) {
   status  <- tolower(as.character(status))
   formula <- tolower(as.character(formula))
@@ -70,7 +63,6 @@ register_covariate_formula <- function(status, formula, nonmem = NULL,
     status      = status,
     formula     = formula,
     nonmem      = nonmem,
-    r_eval      = r_eval,
     init        = init,
     categorical = categorical,
     nonmem_log  = nonmem_log
@@ -182,18 +174,6 @@ parse_covariate_expression <- function(formula) {
     init        = "0.1",
     nonmem = function(cova, ref, n) {
       paste0(" * (", .translate_expr_to_nonmem(expr, cova, ref, thetas, n), ")")
-    },
-    r_eval = function(cov_val, ref, th) {
-      # `th` holds the estimated beta(s). For one parameter it is the beta itself
-      # (a scalar or a per-sample vector); for several it is a list, one element
-      # per parameter (in theta_names order), each a scalar or per-sample vector.
-      env <- list(cov = cov_val, ref = ref)
-      if (length(thetas) == 1L) {
-        env[[thetas[1L]]] <- th
-      } else {
-        for (i in seq_along(thetas)) env[[thetas[i]]] <- th[[i]]
-      }
-      eval(expr, envir = env)
     }
   )
 }
@@ -251,9 +231,8 @@ parse_named_init <- function(init_str, theta_names) {
 # power:   normal  * (COV/ref)**THETA(n)   |  log  + THETA(n)*LOG(COV/ref)
 .cov_pow_nonmem <- function(cova, ref, n) paste0(' * (', cova, '/', ref, ')**THETA(', n, ')')
 .cov_pow_logadd <- function(cova, ref, n) paste0(' + THETA(', n, ')*LOG(', cova, '/', ref, ')')
-.cov_pow_reval  <- function(cov_val, ref, th) (cov_val / ref) ^ th
 register_covariate_formula("con", "power",
-                           nonmem = .cov_pow_nonmem, r_eval = .cov_pow_reval, init = "0.1",
+                           nonmem = .cov_pow_nonmem, init = "0.1",
                            nonmem_log = .cov_pow_logadd)
 
 # linear:   normal  * (1 + (COV-ref) * THETA(n))   |  log  + LOG(1 + (COV-ref) * THETA(n))
@@ -261,7 +240,6 @@ register_covariate_formula(
   "con", "linear",
   nonmem     = function(cova, ref, n) paste0(' * (1 + (', cova, '-', ref, ') * THETA(', n, '))'),
   nonmem_log = function(cova, ref, n) paste0(' + LOG(1 + (', cova, '-', ref, ') * THETA(', n, '))'),
-  r_eval = function(cov_val, ref, th) 1 + (cov_val - ref) * th,
   init   = "0.1"
 )
 
@@ -270,19 +248,18 @@ register_covariate_formula(
   "con", "exponential",
   nonmem     = function(cova, ref, n) paste0(' * EXP(THETA(', n, ') * (', cova, '-', ref, '))'),
   nonmem_log = function(cova, ref, n) paste0(' + THETA(', n, ') * (', cova, '-', ref, ')'),
-  r_eval = function(cov_val, ref, th) exp(th * (cov_val - ref)),
   init   = "0.1"
 )
 
 # cat.power: a covariate with discrete but NUMERIC levels (e.g. dose
 # 35/70/125/150 mg) modelled as a power relationship on the actual values.
-# Identical rendering to con.power and NOT categorical -- this is what keeps the
-# read side (apply_covariate_model) from mistreating it as an IF/ELSEIF block.
+# Identical rendering to con.power and NOT categorical -- so model_add_cov writes
+# it as a plain multiplicative/additive factor, not an IF/ELSEIF block.
 register_covariate_formula("cat", "power",
-                           nonmem = .cov_pow_nonmem, r_eval = .cov_pow_reval, init = "0.1",
+                           nonmem = .cov_pow_nonmem, init = "0.1",
                            nonmem_log = .cov_pow_logadd)
 
 # cat.linear: multi-level categorical written as a $PK IF/ELSEIF per-level block
 # (one beta per non-reference level). Flagged categorical; the per-level logic
-# stays in model_add_cov (writer) and apply_covariate_model (reader).
+# stays in model_add_cov (the writer).
 register_covariate_formula("cat", "linear", categorical = TRUE)
