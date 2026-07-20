@@ -945,6 +945,24 @@ prepare_search_base_model <- function(base_model_path,
   # ---------------------------------------------------------------------------
   # Step 6: Save one combined log file
   # ---------------------------------------------------------------------------
+  # Pull any WARNING lines out of the (otherwise chronological) log so they are
+  # not buried mid-file: append them as a section at the end of the saved log and
+  # echo them to the console in bold red. Terminals cannot change font size, so a
+  # boxed bold-red banner is used for emphasis instead.
+  warn_msgs <- unique(trimws(
+    sub("^.*?WARNING:\\s*", "", grep("WARNING:", combined_log, value = TRUE))
+  ))
+  if (length(warn_msgs) > 0) {
+    combined_log <- c(
+      combined_log, "", strrep("=", 60), "WARNINGS",
+      unlist(lapply(warn_msgs, function(m) {
+        w <- strwrap(m, 70)
+        paste0(c("  - ", rep("    ", length(w) - 1L)), w)
+      })),
+      strrep("=", 60)
+    )
+  }
+
   safe_suffix <- paste(gsub("[^A-Za-z0-9_]+", "_", covariate_values), collapse = "__")
   log_file <- file.path(
     models_folder,
@@ -953,6 +971,19 @@ prepare_search_base_model <- function(base_model_path,
 
   writeLines(combined_log, log_file)
   cat(sprintf("  Combined log saved: %s\n", basename(log_file)))
+
+  if (length(warn_msgs) > 0) {
+    use_color <- (interactive() ||
+                    isTRUE(tryCatch(isatty(stdout()), error = function(e) FALSE))) &&
+      is.na(Sys.getenv("NO_COLOR", unset = NA))
+    red <- if (use_color) "\033[1;31m" else ""
+    rst <- if (use_color) "\033[0m" else ""
+    bar <- strrep("=", 60)
+    emit <- function(s) cat(red, s, rst, "\n", sep = "")
+    cat("\n"); emit(bar); emit("  *** WARNING ***"); emit(bar)
+    for (m in warn_msgs) for (w in strwrap(m, 56)) emit(paste0("  ", w))
+    emit(bar); cat("\n")
+  }
 
   # ---------------------------------------------------------------------------
   # Step 7: Return metadata for later initialization
