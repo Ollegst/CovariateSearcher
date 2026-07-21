@@ -1257,6 +1257,13 @@ plot_exposure_forest <- function(data,
 #' such as a residual-error term) are **skipped**, since their forest would be
 #' flat. Only the remaining parameters need a `param_info`/`pk.yaml` label.
 #'
+#' Each parameter's forest shows only the scenarios that **move that parameter**
+#' - the reference ("Typical subject") plus any scenario whose value differs
+#' from it - so `CL`'s forest shows only the covariates that act on `CL`, not
+#' every covariate. The summary table (when `param_info` is given) is likewise
+#' **one table per parameter** (its relevant scenarios and the covariate columns
+#' that vary), saved as a named list.
+#'
 #' Files are written under `output_folder/<model>/` (created if missing): one
 #' `<model>-forest-plot-<param>.emf`/`.png` per parameter, plus
 #' `<model>-forest-plots.pdf` containing every parameter forest (one per page).
@@ -1287,12 +1294,13 @@ plot_exposure_forest <- function(data,
 #'   named list `list(label=, unit=)` per parameter (e.g.
 #'   `CL = list(label="CL", unit="L/h")`) OR a spec (yspec object / path /
 #'   spec-shaped list, using each entry's `short` + `unit`). When supplied (with
-#'   a `scenario` data.frame), two summary tables are written to the output
-#'   folder: `<model>-parameter-table-absolute.rds` and `…-relative.rds`, with
-#'   one column per **plotted** structural parameter (mirrors the forest).
-#'   **Every plotted parameter must have a label** or the call stops (restrict
-#'   with `parameters=` or add it). Same cell content as the exposure tables -
-#'   see [plot_exposure_forest()]'s `metric_info`. No `param_info` -> no table.
+#'   a `scenario`), two RDS are written to the output folder,
+#'   `<model>-parameter-table-absolute.rds` and `…-relative.rds`, each a **named
+#'   list with one table per parameter** (that parameter's relevant scenarios and
+#'   the covariate columns that vary). **Every plotted parameter must have a
+#'   label** or the call stops (restrict with `parameters=` or add it). Cell
+#'   content as in the exposure tables - see [plot_exposure_forest()]'s
+#'   `metric_info`. No `param_info` -> no table.
 #' @param scenario The scenario table for the summary tables' covariate columns.
 #'   Defaults to the table [build_scenario_parameters()] attaches to `param_sets`,
 #'   so you normally don't pass it (only needed if you built `param_sets` with an
@@ -1400,12 +1408,42 @@ plot_parameter_forests <- function(param_sets,
                 model, length(param_cols), out_dir))
   }
 
-  plots <- list()
+  # Resolve the table label info + covariate lookup once (only when a table is
+  # requested); every parameter must then have a label.
+  make_table <- !is.null(param_info) && is.data.frame(scenario)
+  if (make_table) {
+    lu <- lookup
+    if (!is.null(spec)) {
+      lu <- utils::modifyList(.spec_to_lookup(spec),
+                              if (is.null(lookup)) list() else lookup)
+    }
+    qi <- .resolve_quantity_info(param_info)
+    .require_quantity_labels(qi, param_cols, "param_info")
+  }
+
+  plots <- list(); abs_tbls <- list(); rel_tbls <- list()
   for (i in seq_along(param_cols)) {
     prm  <- param_cols[i]
+
+    # Each parameter's forest shows only the scenarios that move it: the
+    # reference, plus any scenario whose median differs from the reference -
+    # i.e. only the covariates that actually act on this parameter.
+    meds <- tapply(stacked[[prm]], stacked$Scenario, stats::median, na.rm = TRUE)
+    if (reference %in% names(meds)) {
+      refm <- meds[[reference]]
+      keep <- names(meds)[is.finite(meds) &
+                (names(meds) == reference |
+                 abs(meds - refm) > 1e-8 * max(1, abs(refm)))]
+    } else {
+      keep <- names(meds)
+    }
+    keep <- intersect(levels(stacked$Scenario), keep)      # keep definition order
+    sp   <- stacked[as.character(stacked$Scenario) %in% keep, , drop = FALSE]
+    sp$Scenario <- factor(as.character(sp$Scenario), levels = keep)
+
     stem <- file.path(out_dir, paste0(model, "-forest-plot-", prm))
     plots[[prm]] <- plot_exposure_forest(
-      data            = stacked,
+      data            = sp,
       metric          = prm,
       ss              = FALSE,
       filename        = stem,
@@ -1416,7 +1454,22 @@ plot_parameter_forests <- function(param_sets,
       typical_subject = typical_subject,
       ...
     )
-    if (verbose) cat(sprintf("  [%d/%d] %s\n", i, length(param_cols), prm))
+    if (verbose) cat(sprintf("  [%d/%d] %s (%d scenario(s))\n",
+                             i, length(param_cols), prm, length(keep)))
+
+    # Per-parameter summary table: only this parameter's relevant scenarios and
+    # the covariate columns that vary across them.
+    if (make_table) {
+      st <- scenario[match(keep, as.character(scenario$Scenario)), , drop = FALSE]
+      cov_keep <- setdiff(names(st), "Scenario")
+      cov_keep <- cov_keep[vapply(cov_keep,
+                    function(cc) length(unique(st[[cc]])) > 1L, logical(1))]
+      st <- st[, c("Scenario", cov_keep), drop = FALSE]
+      abs_tbls[[prm]] <- .scenario_summary_table(sp, prm, qi, st, reference,
+                                                 percentiles, lu, relative = FALSE)
+      rel_tbls[[prm]] <- .scenario_summary_table(sp, prm, qi, st, reference,
+                                                 percentiles, lu, relative = TRUE)
+    }
   }
 
   # One combined multi-page PDF of every parameter forest, same folder.
@@ -1429,25 +1482,13 @@ plot_parameter_forests <- function(param_sets,
     grDevices::dev.off()
   }
 
-  # Scenario summary tables (absolute + relative) for the parameters, saved in
-  # the same folder, when `param_info` (headers) and the scenario table are given.
-  if (!is.null(param_info) && is.data.frame(scenario)) {
-    lu <- lookup
-    if (!is.null(spec)) {
-      lu <- utils::modifyList(.spec_to_lookup(spec),
-                              if (is.null(lookup)) list() else lookup)
-    }
-    qi <- .resolve_quantity_info(param_info)              # list or spec -> label/unit
-    # Table mirrors the forest: one column per plotted structural parameter.
-    .require_quantity_labels(qi, param_cols, "param_info")
+  # Save the per-parameter tables as two named lists (one table per parameter).
+  if (make_table) {
     base <- paste0(model, "-parameter-table")
-    saveRDS(.scenario_summary_table(stacked, param_cols, qi, scenario,
-              reference, percentiles, lu, relative = FALSE),
-            file.path(out_dir, paste0(base, "-absolute.rds")))
-    saveRDS(.scenario_summary_table(stacked, param_cols, qi, scenario,
-              reference, percentiles, lu, relative = TRUE),
-            file.path(out_dir, paste0(base, "-relative.rds")))
-    if (verbose) cat(sprintf("  tables -> %s-{absolute,relative}.rds\n", base))
+    saveRDS(abs_tbls, file.path(out_dir, paste0(base, "-absolute.rds")))
+    saveRDS(rel_tbls, file.path(out_dir, paste0(base, "-relative.rds")))
+    if (verbose) cat(sprintf("  tables -> %s-{absolute,relative}.rds (list of %d)\n",
+                             base, length(abs_tbls)))
   }
 
   invisible(plots)

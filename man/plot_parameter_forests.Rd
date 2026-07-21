@@ -62,12 +62,13 @@ suppresses it; a character string is shown verbatim (custom). Passed on to
 named list \code{list(label=, unit=)} per parameter (e.g.
 \code{CL = list(label="CL", unit="L/h")}) OR a spec (yspec object / path /
 spec-shaped list, using each entry's \code{short} + \code{unit}). When supplied (with
-a \code{scenario} data.frame), two summary tables are written to the output
-folder: \verb{<model>-parameter-table-absolute.rds} and \verb{...-relative.rds}, with
-one column per \strong{plotted} structural parameter (mirrors the forest).
-\strong{Every plotted parameter must have a label} or the call stops (restrict
-with \code{parameters=} or add it). Same cell content as the exposure tables -
-see \code{\link[=plot_exposure_forest]{plot_exposure_forest()}}'s \code{metric_info}. No \code{param_info} -> no table.}
+a \code{scenario}), two RDS are written to the output folder,
+\verb{<model>-parameter-table-absolute.rds} and \verb{...-relative.rds}, each a \strong{named
+list with one table per parameter} (that parameter's relevant scenarios and
+the covariate columns that vary). \strong{Every plotted parameter must have a
+label} or the call stops (restrict with \code{parameters=} or add it). Cell
+content as in the exposure tables - see \code{\link[=plot_exposure_forest]{plot_exposure_forest()}}'s
+\code{metric_info}. No \code{param_info} -> no table.}
 
 \item{scenario}{The scenario table for the summary tables' covariate columns.
 Defaults to the table \code{\link[=build_scenario_parameters]{build_scenario_parameters()}} attaches to \code{param_sets},
@@ -104,6 +105,13 @@ Parameters with \strong{no covariate effect} (values identical across all
 scenarios - e.g. a parameter no covariate acts on, or a non-structural theta
 such as a residual-error term) are \strong{skipped}, since their forest would be
 flat. Only the remaining parameters need a \code{param_info}/\code{pk.yaml} label.
+
+Each parameter's forest shows only the scenarios that \strong{move that parameter}
+- the reference ("Typical subject") plus any scenario whose value differs
+from it - so \code{CL}'s forest shows only the covariates that act on \code{CL}, not
+every covariate. The summary table (when \code{param_info} is given) is likewise
+\strong{one table per parameter} (its relevant scenarios and the covariate columns
+that vary), saved as a named list.
 
 Files are written under \code{output_folder/<model>/} (created if missing): one
 \code{<model>-forest-plot-<param>.emf}/\code{.png} per parameter, plus
