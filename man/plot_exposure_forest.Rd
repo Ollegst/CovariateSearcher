@@ -12,7 +12,7 @@ plot_exposure_forest(
   ClinicalRelevanceHigh = 1.25,
   outer_range = c(0.5, 2),
   reference = "Typical subject",
-  scenario_order = NULL,
+  scenario = NULL,
   fontsize = 9,
   title = NULL,
   typical_subject = TRUE,
@@ -47,12 +47,14 @@ Default \code{c(0.5, 2)}; \code{NULL} draws only the inner clinical-relevance ba
 \item{reference}{Character. Scenario used as the reference (denominator of the
 ratio and highlighted colour). Default "Typical subject".}
 
-\item{scenario_order}{Optional character vector giving the scenario order on
-the axis, overriding the default. When \code{NULL} (default), the factor levels
-of \code{data$Scenario} are used if it is a factor - which
-\code{\link[=simulate_scenario_profiles]{simulate_scenario_profiles()}} sets to the scenario definition order, so the
-correct order flows through automatically - otherwise the order scenarios
-first appear in \code{data}.}
+\item{scenario}{Optional. The scenario table from \code{\link[=build_scenario_parameters]{build_scenario_parameters()}}
+(a \code{data.frame}, or a path to a saved \code{.rds}/\code{.csv}): its \code{Scenario} column
+sets the axis order and its \code{"typical_subject"} attribute supplies the
+subtitle - handy for exposure forests, whose metrics table (built with
+\code{group_by()}/\code{summarise()}) has lost both. May also be a plain character
+vector giving just the axis order. When \code{NULL} (default) the factor levels
+of \code{data$Scenario} are used if it is a factor (as
+\code{\link[=simulate_scenario_profiles]{simulate_scenario_profiles()}} sets them), else first-appearance order.}
 
 \item{fontsize}{Numeric. Base font size. Default 9.}
 

@@ -858,12 +858,14 @@ utils::globalVariables(c("Scenario", "VALUE", "NAME", "COLOR", "MIN", "MAX",
 #'   Default `c(0.5, 2)`; `NULL` draws only the inner clinical-relevance band.
 #' @param reference Character. Scenario used as the reference (denominator of the
 #'   ratio and highlighted colour). Default "Typical subject".
-#' @param scenario_order Optional character vector giving the scenario order on
-#'   the axis, overriding the default. When `NULL` (default), the factor levels
-#'   of `data$Scenario` are used if it is a factor - which
-#'   [simulate_scenario_profiles()] sets to the scenario definition order, so the
-#'   correct order flows through automatically - otherwise the order scenarios
-#'   first appear in `data`.
+#' @param scenario Optional. The scenario table from [build_scenario_parameters()]
+#'   (a `data.frame`, or a path to a saved `.rds`/`.csv`): its `Scenario` column
+#'   sets the axis order and its `"typical_subject"` attribute supplies the
+#'   subtitle - handy for exposure forests, whose metrics table (built with
+#'   `group_by()`/`summarise()`) has lost both. May also be a plain character
+#'   vector giving just the axis order. When `NULL` (default) the factor levels
+#'   of `data$Scenario` are used if it is a factor (as
+#'   [simulate_scenario_profiles()] sets them), else first-appearance order.
 #' @param fontsize Numeric. Base font size. Default 9.
 #' @param title Character or NULL. Plot title; when NULL it is built from
 #'   `metric` and `ss` ("Covariate effects on <metric>[ss]").
@@ -906,7 +908,7 @@ plot_exposure_forest <- function(data,
                                  ClinicalRelevanceHigh = 1.25,
                                  outer_range = c(0.5, 2),
                                  reference = "Typical subject",
-                                 scenario_order = NULL,
+                                 scenario = NULL,
                                  fontsize = 9,
                                  title = NULL,
                                  typical_subject = TRUE,
@@ -918,11 +920,31 @@ plot_exposure_forest <- function(data,
   # data may be given as an object OR a character path to load (.csv/.rds).
   data <- .load_if_path(data, "data")
 
-  # typical_subject: TRUE -> use the string attached as attr(data,
-  # "typical_subject") (auto, when present); FALSE/NULL -> no subtitle; a
-  # character string -> shown verbatim (custom).
+  # `scenario` sets the axis order and, for exposure forests, carries the
+  # typical-subject string. It may be the scenario table from
+  # build_scenario_parameters (a data.frame, or a path to a saved .rds/.csv) --
+  # its `Scenario` column gives the order and its "typical_subject" attribute the
+  # subtitle -- OR a plain character vector of scenario names (order only). An
+  # exposure metrics table built with group_by()/summarise() loses both, which
+  # is why the scenario table is passed here.
+  if (is.character(scenario) && length(scenario) == 1L && file.exists(scenario)) {
+    scenario <- .load_if_path(scenario, "scenario")
+  }
+  scenario_order <- NULL
+  if (is.data.frame(scenario)) {
+    if ("Scenario" %in% names(scenario)) scenario_order <- scenario$Scenario
+  } else if (!is.null(scenario)) {
+    scenario_order <- as.character(scenario)          # plain order vector
+  }
+
+  # typical_subject: TRUE -> the "typical_subject" attribute on `data`, or on the
+  # `scenario` table when `data` lacks it (the exposure case); FALSE/NULL -> no
+  # subtitle; a character string -> shown verbatim (custom).
   if (isTRUE(typical_subject)) {
     typical_subject <- attr(data, "typical_subject")
+    if (is.null(typical_subject) && is.data.frame(scenario)) {
+      typical_subject <- attr(scenario, "typical_subject")
+    }
   } else if (isFALSE(typical_subject)) {
     typical_subject <- NULL
   }
