@@ -549,20 +549,21 @@ create_covariate_table <- function(model_name,
     }
   }
 
-  # Typical-subject one-line description (every covariate at its REFERENCE),
-  # labelled with the same short/unit/decoded-level machinery, attached as an
-  # attribute so callers/plots can show it (see plot_exposure_forest's
-  # `typical_subject`). e.g. "Typical subject: Weight 70 kg, Sex Male".
+  # Typical-subject description (every covariate at its REFERENCE), labelled with
+  # the same short/unit/decoded-level machinery, one covariate per line (fits
+  # many covariates), attached as an attribute so callers/plots can show it (see
+  # plot_exposure_forest's `typical_subject`). e.g.
+  #   "Typical subject:\nWeight: 70 kg\nSex: Male".
   ts_parts <- vapply(seq_len(nrow(meta)), function(i) {
     cov <- meta$COVARIATE[i]; lbl <- cov_label(cov); refv <- reference[[cov]]
     if (tolower(as.character(meta$STATUS[i])) == "cat") {
-      paste0(lbl, " ", decode_level(cov, refv))
+      paste0(lbl, ": ", decode_level(cov, refv))
     } else {
       u <- cov_unit(cov); v <- format(round(refv, 2), trim = TRUE)
-      paste0(lbl, " ", if (nzchar(u)) paste0(v, " ", u) else v)
+      paste0(lbl, ": ", if (nzchar(u)) paste0(v, " ", u) else v)
     }
   }, character(1))
-  typical_subject <- paste0("Typical subject: ", paste(ts_parts, collapse = ", "))
+  typical_subject <- paste0("Typical subject:\n", paste(ts_parts, collapse = "\n"))
 
   # ---- Assemble -------------------------------------------------------------
   result <- do.call(rbind, rows)
@@ -1064,7 +1065,7 @@ plot_exposure_forest <- function(data,
     ggtitle(ttl, subtitle = if (!is.null(typical_subject) &&
                                 nzchar(typical_subject)) typical_subject else NULL) +
     theme(
-      plot.subtitle = element_text(size = fontsize),
+      plot.subtitle = element_text(size = fontsize - 2),   # a bit smaller than axes
       axis.text     = element_text(size = fontsize)
     )
 
