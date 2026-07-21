@@ -321,9 +321,13 @@ sample_individual_thetas <- function(model,
 #'   one row per subject before computing percentiles. Default "ID".
 #' @param lookup Optional named list (lookup.yaml-style) keyed by covariate, used
 #'   only to render the `Scenario` description. Each entry may hold `short` or
-#'   `label` (a human name for the covariate) and `values`/`decode` (to translate
-#'   a categorical level to its label). When absent, the covariate code and raw
-#'   level are used.
+#'   `label` (a human name for the covariate), `unit` (continuous unit) and
+#'   `values`/`decode` (to translate a categorical level to its label). When
+#'   absent, the covariate code and raw level are used.
+#' @param spec Optional yspec object, or a path to a spec YAML (loaded with
+#'   [yspec::ys_load()]) - an alternative to `lookup`: the `short`/`unit`/
+#'   `values`/`decode` are read from the spec's columns. Any explicit `lookup`
+#'   entries take precedence over the spec-derived ones.
 #' @param wrap_width Integer. If a `Scenario` string is longer than this many
 #'   characters, a line break is inserted so the "(...)" detail (continuous) or
 #'   the category level (categorical) moves onto a second line, which helps long
@@ -352,6 +356,7 @@ create_covariate_table <- function(model_name,
                                     models_folder = "models",
                                     id_col = "ID",
                                     lookup = NULL,
+                                    spec = NULL,
                                     wrap_width = 30) {
 
   # ---- Validate inputs ------------------------------------------------------
@@ -374,6 +379,13 @@ create_covariate_table <- function(model_name,
   }
   if (!id_col %in% names(data)) {
     stop("`id_col` ('", id_col, "') not found in `data`.")
+  }
+
+  # A yspec `spec` is an alternative to `lookup`: derive short/unit/values/decode
+  # from it, then let any explicit `lookup` entries override per covariate.
+  if (!is.null(spec)) {
+    spec_lu <- .spec_to_lookup(spec)
+    lookup  <- utils::modifyList(spec_lu, if (is.null(lookup)) list() else lookup)
   }
 
   # ---- Identify covariates in the model -------------------------------------
@@ -542,6 +554,31 @@ create_covariate_table <- function(model_name,
   result <- cbind(Scenario = scenarios, result, stringsAsFactors = FALSE)
   rownames(result) <- NULL
   result
+}
+
+# Convert a yspec `spec` (object or path) to the `lookup`-list shape that
+# create_covariate_table() consumes: per covariate a list of short/unit/values/
+# decode, taken from the spec's own per-column fields (a yspec column mirrors its
+# YAML: short/label/unit/values/decode). Field access is defensive - a column it
+# cannot read is simply omitted, so labels fall back to raw codes (never errors).
+.spec_to_lookup <- function(spec) {
+  if (is.character(spec) && length(spec) == 1L) {
+    spec <- yspec::ys_load(spec)
+  }
+  nms <- tryCatch(names(spec), error = function(e) character(0))
+  out <- list()
+  for (nm in nms) {
+    cl <- tryCatch(as.list(spec[[nm]]), error = function(e) NULL)
+    if (is.null(cl)) next
+    short <- if (!is.null(cl[["short"]])) cl[["short"]] else cl[["label"]]
+    entry <- list(short  = short,
+                  unit   = cl[["unit"]],
+                  values = cl[["values"]],
+                  decode = cl[["decode"]])
+    entry <- entry[!vapply(entry, is.null, logical(1))]
+    if (length(entry) > 0) out[[nm]] <- entry
+  }
+  out
 }
 
 
@@ -798,7 +835,11 @@ utils::globalVariables(c("Scenario", "VALUE", "NAME", "COLOR", "MIN", "MAX",
 #' @param ss Logical. Steady state? Adds an "ss" suffix to the metric in the
 #'   title (e.g. "AUC" vs "AUCss"). Default `TRUE`.
 #' @param ClinicalRelevanceLow,ClinicalRelevanceHigh Numeric. Bounds of the
-#'   shaded clinical-relevance band (ratio scale). Defaults `0.8`, `1.25`.
+#'   shaded (inner) clinical-relevance band (ratio scale). Defaults `0.8`,
+#'   `1.25`.
+#' @param outer_range Numeric length-2 vector, or `NULL`. Bounds of a second,
+#'   wider shaded reference band (ratio scale) drawn behind the inner one.
+#'   Default `c(0.5, 2)`; `NULL` draws only the inner clinical-relevance band.
 #' @param reference Character. Scenario used as the reference (denominator of the
 #'   ratio and highlighted colour). Default "Typical subject".
 #' @param scenario_order Optional character vector giving the scenario order on
@@ -840,6 +881,7 @@ plot_exposure_forest <- function(data,
                                  ss = TRUE,
                                  ClinicalRelevanceLow = 0.8,
                                  ClinicalRelevanceHigh = 1.25,
+                                 outer_range = c(0.5, 2),
                                  reference = "Typical subject",
                                  scenario_order = NULL,
                                  fontsize = 9,
@@ -908,22 +950,38 @@ plot_exposure_forest <- function(data,
     "Box plots: 2.5% / 25% / 50% / 75% / 97.5%"
   )
 
-  # Shaded reference bands (behind the boxes), mapped to `fill` so they get
-  # legend swatches next to the boxplot colours. Outer band listed first so it is
-  # drawn underneath the (narrower) inner band.
+  # Shaded reference band(s) (behind the boxes), mapped to `fill` so they get
+  # legend swatches next to the boxplot colours. The inner band is the clinical-
+  # relevance range; `outer_range` (when not NULL) adds a wider band drawn
+  # underneath it (outer band listed first so it renders below the inner one).
   inner_lab <- paste0("Reference range\n", ClinicalRelevanceLow, "-",
                       ClinicalRelevanceHigh)
-  outer_lab <- "Reference range\n0.5-2"
-  bands <- data.frame(
-    xmin = -Inf, xmax = Inf,
-    ymin = c(0.5, ClinicalRelevanceLow),
-    ymax = c(2,   ClinicalRelevanceHigh),
-    band = factor(c(outer_lab, inner_lab), levels = c(inner_lab, outer_lab))
-  )
-  fill_values <- stats::setNames(
-    c("#185AA9", "#7AC36A", "darkgrey", "lightgrey"),
-    c("Typical value", "Parameter\nfor defined\ncategory", inner_lab, outer_lab)
-  )
+  if (!is.null(outer_range)) {
+    if (length(outer_range) != 2L || !is.numeric(outer_range)) {
+      stop("`outer_range` must be NULL or a numeric length-2 vector, e.g. c(0.5, 2).")
+    }
+    outer_lab <- paste0("Reference range\n", outer_range[1], "-", outer_range[2])
+    bands <- data.frame(
+      xmin = -Inf, xmax = Inf,
+      ymin = c(outer_range[1], ClinicalRelevanceLow),
+      ymax = c(outer_range[2], ClinicalRelevanceHigh),
+      band = factor(c(outer_lab, inner_lab), levels = c(inner_lab, outer_lab))
+    )
+    fill_values <- stats::setNames(
+      c("#185AA9", "#7AC36A", "darkgrey", "lightgrey"),
+      c("Typical value", "Parameter\nfor defined\ncategory", inner_lab, outer_lab)
+    )
+  } else {
+    bands <- data.frame(
+      xmin = -Inf, xmax = Inf,
+      ymin = ClinicalRelevanceLow, ymax = ClinicalRelevanceHigh,
+      band = factor(inner_lab, levels = inner_lab)
+    )
+    fill_values <- stats::setNames(
+      c("#185AA9", "#7AC36A", "lightgrey"),
+      c("Typical value", "Parameter\nfor defined\ncategory", inner_lab)
+    )
+  }
 
   p <- ggplot() +
     theme_forest(base_size = fontsize) +
@@ -998,6 +1056,9 @@ plot_exposure_forest <- function(data,
 #' @param combined_pdf Logical; if `TRUE` (default) also write a single
 #'   multi-page PDF of every parameter forest to the same folder.
 #' @param width,height Numeric. Figure size in inches. Default 6 x 6.
+#' @param outer_range Passed to [plot_exposure_forest()]. `NULL` (default) draws
+#'   only the clinical-relevance band on parameter forests (the wider 0.5-2 band
+#'   is dropped); pass e.g. `c(0.5, 2)` to add it back.
 #' @param models_folder Character. Folder containing `model`. Default "models".
 #' @param verbose Logical; print progress. Default `TRUE`.
 #' @param ... Further arguments passed to [plot_exposure_forest()] (e.g.
@@ -1021,6 +1082,7 @@ plot_parameter_forests <- function(param_sets,
                                     combined_pdf = TRUE,
                                     width = 6,
                                     height = 6,
+                                    outer_range = NULL,
                                     models_folder = "models",
                                     verbose = TRUE,
                                     ...) {
@@ -1061,6 +1123,7 @@ plot_parameter_forests <- function(param_sets,
       output_format = output_format,
       width         = width,
       height        = height,
+      outer_range   = outer_range,
       ...
     )
     if (verbose) cat(sprintf("  [%d/%d] %s\n", i, length(param_cols), prm))

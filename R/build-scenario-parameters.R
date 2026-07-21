@@ -37,7 +37,11 @@
 #'   path to a `.csv`/`.rds` file to load.
 #' @param data Analysis dataset (used by [create_covariate_table()] to compute
 #'   continuous-covariate percentiles), given as either a `data.frame` OR a
-#'   character path to a `.csv`/`.rds` file to load.
+#'   character path to a `.csv`/`.rds` file to load. It is used **as-is**: the
+#'   model's `$DATA` `IGNORE`/`ACCEPT` filter is not applied, so pre-filter it to
+#'   the modelling population before calling (the function warns to this effect).
+#'   No decoding is needed - continuous covariates use numeric percentiles and
+#'   categorical scenarios come from `covariate_search$LEVELS` + `lookup`.
 #' @param percentiles Numeric vector of probabilities in \[0, 1] for continuous
 #'   covariates, passed straight to [create_covariate_table()]. User-selectable.
 #'   Default `c(0.05, 0.95)`.
@@ -47,6 +51,10 @@
 #'   [create_covariate_table()] so scenario labels show covariate **units** and
 #'   **decoded categorical levels**. When `NULL` (default), raw covariate codes
 #'   and levels are shown.
+#' @param spec Optional yspec object, or a path to a spec YAML, forwarded to
+#'   [create_covariate_table()] - a convenient alternative to `lookup`: the
+#'   short/unit/values/decode are taken from the spec so scenario labels show
+#'   units and decoded levels. Any explicit `lookup` entries override the spec.
 #' @param id_col Character. Subject-ID column used to reduce `data` to one row
 #'   per subject before computing percentiles. Forwarded to
 #'   [create_covariate_table()]. Default "ID".
@@ -87,6 +95,7 @@ build_scenario_parameters <- function(model,
                                       percentiles = c(0.05, 0.95),
                                       models_folder = "models",
                                       lookup = NULL,
+                                      spec = NULL,
                                       id_col = "ID",
                                       wrap_width = 30,
                                       scenario_table_path =
@@ -103,6 +112,19 @@ build_scenario_parameters <- function(model,
          "(output of sample_individual_thetas()).")
   }
 
+  # `data` drives the covariate distributions but is used AS-IS: the model's
+  # $DATA IGNORE/ACCEPT filter is NOT applied here. Remind the caller to pass a
+  # dataset already reduced to the modelling population. (No decoding needed:
+  # continuous covariates use numeric percentiles and categorical scenarios come
+  # from covariate_search$LEVELS + the `lookup` labels, not the data column.)
+  warning(
+    "build_scenario_parameters(): `data` is used as-is - it is NOT filtered to ",
+    "match the model's $DATA (IGNORE/ACCEPT). Pre-filter `data` to the ",
+    "modelling population (same row/subject exclusions as the NONMEM run) ",
+    "before calling, so the covariate percentiles match the estimated data.",
+    call. = FALSE
+  )
+
   # Scenario table: row 1 = typical subject, rows 2+ = one-at-a-time variations.
   # `percentiles` flows straight through to create_covariate_table().
   scenarios <- create_covariate_table(
@@ -113,6 +135,7 @@ build_scenario_parameters <- function(model,
     models_folder    = models_folder,
     id_col           = id_col,
     lookup           = lookup,
+    spec             = spec,
     wrap_width       = wrap_width
   )
 

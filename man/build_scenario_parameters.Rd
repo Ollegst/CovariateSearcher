@@ -12,6 +12,7 @@ build_scenario_parameters(
   percentiles = c(0.05, 0.95),
   models_folder = "models",
   lookup = NULL,
+  spec = NULL,
   id_col = "ID",
   wrap_width = 30,
   scenario_table_path = paste0("scenario_table_", model, ".rds")
@@ -31,7 +32,11 @@ path to a \code{.csv}/\code{.rds} file to load.}
 
 \item{data}{Analysis dataset (used by \code{\link[=create_covariate_table]{create_covariate_table()}} to compute
 continuous-covariate percentiles), given as either a \code{data.frame} OR a
-character path to a \code{.csv}/\code{.rds} file to load.}
+character path to a \code{.csv}/\code{.rds} file to load. It is used \strong{as-is}: the
+model's \verb{$DATA} \code{IGNORE}/\code{ACCEPT} filter is not applied, so pre-filter it to
+the modelling population before calling (the function warns to this effect).
+No decoding is needed - continuous covariates use numeric percentiles and
+categorical scenarios come from \code{covariate_search$LEVELS} + \code{lookup}.}
 
 \item{percentiles}{Numeric vector of probabilities in [0, 1] for continuous
 covariates, passed straight to \code{\link[=create_covariate_table]{create_covariate_table()}}. User-selectable.
@@ -44,6 +49,11 @@ Default \code{c(0.05, 0.95)}.}
 \code{\link[=create_covariate_table]{create_covariate_table()}} so scenario labels show covariate \strong{units} and
 \strong{decoded categorical levels}. When \code{NULL} (default), raw covariate codes
 and levels are shown.}
+
+\item{spec}{Optional yspec object, or a path to a spec YAML, forwarded to
+\code{\link[=create_covariate_table]{create_covariate_table()}} - a convenient alternative to \code{lookup}: the
+short/unit/values/decode are taken from the spec so scenario labels show
+units and decoded levels. Any explicit \code{lookup} entries override the spec.}
 
 \item{id_col}{Character. Subject-ID column used to reduce \code{data} to one row
 per subject before computing percentiles. Forwarded to

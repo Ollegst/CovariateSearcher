@@ -12,6 +12,7 @@ create_covariate_table(
   models_folder = "models",
   id_col = "ID",
   lookup = NULL,
+  spec = NULL,
   wrap_width = 30
 )
 }
@@ -36,9 +37,14 @@ one row per subject before computing percentiles. Default "ID".}
 
 \item{lookup}{Optional named list (lookup.yaml-style) keyed by covariate, used
 only to render the \code{Scenario} description. Each entry may hold \code{short} or
-\code{label} (a human name for the covariate) and \code{values}/\code{decode} (to translate
-a categorical level to its label). When absent, the covariate code and raw
-level are used.}
+\code{label} (a human name for the covariate), \code{unit} (continuous unit) and
+\code{values}/\code{decode} (to translate a categorical level to its label). When
+absent, the covariate code and raw level are used.}
+
+\item{spec}{Optional yspec object, or a path to a spec YAML (loaded with
+\code{\link[yspec:ys_load]{yspec::ys_load()}}) - an alternative to \code{lookup}: the \code{short}/\code{unit}/
+\code{values}/\code{decode} are read from the spec's columns. Any explicit \code{lookup}
+entries take precedence over the spec-derived ones.}
 
 \item{wrap_width}{Integer. If a \code{Scenario} string is longer than this many
 characters, a line break is inserted so the "(...)" detail (continuous) or

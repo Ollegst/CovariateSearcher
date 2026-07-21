@@ -10,6 +10,7 @@ plot_exposure_forest(
   ss = TRUE,
   ClinicalRelevanceLow = 0.8,
   ClinicalRelevanceHigh = 1.25,
+  outer_range = c(0.5, 2),
   reference = "Typical subject",
   scenario_order = NULL,
   fontsize = 9,
@@ -35,7 +36,12 @@ structural parameter column (\code{"CL"}, \code{"V2"}, ...) from
 title (e.g. "AUC" vs "AUCss"). Default \code{TRUE}.}
 
 \item{ClinicalRelevanceLow, ClinicalRelevanceHigh}{Numeric. Bounds of the
-shaded clinical-relevance band (ratio scale). Defaults \code{0.8}, \code{1.25}.}
+shaded (inner) clinical-relevance band (ratio scale). Defaults \code{0.8},
+\code{1.25}.}
+
+\item{outer_range}{Numeric length-2 vector, or \code{NULL}. Bounds of a second,
+wider shaded reference band (ratio scale) drawn behind the inner one.
+Default \code{c(0.5, 2)}; \code{NULL} draws only the inner clinical-relevance band.}
 
 \item{reference}{Character. Scenario used as the reference (denominator of the
 ratio and highlighted colour). Default "Typical subject".}

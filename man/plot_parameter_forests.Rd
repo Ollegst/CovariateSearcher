@@ -13,6 +13,7 @@ plot_parameter_forests(
   combined_pdf = TRUE,
   width = 6,
   height = 6,
+  outer_range = NULL,
   models_folder = "models",
   verbose = TRUE,
   ...
@@ -39,6 +40,10 @@ per-parameter image format(s) to save. Default both. \code{.emf} via
 multi-page PDF of every parameter forest to the same folder.}
 
 \item{width, height}{Numeric. Figure size in inches. Default 6 x 6.}
+
+\item{outer_range}{Passed to \code{\link[=plot_exposure_forest]{plot_exposure_forest()}}. \code{NULL} (default) draws
+only the clinical-relevance band on parameter forests (the wider 0.5-2 band
+is dropped); pass e.g. \code{c(0.5, 2)} to add it back.}
 
 \item{models_folder}{Character. Folder containing \code{model}. Default "models".}
 
