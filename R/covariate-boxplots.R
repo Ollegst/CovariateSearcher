@@ -14,9 +14,10 @@ utils::globalVariables(c("y", "facet_grp", "xlev", "Freq"))
 #' Builds boxplots of an exposure metric across covariate groups. Continuous
 #' covariates are binned into quartile groups; categorical covariates use their
 #' (decoded) factor levels. Each box is annotated with its median value at the
-#' median level, and an extra right-most `REF` box pools all data as a
-#' reference. Optionally splits into side-by-side panels by a stratification
-#' column, and can also emit a single multi-page PDF of every plot.
+#' median level, and (when `total_panel = TRUE`) an extra right-most `Total`
+#' panel pools all data as a reference. Optionally splits into side-by-side
+#' panels by a stratification column, and can also emit a single multi-page PDF
+#' of every plot.
 #'
 #' Covariate axis labels come straight from the yspec `spec` via
 #' [yspec::ys_get_short_unit()] ("Short (unit)"). Categorical covariates are
@@ -47,6 +48,8 @@ utils::globalVariables(c("y", "facet_grp", "xlev", "Freq"))
 #'   entry or the call stops.
 #' @param stratification optional column name (string) in `data` to split
 #'   plots into side-by-side panels (e.g. "COMB"). NULL = single panel.
+#' @param total_panel logical; if TRUE (default) add a right-most `Total` panel
+#'   pooling all subjects as a reference. FALSE drops it.
 #' @param output_folder base output directory. Default
 #'   "results/figure/simulations". AUC/Cmax/Cmin subfolders are created
 #'   inside it as needed.
@@ -108,6 +111,7 @@ create_covariate_boxplots <- function(data,
                                       drug,
                                       param_info,
                                       stratification = NULL,
+                                      total_panel = TRUE,
                                       output_folder = "results/figure/simulations",
                                       width = NULL,
                                       height = NULL,
@@ -184,18 +188,19 @@ create_covariate_boxplots <- function(data,
 
   # Stratification panel order (decoded factor levels, else appearance order);
   # NULL when not stratifying. Panels run left-to-right: one per stratum (a
-  # single blank panel when not stratifying), then a separate right-hand "REF"
-  # panel that pools ALL data.
+  # single blank panel when not stratifying), then - when `total_panel` - a
+  # separate right-hand "Total" panel that pools ALL data.
   strat_levels <- if (!is.null(stratification)) {
     s <- data[[stratification]]
     if (is.factor(s)) levels(droplevels(s)) else unique(as.character(s))
   } else {
     NULL
   }
-  panel_levels <- c(if (is.null(strat_levels)) "" else strat_levels, "REF")
+  panel_levels <- c(if (is.null(strat_levels)) "" else strat_levels,
+                    if (isTRUE(total_panel)) "Total")
 
   # Figure size: explicit width/height override, else scale to the panel count
-  # (all panels sit in one row: strata panels + the REF panel).
+  # (all panels sit in one row: strata panels + the Total panel).
   if (!is.null(width) && !is.null(height)) {
     fig_w <- width
     fig_h <- height
@@ -256,20 +261,25 @@ create_covariate_boxplots <- function(data,
       grp_levels <- levels(pdata[[covariate]])
 
       # Facet-panel column: the stratum (blank when not stratifying) for the
-      # covariate-group rows, plus a REF copy of EVERY row (all strata pooled)
-      # placed in its own right-hand "REF" panel.
+      # covariate-group rows, plus - when `total_panel` - a "Total" copy of EVERY
+      # row (all strata pooled) placed in its own right-hand "Total" panel.
       pdata$facet_grp <- if (!is.null(stratification)) {
         as.character(pdata[[stratification]])
       } else {
         ""
       }
-      ref_rows <- pdata
-      ref_rows$facet_grp    <- "REF"
-      ref_rows[[covariate]] <- "All subjects"
-
       pdata[[covariate]] <- as.character(pdata[[covariate]])
-      alld <- rbind(pdata, ref_rows)
-      alld[[covariate]] <- factor(alld[[covariate]], levels = c(grp_levels, "All subjects"))
+      if (isTRUE(total_panel)) {
+        ref_rows <- pdata
+        ref_rows$facet_grp    <- "Total"
+        ref_rows[[covariate]] <- "All subjects"
+        alld <- rbind(pdata, ref_rows)
+        x_levels <- c(grp_levels, "All subjects")
+      } else {
+        alld <- pdata
+        x_levels <- grp_levels
+      }
+      alld[[covariate]] <- factor(alld[[covariate]], levels = x_levels)
       alld$facet_grp    <- factor(alld$facet_grp, levels = panel_levels)
 
       # N per (panel, box) for the "N=" labels under each box.
@@ -312,7 +322,8 @@ create_covariate_boxplots <- function(data,
               axis.text.x = element_text(angle = 45, hjust = 1))
 
       # Without stratification the left panel is simply "the covariate" and
-      # needs no strip label; the REF panel stays identified by its "REF" tick.
+      # needs no strip label; the Total panel stays identified by its
+      # "All subjects" tick.
       if (is.null(stratification)) {
         combined <- combined +
           theme(strip.background = element_blank(), strip.text = element_blank())

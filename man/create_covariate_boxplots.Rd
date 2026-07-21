@@ -13,6 +13,7 @@ create_covariate_boxplots(
   drug,
   param_info,
   stratification = NULL,
+  total_panel = TRUE,
   output_folder = "results/figure/simulations",
   width = NULL,
   height = NULL,
@@ -55,6 +56,9 @@ entry or the call stops.}
 \item{stratification}{optional column name (string) in \code{data} to split
 plots into side-by-side panels (e.g. "COMB"). NULL = single panel.}
 
+\item{total_panel}{logical; if TRUE (default) add a right-most \code{Total} panel
+pooling all subjects as a reference. FALSE drops it.}
+
 \item{output_folder}{base output directory. Default
 "results/figure/simulations". AUC/Cmax/Cmin subfolders are created
 inside it as needed.}
@@ -95,9 +99,10 @@ invisibly.
 Builds boxplots of an exposure metric across covariate groups. Continuous
 covariates are binned into quartile groups; categorical covariates use their
 (decoded) factor levels. Each box is annotated with its median value at the
-median level, and an extra right-most \code{REF} box pools all data as a
-reference. Optionally splits into side-by-side panels by a stratification
-column, and can also emit a single multi-page PDF of every plot.
+median level, and (when \code{total_panel = TRUE}) an extra right-most \code{Total}
+panel pools all data as a reference. Optionally splits into side-by-side
+panels by a stratification column, and can also emit a single multi-page PDF
+of every plot.
 
 Covariate axis labels come straight from the yspec \code{spec} via
 \code{\link[yspec:ys_get_short_unit]{yspec::ys_get_short_unit()}} ("Short (unit)"). Categorical covariates are
