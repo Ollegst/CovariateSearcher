@@ -21,14 +21,14 @@ utils::globalVariables(c("y", "facet_grp", "xlev", "Freq"))
 #'
 #' Covariate axis labels come straight from the yspec `spec` via
 #' [yspec::ys_get_short_unit()] ("Short (unit)"). Categorical covariates are
-#' expected to be decoded already (via [yspec::decode_dataset()]); if a
+#' expected to be decoded already (via [decode_dataset()]); if a
 #' categorical covariate still holds raw numeric codes the function stops and
 #' tells you how to decode.
 #'
 #' @param data One row per subject/replicate, containing columns for
 #'   AUC/Cmax/Cmin (as named in `param_info`) and all baseline covariates listed
 #'   in `con`/`cat`; categorical covariates should already be decoded (see
-#'   [yspec::decode_dataset()]). Given as either a `data.frame` OR a character
+#'   [decode_dataset()]). Given as either a `data.frame` OR a character
 #'   path to a `.csv`/`.rds` file to load.
 #' @param spec A loaded yspec object (from [yspec::ys_load()]), or a path to
 #'   the spec YAML file (loaded with [yspec::ys_load()]); used for the
@@ -83,7 +83,7 @@ utils::globalVariables(c("y", "facet_grp", "xlev", "Freq"))
 #' \dontrun{
 #' spec <- yspec::ys_load(here::here("data", "spec", "lookup.yml"))
 #' flags <- yspec::pull_meta(spec, "flags")
-#' dat  <- yspec::decode_dataset(dat, spec, c(flags$catcov))
+#' dat  <- decode_dataset(dat, spec, c(flags$catcov))
 #'
 #' param_info <- list(
 #'   AUC  = list(label = "AUCss",   unit = "mg*hr/L"),

@@ -261,3 +261,70 @@ calculate_covariate_df <- function(covariate_name, covariate_search) {
   return(as.integer(df))
 }
 
+
+#' Decode Categorical Columns Using a Variable Specification
+#'
+#' @description
+#' Replaces the numeric codes of one or more categorical columns with their
+#' decoded labels, using each column's `values` -> `decode` mapping from a
+#' variable specification. Every decoded column becomes a `factor` whose levels
+#' are the `decode` labels in spec order, so downstream plots and tables show
+#' readable categories instead of raw codes.
+#'
+#' The specification may be a loaded \pkg{yspec} object (from
+#' [yspec::ys_load()]) **or** a plain list read from a spec YAML with
+#' [yaml::read_yaml()]. In both cases the fields are read with `$`
+#' (`spec[[col]]$values` / `$decode`): on a yspec column that resolves the yspec
+#' accessor, and on a raw list it reads the list element - so the same call
+#' works for either input. (Note: routing the same fields through `as.list()`
+#' first does **not** work on a yspec column - it bypasses the accessor and the
+#' `values`/`decode` pairing shifts.)
+#'
+#' @param data A data frame containing the columns to decode.
+#' @param yaml_file The variable specification: a loaded yspec object, or a raw
+#'   list from [yaml::read_yaml()]. Each entry keyed by column name is expected
+#'   to carry `values` (the numeric codes) and `decode` (the matching labels).
+#' @param column_names Character vector of column names in `data` to decode. A
+#'   name whose spec entry lacks `values`/`decode`, or that is not a column of
+#'   `data`, is left unchanged.
+#'
+#' @return `data`, with each requested column replaced by a `factor` of its
+#'   `decode` labels (levels in spec order). Any code not present in `values`
+#'   becomes `NA`.
+#'
+#' @examples
+#' \dontrun{
+#' spec  <- yspec::ys_load(here::here("data", "spec", "lookup.yml"))
+#' flags <- yspec::pull_meta(spec, "flags")
+#' dat   <- decode_dataset(dat, spec, c(flags$catcov))
+#' }
+#' @export
+decode_dataset <- function(data, yaml_file, column_names) {
+  # Read the spec/lookup entries by name.
+  meta <- yaml_file
+
+  # Decode each requested column that has a values -> decode mapping.
+  for (col_name in column_names) {
+    # `$values` / `$decode` are read directly (not via as.list()): this resolves
+    # the yspec accessor for a ys_load object and the list field for a raw yaml
+    # list alike, keeping the two vectors aligned.
+    if (!is.null(meta[[col_name]]$decode) && !is.null(meta[[col_name]]$values)) {
+      # Only touch columns actually present in the data.
+      if (col_name %in% names(data)) {
+        mapping_values <- meta[[col_name]]$values   # original numeric codes
+        mapping_decode <- meta[[col_name]]$decode   # corresponding decoded labels
+
+        # match() maps each data value to its position in `values`; index
+        # `decode` to get the label. Level order follows `decode` so the factor
+        # keeps the spec's category order (codes not in `values` -> NA).
+        data[[col_name]] <- factor(
+          mapping_decode[match(data[[col_name]], mapping_values)],
+          levels = mapping_decode
+        )
+      }
+    }
+  }
+
+  return(data)
+}
+

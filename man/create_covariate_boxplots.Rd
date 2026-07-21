@@ -28,7 +28,7 @@ create_covariate_boxplots(
 \item{data}{One row per subject/replicate, containing columns for
 AUC/Cmax/Cmin (as named in \code{param_info}) and all baseline covariates listed
 in \code{con}/\code{cat}; categorical covariates should already be decoded (see
-\code{\link[yspec:decode_dataset]{yspec::decode_dataset()}}). Given as either a \code{data.frame} OR a character
+\code{\link{decode_dataset}}). Given as either a \code{data.frame} OR a character
 path to a \code{.csv}/\code{.rds} file to load.}
 
 \item{spec}{A loaded yspec object (from \code{\link[yspec:ys_load]{yspec::ys_load()}}), or a path to
@@ -106,7 +106,7 @@ of every plot.
 
 Covariate axis labels come straight from the yspec \code{spec} via
 \code{\link[yspec:ys_get_short_unit]{yspec::ys_get_short_unit()}} ("Short (unit)"). Categorical covariates are
-expected to be decoded already (via \code{\link[yspec:decode_dataset]{yspec::decode_dataset()}}); if a
+expected to be decoded already (via \code{\link{decode_dataset}}); if a
 categorical covariate still holds raw numeric codes the function stops and
 tells you how to decode.
 }
@@ -114,7 +114,7 @@ tells you how to decode.
 \dontrun{
 spec <- yspec::ys_load(here::here("data", "spec", "lookup.yml"))
 flags <- yspec::pull_meta(spec, "flags")
-dat  <- yspec::decode_dataset(dat, spec, c(flags$catcov))
+dat  <- decode_dataset(dat, spec, c(flags$catcov))
 
 param_info <- list(
   AUC  = list(label = "AUCss",   unit = "mg*hr/L"),
