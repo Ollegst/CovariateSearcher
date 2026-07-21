@@ -598,6 +598,36 @@ create_covariate_table <- function(model_name,
   out
 }
 
+# Resolve `metric_info`/`param_info` to a named list(label=, unit=) per quantity.
+# Accepts that list directly, OR a spec: a yspec object, a path to a spec YAML,
+# or a spec-shaped list (entries carrying `short`) - in which case each entry's
+# `short` (label) and `unit` are taken from the spec.
+.resolve_quantity_info <- function(x) {
+  if (is.null(x)) return(NULL)
+  is_spec <- (is.character(x) && length(x) == 1L) || inherits(x, "yspec") ||
+    (is.list(x) && length(x) > 0 &&
+       any(vapply(x, function(e) is.list(e) && !is.null(e[["short"]]), logical(1))))
+  if (!is_spec) return(x)                              # already a label/unit list
+  lu  <- .spec_to_lookup(x)
+  out <- list()
+  for (nm in names(lu)) {
+    e <- lu[[nm]]
+    out[[nm]] <- list(label = if (!is.null(e$short)) e$short else nm, unit = e$unit)
+  }
+  out
+}
+
+# Stop if any tabulated quantity has no label in `q_info` (user must supply one).
+.require_quantity_labels <- function(q_info, quantities, arg = "metric_info") {
+  miss <- quantities[!quantities %in% names(q_info)]
+  if (length(miss) > 0) {
+    stop("No label/unit in `", arg, "` for: ", paste(miss, collapse = ", "),
+         ". Add an entry (label + unit) for each of these to the spec / list.",
+         call. = FALSE)
+  }
+  invisible(TRUE)
+}
+
 # Build ONE scenario-summary table (absolute or relative) as a formatted
 # data.frame: rows = scenarios, leading covariate columns (from `scenario_tbl`,
 # decoded via `lookup`, units in the header), then one column per quantity.
@@ -955,15 +985,19 @@ utils::globalVariables(c("Scenario", "VALUE", "NAME", "COLOR", "MIN", "MAX",
 #' @param output_format Character. Which format(s) to save when `filename` is
 #'   given: one or both of `"emf"` and `"png"`. Default both. `.emf` is written
 #'   with `devEMF::emf`, `.png` with the [ggplot2::ggsave()] default device.
-#' @param metric_info Optional named list keyed by metric, each
-#'   `list(label=, unit=)` (e.g. `AUC = list(label="AUCss", unit="ng*h/mL")`).
-#'   When supplied (with `filename` and a `scenario` data.frame), two summary
-#'   tables spanning **all** metrics in `metric_info` are written next to the
-#'   plot as `<model>-exposure-table-absolute.rds` and `…-relative.rds`.
-#'   Absolute cell = `median / [lo,hi] / geomean / (geoCV%)`; relative =
-#'   `ratio [lo,hi]` vs the `reference` median. Covariate columns come from
-#'   `scenario` (decoded via `lookup`/`spec`, units in the header); interval at
-#'   `percentiles`; rounded to 2 dp. No `metric_info` -> no table.
+#' @param metric_info Metric labels/units for the summary-table headers, as
+#'   EITHER a named list `list(label=, unit=)` per metric (e.g.
+#'   `AUC = list(label="AUCss", unit="ng*h/mL")`) OR a spec supplying them - a
+#'   yspec object, a path to a spec YAML, or a spec-shaped list (each entry's
+#'   `short` becomes the label, plus its `unit`). When supplied (with `filename`
+#'   and a `scenario` data.frame), two summary tables covering **every** metric
+#'   column of `data` are written next to the plot as
+#'   `<model>-exposure-table-absolute.rds` and `…-relative.rds`. **Every metric
+#'   must have a label** or the call stops (add it to the spec/list). Absolute
+#'   cell = `median / [lo,hi] / geomean / (geoCV%)`; relative = `ratio [lo,hi]`
+#'   vs the `reference` median. Covariate columns come from `scenario` (decoded
+#'   via `lookup`/`spec`); interval at `percentiles`; 2 dp. No `metric_info` ->
+#'   no table.
 #' @param model Optional character used only to name the summary-table files
 #'   (`<model>-exposure-table-*.rds`).
 #' @param percentiles Numeric length-2. Interval for the summary tables (same for
@@ -1189,20 +1223,20 @@ plot_exposure_forest <- function(data,
       lu <- utils::modifyList(.spec_to_lookup(spec),
                               if (is.null(lookup)) list() else lookup)
     }
-    metrics_tbl <- intersect(names(metric_info), names(data))
-    if (length(metrics_tbl) > 0) {
-      tdir <- dirname(stem)
-      if (nzchar(tdir) && !dir.exists(tdir)) {
-        dir.create(tdir, recursive = TRUE, showWarnings = FALSE)
-      }
-      base <- if (!is.null(model)) paste0(model, "-exposure-table") else "exposure-table"
-      saveRDS(.scenario_summary_table(data, metrics_tbl, metric_info, scenario,
-                reference, percentiles, lu, relative = FALSE),
-              file.path(tdir, paste0(base, "-absolute.rds")))
-      saveRDS(.scenario_summary_table(data, metrics_tbl, metric_info, scenario,
-                reference, percentiles, lu, relative = TRUE),
-              file.path(tdir, paste0(base, "-relative.rds")))
+    qi <- .resolve_quantity_info(metric_info)             # list or spec -> label/unit
+    metrics_tbl <- setdiff(names(data)[vapply(data, is.numeric, logical(1))], "ID")
+    .require_quantity_labels(qi, metrics_tbl, "metric_info")
+    tdir <- dirname(stem)
+    if (nzchar(tdir) && !dir.exists(tdir)) {
+      dir.create(tdir, recursive = TRUE, showWarnings = FALSE)
     }
+    base <- if (!is.null(model)) paste0(model, "-exposure-table") else "exposure-table"
+    saveRDS(.scenario_summary_table(data, metrics_tbl, qi, scenario,
+              reference, percentiles, lu, relative = FALSE),
+            file.path(tdir, paste0(base, "-absolute.rds")))
+    saveRDS(.scenario_summary_table(data, metrics_tbl, qi, scenario,
+              reference, percentiles, lu, relative = TRUE),
+            file.path(tdir, paste0(base, "-relative.rds")))
   }
 
   p
@@ -1243,12 +1277,16 @@ plot_exposure_forest <- function(data,
 #'   string `build_scenario_parameters()` attached to `param_sets`; `FALSE`/`NULL`
 #'   suppresses it; a character string is shown verbatim (custom). Passed on to
 #'   [plot_exposure_forest()].
-#' @param param_info Optional named list keyed by parameter, each
-#'   `list(label=, unit=)` (e.g. `CL = list(label="CL", unit="L/h")`). When
-#'   supplied (with a `scenario` data.frame), two summary tables are written to
-#'   the output folder: `<model>-parameter-table-absolute.rds` and
-#'   `…-relative.rds` (same content as the exposure tables - see
-#'   [plot_exposure_forest()]'s `metric_info`). No `param_info` -> no table.
+#' @param param_info Parameter labels/units for the summary-table headers - a
+#'   named list `list(label=, unit=)` per parameter (e.g.
+#'   `CL = list(label="CL", unit="L/h")`) OR a spec (yspec object / path /
+#'   spec-shaped list, using each entry's `short` + `unit`). When supplied (with
+#'   a `scenario` data.frame), two summary tables are written to the output
+#'   folder: `<model>-parameter-table-absolute.rds` and `…-relative.rds`, with
+#'   one column per **plotted** structural parameter (mirrors the forest).
+#'   **Every plotted parameter must have a label** or the call stops (restrict
+#'   with `parameters=` or add it). Same cell content as the exposure tables -
+#'   see [plot_exposure_forest()]'s `metric_info`. No `param_info` -> no table.
 #' @param scenario The scenario table from [build_scenario_parameters()], used
 #'   for the summary tables' covariate columns.
 #' @param reference Character. Reference scenario for the relative table's ratio
@@ -1364,17 +1402,17 @@ plot_parameter_forests <- function(param_sets,
       lu <- utils::modifyList(.spec_to_lookup(spec),
                               if (is.null(lookup)) list() else lookup)
     }
-    ptbl <- intersect(names(param_info), param_cols)
-    if (length(ptbl) > 0) {
-      base <- paste0(model, "-parameter-table")
-      saveRDS(.scenario_summary_table(stacked, ptbl, param_info, scenario,
-                reference, percentiles, lu, relative = FALSE),
-              file.path(out_dir, paste0(base, "-absolute.rds")))
-      saveRDS(.scenario_summary_table(stacked, ptbl, param_info, scenario,
-                reference, percentiles, lu, relative = TRUE),
-              file.path(out_dir, paste0(base, "-relative.rds")))
-      if (verbose) cat(sprintf("  tables -> %s-{absolute,relative}.rds\n", base))
-    }
+    qi <- .resolve_quantity_info(param_info)              # list or spec -> label/unit
+    # Table mirrors the forest: one column per plotted structural parameter.
+    .require_quantity_labels(qi, param_cols, "param_info")
+    base <- paste0(model, "-parameter-table")
+    saveRDS(.scenario_summary_table(stacked, param_cols, qi, scenario,
+              reference, percentiles, lu, relative = FALSE),
+            file.path(out_dir, paste0(base, "-absolute.rds")))
+    saveRDS(.scenario_summary_table(stacked, param_cols, qi, scenario,
+              reference, percentiles, lu, relative = TRUE),
+            file.path(out_dir, paste0(base, "-relative.rds")))
+    if (verbose) cat(sprintf("  tables -> %s-{absolute,relative}.rds\n", base))
   }
 
   invisible(plots)

@@ -57,12 +57,16 @@ string \code{build_scenario_parameters()} attached to \code{param_sets}; \code{F
 suppresses it; a character string is shown verbatim (custom). Passed on to
 \code{\link[=plot_exposure_forest]{plot_exposure_forest()}}.}
 
-\item{param_info}{Optional named list keyed by parameter, each
-\code{list(label=, unit=)} (e.g. \code{CL = list(label="CL", unit="L/h")}). When
-supplied (with a \code{scenario} data.frame), two summary tables are written to
-the output folder: \verb{<model>-parameter-table-absolute.rds} and
-\verb{...-relative.rds} (same content as the exposure tables - see
-\code{\link[=plot_exposure_forest]{plot_exposure_forest()}}'s \code{metric_info}). No \code{param_info} -> no table.}
+\item{param_info}{Parameter labels/units for the summary-table headers - a
+named list \code{list(label=, unit=)} per parameter (e.g.
+\code{CL = list(label="CL", unit="L/h")}) OR a spec (yspec object / path /
+spec-shaped list, using each entry's \code{short} + \code{unit}). When supplied (with
+a \code{scenario} data.frame), two summary tables are written to the output
+folder: \verb{<model>-parameter-table-absolute.rds} and \verb{...-relative.rds}, with
+one column per \strong{plotted} structural parameter (mirrors the forest).
+\strong{Every plotted parameter must have a label} or the call stops (restrict
+with \code{parameters=} or add it). Same cell content as the exposure tables -
+see \code{\link[=plot_exposure_forest]{plot_exposure_forest()}}'s \code{metric_info}. No \code{param_info} -> no table.}
 
 \item{scenario}{The scenario table from \code{\link[=build_scenario_parameters]{build_scenario_parameters()}}, used
 for the summary tables' covariate columns.}
