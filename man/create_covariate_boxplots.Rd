@@ -38,15 +38,19 @@ the spec YAML file (loaded with \code{\link[yspec:ys_load]{yspec::ys_load()}}); 
 
 \item{cat}{character vector of categorical covariate column names.}
 
-\item{type}{character vector, subset of c("AUC","Cmax","Cmin"); which
-parameter(s) to produce plots for.}
+\item{type}{character vector of the metric column(s) of \code{data} to plot
+(default \code{c("AUC","Cmax","Cmin")}); any numeric column works, and each name
+must have an entry in \code{param_info}.}
 
 \item{drug}{character, full drug name used in titles AND filenames
 (e.g. "Camizestrant").}
 
-\item{param_info}{named list keyed by the column names used in \code{type},
-each element a list(label=, unit=), e.g.
-list(AUC = list(label="AUCss", unit="mg*hr/L"), ...).}
+\item{param_info}{Metric labels/units, keyed by the \code{type} names, as EITHER a
+named list \code{list(label=, unit=)} per metric (e.g.
+\code{list(AUC = list(label="AUCss", unit="mg*hr/L"))}) OR a spec supplying them
+- a yspec object, a path to a spec YAML, or a spec-shaped list (each entry's
+\code{short} becomes the label, plus its \code{unit}). Every \code{type} must have an
+entry or the call stops.}
 
 \item{stratification}{optional column name (string) in \code{data} to split
 plots into side-by-side panels (e.g. "COMB"). NULL = single panel.}

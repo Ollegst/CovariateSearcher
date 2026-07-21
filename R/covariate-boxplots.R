@@ -34,13 +34,17 @@ utils::globalVariables(c("y", "facet_grp", "xlev", "Freq"))
 #'   "Short (unit)" covariate axis labels.
 #' @param con character vector of continuous covariate column names.
 #' @param cat character vector of categorical covariate column names.
-#' @param type character vector, subset of c("AUC","Cmax","Cmin"); which
-#'   parameter(s) to produce plots for.
+#' @param type character vector of the metric column(s) of `data` to plot
+#'   (default `c("AUC","Cmax","Cmin")`); any numeric column works, and each name
+#'   must have an entry in `param_info`.
 #' @param drug character, full drug name used in titles AND filenames
 #'   (e.g. "Camizestrant").
-#' @param param_info named list keyed by the column names used in `type`,
-#'   each element a list(label=, unit=), e.g.
-#'   list(AUC = list(label="AUCss", unit="mg*hr/L"), ...).
+#' @param param_info Metric labels/units, keyed by the `type` names, as EITHER a
+#'   named list `list(label=, unit=)` per metric (e.g.
+#'   `list(AUC = list(label="AUCss", unit="mg*hr/L"))`) OR a spec supplying them
+#'   - a yspec object, a path to a spec YAML, or a spec-shaped list (each entry's
+#'   `short` becomes the label, plus its `unit`). Every `type` must have an
+#'   entry or the call stops.
 #' @param stratification optional column name (string) in `data` to split
 #'   plots into side-by-side panels (e.g. "COMB"). NULL = single panel.
 #' @param output_folder base output directory. Default
@@ -113,13 +117,18 @@ create_covariate_boxplots <- function(data,
                                       prefix = NULL,
                                       output_format = c("emf", "png")) {
 
-  type <- match.arg(type, choices = c("AUC", "Cmax", "Cmin"), several.ok = TRUE)
+  type <- as.character(type)
   output_format <- match.arg(output_format, choices = c("emf", "png"),
                              several.ok = TRUE)
 
   # data may be given as an object OR a character path to load (.csv/.rds).
   # (spec is likewise accepted as an object or a path, below.)
   data <- .load_if_path(data, "data")
+
+  # param_info may be a named list(label, unit) per metric OR a spec (yspec
+  # object / path / spec-shaped list) supplying label (`short`) + unit per
+  # metric - keyed by the `type` names.
+  param_info <- .resolve_quantity_info(param_info)
 
   # Optional filename prefix so different simulation runs do not overwrite each
   # other in the same folder (e.g. prefix = "run19" -> run19-<drug>-<cov>-<type>).
@@ -129,9 +138,14 @@ create_covariate_boxplots <- function(data,
     stop("At least one of `con` or `cat` must be supplied.")
   }
 
+  bad_type <- setdiff(type, names(data))
+  if (length(bad_type) > 0) {
+    stop("`type` column(s) not found in `data`: ", paste(bad_type, collapse = ", "))
+  }
   missing_params <- setdiff(type, names(param_info))
   if (length(missing_params) > 0) {
-    stop("param_info is missing entries for: ", paste(missing_params, collapse = ", "))
+    stop("param_info/spec has no entry (label + unit) for: ",
+         paste(missing_params, collapse = ", "))
   }
 
   all_covs <- c(con, cat)
