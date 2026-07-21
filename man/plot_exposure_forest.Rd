@@ -25,7 +25,11 @@ plot_exposure_forest(
 \code{Cmin}), one row per sample per scenario. Given as either a \code{data.frame} OR
 a character path to a \code{.csv}/\code{.rds} file to load.}
 
-\item{metric}{Character. Which metric to plot: "AUC", "Cmax", or "Cmin".}
+\item{metric}{Character. The column of \code{data} to forest (its distribution is
+normalised to the reference scenario's median). Defaults to the exposure
+metrics \code{"AUC"}/\code{"Cmax"}/\code{"Cmin"}, but any numeric column works - e.g. a
+structural parameter column (\code{"CL"}, \code{"V2"}, ...) from
+\code{\link[=stack_scenario_parameters]{stack_scenario_parameters()}} for a parameter forest.}
 
 \item{ss}{Logical. Steady state? Adds an "ss" suffix to the metric in the
 title (e.g. "AUC" vs "AUCss"). Default \code{TRUE}.}

@@ -651,6 +651,125 @@ simulate_scenario_profiles <- function(param_sets,
 }
 
 
+# ---- 3b. Stack scenario parameters (parameter-forest input) -------------------
+
+# Map structural THETA positions to their $PK parameter names, e.g.
+# c(THETA1 = "CL", THETA2 = "V2"). Mirrors apply_covariate_model()'s THETA->param
+# logic (the line where THETA(p) is the leading theta -> LHS -> strip TV_). Used
+# only for axis/title labels, so a position it cannot resolve is simply omitted
+# (the caller keeps the THETAn name). Returns a named character vector.
+.structural_param_names <- function(model_name, models_folder = "models") {
+  base_path  <- file.path(models_folder, model_name)
+  candidates <- c(paste0(base_path, ".ctl"), paste0(base_path, ".mod"),
+                  file.path(base_path, paste0(model_name, ".ctl")),
+                  file.path(base_path, paste0(model_name, ".mod")))
+  ctl_path <- candidates[file.exists(candidates)]
+  if (length(ctl_path) == 0) return(character(0))
+  lines <- readLines(ctl_path[1], warn = FALSE)
+
+  get_block <- function(tag) {
+    starts <- grep(paste0("^\\s*\\$", tag), lines, ignore.case = TRUE)
+    if (length(starts) == 0) return(character(0))
+    out <- character(0)
+    for (s in starts) {
+      e <- s + 1
+      while (e <= length(lines) && !grepl("^\\s*\\$", lines[e])) e <- e + 1
+      out <- c(out, lines[s:(e - 1)])
+    }
+    out
+  }
+  first_theta_index <- function(txt) {
+    m <- regmatches(txt, regexpr("THETA\\(\\s*\\d+\\s*\\)", txt))
+    if (length(m) == 0) return(NA_integer_)
+    as.integer(gsub("\\D", "", m[1]))
+  }
+
+  theta_names <- character(0)
+  for (ln in get_block("THETA")) {
+    if (grepl("^\\s*\\$", ln)) next
+    parts <- strsplit(ln, ";")[[1]]
+    if (!grepl("[0-9]", parts[1])) next
+    theta_names <- c(theta_names, if (length(parts) >= 2) trimws(parts[2]) else "")
+  }
+  if (length(theta_names) == 0) return(character(0))
+  structural_idx <- which(!grepl("^beta_", theta_names))
+
+  pk <- get_block("PK")
+  if (length(pk) == 0) pk <- get_block("PRED")
+  if (length(pk) == 0) return(character(0))
+
+  map <- character(0)
+  for (p in structural_idx) {
+    for (raw in pk) {
+      ln <- trimws(sub(";.*$", "", raw))
+      if (!grepl("=", ln)) next
+      rhs <- sub("^[^=]*=", "", ln)
+      if (grepl(paste0("THETA\\(\\s*", p, "\\s*\\)"), ln) &&
+          identical(first_theta_index(rhs), as.integer(p))) {
+        param <- sub("^TV_?", "", trimws(sub("=.*$", "", ln)))   # TV_CL/TVCL -> CL
+        if (nzchar(param)) map[paste0("THETA", p)] <- param
+        break
+      }
+    }
+  }
+  map
+}
+
+#' Stack Scenario Parameter Tables into One Long, Scenario-Tagged Data Frame
+#'
+#' @description
+#' Turns the named list from [build_scenario_parameters()] into a single long
+#' data frame with a `Scenario` column (an ordered factor in scenario-definition
+#' order), ready to feed straight to [plot_exposure_forest()] for a **parameter
+#' forest** - the covariate effect on a structural parameter (CL, V, ...), with
+#' no simulation or exposure metrics. It is the pre-simulation counterpart of the
+#' stacking [simulate_scenario_profiles()] does internally.
+#'
+#' When `model` is supplied, the `THETA1..THETAn` columns are renamed to the
+#' model's parameter names (e.g. `THETA1 -> CL`) by reading its `$PK`, so the
+#' forest axis/title read the real names. Positions that cannot be resolved keep
+#' their `THETAn` name.
+#'
+#' @param param_sets Named list from [build_scenario_parameters()] (each element:
+#'   `ID` + structural `THETA` columns), given as either the list itself OR a
+#'   character path to an `.rds` file to load.
+#' @param model Optional model name (as for [build_scenario_parameters()]); when
+#'   supplied, THETA columns are relabelled to their `$PK` parameter names.
+#' @param models_folder Character. Folder containing `model`. Default "models".
+#'
+#' @return A long `data.frame`: `ID`, the parameter columns (named `THETA1..` or
+#'   the mapped parameter names), and an ordered-factor `Scenario` column.
+#' @seealso [build_scenario_parameters()], [plot_exposure_forest()]
+#' @examples
+#' \dontrun{
+#' params <- build_scenario_parameters("run19", covariate_search, thetas, data)
+#' pf <- stack_scenario_parameters(params, model = "run19")
+#' plot_exposure_forest(pf, metric = "CL", ss = FALSE, width = 6, height = 6)
+#' }
+#' @export
+stack_scenario_parameters <- function(param_sets, model = NULL,
+                                      models_folder = "models") {
+  param_sets <- .load_if_path(param_sets, "param_sets")
+  if (!is.list(param_sets) || is.null(names(param_sets))) {
+    stop("`param_sets` must be a named list ",
+         "(output of build_scenario_parameters()).")
+  }
+
+  long <- purrr::imap_dfr(param_sets, function(df, scenario) {
+    df$Scenario <- scenario
+    df
+  })
+  long$Scenario <- factor(long$Scenario, levels = names(param_sets))
+
+  if (!is.null(model)) {
+    map <- .structural_param_names(model, models_folder)
+    hit <- names(map)[names(map) %in% names(long)]
+    if (length(hit) > 0) names(long)[match(hit, names(long))] <- unname(map[hit])
+  }
+  long
+}
+
+
 # ---- 4. Exposure forest plot --------------------------------------------------
 
 # Column names used inside dplyr / ggplot2 data-masking.
@@ -671,7 +790,11 @@ utils::globalVariables(c("Scenario", "VALUE", "NAME", "COLOR", "MIN", "MAX",
 #' @param data A `Scenario` column and the metric column (`AUC`, `Cmax`, or
 #'   `Cmin`), one row per sample per scenario. Given as either a `data.frame` OR
 #'   a character path to a `.csv`/`.rds` file to load.
-#' @param metric Character. Which metric to plot: "AUC", "Cmax", or "Cmin".
+#' @param metric Character. The column of `data` to forest (its distribution is
+#'   normalised to the reference scenario's median). Defaults to the exposure
+#'   metrics `"AUC"`/`"Cmax"`/`"Cmin"`, but any numeric column works - e.g. a
+#'   structural parameter column (`"CL"`, `"V2"`, ...) from
+#'   [stack_scenario_parameters()] for a parameter forest.
 #' @param ss Logical. Steady state? Adds an "ss" suffix to the metric in the
 #'   title (e.g. "AUC" vs "AUCss"). Default `TRUE`.
 #' @param ClinicalRelevanceLow,ClinicalRelevanceHigh Numeric. Bounds of the
@@ -729,7 +852,10 @@ plot_exposure_forest <- function(data,
   # data may be given as an object OR a character path to load (.csv/.rds).
   data <- .load_if_path(data, "data")
 
-  metric <- match.arg(metric)
+  # `metric` is any numeric column of `data` to forest (its distribution
+  # normalised to the reference median). AUC/Cmax/Cmin are the defaults, but a
+  # parameter column (e.g. from stack_scenario_parameters()) works just as well.
+  metric <- as.character(metric)[1]
   output_format <- match.arg(output_format, c("emf", "png"), several.ok = TRUE)
   if (!all(c("Scenario", metric) %in% names(data))) {
     stop("`data` must contain a 'Scenario' column and a '", metric, "' column.")
@@ -842,6 +968,115 @@ plot_exposure_forest <- function(data,
   }
 
   p
+}
+
+
+#' Save a Covariate Parameter Forest for Every Structural Parameter
+#'
+#' @description
+#' Convenience driver that builds and saves a covariate **parameter forest** for
+#' each structural parameter of a model, plus one combined PDF of them all. It
+#' stacks the scenario parameter tables ([stack_scenario_parameters()], which
+#' relabels the `THETA` columns to their `$PK` names) and forests each parameter
+#' with [plot_exposure_forest()] - no simulation or exposure metrics.
+#'
+#' Files are written under `output_folder/<model>/` (created if missing): one
+#' `<model>-forest-plot-<param>.emf`/`.png` per parameter, plus
+#' `<model>-forest-plots.pdf` containing every parameter forest (one per page).
+#'
+#' @param param_sets Named list from [build_scenario_parameters()], given as
+#'   either the list itself OR a character path to an `.rds` file to load.
+#' @param model Character. Model name - used to relabel THETA columns via its
+#'   `$PK`, to name the output subfolder, and in the file names.
+#' @param parameters Optional character vector selecting which parameters to
+#'   plot; `NULL` (default) plots every structural parameter column.
+#' @param output_folder Base output directory; the model name is appended, so
+#'   files land in `output_folder/<model>/`. Default `"results/figure"`.
+#' @param output_format Character vector, subset of `c("emf","png")`; which
+#'   per-parameter image format(s) to save. Default both. `.emf` via
+#'   [devEMF::emf()], `.png` via the [ggplot2::ggsave()] default device.
+#' @param combined_pdf Logical; if `TRUE` (default) also write a single
+#'   multi-page PDF of every parameter forest to the same folder.
+#' @param width,height Numeric. Figure size in inches. Default 6 x 6.
+#' @param models_folder Character. Folder containing `model`. Default "models".
+#' @param verbose Logical; print progress. Default `TRUE`.
+#' @param ... Further arguments passed to [plot_exposure_forest()] (e.g.
+#'   `reference`, `ClinicalRelevanceLow`, `ClinicalRelevanceHigh`, `fontsize`).
+#'
+#' @return Invisibly, a named list of the ggplot objects (one per parameter).
+#' @seealso [stack_scenario_parameters()], [plot_exposure_forest()]
+#' @examples
+#' \dontrun{
+#' params <- build_scenario_parameters("run19", covariate_search, thetas, data)
+#' plot_parameter_forests(params, model = "run19")
+#' # -> results/figure/run19/run19-forest-plot-CL.emf/.png, ...,
+#' #    results/figure/run19/run19-forest-plots.pdf
+#' }
+#' @export
+plot_parameter_forests <- function(param_sets,
+                                    model,
+                                    parameters = NULL,
+                                    output_folder = "results/figure",
+                                    output_format = c("emf", "png"),
+                                    combined_pdf = TRUE,
+                                    width = 6,
+                                    height = 6,
+                                    models_folder = "models",
+                                    verbose = TRUE,
+                                    ...) {
+  output_format <- match.arg(output_format, c("emf", "png"), several.ok = TRUE)
+
+  stacked <- stack_scenario_parameters(param_sets, model = model,
+                                       models_folder = models_folder)
+  param_cols <- setdiff(names(stacked), c("ID", "Scenario"))
+  if (!is.null(parameters)) {
+    miss <- setdiff(parameters, param_cols)
+    if (length(miss) > 0) {
+      stop("Parameter(s) not found in the scenario tables: ",
+           paste(miss, collapse = ", "),
+           ". Available: ", paste(param_cols, collapse = ", "))
+    }
+    param_cols <- as.character(parameters)
+  }
+  if (length(param_cols) == 0) stop("No parameter columns found to plot.")
+
+  # Files go to output_folder/<model>/ (create it, incl. a missing figure/).
+  out_dir <- file.path(output_folder, model)
+  if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+
+  if (verbose) {
+    cat(sprintf("Parameter forests for %s: %d parameter(s) -> %s\n",
+                model, length(param_cols), out_dir))
+  }
+
+  plots <- list()
+  for (i in seq_along(param_cols)) {
+    prm  <- param_cols[i]
+    stem <- file.path(out_dir, paste0(model, "-forest-plot-", prm))
+    plots[[prm]] <- plot_exposure_forest(
+      data          = stacked,
+      metric        = prm,
+      ss            = FALSE,
+      filename      = stem,
+      output_format = output_format,
+      width         = width,
+      height        = height,
+      ...
+    )
+    if (verbose) cat(sprintf("  [%d/%d] %s\n", i, length(param_cols), prm))
+  }
+
+  # One combined multi-page PDF of every parameter forest, same folder.
+  if (isTRUE(combined_pdf)) {
+    pdf_path <- file.path(out_dir, paste0(model, "-forest-plots.pdf"))
+    if (verbose) cat(sprintf("  combined PDF -> %s\n", pdf_path))
+    grDevices::cairo_pdf(pdf_path, width = width, height = height,
+                         onefile = TRUE)
+    for (prm in param_cols) print(plots[[prm]])
+    grDevices::dev.off()
+  }
+
+  invisible(plots)
 }
 
 
