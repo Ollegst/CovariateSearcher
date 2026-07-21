@@ -34,7 +34,8 @@ either the list itself OR a character path to an \code{.rds} file to load.}
 \verb{$PK}, to name the output subfolder, and in the file names.}
 
 \item{parameters}{Optional character vector selecting which parameters to
-plot; \code{NULL} (default) plots every structural parameter column.}
+plot; \code{NULL} (default) considers every structural parameter column (those
+with no covariate effect are then skipped automatically).}
 
 \item{output_folder}{Base output directory; the model name is appended, so
 files land in \code{output_folder/<model>/}. Default \code{"results/figure"}.}
@@ -68,8 +69,10 @@ one column per \strong{plotted} structural parameter (mirrors the forest).
 with \code{parameters=} or add it). Same cell content as the exposure tables -
 see \code{\link[=plot_exposure_forest]{plot_exposure_forest()}}'s \code{metric_info}. No \code{param_info} -> no table.}
 
-\item{scenario}{The scenario table from \code{\link[=build_scenario_parameters]{build_scenario_parameters()}}, used
-for the summary tables' covariate columns.}
+\item{scenario}{The scenario table for the summary tables' covariate columns.
+Defaults to the table \code{\link[=build_scenario_parameters]{build_scenario_parameters()}} attaches to \code{param_sets},
+so you normally don't pass it (only needed if you built \code{param_sets} with an
+older version, or want a different table).}
 
 \item{reference}{Character. Reference scenario for the relative table's ratio
 denominator. Default "Typical subject".}
@@ -92,10 +95,15 @@ Invisibly, a named list of the ggplot objects (one per parameter).
 }
 \description{
 Convenience driver that builds and saves a covariate \strong{parameter forest} for
-each structural parameter of a model, plus one combined PDF of them all. It
-stacks the scenario parameter tables (\code{\link[=stack_scenario_parameters]{stack_scenario_parameters()}}, which
-relabels the \code{THETA} columns to their \verb{$PK} names) and forests each parameter
-with \code{\link[=plot_exposure_forest]{plot_exposure_forest()}} - no simulation or exposure metrics.
+each structural parameter a covariate acts on, plus one combined PDF of them
+all. It stacks the scenario parameter tables (\code{\link[=stack_scenario_parameters]{stack_scenario_parameters()}},
+which relabels the \code{THETA} columns to their \verb{$PK} names) and forests each
+parameter with \code{\link[=plot_exposure_forest]{plot_exposure_forest()}} - no simulation or exposure metrics.
+
+Parameters with \strong{no covariate effect} (values identical across all
+scenarios - e.g. a parameter no covariate acts on, or a non-structural theta
+such as a residual-error term) are \strong{skipped}, since their forest would be
+flat. Only the remaining parameters need a \code{param_info}/\code{pk.yaml} label.
 
 Files are written under \code{output_folder/<model>/} (created if missing): one
 \code{<model>-forest-plot-<param>.emf}/\code{.png} per parameter, plus

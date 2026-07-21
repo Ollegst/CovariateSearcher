@@ -164,8 +164,17 @@ build_scenario_parameters <- function(model,
   })
 
   names(param_sets) <- scenarios$Scenario
-  # Carry the typical-subject description through so plot_parameter_forests can
-  # show it without re-reading the scenario table.
+  # Carry the scenario table, its typical-subject description, and the resolved
+  # covariate lookup through on `param_sets`, so plot_parameter_forests can show
+  # the subtitle AND write the summary table (covariate columns) without the
+  # caller re-supplying `scenario`/`lookup`.
   attr(param_sets, "typical_subject") <- attr(scenarios, "typical_subject")
+  attr(param_sets, "scenario_table")  <- scenarios
+  cov_lu <- lookup
+  if (!is.null(spec)) {
+    cov_lu <- utils::modifyList(.spec_to_lookup(spec),
+                                if (is.null(lookup)) list() else lookup)
+  }
+  attr(param_sets, "covariate_lookup") <- cov_lu
   param_sets
 }

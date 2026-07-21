@@ -1247,10 +1247,15 @@ plot_exposure_forest <- function(data,
 #'
 #' @description
 #' Convenience driver that builds and saves a covariate **parameter forest** for
-#' each structural parameter of a model, plus one combined PDF of them all. It
-#' stacks the scenario parameter tables ([stack_scenario_parameters()], which
-#' relabels the `THETA` columns to their `$PK` names) and forests each parameter
-#' with [plot_exposure_forest()] - no simulation or exposure metrics.
+#' each structural parameter a covariate acts on, plus one combined PDF of them
+#' all. It stacks the scenario parameter tables ([stack_scenario_parameters()],
+#' which relabels the `THETA` columns to their `$PK` names) and forests each
+#' parameter with [plot_exposure_forest()] - no simulation or exposure metrics.
+#'
+#' Parameters with **no covariate effect** (values identical across all
+#' scenarios - e.g. a parameter no covariate acts on, or a non-structural theta
+#' such as a residual-error term) are **skipped**, since their forest would be
+#' flat. Only the remaining parameters need a `param_info`/`pk.yaml` label.
 #'
 #' Files are written under `output_folder/<model>/` (created if missing): one
 #' `<model>-forest-plot-<param>.emf`/`.png` per parameter, plus
@@ -1261,7 +1266,8 @@ plot_exposure_forest <- function(data,
 #' @param model Character. Model name - used to relabel THETA columns via its
 #'   `$PK`, to name the output subfolder, and in the file names.
 #' @param parameters Optional character vector selecting which parameters to
-#'   plot; `NULL` (default) plots every structural parameter column.
+#'   plot; `NULL` (default) considers every structural parameter column (those
+#'   with no covariate effect are then skipped automatically).
 #' @param output_folder Base output directory; the model name is appended, so
 #'   files land in `output_folder/<model>/`. Default `"results/figure"`.
 #' @param output_format Character vector, subset of `c("emf","png")`; which
@@ -1287,8 +1293,10 @@ plot_exposure_forest <- function(data,
 #'   **Every plotted parameter must have a label** or the call stops (restrict
 #'   with `parameters=` or add it). Same cell content as the exposure tables -
 #'   see [plot_exposure_forest()]'s `metric_info`. No `param_info` -> no table.
-#' @param scenario The scenario table from [build_scenario_parameters()], used
-#'   for the summary tables' covariate columns.
+#' @param scenario The scenario table for the summary tables' covariate columns.
+#'   Defaults to the table [build_scenario_parameters()] attaches to `param_sets`,
+#'   so you normally don't pass it (only needed if you built `param_sets` with an
+#'   older version, or want a different table).
 #' @param reference Character. Reference scenario for the relative table's ratio
 #'   denominator. Default "Typical subject".
 #' @param percentiles Numeric length-2. Interval for the summary tables. Default
@@ -1342,6 +1350,14 @@ plot_parameter_forests <- function(param_sets,
     typical_subject <- NULL
   }
 
+  # The summary-table inputs are carried on `param_sets` by
+  # build_scenario_parameters, so the caller need not re-supply them: fall back
+  # to the attached scenario table and covariate lookup when not given.
+  if (is.null(scenario)) scenario <- attr(param_sets, "scenario_table")
+  if (is.null(lookup) && is.null(spec)) {
+    lookup <- attr(param_sets, "covariate_lookup")
+  }
+
   stacked <- stack_scenario_parameters(param_sets, model = model,
                                        models_folder = models_folder)
   param_cols <- setdiff(names(stacked), c("ID", "Scenario"))
@@ -1355,6 +1371,25 @@ plot_parameter_forests <- function(param_sets,
     param_cols <- as.character(parameters)
   }
   if (length(param_cols) == 0) stop("No parameter columns found to plot.")
+
+  # Only forest parameters a covariate actually acts on: drop any whose values
+  # are identical across all scenarios (a parameter with no covariate, or a
+  # non-structural theta such as a residual-error term). These produce a flat,
+  # meaningless forest. Always done.
+  varies <- vapply(param_cols, function(p) {
+    meds <- tapply(stacked[[p]], stacked$Scenario, stats::median, na.rm = TRUE)
+    length(unique(signif(meds[is.finite(meds)], 8))) > 1L
+  }, logical(1))
+  dropped    <- param_cols[!varies]
+  param_cols <- param_cols[varies]
+  if (verbose && length(dropped) > 0) {
+    cat(sprintf("  skipping %d parameter(s) with no covariate effect: %s\n",
+                length(dropped), paste(dropped, collapse = ", ")))
+  }
+  if (length(param_cols) == 0) {
+    stop("No parameters with a covariate effect to plot ",
+         "(all were flat across scenarios).")
+  }
 
   # Files go to output_folder/<model>/ (create it, incl. a missing figure/).
   out_dir <- file.path(output_folder, model)
