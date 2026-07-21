@@ -89,7 +89,8 @@ categoricals and label the covariate columns of the summary tables.}
 \item{verbose}{Logical; print progress. Default \code{TRUE}.}
 
 \item{...}{Further arguments passed to \code{\link[=plot_exposure_forest]{plot_exposure_forest()}} (e.g.
-\code{reference}, \code{ClinicalRelevanceLow}, \code{ClinicalRelevanceHigh}, \code{fontsize}).}
+\code{x_lim}, \code{reference}, \code{ClinicalRelevanceLow}, \code{ClinicalRelevanceHigh},
+\code{fontsize}).}
 }
 \value{
 Invisibly, a named list of the ggplot objects (one per parameter).

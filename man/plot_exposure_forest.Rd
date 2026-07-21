@@ -15,6 +15,7 @@ plot_exposure_forest(
   scenario = NULL,
   fontsize = 9,
   title = NULL,
+  x_lim = NULL,
   typical_subject = TRUE,
   filename = NULL,
   output_format = c("emf", "png"),
@@ -65,6 +66,12 @@ of \code{data$Scenario} are used if it is a factor (as
 
 \item{title}{Character or NULL. Plot title; when NULL it is built from
 \code{metric} and \code{ss} ("Covariate effects on \if{html}{\out{<metric>}}\link{ss}").}
+
+\item{x_lim}{Numeric length-2 vector, or \code{NULL}. Fixed limits for the
+horizontal (ratio) axis - the change relative to the reference - e.g.
+\code{c(0, 3)}. \code{NULL} (default) auto-scales to the data (the box whiskers plus
+a small margin). The plot is drawn with \code{coord_flip()}, so this sets the
+visual x-axis the reader sees.}
 
 \item{typical_subject}{Controls the reference-subject subtitle under the
 title. \code{TRUE} (default) uses the ready-made string that

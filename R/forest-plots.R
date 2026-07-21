@@ -987,6 +987,11 @@ utils::globalVariables(c("Scenario", "VALUE", "NAME", "COLOR", "MIN", "MAX",
 #' @param fontsize Numeric. Base font size. Default 9.
 #' @param title Character or NULL. Plot title; when NULL it is built from
 #'   `metric` and `ss` ("Covariate effects on <metric>[ss]").
+#' @param x_lim Numeric length-2 vector, or `NULL`. Fixed limits for the
+#'   horizontal (ratio) axis - the change relative to the reference - e.g.
+#'   `c(0, 3)`. `NULL` (default) auto-scales to the data (the box whiskers plus
+#'   a small margin). The plot is drawn with `coord_flip()`, so this sets the
+#'   visual x-axis the reader sees.
 #' @param typical_subject Controls the reference-subject subtitle under the
 #'   title. `TRUE` (default) uses the ready-made string that
 #'   [create_covariate_table()] / [build_scenario_parameters()] attach as
@@ -1049,6 +1054,7 @@ plot_exposure_forest <- function(data,
                                  scenario = NULL,
                                  fontsize = 9,
                                  title = NULL,
+                                 x_lim = NULL,
                                  typical_subject = TRUE,
                                  filename = NULL,
                                  output_format = c("emf", "png"),
@@ -1148,6 +1154,19 @@ plot_exposure_forest <- function(data,
     "Box plots: 2.5% / 25% / 50% / 75% / 97.5%"
   )
 
+  # Horizontal (ratio) axis limits: user-supplied `x_lim` overrides, else auto-
+  # scale to the box whiskers plus a small margin. The plot is drawn with
+  # coord_flip(), so this is the ylim of the flipped coordinate system - i.e. the
+  # visual x-axis the user sees.
+  if (!is.null(x_lim)) {
+    if (length(x_lim) != 2L || !is.numeric(x_lim)) {
+      stop("`x_lim` must be NULL or a numeric length-2 vector, e.g. c(0, 3).")
+    }
+    axis_lim <- range(x_lim)
+  } else {
+    axis_lim <- c(min(d$MIN, na.rm = TRUE) - 0.2, max(d$MAX, na.rm = TRUE) + 0.2)
+  }
+
   # Shaded reference band(s) (behind the boxes), mapped to `fill` so they get
   # legend swatches next to the boxplot colours. The inner band is the clinical-
   # relevance range; `outer_range` (when not NULL) adds a wider band drawn
@@ -1202,8 +1221,7 @@ plot_exposure_forest <- function(data,
     ) +
     ylab(boxlabel) +
     xlab(NULL) +
-    coord_flip(ylim = c(min(d$MIN, na.rm = TRUE) - 0.2,
-                        max(d$MAX, na.rm = TRUE) + 0.2)) +
+    coord_flip(ylim = axis_lim) +
     ggtitle(ttl, subtitle = if (!is.null(typical_subject) &&
                                 nzchar(typical_subject)) typical_subject else NULL) +
     theme(
@@ -1329,7 +1347,8 @@ plot_exposure_forest <- function(data,
 #' @param models_folder Character. Folder containing `model`. Default "models".
 #' @param verbose Logical; print progress. Default `TRUE`.
 #' @param ... Further arguments passed to [plot_exposure_forest()] (e.g.
-#'   `reference`, `ClinicalRelevanceLow`, `ClinicalRelevanceHigh`, `fontsize`).
+#'   `x_lim`, `reference`, `ClinicalRelevanceLow`, `ClinicalRelevanceHigh`,
+#'   `fontsize`).
 #'
 #' @return Invisibly, a named list of the ggplot objects (one per parameter).
 #' @seealso [stack_scenario_parameters()], [plot_exposure_forest()]
