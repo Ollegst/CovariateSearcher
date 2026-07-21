@@ -489,7 +489,7 @@ create_covariate_table <- function(model_name,
   }
   cont_scenario <- function(label, p, value, unit) {
     direction <- if (p < 0.5) "Low" else if (p > 0.5) "High" else "Median"
-    value_txt <- format(value, trim = TRUE)
+    value_txt <- format(round(value, 2), trim = TRUE)   # 2 dp in the label
     if (nzchar(unit)) value_txt <- paste0(value_txt, " ", unit)
     head <- paste0(direction, " ", label)
     tail <- paste0("(", ordinal(p * 100), " percentile: ", value_txt, ")")
@@ -549,10 +549,26 @@ create_covariate_table <- function(model_name,
     }
   }
 
+  # Typical-subject one-line description (every covariate at its REFERENCE),
+  # labelled with the same short/unit/decoded-level machinery, attached as an
+  # attribute so callers/plots can show it (see plot_exposure_forest's
+  # `typical_subject`). e.g. "Typical subject: Weight 70 kg, Sex Male".
+  ts_parts <- vapply(seq_len(nrow(meta)), function(i) {
+    cov <- meta$COVARIATE[i]; lbl <- cov_label(cov); refv <- reference[[cov]]
+    if (tolower(as.character(meta$STATUS[i])) == "cat") {
+      paste0(lbl, " ", decode_level(cov, refv))
+    } else {
+      u <- cov_unit(cov); v <- format(round(refv, 2), trim = TRUE)
+      paste0(lbl, " ", if (nzchar(u)) paste0(v, " ", u) else v)
+    }
+  }, character(1))
+  typical_subject <- paste0("Typical subject: ", paste(ts_parts, collapse = ", "))
+
   # ---- Assemble -------------------------------------------------------------
   result <- do.call(rbind, rows)
   result <- cbind(Scenario = scenarios, result, stringsAsFactors = FALSE)
   rownames(result) <- NULL
+  attr(result, "typical_subject") <- typical_subject
   result
 }
 
@@ -851,9 +867,15 @@ utils::globalVariables(c("Scenario", "VALUE", "NAME", "COLOR", "MIN", "MAX",
 #' @param fontsize Numeric. Base font size. Default 9.
 #' @param title Character or NULL. Plot title; when NULL it is built from
 #'   `metric` and `ss` ("Covariate effects on <metric>[ss]").
+#' @param typical_subject Character or NULL. When a non-empty string, shown as a
+#'   subtitle under the title (describing the reference subject, e.g.
+#'   "Typical subject: Weight 70 kg, Sex Male"). `NULL` (default) shows no
+#'   subtitle. [create_covariate_table()] / [build_scenario_parameters()] attach
+#'   a ready-made string as `attr(x, "typical_subject")`.
 #' @param filename Character or NULL. Base path for saved output; any extension
 #'   is stripped and one file per `output_format` is written as
-#'   `<stem>.<format>`. `NULL` (default) does not save.
+#'   `<stem>.<format>`. Missing parent folders are created. `NULL` (default)
+#'   does not save.
 #' @param output_format Character. Which format(s) to save when `filename` is
 #'   given: one or both of `"emf"` and `"png"`. Default both. `.emf` is written
 #'   with `devEMF::emf`, `.png` with the [ggplot2::ggsave()] default device.
@@ -886,6 +908,7 @@ plot_exposure_forest <- function(data,
                                  scenario_order = NULL,
                                  fontsize = 9,
                                  title = NULL,
+                                 typical_subject = NULL,
                                  filename = NULL,
                                  output_format = c("emf", "png"),
                                  width,
@@ -1006,7 +1029,8 @@ plot_exposure_forest <- function(data,
     xlab(NULL) +
     coord_flip(ylim = c(min(d$MIN, na.rm = TRUE) - 0.2,
                         max(d$MAX, na.rm = TRUE) + 0.2)) +
-    ggtitle(ttl) +
+    ggtitle(ttl, subtitle = if (!is.null(typical_subject) &&
+                                nzchar(typical_subject)) typical_subject else NULL) +
     theme(
       plot.subtitle = element_text(size = fontsize),
       axis.text     = element_text(size = fontsize)
@@ -1014,6 +1038,10 @@ plot_exposure_forest <- function(data,
 
   if (!is.null(filename)) {
     stem <- tools::file_path_sans_ext(filename)
+    out_dir <- dirname(stem)                     # create the folder if missing
+    if (nzchar(out_dir) && !dir.exists(out_dir)) {
+      dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
+    }
     for (fmt in output_format) {
       out_file <- paste0(stem, ".", fmt)
       if (fmt == "emf") {
@@ -1059,6 +1087,10 @@ plot_exposure_forest <- function(data,
 #' @param outer_range Passed to [plot_exposure_forest()]. `NULL` (default) draws
 #'   only the clinical-relevance band on parameter forests (the wider 0.5-2 band
 #'   is dropped); pass e.g. `c(0.5, 2)` to add it back.
+#' @param typical_subject Subtitle describing the reference subject, passed to
+#'   [plot_exposure_forest()]. `NULL` (default) uses the string
+#'   `build_scenario_parameters()` attached to `param_sets`; pass a string to
+#'   override, or `""` to suppress it.
 #' @param models_folder Character. Folder containing `model`. Default "models".
 #' @param verbose Logical; print progress. Default `TRUE`.
 #' @param ... Further arguments passed to [plot_exposure_forest()] (e.g.
@@ -1083,10 +1115,16 @@ plot_parameter_forests <- function(param_sets,
                                     width = 6,
                                     height = 6,
                                     outer_range = NULL,
+                                    typical_subject = NULL,
                                     models_folder = "models",
                                     verbose = TRUE,
                                     ...) {
   output_format <- match.arg(output_format, c("emf", "png"), several.ok = TRUE)
+
+  param_sets <- .load_if_path(param_sets, "param_sets")
+  # Show the typical-subject subtitle: explicit arg wins, else the description
+  # carried on param_sets by build_scenario_parameters (NULL -> no subtitle).
+  if (is.null(typical_subject)) typical_subject <- attr(param_sets, "typical_subject")
 
   stacked <- stack_scenario_parameters(param_sets, model = model,
                                        models_folder = models_folder)
@@ -1116,14 +1154,15 @@ plot_parameter_forests <- function(param_sets,
     prm  <- param_cols[i]
     stem <- file.path(out_dir, paste0(model, "-forest-plot-", prm))
     plots[[prm]] <- plot_exposure_forest(
-      data          = stacked,
-      metric        = prm,
-      ss            = FALSE,
-      filename      = stem,
-      output_format = output_format,
-      width         = width,
-      height        = height,
-      outer_range   = outer_range,
+      data            = stacked,
+      metric          = prm,
+      ss              = FALSE,
+      filename        = stem,
+      output_format   = output_format,
+      width           = width,
+      height          = height,
+      outer_range     = outer_range,
+      typical_subject = typical_subject,
       ...
     )
     if (verbose) cat(sprintf("  [%d/%d] %s\n", i, length(param_cols), prm))

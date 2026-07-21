@@ -164,5 +164,8 @@ build_scenario_parameters <- function(model,
   })
 
   names(param_sets) <- scenarios$Scenario
+  # Carry the typical-subject description through so plot_parameter_forests can
+  # show it without re-reading the scenario table.
+  attr(param_sets, "typical_subject") <- attr(scenarios, "typical_subject")
   param_sets
 }

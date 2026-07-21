@@ -14,6 +14,7 @@ plot_parameter_forests(
   width = 6,
   height = 6,
   outer_range = NULL,
+  typical_subject = NULL,
   models_folder = "models",
   verbose = TRUE,
   ...
@@ -44,6 +45,11 @@ multi-page PDF of every parameter forest to the same folder.}
 \item{outer_range}{Passed to \code{\link[=plot_exposure_forest]{plot_exposure_forest()}}. \code{NULL} (default) draws
 only the clinical-relevance band on parameter forests (the wider 0.5-2 band
 is dropped); pass e.g. \code{c(0.5, 2)} to add it back.}
+
+\item{typical_subject}{Subtitle describing the reference subject, passed to
+\code{\link[=plot_exposure_forest]{plot_exposure_forest()}}. \code{NULL} (default) uses the string
+\code{build_scenario_parameters()} attached to \code{param_sets}; pass a string to
+override, or \code{""} to suppress it.}
 
 \item{models_folder}{Character. Folder containing \code{model}. Default "models".}
 
