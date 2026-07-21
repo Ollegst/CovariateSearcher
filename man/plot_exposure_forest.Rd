@@ -18,6 +18,11 @@ plot_exposure_forest(
   typical_subject = TRUE,
   filename = NULL,
   output_format = c("emf", "png"),
+  metric_info = NULL,
+  model = NULL,
+  percentiles = c(0.05, 0.95),
+  lookup = NULL,
+  spec = NULL,
   width,
   height
 )
@@ -76,6 +81,26 @@ does not save.}
 \item{output_format}{Character. Which format(s) to save when \code{filename} is
 given: one or both of \code{"emf"} and \code{"png"}. Default both. \code{.emf} is written
 with \code{devEMF::emf}, \code{.png} with the \code{\link[ggplot2:ggsave]{ggplot2::ggsave()}} default device.}
+
+\item{metric_info}{Optional named list keyed by metric, each
+\code{list(label=, unit=)} (e.g. \code{AUC = list(label="AUCss", unit="ng*h/mL")}).
+When supplied (with \code{filename} and a \code{scenario} data.frame), two summary
+tables spanning \strong{all} metrics in \code{metric_info} are written next to the
+plot as \verb{<model>-exposure-table-absolute.rds} and \verb{...-relative.rds}.
+Absolute cell = \verb{median / [lo,hi] / geomean / (geoCV\%)}; relative =
+\verb{ratio [lo,hi]} vs the \code{reference} median. Covariate columns come from
+\code{scenario} (decoded via \code{lookup}/\code{spec}, units in the header); interval at
+\code{percentiles}; rounded to 2 dp. No \code{metric_info} -> no table.}
+
+\item{model}{Optional character used only to name the summary-table files
+(\verb{<model>-exposure-table-*.rds}).}
+
+\item{percentiles}{Numeric length-2. Interval for the summary tables (same for
+absolute and relative). Default \code{c(0.05, 0.95)}.}
+
+\item{lookup, spec}{Covariate lookup list and/or yspec object (as in
+\code{\link[=create_covariate_table]{create_covariate_table()}}) used to decode categoricals and label the
+covariate columns of the summary tables.}
 
 \item{width, height}{Numeric. Output size in inches. Mandatory (no default);
 required whenever \code{filename} is given.}

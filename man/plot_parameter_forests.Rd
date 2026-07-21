@@ -15,6 +15,12 @@ plot_parameter_forests(
   height = 6,
   outer_range = NULL,
   typical_subject = TRUE,
+  param_info = NULL,
+  scenario = NULL,
+  reference = "Typical subject",
+  percentiles = c(0.05, 0.95),
+  lookup = NULL,
+  spec = NULL,
   models_folder = "models",
   verbose = TRUE,
   ...
@@ -50,6 +56,25 @@ is dropped); pass e.g. \code{c(0.5, 2)} to add it back.}
 string \code{build_scenario_parameters()} attached to \code{param_sets}; \code{FALSE}/\code{NULL}
 suppresses it; a character string is shown verbatim (custom). Passed on to
 \code{\link[=plot_exposure_forest]{plot_exposure_forest()}}.}
+
+\item{param_info}{Optional named list keyed by parameter, each
+\code{list(label=, unit=)} (e.g. \code{CL = list(label="CL", unit="L/h")}). When
+supplied (with a \code{scenario} data.frame), two summary tables are written to
+the output folder: \verb{<model>-parameter-table-absolute.rds} and
+\verb{...-relative.rds} (same content as the exposure tables - see
+\code{\link[=plot_exposure_forest]{plot_exposure_forest()}}'s \code{metric_info}). No \code{param_info} -> no table.}
+
+\item{scenario}{The scenario table from \code{\link[=build_scenario_parameters]{build_scenario_parameters()}}, used
+for the summary tables' covariate columns.}
+
+\item{reference}{Character. Reference scenario for the relative table's ratio
+denominator. Default "Typical subject".}
+
+\item{percentiles}{Numeric length-2. Interval for the summary tables. Default
+\code{c(0.05, 0.95)}.}
+
+\item{lookup, spec}{Covariate lookup list and/or yspec object used to decode
+categoricals and label the covariate columns of the summary tables.}
 
 \item{models_folder}{Character. Folder containing \code{model}. Default "models".}
 

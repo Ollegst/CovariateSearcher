@@ -598,6 +598,78 @@ create_covariate_table <- function(model_name,
   out
 }
 
+# Build ONE scenario-summary table (absolute or relative) as a formatted
+# data.frame: rows = scenarios, leading covariate columns (from `scenario_tbl`,
+# decoded via `lookup`, units in the header), then one column per quantity.
+#   absolute cell (\n-separated): median / [lo, hi] / geomean / (geoCV%)
+#   relative cell: <ratio> [lo, hi]   (median/lo/hi divided by the reference median)
+# `long` has a Scenario column + numeric quantity columns (one row per sample);
+# `q_info[[q]]` = list(label=, unit=) for the quantity headers.
+.scenario_summary_table <- function(long, quantities, q_info, scenario_tbl,
+                                    reference, percentiles = c(0.05, 0.95),
+                                    lookup = NULL, relative = FALSE, digits = 2) {
+  plo <- min(percentiles); phi <- max(percentiles)
+  r2  <- function(x) ifelse(is.na(x), "NA", format(round(x, digits), trim = TRUE))
+  scn <- as.character(long$Scenario)
+
+  # scenario order: the scenario table's order (definition order), else `long`
+  scen <- if (!is.null(scenario_tbl) && "Scenario" %in% names(scenario_tbl)) {
+    as.character(scenario_tbl$Scenario)
+  } else if (is.factor(long$Scenario)) {
+    levels(long$Scenario)
+  } else {
+    unique(scn)
+  }
+
+  ref_med <- vapply(quantities, function(q)
+    stats::median(long[[q]][scn == reference], na.rm = TRUE), numeric(1))
+
+  fmt_cell <- function(x, q) {
+    x <- x[!is.na(x)]
+    if (length(x) == 0) return(NA_character_)
+    med <- stats::median(x)
+    qs  <- stats::quantile(x, c(plo, phi), names = FALSE)
+    if (relative) {
+      d <- ref_med[[q]]
+      paste0(r2(med / d), " [", r2(qs[1] / d), ", ", r2(qs[2] / d), "]")
+    } else {
+      pos <- x[x > 0]
+      gm  <- if (length(pos)) exp(mean(log(pos))) else NA_real_
+      gcv <- if (length(pos) > 1) sqrt(exp(stats::var(log(pos))) - 1) * 100 else NA_real_
+      paste0(r2(med), "\n[", r2(qs[1]), ", ", r2(qs[2]), "]\n",
+             r2(gm), "\n(", r2(gcv), "%)")
+    }
+  }
+
+  out <- data.frame(Scenario = scen, stringsAsFactors = FALSE, check.names = FALSE)
+
+  # leading covariate columns (decoded, unit headers) from the scenario table
+  if (!is.null(scenario_tbl)) {
+    idx <- match(scen, as.character(scenario_tbl$Scenario))
+    for (cv in setdiff(names(scenario_tbl), "Scenario")) {
+      e <- lookup[[cv]]
+      short <- if (!is.null(e$short)) e$short else if (!is.null(e$label)) e$label else cv
+      hdr   <- if (!is.null(e$unit) && nzchar(e$unit)) paste0(short, " [", e$unit, "]") else short
+      raw   <- scenario_tbl[[cv]][idx]
+      out[[hdr]] <- if (!is.null(e$values) && !is.null(e$decode)) {
+        m <- match(as.character(raw), as.character(unlist(e$values)))
+        ifelse(is.na(m), as.character(raw), as.character(unlist(e$decode))[m])
+      } else {
+        r2(as.numeric(raw))
+      }
+    }
+  }
+
+  # quantity columns
+  for (q in quantities) {
+    info <- q_info[[q]]
+    lab  <- if (!is.null(info$label)) info$label else q
+    hdr  <- if (!is.null(info$unit) && nzchar(info$unit)) paste0(lab, " [", info$unit, "]") else lab
+    out[[hdr]] <- vapply(scen, function(s) fmt_cell(long[[q]][scn == s], q), character(1))
+  }
+  out
+}
+
 
 # ---- 3. Simulate concentration-time profiles ----------------------------------
 
@@ -883,6 +955,22 @@ utils::globalVariables(c("Scenario", "VALUE", "NAME", "COLOR", "MIN", "MAX",
 #' @param output_format Character. Which format(s) to save when `filename` is
 #'   given: one or both of `"emf"` and `"png"`. Default both. `.emf` is written
 #'   with `devEMF::emf`, `.png` with the [ggplot2::ggsave()] default device.
+#' @param metric_info Optional named list keyed by metric, each
+#'   `list(label=, unit=)` (e.g. `AUC = list(label="AUCss", unit="ng*h/mL")`).
+#'   When supplied (with `filename` and a `scenario` data.frame), two summary
+#'   tables spanning **all** metrics in `metric_info` are written next to the
+#'   plot as `<model>-exposure-table-absolute.rds` and `…-relative.rds`.
+#'   Absolute cell = `median / [lo,hi] / geomean / (geoCV%)`; relative =
+#'   `ratio [lo,hi]` vs the `reference` median. Covariate columns come from
+#'   `scenario` (decoded via `lookup`/`spec`, units in the header); interval at
+#'   `percentiles`; rounded to 2 dp. No `metric_info` -> no table.
+#' @param model Optional character used only to name the summary-table files
+#'   (`<model>-exposure-table-*.rds`).
+#' @param percentiles Numeric length-2. Interval for the summary tables (same for
+#'   absolute and relative). Default `c(0.05, 0.95)`.
+#' @param lookup,spec Covariate lookup list and/or yspec object (as in
+#'   [create_covariate_table()]) used to decode categoricals and label the
+#'   covariate columns of the summary tables.
 #' @param width,height Numeric. Output size in inches. Mandatory (no default);
 #'   required whenever `filename` is given.
 #'
@@ -915,6 +1003,11 @@ plot_exposure_forest <- function(data,
                                  typical_subject = TRUE,
                                  filename = NULL,
                                  output_format = c("emf", "png"),
+                                 metric_info = NULL,
+                                 model = NULL,
+                                 percentiles = c(0.05, 0.95),
+                                 lookup = NULL,
+                                 spec = NULL,
                                  width,
                                  height) {
 
@@ -1086,6 +1179,32 @@ plot_exposure_forest <- function(data,
     }
   }
 
+  # Scenario summary tables (absolute + relative), saved next to the plot when
+  # `metric_info` (headers) and the scenario table are supplied. Built from all
+  # metrics in `metric_info`, so the full multi-metric table is written even
+  # though one metric is plotted (re-written harmlessly on each per-metric call).
+  if (!is.null(metric_info) && !is.null(filename) && is.data.frame(scenario)) {
+    lu <- lookup
+    if (!is.null(spec)) {
+      lu <- utils::modifyList(.spec_to_lookup(spec),
+                              if (is.null(lookup)) list() else lookup)
+    }
+    metrics_tbl <- intersect(names(metric_info), names(data))
+    if (length(metrics_tbl) > 0) {
+      tdir <- dirname(stem)
+      if (nzchar(tdir) && !dir.exists(tdir)) {
+        dir.create(tdir, recursive = TRUE, showWarnings = FALSE)
+      }
+      base <- if (!is.null(model)) paste0(model, "-exposure-table") else "exposure-table"
+      saveRDS(.scenario_summary_table(data, metrics_tbl, metric_info, scenario,
+                reference, percentiles, lu, relative = FALSE),
+              file.path(tdir, paste0(base, "-absolute.rds")))
+      saveRDS(.scenario_summary_table(data, metrics_tbl, metric_info, scenario,
+                reference, percentiles, lu, relative = TRUE),
+              file.path(tdir, paste0(base, "-relative.rds")))
+    }
+  }
+
   p
 }
 
@@ -1124,6 +1243,20 @@ plot_exposure_forest <- function(data,
 #'   string `build_scenario_parameters()` attached to `param_sets`; `FALSE`/`NULL`
 #'   suppresses it; a character string is shown verbatim (custom). Passed on to
 #'   [plot_exposure_forest()].
+#' @param param_info Optional named list keyed by parameter, each
+#'   `list(label=, unit=)` (e.g. `CL = list(label="CL", unit="L/h")`). When
+#'   supplied (with a `scenario` data.frame), two summary tables are written to
+#'   the output folder: `<model>-parameter-table-absolute.rds` and
+#'   `…-relative.rds` (same content as the exposure tables - see
+#'   [plot_exposure_forest()]'s `metric_info`). No `param_info` -> no table.
+#' @param scenario The scenario table from [build_scenario_parameters()], used
+#'   for the summary tables' covariate columns.
+#' @param reference Character. Reference scenario for the relative table's ratio
+#'   denominator. Default "Typical subject".
+#' @param percentiles Numeric length-2. Interval for the summary tables. Default
+#'   `c(0.05, 0.95)`.
+#' @param lookup,spec Covariate lookup list and/or yspec object used to decode
+#'   categoricals and label the covariate columns of the summary tables.
 #' @param models_folder Character. Folder containing `model`. Default "models".
 #' @param verbose Logical; print progress. Default `TRUE`.
 #' @param ... Further arguments passed to [plot_exposure_forest()] (e.g.
@@ -1149,6 +1282,12 @@ plot_parameter_forests <- function(param_sets,
                                     height = 6,
                                     outer_range = NULL,
                                     typical_subject = TRUE,
+                                    param_info = NULL,
+                                    scenario = NULL,
+                                    reference = "Typical subject",
+                                    percentiles = c(0.05, 0.95),
+                                    lookup = NULL,
+                                    spec = NULL,
                                     models_folder = "models",
                                     verbose = TRUE,
                                     ...) {
@@ -1215,6 +1354,27 @@ plot_parameter_forests <- function(param_sets,
                          onefile = TRUE)
     for (prm in param_cols) print(plots[[prm]])
     grDevices::dev.off()
+  }
+
+  # Scenario summary tables (absolute + relative) for the parameters, saved in
+  # the same folder, when `param_info` (headers) and the scenario table are given.
+  if (!is.null(param_info) && is.data.frame(scenario)) {
+    lu <- lookup
+    if (!is.null(spec)) {
+      lu <- utils::modifyList(.spec_to_lookup(spec),
+                              if (is.null(lookup)) list() else lookup)
+    }
+    ptbl <- intersect(names(param_info), param_cols)
+    if (length(ptbl) > 0) {
+      base <- paste0(model, "-parameter-table")
+      saveRDS(.scenario_summary_table(stacked, ptbl, param_info, scenario,
+                reference, percentiles, lu, relative = FALSE),
+              file.path(out_dir, paste0(base, "-absolute.rds")))
+      saveRDS(.scenario_summary_table(stacked, ptbl, param_info, scenario,
+                reference, percentiles, lu, relative = TRUE),
+              file.path(out_dir, paste0(base, "-relative.rds")))
+      if (verbose) cat(sprintf("  tables -> %s-{absolute,relative}.rds\n", base))
+    }
   }
 
   invisible(plots)
