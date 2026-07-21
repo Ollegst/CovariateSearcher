@@ -15,7 +15,7 @@ plot_exposure_forest(
   scenario_order = NULL,
   fontsize = 9,
   title = NULL,
-  typical_subject = NULL,
+  typical_subject = TRUE,
   filename = NULL,
   output_format = c("emf", "png"),
   width,
@@ -59,11 +59,12 @@ first appear in \code{data}.}
 \item{title}{Character or NULL. Plot title; when NULL it is built from
 \code{metric} and \code{ss} ("Covariate effects on \if{html}{\out{<metric>}}\link{ss}").}
 
-\item{typical_subject}{Character or NULL. When a non-empty string, shown as a
-subtitle under the title (describing the reference subject, e.g.
-"Typical subject: Weight 70 kg, Sex Male"). \code{NULL} (default) shows no
-subtitle. \code{\link[=create_covariate_table]{create_covariate_table()}} / \code{\link[=build_scenario_parameters]{build_scenario_parameters()}} attach
-a ready-made string as \code{attr(x, "typical_subject")}.}
+\item{typical_subject}{Controls the reference-subject subtitle under the
+title. \code{TRUE} (default) uses the ready-made string that
+\code{\link[=create_covariate_table]{create_covariate_table()}} / \code{\link[=build_scenario_parameters]{build_scenario_parameters()}} attach as
+\code{attr(data, "typical_subject")} (nothing shown if that attribute is
+absent); \code{FALSE}/\code{NULL} shows no subtitle; a character string is shown
+verbatim (custom text, e.g. "Typical subject: 70 kg male, ECOG 0").}
 
 \item{filename}{Character or NULL. Base path for saved output; any extension
 is stripped and one file per \code{output_format} is written as

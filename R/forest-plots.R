@@ -867,11 +867,12 @@ utils::globalVariables(c("Scenario", "VALUE", "NAME", "COLOR", "MIN", "MAX",
 #' @param fontsize Numeric. Base font size. Default 9.
 #' @param title Character or NULL. Plot title; when NULL it is built from
 #'   `metric` and `ss` ("Covariate effects on <metric>[ss]").
-#' @param typical_subject Character or NULL. When a non-empty string, shown as a
-#'   subtitle under the title (describing the reference subject, e.g.
-#'   "Typical subject: Weight 70 kg, Sex Male"). `NULL` (default) shows no
-#'   subtitle. [create_covariate_table()] / [build_scenario_parameters()] attach
-#'   a ready-made string as `attr(x, "typical_subject")`.
+#' @param typical_subject Controls the reference-subject subtitle under the
+#'   title. `TRUE` (default) uses the ready-made string that
+#'   [create_covariate_table()] / [build_scenario_parameters()] attach as
+#'   `attr(data, "typical_subject")` (nothing shown if that attribute is
+#'   absent); `FALSE`/`NULL` shows no subtitle; a character string is shown
+#'   verbatim (custom text, e.g. "Typical subject: 70 kg male, ECOG 0").
 #' @param filename Character or NULL. Base path for saved output; any extension
 #'   is stripped and one file per `output_format` is written as
 #'   `<stem>.<format>`. Missing parent folders are created. `NULL` (default)
@@ -908,7 +909,7 @@ plot_exposure_forest <- function(data,
                                  scenario_order = NULL,
                                  fontsize = 9,
                                  title = NULL,
-                                 typical_subject = NULL,
+                                 typical_subject = TRUE,
                                  filename = NULL,
                                  output_format = c("emf", "png"),
                                  width,
@@ -916,6 +917,15 @@ plot_exposure_forest <- function(data,
 
   # data may be given as an object OR a character path to load (.csv/.rds).
   data <- .load_if_path(data, "data")
+
+  # typical_subject: TRUE -> use the string attached as attr(data,
+  # "typical_subject") (auto, when present); FALSE/NULL -> no subtitle; a
+  # character string -> shown verbatim (custom).
+  if (isTRUE(typical_subject)) {
+    typical_subject <- attr(data, "typical_subject")
+  } else if (isFALSE(typical_subject)) {
+    typical_subject <- NULL
+  }
 
   # `metric` is any numeric column of `data` to forest (its distribution
   # normalised to the reference median). AUC/Cmax/Cmin are the defaults, but a
@@ -1087,10 +1097,10 @@ plot_exposure_forest <- function(data,
 #' @param outer_range Passed to [plot_exposure_forest()]. `NULL` (default) draws
 #'   only the clinical-relevance band on parameter forests (the wider 0.5-2 band
 #'   is dropped); pass e.g. `c(0.5, 2)` to add it back.
-#' @param typical_subject Subtitle describing the reference subject, passed to
-#'   [plot_exposure_forest()]. `NULL` (default) uses the string
-#'   `build_scenario_parameters()` attached to `param_sets`; pass a string to
-#'   override, or `""` to suppress it.
+#' @param typical_subject Reference-subject subtitle. `TRUE` (default) uses the
+#'   string `build_scenario_parameters()` attached to `param_sets`; `FALSE`/`NULL`
+#'   suppresses it; a character string is shown verbatim (custom). Passed on to
+#'   [plot_exposure_forest()].
 #' @param models_folder Character. Folder containing `model`. Default "models".
 #' @param verbose Logical; print progress. Default `TRUE`.
 #' @param ... Further arguments passed to [plot_exposure_forest()] (e.g.
@@ -1115,16 +1125,22 @@ plot_parameter_forests <- function(param_sets,
                                     width = 6,
                                     height = 6,
                                     outer_range = NULL,
-                                    typical_subject = NULL,
+                                    typical_subject = TRUE,
                                     models_folder = "models",
                                     verbose = TRUE,
                                     ...) {
   output_format <- match.arg(output_format, c("emf", "png"), several.ok = TRUE)
 
   param_sets <- .load_if_path(param_sets, "param_sets")
-  # Show the typical-subject subtitle: explicit arg wins, else the description
-  # carried on param_sets by build_scenario_parameters (NULL -> no subtitle).
-  if (is.null(typical_subject)) typical_subject <- attr(param_sets, "typical_subject")
+  # typical_subject: TRUE (default) -> the string build_scenario_parameters
+  # attached to param_sets; FALSE/NULL -> no subtitle; a string -> custom. The
+  # stacked frame does not carry the attribute, so resolve to a string here and
+  # pass that on.
+  if (isTRUE(typical_subject)) {
+    typical_subject <- attr(param_sets, "typical_subject")
+  } else if (isFALSE(typical_subject)) {
+    typical_subject <- NULL
+  }
 
   stacked <- stack_scenario_parameters(param_sets, model = model,
                                        models_folder = models_folder)
