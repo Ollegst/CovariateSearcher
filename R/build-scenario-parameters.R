@@ -28,13 +28,16 @@
 #' order from it.
 #'
 #' @param model Character. Model name without extension, e.g. "run28".
-#' @param covariate_search Data frame. Covariate-search table, as consumed by
-#'   [create_covariate_table()] and [apply_covariate_model()].
-#' @param thetas Data frame. Sampled THETA vectors from
-#'   [sample_individual_thetas()] (columns `THETA1`..`THETAn`, absolute scale).
-#'   The covariate-beta columns must be present, as they drive the factors.
-#' @param data Data frame. Analysis dataset, used by [create_covariate_table()]
-#'   to compute continuous-covariate percentiles.
+#' @param covariate_search Covariate-search table (consumed by
+#'   [create_covariate_table()] and [apply_covariate_model()]), given as either a
+#'   `data.frame` OR a character path to a `.csv`/`.rds` file to load.
+#' @param thetas Sampled THETA vectors from [sample_individual_thetas()] (columns
+#'   `THETA1`..`THETAn`, absolute scale; covariate-beta columns must be present,
+#'   as they drive the factors), given as either a `data.frame` OR a character
+#'   path to a `.csv`/`.rds` file to load.
+#' @param data Analysis dataset (used by [create_covariate_table()] to compute
+#'   continuous-covariate percentiles), given as either a `data.frame` OR a
+#'   character path to a `.csv`/`.rds` file to load.
 #' @param percentiles Numeric vector of probabilities in \[0, 1] for continuous
 #'   covariates, passed straight to [create_covariate_table()]. User-selectable.
 #'   Default `c(0.05, 0.95)`.
@@ -88,6 +91,12 @@ build_scenario_parameters <- function(model,
                                       wrap_width = 30,
                                       scenario_table_path =
                                         paste0("scenario_table_", model, ".rds")) {
+
+  # Each data input may be given as an object OR a character path to load
+  # (.csv/.rds) -- see .load_if_path(). `model` stays a name (models_folder).
+  covariate_search <- .load_if_path(covariate_search, "covariate_search")
+  thetas <- .load_if_path(thetas, "thetas")
+  data <- .load_if_path(data, "data")
 
   if (!is.data.frame(thetas)) {
     stop("`thetas` must be a data.frame of sampled THETA vectors ",

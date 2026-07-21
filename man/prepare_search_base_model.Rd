@@ -24,9 +24,11 @@ c("beta_WT_CL", "beta_AGE_V2")}
 
 \item{new_model_number}{Integer. Required model number for the new model}
 
-\item{data_file_path}{Character. Path to NONMEM dataset CSV}
+\item{data_file_path}{NONMEM dataset, given as either an in-memory
+\code{data.frame} OR a character path to a \code{.csv}/\code{.rds} file (loaded here).}
 
-\item{covariate_search_path}{Character. Path to covariate search CSV}
+\item{covariate_search_path}{Covariate search table, given as either an
+in-memory \code{data.frame} OR a character path to a \code{.csv}/\code{.rds} file.}
 
 \item{models_folder}{Character. Models directory}
 

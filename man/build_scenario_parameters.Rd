@@ -20,15 +20,18 @@ build_scenario_parameters(
 \arguments{
 \item{model}{Character. Model name without extension, e.g. "run28".}
 
-\item{covariate_search}{Data frame. Covariate-search table, as consumed by
-\code{\link[=create_covariate_table]{create_covariate_table()}} and \code{\link[=apply_covariate_model]{apply_covariate_model()}}.}
+\item{covariate_search}{Covariate-search table (consumed by
+\code{\link[=create_covariate_table]{create_covariate_table()}} and \code{\link[=apply_covariate_model]{apply_covariate_model()}}), given as either a
+\code{data.frame} OR a character path to a \code{.csv}/\code{.rds} file to load.}
 
-\item{thetas}{Data frame. Sampled THETA vectors from
-\code{\link[=sample_individual_thetas]{sample_individual_thetas()}} (columns \code{THETA1}..\code{THETAn}, absolute scale).
-The covariate-beta columns must be present, as they drive the factors.}
+\item{thetas}{Sampled THETA vectors from \code{\link[=sample_individual_thetas]{sample_individual_thetas()}} (columns
+\code{THETA1}..\code{THETAn}, absolute scale; covariate-beta columns must be present,
+as they drive the factors), given as either a \code{data.frame} OR a character
+path to a \code{.csv}/\code{.rds} file to load.}
 
-\item{data}{Data frame. Analysis dataset, used by \code{\link[=create_covariate_table]{create_covariate_table()}}
-to compute continuous-covariate percentiles.}
+\item{data}{Analysis dataset (used by \code{\link[=create_covariate_table]{create_covariate_table()}} to compute
+continuous-covariate percentiles), given as either a \code{data.frame} OR a
+character path to a \code{.csv}/\code{.rds} file to load.}
 
 \item{percentiles}{Numeric vector of probabilities in [0, 1] for continuous
 covariates, passed straight to \code{\link[=create_covariate_table]{create_covariate_table()}}. User-selectable.

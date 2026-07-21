@@ -99,6 +99,36 @@ extract_covariate_name_from_tag <- function(tag) {
 }
 
 
+#' Accept an input as either an in-memory object or a path to load
+#'
+#' @description Lets a function argument be given as the object directly OR as a
+#'   path to a file that holds it, consistently across the package. If \code{x}
+#'   is a single character string it is treated as a path and loaded by
+#'   extension (\code{.csv} via \code{readr::read_csv}, \code{.rds} via
+#'   \code{readRDS}); anything else (a data.frame, list, ...) is returned
+#'   unchanged. Model files are intentionally NOT handled here - models are
+#'   referenced by name against \code{models_folder}.
+#' @param x The object, or a length-1 character path to a \code{.csv}/\code{.rds}.
+#' @param what Character label for this input, used in error messages.
+#' @return The in-memory object (loaded if a path was given).
+#' @keywords internal
+#' @noRd
+.load_if_path <- function(x, what = "input") {
+  if (!is.character(x) || length(x) != 1L) return(x)   # already an object
+  if (!file.exists(x)) {
+    stop(sprintf("`%s` is a path but the file does not exist: %s", what, x),
+         call. = FALSE)
+  }
+  ext <- tolower(tools::file_ext(x))
+  switch(ext,
+    csv = readr::read_csv(x, show_col_types = FALSE),
+    rds = readRDS(x),
+    stop(sprintf("`%s`: cannot load a '.%s' file (supported: .csv, .rds): %s",
+                 what, ext, x), call. = FALSE)
+  )
+}
+
+
 #' Convert P-Value to Chi-Square ΔOFV Threshold
 #'
 #' @title Calculate ΔOFV threshold from p-value for likelihood ratio test

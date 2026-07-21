@@ -564,8 +564,9 @@ create_covariate_table <- function(model_name,
 #' be structural only (no covariate terms).
 #'
 #' @param param_sets Named list of data frames from [build_scenario_parameters()]
-#'   (each: `ID` + structural `THETA` columns). The list names label the
-#'   scenarios and are carried into a `Scenario` column of the output.
+#'   (each: `ID` + structural `THETA` columns; the list names label the scenarios
+#'   and are carried into a `Scenario` column of the output). Given as either the
+#'   list itself OR a character path to an `.rds` file to load.
 #' @param mod A loaded mrgsolve model object (from [mrgsolve::mread()]), compiled
 #'   by the caller before calling this function.
 #' @param dose An mrgsolve event object ([mrgsolve::ev()]) describing the dosing
@@ -604,6 +605,9 @@ simulate_scenario_profiles <- function(param_sets,
                                         end = 24,
                                         delta = 0.1,
                                         verbose = TRUE) {
+
+  # param_sets may be given as an object OR a character path to an .rds to load.
+  param_sets <- .load_if_path(param_sets, "param_sets")
 
   if (!is.list(param_sets) || is.null(names(param_sets))) {
     stop("`param_sets` must be a named list ",
@@ -664,8 +668,9 @@ utils::globalVariables(c("Scenario", "VALUE", "NAME", "COLOR", "MIN", "MAX",
 #' e.g. a `group_by(Scenario, ID) %>% summarise(...)` result, saved to RDS or in
 #' memory.
 #'
-#' @param data Data frame with a `Scenario` column and the metric column
-#'   (`AUC`, `Cmax`, or `Cmin`), one row per sample per scenario.
+#' @param data A `Scenario` column and the metric column (`AUC`, `Cmax`, or
+#'   `Cmin`), one row per sample per scenario. Given as either a `data.frame` OR
+#'   a character path to a `.csv`/`.rds` file to load.
 #' @param metric Character. Which metric to plot: "AUC", "Cmax", or "Cmin".
 #' @param ss Logical. Steady state? Adds an "ss" suffix to the metric in the
 #'   title (e.g. "AUC" vs "AUCss"). Default `TRUE`.
@@ -720,6 +725,9 @@ plot_exposure_forest <- function(data,
                                  output_format = c("emf", "png"),
                                  width,
                                  height) {
+
+  # data may be given as an object OR a character path to load (.csv/.rds).
+  data <- .load_if_path(data, "data")
 
   metric <- match.arg(metric)
   output_format <- match.arg(output_format, c("emf", "png"), several.ok = TRUE)

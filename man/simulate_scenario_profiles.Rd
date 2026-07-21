@@ -16,8 +16,9 @@ simulate_scenario_profiles(
 }
 \arguments{
 \item{param_sets}{Named list of data frames from \code{\link[=build_scenario_parameters]{build_scenario_parameters()}}
-(each: \code{ID} + structural \code{THETA} columns). The list names label the
-scenarios and are carried into a \code{Scenario} column of the output.}
+(each: \code{ID} + structural \code{THETA} columns; the list names label the scenarios
+and are carried into a \code{Scenario} column of the output). Given as either the
+list itself OR a character path to an \code{.rds} file to load.}
 
 \item{mod}{A loaded mrgsolve model object (from \code{\link[mrgsolve:mread]{mrgsolve::mread()}}), compiled
 by the caller before calling this function.}

@@ -757,8 +757,10 @@ fix_theta_renumbering <- function(modelcode, theta_numbers_to_remove, log_functi
 #' @param covariate_tags Character vector of covariate tags, e.g.
 #'   c("beta_WT_CL", "beta_AGE_V2")
 #' @param new_model_number Integer. Required model number for the new model
-#' @param data_file_path Character. Path to NONMEM dataset CSV
-#' @param covariate_search_path Character. Path to covariate search CSV
+#' @param data_file_path NONMEM dataset, given as either an in-memory
+#'   `data.frame` OR a character path to a `.csv`/`.rds` file (loaded here).
+#' @param covariate_search_path Covariate search table, given as either an
+#'   in-memory `data.frame` OR a character path to a `.csv`/`.rds` file.
 #' @param models_folder Character. Models directory
 #' @param idcol Character. ID column name
 #' @param overwrite Logical. Overwrite existing model if present
@@ -801,8 +803,9 @@ prepare_search_base_model <- function(base_model_path,
   # ---------------------------------------------------------------------------
   # Step 2: Load data needed for model editing
   # ---------------------------------------------------------------------------
-  data_file <- readr::read_csv(data_file_path, show_col_types = FALSE)
-  covariate_search <- readr::read_csv(covariate_search_path, show_col_types = FALSE)
+  # Each argument may be a path (loaded here) OR an already-in-memory data.frame.
+  data_file <- .load_if_path(data_file_path, "data_file_path")
+  covariate_search <- .load_if_path(covariate_search_path, "covariate_search_path")
 
   if (!"cov_to_test" %in% names(covariate_search)) {
     covariate_search$cov_to_test <- paste0(

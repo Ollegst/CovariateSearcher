@@ -21,8 +21,9 @@ plot_exposure_forest(
 )
 }
 \arguments{
-\item{data}{Data frame with a \code{Scenario} column and the metric column
-(\code{AUC}, \code{Cmax}, or \code{Cmin}), one row per sample per scenario.}
+\item{data}{A \code{Scenario} column and the metric column (\code{AUC}, \code{Cmax}, or
+\code{Cmin}), one row per sample per scenario. Given as either a \code{data.frame} OR
+a character path to a \code{.csv}/\code{.rds} file to load.}
 
 \item{metric}{Character. Which metric to plot: "AUC", "Cmax", or "Cmin".}
 

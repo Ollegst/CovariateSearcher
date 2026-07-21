@@ -19,9 +19,11 @@
 #' same way -- the block is evaluated for the scenario's covariate value.
 #'
 #' @param model_name Character. Model name without extension, e.g. "run28".
-#' @param covariate_search Data frame with columns `COVARIATE`, `PARAMETER`,
-#'   `STATUS`, `FORMULA`, `REFERENCE`. `REFERENCE` supplies the value for any
-#'   covariate an equation references that is not in `covariates`.
+#' @param covariate_search Covariate-search table with columns `COVARIATE`,
+#'   `PARAMETER`, `STATUS`, `FORMULA`, `REFERENCE` (`REFERENCE` supplies the
+#'   value for any covariate an equation references that is not in
+#'   `covariates`), given as either a `data.frame` OR a character path to a
+#'   `.csv`/`.rds` file to load.
 #' @param individual_thetas Data frame whose columns are `THETA1`, `THETA2`, ...
 #'   the sampled THETA draws on the **estimation scale** (raw, as returned by
 #'   [sample_individual_thetas()]; a log-parameterised THETA stays on the log
@@ -41,6 +43,9 @@ apply_covariate_model <- function(model_name,
                                   individual_thetas,
                                   covariates,
                                   models_folder = "models") {
+
+  # covariate_search may be given as an object or a character path (.csv/.rds).
+  covariate_search <- .load_if_path(covariate_search, "covariate_search")
 
   # ---- Normalise the single covariate scenario to a named vector ------------
   if (is.data.frame(covariates)) {

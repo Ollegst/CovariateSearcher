@@ -24,10 +24,11 @@ utils::globalVariables(c("y", "facet_grp", "xlev", "Freq"))
 #' categorical covariate still holds raw numeric codes the function stops and
 #' tells you how to decode.
 #'
-#' @param data data.frame with one row per subject/replicate, containing
-#'   columns for AUC/Cmax/Cmin (as named in `param_info`) and all baseline
-#'   covariates listed in `con`/`cat`. Categorical covariates should already be
-#'   decoded (see [yspec::decode_dataset()]).
+#' @param data One row per subject/replicate, containing columns for
+#'   AUC/Cmax/Cmin (as named in `param_info`) and all baseline covariates listed
+#'   in `con`/`cat`; categorical covariates should already be decoded (see
+#'   [yspec::decode_dataset()]). Given as either a `data.frame` OR a character
+#'   path to a `.csv`/`.rds` file to load.
 #' @param spec A loaded yspec object (from [yspec::ys_load()]), or a path to
 #'   the spec YAML file (loaded with [yspec::ys_load()]); used for the
 #'   "Short (unit)" covariate axis labels.
@@ -115,6 +116,10 @@ create_covariate_boxplots <- function(data,
   type <- match.arg(type, choices = c("AUC", "Cmax", "Cmin"), several.ok = TRUE)
   output_format <- match.arg(output_format, choices = c("emf", "png"),
                              several.ok = TRUE)
+
+  # data may be given as an object OR a character path to load (.csv/.rds).
+  # (spec is likewise accepted as an object or a path, below.)
+  data <- .load_if_path(data, "data")
 
   # Optional filename prefix so different simulation runs do not overwrite each
   # other in the same folder (e.g. prefix = "run19" -> run19-<drug>-<cov>-<type>).

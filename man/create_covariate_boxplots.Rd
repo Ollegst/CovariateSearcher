@@ -24,10 +24,11 @@ create_covariate_boxplots(
 )
 }
 \arguments{
-\item{data}{data.frame with one row per subject/replicate, containing
-columns for AUC/Cmax/Cmin (as named in \code{param_info}) and all baseline
-covariates listed in \code{con}/\code{cat}. Categorical covariates should already be
-decoded (see \code{\link[yspec:decode_dataset]{yspec::decode_dataset()}}).}
+\item{data}{One row per subject/replicate, containing columns for
+AUC/Cmax/Cmin (as named in \code{param_info}) and all baseline covariates listed
+in \code{con}/\code{cat}; categorical covariates should already be decoded (see
+\code{\link[yspec:decode_dataset]{yspec::decode_dataset()}}). Given as either a \code{data.frame} OR a character
+path to a \code{.csv}/\code{.rds} file to load.}
 
 \item{spec}{A loaded yspec object (from \code{\link[yspec:ys_load]{yspec::ys_load()}}), or a path to
 the spec YAML file (loaded with \code{\link[yspec:ys_load]{yspec::ys_load()}}); used for the

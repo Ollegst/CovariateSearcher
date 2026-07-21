@@ -13,8 +13,10 @@
 #' @description Main initialization function that sets up the search state,
 #'   loads data files, validates configuration, and discovers existing models.
 #' @param base_model_path Character. Path to base model (e.g., "run1")
-#' @param data_file_path Character. Path to NONMEM dataset CSV
-#' @param covariate_search_path Character. Path to covariate search CSV
+#' @param data_file_path NONMEM dataset, given as either an in-memory
+#'   `data.frame` OR a character path to a `.csv`/`.rds` file (loaded here).
+#' @param covariate_search_path Covariate search table, given as either an
+#'   in-memory `data.frame` OR a character path to a `.csv`/`.rds` file.
 #' @param models_folder Character. Directory containing models (default: "models")
 #' @param timecol Character. Time column name (default: "TIME")
 #' @param idcol Character. ID column name (default: "ID")
@@ -65,10 +67,11 @@ initialize_covariate_search <- function(base_model_path,
     discovered_models = NULL
   )
 
-  # Load data files
+  # Load data files. Each argument may be given as a path (loaded here) OR as an
+  # already-in-memory data.frame (used as-is) -- see .load_if_path().
   cat("Loading data files...\n")
-  search_state$data_file <- readr::read_csv(data_file_path, show_col_types = FALSE)
-  search_state$covariate_search <- readr::read_csv(covariate_search_path, show_col_types = FALSE)
+  search_state$data_file <- .load_if_path(data_file_path, "data_file_path")
+  search_state$covariate_search <- .load_if_path(covariate_search_path, "covariate_search_path")
 
   # VALIDATION: Check that the ID column exists in the data
   # First try exact match, then search for columns containing "ID"
@@ -116,7 +119,10 @@ initialize_covariate_search <- function(base_model_path,
     NULL
   }
 
-  if (!is.null(ctl_file)) {
+  # The $DATA-name cross-check only applies when the dataset was given as a path
+  # (there is a filename to compare); skip it when an in-memory data.frame was
+  # passed for data_file_path.
+  if (!is.null(ctl_file) && is.character(data_file_path)) {
     modelcode <- readLines(ctl_file)
     # Find DATA line (case-insensitive, may have spaces)
     data_line <- grep("^\\s*\\$DATA", modelcode, ignore.case = TRUE, value = TRUE)
