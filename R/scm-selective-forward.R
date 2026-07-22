@@ -309,6 +309,37 @@ run_scm_selective_forward <- function(search_state,
       step_base_model <- current_best_model
 
     } else {
+      # Restore the pre-"unify forward eval" invariant: never evaluate/advance a
+      # step from the database while any of its models are still unfinished.
+      # get_step_models() reads only status=="completed" rows, so a model still
+      # running on the cluster (e.g. run15) would be invisible here and the loop
+      # would march on and create the next step's / a redemption model for it
+      # (run16) while it is still running. Wait for the previous step's submitted
+      # models to reach a terminal state first, mirroring what the in-memory
+      # submit_and_wait_for_step() result guaranteed on the main branch. On a
+      # fresh run the previous step was just waited on, so this passes with no
+      # sleep; on a continue_search resume it blocks on any still-running model.
+      repeat {
+        prev_rows <- search_state$search_database[
+          !is.na(search_state$search_database$step_number) &
+            search_state$search_database$step_number == (current_step - 1), ,
+          drop = FALSE]
+        if ("phase" %in% names(prev_rows)) {
+          prev_rows <- prev_rows[is.na(prev_rows$phase) |
+                                   prev_rows$phase != "base", , drop = FALSE]
+        }
+        pending <- prev_rows$model_name[
+          !is.na(prev_rows$status) &
+            prev_rows$status %in% c("created", "submitted", "in_progress", "unknown")]
+        if (length(pending) == 0) break
+        cat(sprintf(paste0("⏳ Step %d still has %d unfinished model(s); ",
+                           "waiting before advancing: %s\n"),
+                    current_step - 1, length(pending),
+                    paste(pending, collapse = ", ")))
+        Sys.sleep(60)
+        search_state <- update_all_model_statuses(search_state)
+      }
+
       # Continuation: test only covariates from the previous step's significant models
       prev_step <- get_step_models(
         search_state, current_step - 1,

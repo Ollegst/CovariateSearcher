@@ -437,6 +437,21 @@ update_all_model_statuses <- function(search_state, show_progress = TRUE) {
       terminal_statuses <- c("completed", "failed", "estimation_error")
       needs_update <- !(all_statuses %in% terminal_statuses)
 
+      # Also skip models the user tagged "do_not_run": set-up models such as the
+      # base-model-prep run, which are NOT part of the covariate search. The bbr
+      # tag flows into the DB `tags` list column via model discovery. Skipping
+      # them here means they are never status-checked -> never marked failed
+      # (they have no NONMEM output of their own) -> never auto-retried (no
+      # run<N>001) -> never shown as failed by the search.
+      if ("tags" %in% names(search_state$search_database)) {
+        is_ignored <- vapply(
+          search_state$search_database$tags,
+          function(t) "do_not_run" %in% unlist(t),
+          logical(1)
+        )
+        needs_update <- needs_update & !is_ignored
+      }
+
       # Get models that need updating
       models_needing_update <- all_models[needs_update]
 
