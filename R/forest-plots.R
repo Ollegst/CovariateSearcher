@@ -1309,7 +1309,10 @@ plot_exposure_forest <- function(data,
 #'   plot; `NULL` (default) considers every structural parameter column (those
 #'   with no covariate effect are then skipped automatically).
 #' @param output_folder Base output directory; the model name is appended, so
-#'   files land in `output_folder/<model>/`. Default `"results/figure"`.
+#'   files land in `output_folder/<model>/`. If `model` is already a folder in
+#'   `output_folder` (you passed a fully qualified path such as
+#'   `"results/models/run19/forestplots/plots/"`), it is **not** appended again,
+#'   so you don't get a redundant `<model>/<model>/`. Default `"results/figure"`.
 #' @param output_format Character vector, subset of `c("emf","png")`; which
 #'   per-parameter image format(s) to save. Default both. `.emf` via
 #'   [devEMF::emf()], `.png` via the [ggplot2::ggsave()] default device.
@@ -1433,8 +1436,12 @@ plot_parameter_forests <- function(param_sets,
          "(all were flat across scenarios).")
   }
 
-  # Files go to output_folder/<model>/ (create it, incl. a missing figure/).
-  out_dir <- file.path(output_folder, model)
+  # Files go to output_folder/<model>/ so multiple models don't collide. But if
+  # the caller already put the model name in output_folder (a fully qualified
+  # path, e.g. "results/models/run15/forestplots/plots/"), don't append it again
+  # -> no redundant <model>/<model>/ nesting.
+  out_parts <- strsplit(output_folder, "[/\\\\]+")[[1]]
+  out_dir <- if (model %in% out_parts) output_folder else file.path(output_folder, model)
   if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
 
   if (verbose) {

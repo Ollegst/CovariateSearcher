@@ -38,7 +38,10 @@ plot; \code{NULL} (default) considers every structural parameter column (those
 with no covariate effect are then skipped automatically).}
 
 \item{output_folder}{Base output directory; the model name is appended, so
-files land in \code{output_folder/<model>/}. Default \code{"results/figure"}.}
+files land in \code{output_folder/<model>/}. If \code{model} is already a folder in
+\code{output_folder} (you passed a fully qualified path such as
+\code{"results/models/run19/forestplots/plots/"}), it is \strong{not} appended again,
+so you don't get a redundant \code{<model>/<model>/}. Default \code{"results/figure"}.}
 
 \item{output_format}{Character vector, subset of \code{c("emf","png")}; which
 per-parameter image format(s) to save. Default both. \code{.emf} via
