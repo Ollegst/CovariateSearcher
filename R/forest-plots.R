@@ -1297,9 +1297,11 @@ plot_exposure_forest <- function(data,
 #' **one table per parameter** (its relevant scenarios and the covariate columns
 #' that vary), saved as a named list.
 #'
-#' Files are written under `output_folder/<model>/` (created if missing): one
-#' `<model>-forest-plot-<param>.emf`/`.png` per parameter, plus
+#' Plots are written under `output_plot_folder/<model>/` (created if missing):
+#' one `<model>-forest-plot-<param>.emf`/`.png` per parameter, plus
 #' `<model>-forest-plots.pdf` containing every parameter forest (one per page).
+#' The summary-table RDS go to `output_rds_folder/<model>/` when supplied, else
+#' alongside the plots.
 #'
 #' @param param_sets Named list from [build_scenario_parameters()], given as
 #'   either the list itself OR a character path to an `.rds` file to load.
@@ -1308,11 +1310,17 @@ plot_exposure_forest <- function(data,
 #' @param parameters Optional character vector selecting which parameters to
 #'   plot; `NULL` (default) considers every structural parameter column (those
 #'   with no covariate effect are then skipped automatically).
-#' @param output_folder Base output directory; the model name is appended, so
-#'   files land in `output_folder/<model>/`. If `model` is already a folder in
-#'   `output_folder` (you passed a fully qualified path such as
+#' @param output_plot_folder Base output directory for the plots (per-parameter
+#'   `.emf`/`.png` and the combined PDF); the model name is appended, so files
+#'   land in `output_plot_folder/<model>/`. If `model` is already a folder in
+#'   `output_plot_folder` (you passed a fully qualified path such as
 #'   `"results/models/run19/forestplots/plots/"`), it is **not** appended again,
 #'   so you don't get a redundant `<model>/<model>/`. Default `"results/figure"`.
+#' @param output_rds_folder Base output directory for the summary-table RDS
+#'   (`<model>-parameter-table-{absolute,relative}.rds`), with the same
+#'   `<model>`-append / no-double behaviour as `output_plot_folder`. `NULL`
+#'   (default) writes the tables alongside the plots; pass e.g.
+#'   `"results/models/run19/forestplots/rds/"` to keep them in a separate folder.
 #' @param output_format Character vector, subset of `c("emf","png")`; which
 #'   per-parameter image format(s) to save. Default both. `.emf` via
 #'   [devEMF::emf()], `.png` via the [ggplot2::ggsave()] default device.
@@ -1366,7 +1374,8 @@ plot_exposure_forest <- function(data,
 plot_parameter_forests <- function(param_sets,
                                     model,
                                     parameters = NULL,
-                                    output_folder = "results/figure",
+                                    output_plot_folder = "results/figure",
+                                    output_rds_folder = NULL,
                                     output_format = c("emf", "png"),
                                     combined_pdf = TRUE,
                                     width = 6,
@@ -1436,17 +1445,25 @@ plot_parameter_forests <- function(param_sets,
          "(all were flat across scenarios).")
   }
 
-  # Files go to output_folder/<model>/ so multiple models don't collide. But if
-  # the caller already put the model name in output_folder (a fully qualified
-  # path, e.g. "results/models/run15/forestplots/plots/"), don't append it again
-  # -> no redundant <model>/<model>/ nesting.
-  out_parts <- strsplit(output_folder, "[/\\\\]+")[[1]]
-  out_dir <- if (model %in% out_parts) output_folder else file.path(output_folder, model)
-  if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+  # Resolve an output directory: files go to <folder>/<model>/ so multiple models
+  # don't collide, but if the caller already put the model name in <folder> (a
+  # fully qualified path, e.g. "results/models/run15/forestplots/plots/"), don't
+  # append it again -> no redundant <model>/<model>/ nesting. Created if missing.
+  resolve_out_dir <- function(folder) {
+    parts <- strsplit(folder, "[/\\\\]+")[[1]]
+    d <- if (model %in% parts) folder else file.path(folder, model)
+    if (!dir.exists(d)) dir.create(d, recursive = TRUE)
+    d
+  }
+
+  # Plots + combined PDF go to `output_plot_folder`; the summary-table RDS go to
+  # `output_rds_folder` (resolved lazily below), or alongside the plots when it
+  # is NULL.
+  plot_dir <- resolve_out_dir(output_plot_folder)
 
   if (verbose) {
     cat(sprintf("Parameter forests for %s: %d parameter(s) -> %s\n",
-                model, length(param_cols), out_dir))
+                model, length(param_cols), plot_dir))
   }
 
   # Resolve the table label info + covariate lookup once (only when a table is
@@ -1482,7 +1499,7 @@ plot_parameter_forests <- function(param_sets,
     sp   <- stacked[as.character(stacked$Scenario) %in% keep, , drop = FALSE]
     sp$Scenario <- factor(as.character(sp$Scenario), levels = keep)
 
-    stem <- file.path(out_dir, paste0(model, "-forest-plot-", prm))
+    stem <- file.path(plot_dir, paste0(model, "-forest-plot-", prm))
     plots[[prm]] <- plot_exposure_forest(
       data            = sp,
       metric          = prm,
@@ -1515,7 +1532,7 @@ plot_parameter_forests <- function(param_sets,
 
   # One combined multi-page PDF of every parameter forest, same folder.
   if (isTRUE(combined_pdf)) {
-    pdf_path <- file.path(out_dir, paste0(model, "-forest-plots.pdf"))
+    pdf_path <- file.path(plot_dir, paste0(model, "-forest-plots.pdf"))
     if (verbose) cat(sprintf("  combined PDF -> %s\n", pdf_path))
     grDevices::cairo_pdf(pdf_path, width = width, height = height,
                          onefile = TRUE)
@@ -1523,13 +1540,15 @@ plot_parameter_forests <- function(param_sets,
     grDevices::dev.off()
   }
 
-  # Save the per-parameter tables as two named lists (one table per parameter).
+  # Save the per-parameter tables as two named lists (one table per parameter),
+  # to `output_rds_folder` when given, else alongside the plots.
   if (make_table) {
+    rds_dir <- if (is.null(output_rds_folder)) plot_dir else resolve_out_dir(output_rds_folder)
     base <- paste0(model, "-parameter-table")
-    saveRDS(abs_tbls, file.path(out_dir, paste0(base, "-absolute.rds")))
-    saveRDS(rel_tbls, file.path(out_dir, paste0(base, "-relative.rds")))
-    if (verbose) cat(sprintf("  tables -> %s-{absolute,relative}.rds (list of %d)\n",
-                             base, length(abs_tbls)))
+    saveRDS(abs_tbls, file.path(rds_dir, paste0(base, "-absolute.rds")))
+    saveRDS(rel_tbls, file.path(rds_dir, paste0(base, "-relative.rds")))
+    if (verbose) cat(sprintf("  tables -> %s/%s-{absolute,relative}.rds (list of %d)\n",
+                             rds_dir, base, length(abs_tbls)))
   }
 
   invisible(plots)

@@ -8,7 +8,8 @@ plot_parameter_forests(
   param_sets,
   model,
   parameters = NULL,
-  output_folder = "results/figure",
+  output_plot_folder = "results/figure",
+  output_rds_folder = NULL,
   output_format = c("emf", "png"),
   combined_pdf = TRUE,
   width = 6,
@@ -37,11 +38,18 @@ either the list itself OR a character path to an \code{.rds} file to load.}
 plot; \code{NULL} (default) considers every structural parameter column (those
 with no covariate effect are then skipped automatically).}
 
-\item{output_folder}{Base output directory; the model name is appended, so
-files land in \code{output_folder/<model>/}. If \code{model} is already a folder in
-\code{output_folder} (you passed a fully qualified path such as
+\item{output_plot_folder}{Base output directory for the plots (per-parameter
+\code{.emf}/\code{.png} and the combined PDF); the model name is appended, so files
+land in \code{output_plot_folder/<model>/}. If \code{model} is already a folder in
+\code{output_plot_folder} (you passed a fully qualified path such as
 \code{"results/models/run19/forestplots/plots/"}), it is \strong{not} appended again,
 so you don't get a redundant \code{<model>/<model>/}. Default \code{"results/figure"}.}
+
+\item{output_rds_folder}{Base output directory for the summary-table RDS
+(\code{<model>-parameter-table-{absolute,relative}.rds}), with the same
+\code{<model>}-append / no-double behaviour as \code{output_plot_folder}. \code{NULL}
+(default) writes the tables alongside the plots; pass e.g.
+\code{"results/models/run19/forestplots/rds/"} to keep them in a separate folder.}
 
 \item{output_format}{Character vector, subset of \code{c("emf","png")}; which
 per-parameter image format(s) to save. Default both. \code{.emf} via
@@ -117,9 +125,11 @@ every covariate. The summary table (when \code{param_info} is given) is likewise
 \strong{one table per parameter} (its relevant scenarios and the covariate columns
 that vary), saved as a named list.
 
-Files are written under \code{output_folder/<model>/} (created if missing): one
-\code{<model>-forest-plot-<param>.emf}/\code{.png} per parameter, plus
+Plots are written under \code{output_plot_folder/<model>/} (created if missing):
+one \code{<model>-forest-plot-<param>.emf}/\code{.png} per parameter, plus
 \code{<model>-forest-plots.pdf} containing every parameter forest (one per page).
+The summary-table RDS go to \code{output_rds_folder/<model>/} when supplied, else
+alongside the plots.
 }
 \examples{
 \dontrun{
