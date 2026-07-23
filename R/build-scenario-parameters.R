@@ -63,9 +63,12 @@
 #' @param scenario_table_path Character or NULL. Where to save the scenario table
 #'   (the [create_covariate_table()] result, in definition order) as an RDS for
 #'   later reference - e.g. to restore the scenario order in
-#'   [plot_exposure_forest()] via `scenario_order`. Defaults to
+#'   [plot_exposure_forest()] via `scenario_order`. May be a full file path
+#'   (".../foo.rds") OR a **directory** (a trailing slash, an existing folder, or
+#'   any path without an `.rds` extension) - for a directory the default file
+#'   name `scenario_table_<model>.rds` is written inside it. Defaults to
 #'   `paste0("scenario_table_", model, ".rds")`; missing parent folders are
-#'   created. Pass `NULL` to skip saving.
+#'   created (nested). Pass `NULL` to skip saving.
 #'
 #' @return A named list of data frames, one per scenario (named by the scenario
 #'   description). Each holds `ID` (sample index) plus the structural THETA
@@ -142,6 +145,21 @@ build_scenario_parameters <- function(model,
   # Persist the scenario table (labels + covariate values, in definition order)
   # so downstream forest plots can restore the scenario order. `NULL` skips it.
   if (!is.null(scenario_table_path)) {
+    # Accept either a full file path (".../foo.rds") OR a directory - a trailing
+    # slash, an existing directory, or a path with no .rds extension. For a
+    # directory, write the default file name inside it, so e.g.
+    #   scenario_table_path = "results/forestplots/rds/run16/"
+    # saves results/forestplots/rds/run16/scenario_table_run16.rds instead of
+    # trying to saveRDS() onto the folder itself.
+    is_dir <- grepl("[/\\\\]$", scenario_table_path) ||
+      dir.exists(scenario_table_path) ||
+      !grepl("\\.[Rr][Dd][Ss]$", scenario_table_path)
+    if (is_dir) {
+      scenario_table_path <- file.path(
+        sub("[/\\\\]+$", "", scenario_table_path),
+        paste0("scenario_table_", model, ".rds")
+      )
+    }
     dir_out <- dirname(scenario_table_path)
     if (dir_out != "." && !dir.exists(dir_out)) {
       dir.create(dir_out, recursive = TRUE, showWarnings = FALSE)

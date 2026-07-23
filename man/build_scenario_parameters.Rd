@@ -65,9 +65,12 @@ per subject before computing percentiles. Forwarded to
 \item{scenario_table_path}{Character or NULL. Where to save the scenario table
 (the \code{\link[=create_covariate_table]{create_covariate_table()}} result, in definition order) as an RDS for
 later reference - e.g. to restore the scenario order in
-\code{\link[=plot_exposure_forest]{plot_exposure_forest()}} via \code{scenario_order}. Defaults to
+\code{\link[=plot_exposure_forest]{plot_exposure_forest()}} via \code{scenario_order}. May be a full file path
+(".../foo.rds") OR a \strong{directory} (a trailing slash, an existing folder, or
+any path without an \code{.rds} extension) - for a directory the default file
+name \code{scenario_table_<model>.rds} is written inside it. Defaults to
 \code{paste0("scenario_table_", model, ".rds")}; missing parent folders are
-created. Pass \code{NULL} to skip saving.}
+created (nested). Pass \code{NULL} to skip saving.}
 }
 \value{
 A named list of data frames, one per scenario (named by the scenario
