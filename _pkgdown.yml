@@ -113,6 +113,7 @@ reference:
   contents:
   - validate_base_model_for_search
   - validate_covariate_search_table
+  - validate_covariate_parameter_mapping
   - validate_base_model_parameters
   - validate_parameter_blocks
 
