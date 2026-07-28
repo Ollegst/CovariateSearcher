@@ -24,13 +24,18 @@ jobs:
       - uses: r-lib/actions/setup-pandoc@v2
 
       # bbr, yspec and bbr's own nmrec/mrgmisc dependencies are not on CRAN.
-      # They come from MPN, one CRAN-like repository per package, pinned to the
-      # versions used on Metworx.
+      # They come from MPN, one CRAN-like repository per package.
+      #
+      # bbr is 1.16.1 rather than the 1.11.0 used on Metworx: releases up to
+      # 1.14.3 import readr::read_table2(), which readr dropped in 2.1, so they
+      # cannot install against a current CRAN. Nothing in bbr runs while the
+      # site builds - every article sets eval = FALSE - so the site only needs
+      # the package to install and load.
       - uses: r-lib/actions/setup-r@v2
         with:
           use-public-rspm: true
           extra-repositories: |
-            https://s3.amazonaws.com/mpn.metworx.dev/releases/bbr/1.11.0
+            https://s3.amazonaws.com/mpn.metworx.dev/releases/bbr/1.16.1
             https://s3.amazonaws.com/mpn.metworx.dev/releases/yspec/0.6.2
             https://s3.amazonaws.com/mpn.metworx.dev/releases/nmrec/0.4.0
             https://s3.amazonaws.com/mpn.metworx.dev/releases/mrgmisc/0.2.2
