@@ -11,7 +11,7 @@ articles:
   articles/recovery-system: recovery-system.html
   articles/troubleshooting: troubleshooting.html
   articles/yaml-specification-files: yaml-specification-files.html
-last_built: 2026-07-28T18:14Z
+last_built: 2026-07-28T18:22Z
 urls:
   reference: https://ollegst.github.io/CovariateSearcher/reference
   article: https://ollegst.github.io/CovariateSearcher/articles
