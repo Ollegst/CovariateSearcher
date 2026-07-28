@@ -1,7 +1,7 @@
 CovariateSearcher: Quick Reference
 ================
 CovariateSearcher Package
-2026-06-24
+2026-07-28
 
 ## 🚀 Minimal Working Example
 
@@ -154,19 +154,42 @@ block.
 
 `data/derived/covariate_search.csv`
 
-| PARAMETER | COVARIATE | STATUS | FORMULA | LEVELS | REFERENCE | TIME_DEPENDENT |
-|-----------|-----------|--------|---------|--------|-----------|----------------|
-| CL        | WT        | con    | power   | NA     | 70        | FALSE          |
-| CL        | AGE       | con    | linear  | NA     | 50        | FALSE          |
-| CL        | ECOG      | cat    | linear  | 0;1;2  | 1         | FALSE          |
-| V2        | WT        | con    | power   | NA     | 70        | FALSE          |
+| PARAMETER | COVARIATE | STATUS | FORMULA | LEVELS | REFERENCE | TIME_DEPENDENT | INIT |
+|----|----|----|----|----|----|----|----|
+| CL | WT | con | power | NA | 70 | No |  |
+| CL | AGE | con | linear | NA | 50 | No |  |
+| CL | ECOG | cat | linear | 0;1;2 | 1 | No |  |
+| V2 | WT | con | power | NA | 70 | No | 0.75 FIX |
+| V2 | AGE | con | EMAX\*cov/(EC50+cov) | NA | 50 | No | EMAX=0.5; EC50=10 |
 
-**FORMULA options for continuous covariates (`STATUS = "con"`):** -
-`linear`: `PARAM * (1 + (COV - REF) * THETA)` - `power`:
-`PARAM * (COV / REF) ** THETA` - `power1`:
-`PARAM * (COV / REF) ** THETA` with THETA fixed to 1 - `power0.75`:
-`PARAM * (COV / REF) ** THETA` with THETA fixed to 0.75 - `exponential`:
-`PARAM * EXP(THETA * (COV - REF))`
+`STATUS` is `con` or `cat`; `LEVELS` lists the observed level values,
+separated by `;`. `cov_to_test` (`beta_WT_CL`, …) is generated for you.
+
+**FORMULA options for continuous covariates (`STATUS = "con"`):**
+
+- `linear`: `PARAM * (1 + (COV - REF) * THETA)`
+- `power`: `PARAM * (COV / REF) ** THETA`
+- `exponential`: `PARAM * EXP(THETA * (COV - REF))`
+
+**FORMULA options for categorical covariates (`STATUS = "cat"`):**
+
+- `linear`: one THETA per non-reference level, written as an `IF/ELSEIF`
+  block
+- `power`: for covariates whose levels are numeric (e.g. dose 35/70/125)
+
+**User-defined formulas**: any other `FORMULA` is read as an expression
+in `cov` (the covariate) and `ref` (its REFERENCE); every remaining
+symbol becomes an estimated THETA, e.g. `EMAX*cov/(EC50+cov)` estimates
+`EMAX` and `EC50`.
+
+**INIT** (optional) sets the initial `$THETA` for the covariate beta:
+
+| INIT | meaning |
+|----|----|
+| *(blank)* | default `0.1` |
+| `(0, 0.5, 2)` | bounded: lower, initial, upper |
+| `0.75 FIX` | fixed - adds no degree of freedom |
+| `EMAX=0.5; EC50=10` | one entry per theta, **by name**, for a multi-theta formula |
 
 ------------------------------------------------------------------------
 
