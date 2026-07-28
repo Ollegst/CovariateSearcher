@@ -1,0 +1,351 @@
+# YAML Specification Files
+
+## YAML Specification Files for CovariateSearcher
+
+CovariateSearcher uses YAML specification files inspired by the
+[yspec](https://metrumresearchgroup.github.io/yspec/) structure
+(developed by Metrum Research Group) to enhance documentation and create
+formatted output tables.
+
+### 📋 Overview
+
+The YAML specification system provides:
+
+- ✅ **Standardized variable definitions** with units and descriptions
+- ✅ **Formatted output tables** for parameters and results
+- ✅ **Categorical variable decoding** (e.g., 1 = “White”, 2 = “Black”)
+- ✅ **Automatic documentation** generation
+
+------------------------------------------------------------------------
+
+### 🗂️ Required Files
+
+For CovariateSearcher, use this two-file setup in `data/spec/`:
+
+    data/spec/
+    ├── lookup.yaml       # Variable definitions + SETUP__ metadata + covariate flags
+    └── pk-extend.yml     # Parameter formatting for output tables (optional but recommended)
+
+In addition, CovariateSearcher automatically creates
+`data/spec/tags.yaml` during initialization from your covariate search
+table.
+
+### 🏷️ Auto-Generated File: tags.yaml
+
+`tags.yaml` is generated automatically when you run initialization. It
+maps internal beta tags to covariate-parameter combinations used in
+model generation and tracking.
+
+You do not need to create this file manually.
+
+#### Example tags.yaml
+
+``` yaml
+# Tags configuration file
+# Auto-generated from covariate search table
+# Generated: 2026-04-20
+
+## Covariates
+beta_WT_CL: "WT_CL"                     # Continuous, power, time-independent
+beta_ALB_CL: "ALB_CL"                   # Continuous, power, time-independent
+beta_LDH_CL: "LDH_CL"                   # Continuous, power, time-independent
+beta_SEXN_CL: "SEXN_CL"                 # Categorical 2-level, linear, time-independent
+beta_WT_V1: "WT_V1"                     # Continuous, power, time-independent
+beta_SEXN_V1: "SEXN_V1"                 # Categorical 2-level, linear, time-independent
+beta_AST_V2: "AST_V2"                   # Continuous, power, time-independent
+beta_NLR_V2: "NLR_V2"                   # Continuous, power, time-independent
+beta_SMOKH2_V2: "SMOKH2_V2"             # Categorical 2-level, linear, time-independent
+beta_COMB_V2: "COMB_V2"                 # Categorical 2-level, linear, time-independent
+beta_TUMTYP2_TMAX: "TUMTYP2_TMAX"       # Categorical 2-level, linear, time-independent
+```
+
+------------------------------------------------------------------------
+
+### 📄 File 1: lookup.yaml
+
+Defines variables, their types, units, categorical value decoding, and
+project-level `SETUP__` metadata.
+
+#### Example Structure
+
+``` yaml
+SETUP__:
+  description: Formoterol Population PK Analysis
+  sponsor: AstraZeneca
+  projectnumber: PT010
+  extend_file: pk-extend.yml
+  flags:
+    contcov: [AGE, SCR, CRCL, EGFR, BEGFR, BSCR, BCRCL, BWT, BBMI, BBSA]
+    catcov: [SEXM, RACE, ETHNIC, SMOKING, DOSE, FORM, TRTID, ICS, ASTHMA]
+    diagContCov: [AGE, BEGFR, BSCR, BCRCL, BWT, BBMI, BBSA]
+    diagCatCov: [SEXM, RACE, ETHNIC, SMOKING, DOSE, FORM, TRTID, ICS, ASTHMA]
+NUM:
+  short: Row number
+  type: numeric
+OPROJID:
+  short: Project name
+  type: character
+RACE:
+  short: Race
+  values: [1, 2, 3, 9]
+  decode: ["White", "Black or African American", "Asian", "Other"]
+EGFR:
+  short: Estimated GFR
+  type: numeric
+  unit.text: "mL/min/1.73m^2"
+BBSA:
+  short: Body surface area
+  unit: m2
+  unit.tex: "m^2"
+```
+
+#### Common Variables to Include
+
+**Demographics:**
+
+``` yaml
+AGE:
+  short: Age
+  type: numeric
+  unit: years
+WT:
+  short: Body weight
+  type: numeric
+  unit: kg
+SEX:
+  short: Sex
+  values: [0, 1]
+  decode: ["Female", "Male"]
+```
+
+**Clinical Covariates:**
+
+``` yaml
+CRCL:
+  short: Creatinine clearance
+  type: numeric
+  unit: mL/min
+BMI:
+  short: Body mass index
+  type: numeric
+  unit.text: "kg/m^2"
+```
+
+------------------------------------------------------------------------
+
+### 📄 File 2: pk-extend.yml
+
+Defines parameter formatting for output tables. This creates nicely
+formatted parameter names with units and descriptions.
+
+#### Example Structure
+
+``` yaml
+SETUP__:
+  max_nchar_label: 10000
+DVNORM:
+  short: Dose-normalized concentration
+  unit: ng/mL/mg
+AUCss:
+  short: AUC,ss
+  label: steady-state area under the concentration-time curve
+  unit: mg*hr/L
+CMAXss:
+  short: Cmax,ss
+  label: steady-state maximum concentration
+  unit: ng/mL
+CMINss:
+  short: Cmin,ss
+  label: steady-state minimum concentration
+  unit: ng/mL
+KA:
+  short: Ka
+  label: Absorption rate constant
+  unit: 1/hr
+  comment: Typical parameters
+Frel:
+  short: Frel
+  label: Relative bioavailability
+  unit: percent
+  comment: Typical parameters
+CL:
+  short: CL/F
+  label: Apparent clearance
+  unit: L/h
+  comment: Typical parameters
+V1:
+  short: Vc/F
+  label: Apparent central volume
+  unit: L
+  comment: Typical parameters
+V2:
+  short: Vp1/F
+  label: Apparent peripheral volume
+  unit: L
+  comment: Typical parameters
+```
+
+#### Key Fields for Parameters
+
+| Field     | Description         | Example              |
+|-----------|---------------------|----------------------|
+| `short`   | Abbreviated name    | “CL/F”               |
+| `label`   | Full description    | “Apparent clearance” |
+| `unit`    | Unit of measurement | “L/h”                |
+| `comment` | Category or note    | “Typical parameters” |
+
+comments should be selected from this list: Typical parameters”
+Inter-individual variability Correlation of random effects
+Parameter-Covariate relationships Residual variability
+
+#### Common Parameters to Include
+
+``` yaml
+CL:
+  short: CL/F
+  label: Apparent clearance
+  unit: L/h
+  comment: Typical parameters
+V:
+  short: V/F
+  label: Apparent volume of distribution
+  unit: L
+  comment: Typical parameters
+KA:
+  short: Ka
+  label: Absorption rate constant
+  unit: 1/hr
+  comment: Typical parameters
+IIV_CL:
+  short:CL/F CV%
+  label: Inter-individual variability on clearance
+  comment: Random effects
+IIV_V:
+  short: V/F CV%
+  label: Inter-individual variability on volume
+  comment: Random effects
+RUV_PROP:
+  short: Prop error
+  label: Proportional residual error
+  comment: Residual error
+```
+
+------------------------------------------------------------------------
+
+### 🎯 How CovariateSearcher Uses YAML Files
+
+#### 1. Variable Decoding
+
+Categorical covariate levels are decoded in
+[`model_report()`](https://ollegst.github.io/CovariateSearcher/reference/model_report.md)
+output tables when you pass the lookup spec as the `lookup` argument
+(`model_report(..., lookup = lookup)`):
+
+    Instead of: Effect of SEXN level 2 on Apparent central volume
+    Shows:      Effect of Female (SEXN) on Apparent central volume
+
+Decoding uses each covariate’s `values`/`decode` entries (e.g. `RACE` →
+White, Black or African American, Asian). Without a `lookup`, the
+generic “level N” label is shown.
+
+#### 2. Parameter Formatting
+
+Output tables show formatted parameter names:
+
+    Instead of: CL = 5.2 (units unclear)
+    Shows:      CL/F [L/h] = 5.2 (Apparent clearance)
+
+#### 3. Covariate Categorization
+
+Automatically identifies which covariates to test:
+
+``` yaml
+flags:
+  contcov: [AGE, WT, BMI]  # Test these continuous covariates
+  catcov: [SEX, RACE]      # Test these categorical covariates
+```
+
+------------------------------------------------------------------------
+
+### ✅ Best Practices
+
+#### 1. Match Parameter Names
+
+Ensure names in `pk-extend.yml` match your NONMEM model:
+
+``` yaml
+# If your model has:
+$THETA
+0.5 ; CL ; L/h ; LOG
+
+# Your pk-extend.yml should have:
+CL:
+  short: CL/F
+  label: Apparent clearance
+  unit: L/h
+```
+
+#### 2. Include All Covariates
+
+List all potential covariates in `lookup.yaml`:
+
+``` yaml
+# In lookup.yaml - define them
+AGE:
+  short: Age
+  type: numeric
+  unit: years
+```
+
+#### 3. Use Consistent Units
+
+Match units across files:
+
+``` yaml
+# lookup.yaml
+WT:
+  unit: kg
+
+# pk-extend.yml
+CL:
+  unit: L/h  # Not L/hr or L/hour
+```
+
+#### 4. Decode All Categorical Variables
+
+Provide meaningful labels:
+
+``` yaml
+RACE:
+  values: [1, 2, 3, 9]
+  decode: ["White", "Black or African American", "Asian", "Other"]
+  # NOT: ["1", "2", "3", "9"]
+```
+
+------------------------------------------------------------------------
+
+### 🔍 Validation
+
+Check your YAML files are valid:
+
+``` r
+
+library(yaml)
+
+# Core validation for CovariateSearcher
+lookup <- read_yaml("data/spec/lookup.yaml")
+pk_extended <- read_yaml("data/spec/pk-extend.yml")
+
+# Quick checks
+names(lookup)
+names(pk_extended)
+```
+
+------------------------------------------------------------------------
+
+### 📚 Additional Resources
+
+- **yspec Documentation**:
+  <https://metrumresearchgroup.github.io/yspec/>
+- **yspec Book**: <https://metrumresearchgroup.github.io/ysp-book/>
+- **Examples**: See the yspec package for more examples

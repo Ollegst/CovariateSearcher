@@ -1,0 +1,336 @@
+# Covariate Formulas
+
+## Covariate Formulas
+
+Everything about how a covariate effect is expressed and written into
+the control stream: the built-in forms, custom expressions, initial
+estimates, placement, and what each choice costs in degrees of freedom.
+
+The `FORMULA` column of the covariate search table drives all of it. A
+value is one of three things:
+
+1.  a **built-in name** for a continuous covariate — `linear`, `power`,
+    `exponential`
+2.  a **built-in name** for a categorical covariate — `linear`, `power`
+3.  anything else — a **user-defined expression** such as
+    `EMAX*cov/(EC50+cov)`
+
+------------------------------------------------------------------------
+
+### Where the effect goes
+
+Two properties decide how the effect is written, and both are read from
+your data and model rather than declared by you.
+
+**Is the covariate time-varying?** If a subject has more than one
+distinct value of the covariate, the effect is an individual-level
+effect and is applied to the individual parameter line. Otherwise it is
+a population effect and is applied to the typical-value (`TV_`) line.
+[`build_covariate_reference_table()`](https://ollegst.github.io/CovariateSearcher/reference/build_covariate_reference_table.md)
+records this as `TIME_DEPENDENT`.
+
+**Is the parameter log- or normal-scale?** Read from the parameter’s own
+equation: `PARAM = TV * EXP(ETA)` is normal, `PARAM = EXP(TV + ETA)` is
+log.
+
+| placement                      | normal scale | log scale  |
+|--------------------------------|--------------|------------|
+| population (on `TV_` line)     | `*` factor   | `+` term   |
+| individual (on `PARAM =` line) | `*` factor   | `*` factor |
+
+A multiplicative factor is only correct on a natural-scale value. On a
+log-scale typical value the same effect has to be **added**, because
+`EXP(θ + β·LOG(cov/ref))` is what `EXP(θ) * (cov/ref)^β` means. Every
+built-in carries both renderings, so this is handled for you.
+
+#### What the base model must look like
+
+Because a population covariate is written onto the `TV_` line, a
+log-scale parameter needs that line to exist:
+
+    TV_V1 = THETA(2)
+    V1    = EXP(TV_V1 + ETA(2))
+
+At initialization,
+[`validate_param_transformations()`](https://ollegst.github.io/CovariateSearcher/reference/validate_param_transformations.md)
+checks every parameter that will receive a population covariate and
+stops on these:
+
+| Rejected | Why |
+|----|----|
+| `V1 = EXP(THETA(2) + ETA(2))` | no separate `TV_V1` line, so the additive term would land outside the `EXP()` |
+| `TV_V1 = EXP(THETA(2))` with `V1 = TV_V1*EXP(ETA(2))` | log scale written in normal-IIV form; the effect would be placed multiplicatively on a log value |
+| `V1 = EXP(TV_V1 + EXP(ETA(2))` | unbalanced parentheses — the transformation cannot be detected |
+
+Time-varying covariates are multiplicative on the individual line
+whatever the parameterization, so they are not subject to these checks.
+
+------------------------------------------------------------------------
+
+### Built-in continuous formulas
+
+For covariate `COV` with reference `ref` on THETA number `n`:
+
+| FORMULA | normal scale | log scale |
+|----|----|----|
+| `power` | `* (COV/ref)**THETA(n)` | `+ THETA(n)*LOG(COV/ref)` |
+| `linear` | `* (1 + (COV-ref) * THETA(n))` | `+ LOG(1 + (COV-ref) * THETA(n))` |
+| `exponential` | `* EXP(THETA(n) * (COV-ref))` | `+ THETA(n) * (COV-ref)` |
+
+`REFERENCE` is the value at which the effect is 1 (no effect).
+[`build_covariate_reference_table()`](https://ollegst.github.io/CovariateSearcher/reference/build_covariate_reference_table.md)
+sets it to the median of the baseline values for a continuous covariate.
+
+To fix an exponent rather than estimate it — allometric scaling, for
+instance — use `power` with a fixed `INIT`:
+
+| FORMULA | INIT       | effect            |
+|---------|------------|-------------------|
+| `power` | `1 FIX`    | `* (WT/70)**1`    |
+| `power` | `0.75 FIX` | `* (WT/70)**0.75` |
+
+A fixed theta adds no estimated parameter, which changes how the
+covariate is tested — see [Degrees of
+freedom](#degrees-of-freedom-and-selection).
+
+------------------------------------------------------------------------
+
+### Categorical covariates
+
+Set `STATUS = "cat"`. `LEVELS` holds the observed level values separated
+by `;` (`0;1;2`), and `REFERENCE` is the level the others are compared
+against — by default the most frequent one.
+
+#### `linear` — one theta per level
+
+Each non-reference level gets its own THETA, written as an `IF/ELSEIF`
+block inserted after `$PK`. For `SEX` (levels 1, 2; reference 1) on
+`CL`:
+
+    $PK
+
+    IF(SEX.EQ.1)THEN
+    beta_SEX_CL = 1
+    ELSEIF(SEX.EQ.2)THEN
+    beta_SEX_CL = 1 + THETA(5)
+    ENDIF
+
+    TV_CL = THETA(1) * beta_SEX_CL
+    CL    = TV_CL * EXP(ETA(1))
+
+On a log-scale parameter the same block is written additively — the
+reference level is assigned `0` instead of `1`, non-reference levels get
+`THETA(n)` rather than `1 + THETA(n)`, and the term is added to the
+`TV_` line:
+
+    IF(SEX.EQ.1)THEN
+    beta_SEX_CL = 0
+    ELSEIF(SEX.EQ.2)THEN
+    beta_SEX_CL = THETA(5)
+    ENDIF
+
+    TV_V1 = THETA(2) + beta_SEX_CL
+    V1    = EXP(TV_V1 + ETA(2))
+
+Non-reference levels are ordered by frequency, most common first, so the
+lowest-numbered THETA belongs to the best-informed level.
+
+The `$THETA` entries are named from your lookup file when one is
+available, and from the level value otherwise:
+
+    0.1 ; beta_SEX_CL_FEMALE ;  ; RATIO      # lookup: 2 -> "Female"
+    0.1 ; beta_SEX_CL_2      ;  ; RATIO      # no lookup entry
+
+#### `power` — numeric levels
+
+A covariate with discrete but genuinely numeric levels — dose
+35/70/125/150 mg, say — is usually better described by a power
+relationship on the actual values than by one theta per level.
+`STATUS = "cat"` with `FORMULA = "power"` does that: it renders exactly
+like the continuous `power` form, with no `IF` block.
+
+------------------------------------------------------------------------
+
+### User-defined formulas
+
+Any `FORMULA` that is not a built-in name is read as a **single-factor
+expression**. Two names are reserved:
+
+- `cov` — the covariate
+- `ref` — its `REFERENCE`
+
+Every other symbol becomes an estimated THETA, numbered in order of
+first appearance:
+
+| FORMULA | thetas | written into `$PK` |
+|----|----|----|
+| `1 + slope*log(cov/ref)` | slope | `* (1 + THETA(5) * LOG(WT/70))` |
+| `EMAX*cov/(EC50+cov)` | EMAX, EC50 | `* (THETA(5) * WT/(THETA(6) + WT))` |
+| `IMAX*cov**hill/(IC50**hill+cov**hill)` | IMAX, hill, IC50 | `* (THETA(5) * WT**THETA(6)/(THETA(7)**THETA(6) + WT**THETA(6)))` |
+
+Allowed in an expression: `+`, `-`, `*`, `/`, `^` (or `**`), and the
+functions `exp`, `log`, `log10`, `sqrt`. Conditionals (`if`, `ifelse`)
+are rejected, which keeps every expression a single factor — per-level
+behaviour is what `cat`/`linear` is for.
+
+An expression must reference `cov`, and must contain at least one symbol
+that is not `cov`/`ref`; otherwise there is nothing to estimate.
+
+``` r
+
+cov_tbl <- build_covariate_reference_table(
+  data      = data,
+  id        = "ID",
+  time      = "TIME",
+  Parameter = "CL",
+  Covariate = "AGE",
+  Category  = "con",
+  Formula   = "EMAX*cov/(EC50+cov)",
+  yaml_data = spec,
+  INIT      = "EMAX=0.5; EC50=10"
+)
+```
+
+Each theta gets its own `$THETA` line, named after the symbol:
+
+    0.5 ; beta_AGE_CL_EMAX ;  ; RATIO
+    10  ; beta_AGE_CL_EC50 ;  ; RATIO
+
+#### Expressions and log-scale parameters
+
+The package chooses the **operator** by the parameter’s scale, and
+inserts your expression **exactly as written**. It never transforms it.
+
+| parameter                                 | joined with |
+|-------------------------------------------|-------------|
+| `CL = TV_CL * EXP(ETA(1))` (normal scale) | `*`         |
+| `V = EXP(TV_V + ETA(2))` (log scale)      | `+`         |
+
+So on a log-scale parameter the expression must already be on the log
+scale — writing it that way is your responsibility. Use
+[`log()`](https://rdrr.io/r/base/Log.html) in the expression and it is
+rendered as NONMEM’s `LOG()`:
+
+``` r
+
+Formula = "log(EMAX*cov/(EC50+cov))"      # on a log-scale parameter
+```
+
+which produces
+
+    TV_V = THETA(2) + (LOG(THETA(3) * AGE/(THETA(4) + AGE)))
+    V    = EXP(TV_V + ETA(2))
+
+The same expression **without**
+[`log()`](https://rdrr.io/r/base/Log.html) is still inserted with `+`,
+giving `TV_V = THETA(2) + (THETA(3) * AGE/(THETA(4) + AGE))` — a
+different model, and almost certainly not what you meant. Whenever an
+expression goes onto a log-scale parameter the log records:
+
+    WARNING: user expression added to log-scale parameter 'V' with '+'; the
+    expression is inserted as written, so it must already be on the log scale
+    (e.g. LOG(...)).
+
+The built-in forms need no such care: each carries its own additive
+rendering and switches to it automatically.
+
+------------------------------------------------------------------------
+
+### The INIT column
+
+`INIT` sets the initial estimate written for the covariate’s THETA. It
+is copied into the `$THETA` record as given, so anything NONMEM accepts
+works:
+
+| INIT | `$THETA` line | meaning |
+|----|----|----|
+| *(blank)* | `0.1 ; beta_WT_CL` | formula default |
+| `0.5` | `0.5 ; beta_WT_CL` | plain initial estimate |
+| `(0, 0.5, 2)` | `(0, 0.5, 2) ; beta_WT_CL` | lower bound, initial, upper bound |
+| `0.75 FIX` | `0.75 FIX ; beta_WT_CL` | fixed, not estimated |
+| `EMAX=0.5; EC50=10` | one line per theta | multi-theta expression |
+
+For a multi-theta expression the entries are matched **by name**, so
+order does not matter and any theta you leave out defaults to `0.1`:
+
+``` r
+
+INIT = "EC50=10; EMAX=0.5"     # same as "EMAX=0.5; EC50=10"
+INIT = "EC50=10"               # EMAX falls back to 0.1
+```
+
+For a categorical covariate a single `INIT` value is shared by every
+level’s theta.
+
+**`INIT` must match the number of THETAs the formula declares**, and the
+table check enforces it:
+
+| FORMULA | valid INIT | rejected |
+|----|----|----|
+| `power`, `linear`, `exponential`, `cat.power`, `cat.linear` | one estimate: `0.1`, `(0, 0.5, 2)`, `0.75 FIX` | anything named or multi-entry, e.g. `EMAX=0.5; EC50=10` |
+| `EMAX*cov/(EC50+cov)` | one named entry per theta: `EMAX=0.5; EC50=10` | a bare value, or a name the formula does not declare |
+
+    Row 1: FORMULA 'power' for covariate 'AGE' on parameter 'CL' has a single THETA,
+    so INIT takes one initial estimate, but got a named/multi-entry spec:
+    'EMAX=0.5; EC50=10'.
+      Use e.g. "0.1", "(0, 0.5, 2)" or "0.75 FIX".
+
+------------------------------------------------------------------------
+
+### Degrees of freedom and selection
+
+A covariate is kept when its ΔOFV beats a chi-square threshold. The
+threshold depends on how many parameters the covariate actually adds, so
+it is not a fixed 3.84.
+
+**df = the number of estimated (non-`FIX`) thetas the covariate adds.**
+
+| covariate                        | df  | forward threshold at p = 0.05 |
+|----------------------------------|-----|-------------------------------|
+| continuous, one theta            | 1   | 3.84                          |
+| categorical, 3 levels            | 2   | 5.99                          |
+| `EMAX*cov/(EC50+cov)`            | 2   | 5.99                          |
+| `power` with `INIT = "0.75 FIX"` | 0   | see below                     |
+
+``` r
+
+calculate_covariate_df("WT", search_state$covariate_search)
+pvalue_to_threshold(0.05, df = 2)
+#> 5.991465
+```
+
+A covariate whose thetas are all `FIX` estimates nothing, so a
+likelihood-ratio test is meaningless. Its df is 0, the threshold is 0,
+and it is kept whenever the model improves at all — any ΔOFV \> 0. This
+is what makes fixed allometric scaling testable: it either helps the fit
+or it does not.
+
+------------------------------------------------------------------------
+
+### Reading the results
+
+THETA names encode what the covariate is and where it acts:
+
+| `$THETA` name        | meaning                                      |
+|----------------------|----------------------------------------------|
+| `beta_WT_CL`         | single-theta effect of WT on CL              |
+| `beta_SEX_CL_FEMALE` | categorical level “Female” of SEX on CL      |
+| `beta_AGE_CL_EMAX`   | the `EMAX` theta of a multi-theta expression |
+
+The same names appear as `cov_to_test` in the search table
+(`beta_WT_CL`) and as bbr tags on the models, which is how a model’s
+covariates are recovered from disk.
+
+------------------------------------------------------------------------
+
+### See also
+
+- [Quick
+  Start](https://ollegst.github.io/CovariateSearcher/quick-start.md) —
+  the minimal path through a search
+- [`?build_covariate_reference_table`](https://ollegst.github.io/CovariateSearcher/reference/build_covariate_reference_table.md)
+  — building the table from your data
+- [`?validate_covariate_search_table`](https://ollegst.github.io/CovariateSearcher/reference/validate_covariate_search_table.md)
+  — the checks applied to the table
+- [`?calculate_covariate_df`](https://ollegst.github.io/CovariateSearcher/reference/calculate_covariate_df.md),
+  [`?pvalue_to_threshold`](https://ollegst.github.io/CovariateSearcher/reference/pvalue_to_threshold.md)

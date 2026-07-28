@@ -1,0 +1,868 @@
+# CovariateSearcher — Function Reference
+
+**What this is:** an agent-facing map of *every* function in `R/`, so
+future sessions don’t have to re-read the whole codebase. Originally
+generated from a full read of the pre-refactor code (v0.1.30). **Last
+audited 2026-07-28 against v0.1.31: 29 files in `R/`, 127 top-level
+functions, 91 exports in NAMESPACE** — every defined function appears
+below. Keep it in sync as the modular reorg lands.
+
+**Legend:** `Exp` ✓ = exported (`@export`), · =
+internal/documented-internal. *Side effects* flag file writes, `bbr::`
+calls, `<<-`, [`stop()`](https://rdrr.io/r/base/stop.html), hardcoded
+paths. *Nested* = a closure defined inside another function (not
+top-level).
+
+**Housekeeping:** this file is a dev/agent aid, not package content —
+`^FUNCTIONS\.md$` is in `.Rbuildignore` (done), so it doesn’t ship or
+trip `R CMD check`.
+
+------------------------------------------------------------------------
+
+## Target-module map (current file → planned home)
+
+| Current file(s) | Planned module |
+|----|----|
+| `CovariateSearchr.R`, `imports.R`, `utilities.R` | `utils.R` (+ package scaffolding stays) |
+| `file-io.R`, `monitoring-files.R`, `plot_nonmem_iterations.R` (ext reader), `model-output-tables.R` (matrix/`$THETA` parsers) | `nonmem-io.R` |
+| `initialization.R`, `database-management.R`, `model-discovery.R`, `validation.R` | `search-state.R` |
+| `model-modification.R` | `model-modification.R` |
+| `full_scm_search.R`, `scm-algorithm.R`, `scm-execution.R`, `scm-evaluation.R` | `scm-engine.R` |
+| `scm-selective-forward.R`, `scm-backward.R` | `scm-method-*.R` (+ engine bits) |
+| `recovery-detection.R`, `recovery-actions.R` | `recovery.R` |
+| `reporting.R`, `scm-results.R`, `model-output-tables.R` (tables/plots) | `reporting.R` |
+| `covariate-formula.R` (**exists**) | `covariate-formula.R` |
+| `sample-theta-uncertainty.R`, `covariate-table.R`, `simulate-scenario-profiles.R`, `plot-exposure-forest.R` | `forest-plots.R` (**done**); `apply-covariate-model.R` + `build-scenario-parameters.R` + `covariate-boxplots.R` kept separate |
+| `continue-search.R`, `resume-reconstruct.R` (**newer than this map**) | resume/checkpoint path — not in the original reorg plan |
+
+------------------------------------------------------------------------
+
+## Cross-cutting hazards & consolidation candidates (read before any merge)
+
+**Duplicate implementations (merge targets — but preserve
+contracts):** - **`.ext` readers ×3:** `read_nonmem_ext` (file-io.R →
+`found/ofv/parameters`, FINAL `-1e9` line, flat+subdir), `read_ext_file`
+(monitoring-files.R →
+`status/current_ofv/iterations/has_estimation_issues/…`, last/current
+line, subdir-only), `read_ext_iterations` (plot_nonmem_iterations.R →
+tidy data.frame, consumed positionally by the sim sampler). **Different
+OFV semantics + file locations — do not conflate.** - **`.cov`/`.cor`
+matrix parsers ×2:** `calculate_condition_number`
+(model-output-tables.R, reconstructs lower-triangular) vs
+`.read_nonmem_matrix` (forest-plots.R, assumes labelled square). -
+**`$THETA` name/trans parsers ×3:**
+`extract_params`/`extract_model_params` (model-output-tables.R) vs
+inline in `apply_covariate_model` vs inline in
+`create_covariate_table`. - **Categorical-level decode ×2+:**
+`decode_cov_level` (model-output-tables.R, the only unit-tested fn) vs
+nested `decode_level` (forest-plots.R) vs the inline decode in
+`model_add_cov`. - **Covariate formula algebra ×2 (highest risk):**
+`model_add_cov` *writes* NONMEM factors; `apply_covariate_model`
+*reconstructs the same math in R*. Must stay in sync. Also,
+`model_add_cov`’s formula block is **duplicated verbatim within itself**
+(~L404-408 and ~L490-494). - **name→tag idiom**
+`names(tags)[tags==name]` repeated ~6× in scm-selective-forward.R +
+full_scm_search.R; overlaps `get_covariate_tag_from_name`. - **“Get
+covariates” family (names lie about source):**
+`get_model_covariates_from_db` (reads **bbr files**, returns tag
+**values**), `get_model_covariates_from_files` (reads bbr files, returns
+tag **names**), `get_covariates_from_models` (DB, many models). **Do not
+collapse blindly.**
+
+**Schema declared in 5 places (must all stay in sync / all get
+`stage`):** canonical `initialize_search_database_core` (18 cols) ·
+self-heal `required_cols` in `validation.R` (13-col subset) · self-heal
+in `scm-selective-forward.R` · `model-discovery.R` rebuilds the 18-col
+row by hand · row-builders
+`add_covariate_to_model`/`remove_covariate_from_model` (`bind_rows`) +
+`create_retry_model` (**order-sensitive `rbind` on a blanked `db[1,]`
+template**).
+
+**`action` / `phase` vocabulary (display registry must cover all):** -
+`action` written: `base_model`, `add_covariate`, `remove_covariate`,
+`add_single_covariate`, `remove_single_covariate`, `retry`,
+`manual_modification`. - `phase` written: `base`, `forward_selection`,
+`covariate_removal`, `backward_elimination`, `retry`, `manual`,
+`individual_testing`. - Display generators
+(`generate_step_display`/`_changes_display`/`_step_description`) only
+recognize `{base_model, add_covariate, remove_covariate, retry}` →
+**everything else renders “Unknown: X”**.
+
+**Confirmed bugs (fix during the relevant phase):** -
+~~`run_univariate_step` error handler `<-`~~ **FIXED 2026-07-18**: error
+handler used `<-` (handler-local) → thrown-error failures dropped from
+tracking → now `<<-` (scm-execution.R:153-154), matching the file’s
+existing `<<-` callbacks. - ~~`remove_covariate_from_model` action
+label~~ **FIXED 2026-07-18** (A1): wrote
+`action="remove_single_covariate"` → “Unknown” in tables (backward path
+was only patched by `scm-backward.R:155`); now writes
+`"remove_covariate"` at root so manual removal displays correctly. -
+~~Retry misclassification~~ **FIXED 2026-07-18**: `grepl("\\d{3}$")`
+flagged `run100`+ as retries → now `grepl("^run\\d+001$")` (was 6 sites;
+the 2 yaml-analysis helpers later removed in the dead-code sweep —
+remaining: `process_estimation_issues`, `update_model_counter`,
+`generate_recovery_report`, `discover_models`). Residual false positives
+only for normal models ending in `001` (run1001…). - Excluded-covariate
+“final testing” block in `full_scm_search.R` is **dead** (filters
+`phase=="forward"` which is never written; also gated by
+`run_forward && !run_final_backward`, false for `full_scm`). → retire
+(owner dropped `excluded_only`). - ~~`cat.power` read-side bug~~ **FIXED
+2026-07-19 (registry, Step ③)**: `apply_covariate_model` previously
+gated the categorical `IF`-parse branch on `status=="cat"` alone, so
+`cat.power` (e.g. dose 35/70/125/150) wrongly entered it (no
+`IF(COV.EQ.x)` block → mis-reconstructed). Now BOTH `model_add_cov`
+(write) and `apply_covariate_model` (read) dispatch on the registry’s
+`categorical` flag
+(`get_covariate_formula(status, formula)$categorical`): `cat.linear` →
+per-level `IF/ELSEIF`; everything else incl. `cat.power` → single factor
+from the same registry entry (`nonmem` write / `r_eval` read), so write
+& read can’t drift. - ~~`generate_phase`~~ **removed 2026-07-18** (dead,
+unexported).
+
+**Dependency/NAMESPACE hygiene — RESOLVED (verified 2026-07-28):**
+`mvtnorm`, `ggplot2`, `yspec` are in `Imports:`; `mrgsolve`, `devEMF` in
+`Suggests:`. The 5 sim `@export`s that used to be missing
+(`sample_individual_thetas`, `build_scenario_parameters`,
+`simulate_scenario_profiles`, `plot_exposure_forest`+`theme_forest`,
+`create_covariate_boxplots`) are all in NAMESPACE now. Still
+un-declared: base-priority `tools`/`grid`/`grDevices`.
+
+**Removed on `feature/package-rebuild`:**
+`analyze_model_covariates_yaml`, `analyze_model_from_logic`,
+`get_model_parent_yaml`, `get_dropped_covariates`, `generate_phase`,
+`get_model_covariates`, `read_model_yaml` (dead-code sweep 2026-07-18,
+last two are cascade orphans); `resume_selective_forward` (2026-07-18);
+`data-operations.R` + its 3 exported functions.
+
+**`<<-` scope hazards (break if extracted into functions):**
+`submit_and_wait_for_step` error callbacks (scm-execution.R L298, L578;
+success path uses `<-`) · error handlers in `full_scm_search.R` · log
+accumulators in model-modification/recovery.
+
+**Hardcoded relative paths:** `data/spec/tags.yaml`,
+`data/spec/lookup.yaml`, `models/scm_rds/`, `scenario_table_<model>.rds`
+(cwd), `results/figure/simulations/`, `scm_report.txt`.
+
+------------------------------------------------------------------------
+
+## Package scaffolding
+
+### R/CovariateSearchr.R
+
+*Package-level scaffolding: `_PACKAGE` doc, the central `@importFrom`
+manifest, and the master `globalVariables` block. No functions.*
+
+**Notes:** No function definitions. Holds the central
+`utils::globalVariables(...)` block (~60 names: DB columns + dplyr-chain
+vars + per-function NSE vars for
+`extract_params`/`get_param2`/`model_report`/`submit_and_wait_for_step`)
+and the central `@importFrom` manifest on `"_PACKAGE"` (dplyr, tibble,
+bbr, yaml, readr, purrr, stringr, stats, utils, data.table, flextable,
+officer, tidyr, rlang). **This block is the single most important thing
+to keep intact when moving NSE-heavy functions.**
+
+### R/imports.R
+
+*Package import shell: the `%||%` null-coalescing operator and one stray
+import tag.*
+
+| Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
+|----|----|----|----|----|----|----|
+| `%||%(x, y)` | ✓ | Null-coalesce: `x` unless NULL, else `y` | `x`, `y` | `x` or `y` | — | used throughout |
+
+**Notes:** Only real code is `%||%`; carries a lone
+`#' @importFrom stats qchisq`. `%||%` is **re-defined locally** inside
+`generate_scm_report` (redundant shadow).
+
+------------------------------------------------------------------------
+
+## Initialization & config
+
+### R/initialization.R
+
+*Main entry point: builds `search_state`, loads CSV/YAML inputs,
+validates, auto-generates `tags.yaml`, orchestrates
+DB/config/model-discovery setup.*
+
+| Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
+|----|----|----|----|----|----|----|
+| `initialize_covariate_search(base_model_path, data_file_path, covariate_search_path, models_folder="models", timecol="TIME", idcol="ID", threads=60, validate_parameters=TRUE, require_base_run=TRUE, lookup_file=NULL, starting_model_number=NULL)` | ✓ | Full init: load data, verify ID col + `$DATA` filename match, gen tags, validate base model (skippable via `require_base_run=FALSE`), validate parameter transformations, build DB/config, discover models, set counter | two CSV paths, base model name, `starting_model_number` | full `search_state` list (13 slots) | `cat`; [`readr::read_csv`](https://readr.tidyverse.org/reference/read_delim.html); `readLines`; `dir.create` `models/scm_rds/`; many [`stop()`](https://rdrr.io/r/base/stop.html); hardcoded `data/spec/tags.yaml` | calls `generate_tags_from_covariate_search`, `validate_base_model_for_search`, `load_tags`, `validate_setup`, `initialize_search_database_core`, `initialize_search_config`, `discover_existing_models`, `update_model_counter`, `validate_base_model_parameters`; called-by `load_existing_search` |
+| `load_tags(search_state)` | ✓ | Read `tags.yaml` into `$tags` | `search_state` | updated `search_state` | [`yaml::read_yaml`](https://yaml.r-lib.org/reference/read_yaml.html); [`stop()`](https://rdrr.io/r/base/stop.html); hardcoded `data/spec/tags.yaml` | called-by `initialize_covariate_search` |
+| `validate_covariate_search_table(covariate_search, data_file)` | ✓ | Reusable checks: required cols, non-empty COV/PARAM, dup `cov_to_test`, covariates in data, categorical LEVELS/REFERENCE numeric & consistent, LEVELS numeric, **and `INIT` vs the FORMULA’s theta count** (single-theta form ⇒ one plain estimate; multi-theta expression ⇒ one named entry per theta, names must match) | two data.frames | validated `covariate_search` (adds `cov_to_test`) | `cat`; many [`stop()`](https://rdrr.io/r/base/stop.html) | called-by `validate_setup`, `add_covariates_to_search` |
+| `validate_setup(search_state)` | ✓ | High-level setup validation wrapper | `search_state` | updated `search_state` | `cat`; [`stop()`](https://rdrr.io/r/base/stop.html) | calls `validate_covariate_search_table`, `validate_covariate_parameter_mapping`; called-by `initialize_covariate_search` |
+| `validate_base_model_for_search(base_model_path, models_folder="models")` | ✓ | Confirm base model exists, finished, has OFV | model name, folder | `TRUE` or [`stop()`](https://rdrr.io/r/base/stop.html) | [`stop()`](https://rdrr.io/r/base/stop.html) | calls `get_model_status_from_files`, `read_nonmem_lst`, `read_nonmem_ext` |
+| `initialize_search_config(search_state, lookup_file=NULL)` | ✓ | Set default SCM config (p-values, RSE, threads, lookup, phase) | `search_state`, lookup | updated `search_state` (`$search_config`) | `cat`; hardcoded `data/spec/lookup.yaml` | called-by `initialize_covariate_search` |
+| `generate_tags_from_covariate_search(covariate_search, tags_yaml_path="data/spec/tags.yaml", verbose=TRUE)` | ✓ | Build/replace `## Covariates` section of `tags.yaml`; validates continuous FORMULA vocab | df or CSV path | logical | `writeLines`/`readLines`/`dir.create`; [`stop()`](https://rdrr.io/r/base/stop.html); default `data/spec/tags.yaml` | nested `generate_tag_entry`; called-by `initialize_covariate_search`, `update_tags_yaml` |
+| `update_tags_yaml(search_state=NULL, covariate_search=NULL, tags_yaml_path="data/spec/tags.yaml", verbose=TRUE)` | ✓ | Thin wrapper choosing df/path source | either arg | logical | [`stop()`](https://rdrr.io/r/base/stop.html) | calls `generate_tags_from_covariate_search` |
+| `add_covariates_to_search(search_state, additions, tags_yaml_path="data/spec/tags.yaml", verbose=TRUE)` | ✓ | Extend a **live** search with covariates it did not start with: append rows, derive missing `cov_to_test`, revalidate the merged table (duplicate pair ⇒ `stop`), regenerate `tags.yaml`, refresh `$tags`. Reconciles column types so a CSV round-trip (numeric `REFERENCE`/`LEVELS`) still binds | `search_state`, new rows (df or `.csv` path) | updated `search_state` | rewrites `tags.yaml`; [`stop()`](https://rdrr.io/r/base/stop.html)/`warning` | calls `.load_if_path`, `validate_covariate_search_table`, `generate_tags_from_covariate_search`, `load_tags`; enables `add_covariate_to_model` on a covariate outside the original table |
+| `build_covariate_reference_table(data, id, time, Parameter, Covariate, Category, Formula, yaml_data, INIT=NULL)` | ✓ | Build the `covariate_search` table from parallel vectors: validates the FORMULA vocab (built-ins `linear`/`power`/`exponential`, else an expression), computes REFERENCE (median / user), LEVELS from the data, and TIME_DEPENDENT (\>1 distinct value within a subject); optional `INIT` column | data, aligned spec vectors, lookup yaml | `data.frame` (COVARIATE, PARAMETER, FORMULA, STATUS, LEVELS, REFERENCE, TIME_DEPENDENT\[, INIT\]) | [`stop()`](https://rdrr.io/r/base/stop.html) on spec/vocab errors | feeds `initialize_covariate_search`; TIME_DEPENDENT drives covariate placement |
+| `validate_param_transformations(covariate_search, data_file, id_col, model_name, models_folder="models")` | ✓ | Fail-fast guard for every **population** (time-constant) covariate target: parameterization must be classifiable as normal `P = TV*EXP(ETA)` or log `P = EXP(TV+ETA)`; a log target must have a separate `TV_<param>` line (inline `P = EXP(THETA+ETA)` rejected — the additive term would land outside the `EXP`); rejects disguised-log `TV_P = EXP(THETA(n))` and unbalanced parens | search table, data, model | `invisible(TRUE)` or [`stop()`](https://rdrr.io/r/base/stop.html) with a refactor message | `readLines`; [`stop()`](https://rdrr.io/r/base/stop.html) | calls `detect_param_transform`; called-by `initialize_covariate_search`, `prepare_search_base_model` |
+
+**Notes:** `cov_to_test = beta_<COV>_<PARAM>` computed in two places
+here + in `validate_covariate_search_table` (dup). Continuous FORMULA
+vocab is now `linear`/`power`/`exponential` **plus user expressions** —
+`power1`/`power0.75` were removed (use `power` + `INIT`
+`"1 FIX"`/`"0.75 FIX"`). No schema/`action`/`phase` writes here.
+
+------------------------------------------------------------------------
+
+## Database & state
+
+### R/database-management.R
+
+*Search-database schema/self-heal, RDS save/load, model-lookup
+accessors, model counter, comprehensive display-table builders.*
+
+| Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
+|----|----|----|----|----|----|----|
+| `load_existing_search(base_model_path, data_file_path, covariate_search_path, models_folder="models", timecol="TIME", idcol="ID", threads=60, lookup_file=NULL)` | ✓ | Discovery-mode wrapper: re-init from existing models | CSV/model paths | `search_state` or [`stop()`](https://rdrr.io/r/base/stop.html) | `cat`; `list.files`; [`stop()`](https://rdrr.io/r/base/stop.html) | calls `initialize_covariate_search` |
+| `save_search_state(search_state, filename)` | ✓ | Save RDS; bare name → `models/scm_rds/` | state, filename | `invisible(search_state)` | `saveRDS`; `dir.create`; hardcoded `scm_rds/` | — |
+| `load_search_state(filename)` | ✓ | Load RDS (no migration) | filename | `search_state` | `readRDS`; [`stop()`](https://rdrr.io/r/base/stop.html) | — |
+| `initialize_search_database_core(search_state)` | ✓ | Create empty 18-col search DB (**canonical schema**) | `search_state` | updated `search_state` | `cat` | called-by `initialize_covariate_search`, `discover_existing_models` |
+| `get_model_status(search_state, model_name)` | ✓ | DB status lookup | state, name | char status or `"not_found"` | — | — |
+| `get_model_ofv_from_database(search_state, model_name)` | ✓ | Cached OFV lookup | state, name | numeric or `NA_real_` | — | — |
+| `get_model_covariates_from_db(search_state, model_name)` | ✓ | Read **bbr tags**, intersect w/ `beta_*` tag **values** | state, name | char or `character(0)` | [`bbr::read_model`](https://metrumresearchgroup.github.io/bbr/reference/read_model.html) | called widely (forward/backward/selective) |
+| `update_model_counter(search_state)` | ✓ | Set `model_counter` to last non-retry run number | `search_state` | updated `search_state` | `cat` | called-by `initialize_covariate_search` |
+| `create_comprehensive_table(search_state, use_separate_columns=TRUE)` | ✓ | Build display df (parent/type/step/changes/status/ofv/delta/param) | `search_state` | `data.frame` | [`stop()`](https://rdrr.io/r/base/stop.html) | calls `generate_step_display`/`_changes_display`/`_step_description`; called-by `view_comprehensive_table` |
+| `generate_step_display(step_number, action)` | · | “Base”/“Step N”/“Step N (Retry)” | vectors | char vector | — | called-by `create_comprehensive_table` |
+| `view_comprehensive_table(search_state, use_separate_columns=TRUE)` | ✓ | Print comprehensive table | `search_state` | `invisible(df)` | `cat`; `print` | calls `create_comprehensive_table` |
+| `generate_changes_display(action, covariate_tested)` | · | “Add/Remove/Retry X” | vectors | char vector | — | called-by `create_comprehensive_table` |
+| `generate_step_description(step_number, action, covariate_tested)` | · | “Step N: Add X” | vectors | char vector | — | called-by `create_comprehensive_table` |
+
+**Notes:** **Canonical schema (18 cols):**
+`model_name, step_description, phase, step_number, parent_model, covariate_tested, action, ofv, delta_ofv, rse_max, status, tags (I(list())), submission_time, completion_time (POSIXct), retry_attempt, original_model, estimation_issue, excluded_from_step`.
+Display generators branch on
+`action ∈ {base_model, add_covariate, remove_covariate, retry}` →
+discovered/manual/`*_single_*` rows fall through to “Unknown”. No
+`action`/`phase` **written** here (display only).
+
+### R/model-discovery.R
+
+*Scans the models folder, parses bbr `based_on`/notes into DB rows,
+computes relative step numbers via parent-chain recursion.*
+
+| Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
+|----|----|----|----|----|----|----|
+| `discover_existing_models(search_state)` | ✓ | Catalog `run\d+.(ctl|mod)`, read bbr per run, build `search_database`, assign relative step numbers | `search_state` | updated `search_state` (+ `$discovered_models`) | `cat`; `list.files`; [`bbr::read_model`](https://metrumresearchgroup.github.io/bbr/reference/read_model.html); [`stop()`](https://rdrr.io/r/base/stop.html) (missing base / circular parent) | calls `initialize_search_database_core`, `get_model_status_from_files`, `read_nonmem_ext`, `get_model_covariates_from_files`, [`dplyr::bind_rows`](https://dplyr.tidyverse.org/reference/bind_rows.html); nested `get_step_number`, `is_descendant_of`; called-by `initialize_covariate_search` |
+
+**Notes:** **4th row-builder** — hand-builds the 18-col row (must stay
+in sync w/ canonical schema). Writes
+`action ∈ {manual_modification(default), retry, add_single_covariate, remove_single_covariate}`,
+`phase ∈ {manual(default), retry, individual_testing}` — but then
+**overwrites** most: `phase <- ifelse(retry, phase, "manual")`,
+`action <- ifelse(retry, action, "manual_modification")`, so only
+`retry` survives; base row forced to
+`action="base_model"/phase="base"/step_number=0L`. Net: the note-parsing
+into `*_single_covariate` is discarded for non-retry models.
+
+### R/validation.R
+
+*Reads NONMEM output to update DB status/OFV/RSE/ΔOFV; THETA/OMEGA/SIGMA
+block-format validators; covariate→parameter mapping check.*
+
+| Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
+|----|----|----|----|----|----|----|
+| `update_model_status_from_files(search_state, model_name, force=FALSE)` | ✓ | Read `.lst`/`.ext`/`.cov`, set status/ofv/rse_max/issue, compute signed ΔOFV vs parent | state, name, force | updated `search_state` | `cat`; `readLines`; **self-heals missing DB cols** | calls `extract_nonmem_timestamps`, `read_nonmem_ext`, `get_param2`; called-by `force_update_models`, `update_all_model_statuses` |
+| `force_update_models(search_state, model_names)` | ✓ | Force-reread one/many | state, names | updated `search_state` | `cat` | calls `update_model_status_from_files` |
+| `update_all_model_statuses(search_state, show_progress=TRUE)` | ✓ | Update all non-terminal models; report newly-significant via per-df thresholds | `search_state` | updated `search_state` | `cat` | calls `update_model_status_from_files`, `extract_covariate_name_from_tag`, `calculate_covariate_df`, `pvalue_to_threshold`; called-by `submit_and_wait_for_step`, `select_best_model` |
+| `get_model_max_rse(search_state, model_name)` | ✓ | Max finite RSE via `get_param2` | state, name | numeric or `NA_real_` | — | calls `get_param2` |
+| `validate_parameter_blocks(model_file, check_omega_structure=TRUE, check_comments=TRUE, allow_empty_units=TRUE)` | ✓ | Check THETA/OMEGA/SIGMA line formatting | .ctl path | `list(valid, issues, warnings, model_file, blocks_checked)` | `readLines` | called-by `validate_base_model_parameters` |
+| `print_parameter_validation(validation_result, verbose=TRUE)` | ✓ | Pretty-print validation + guidance | validation list | `invisible(...)` | `cat` | called-by `validate_base_model_parameters` |
+| `validate_base_model_parameters(base_model_path, models_folder=NULL, strict=TRUE, check_omega_structure=TRUE, check_comments=TRUE)` | ✓ | Resolve base model, run+print block validation | model path/folder | validation `list` or [`stop()`](https://rdrr.io/r/base/stop.html) | `cat`; `stop`/`warning`; `list.files` | calls `validate_parameter_blocks`, `print_parameter_validation`; called-by `initialize_covariate_search` |
+| `validate_covariate_parameter_mapping(covariate_search, model_name, models_folder="models", covariate_tags=NULL, strict=TRUE, verbose=TRUE)` | · | Verify each PARAMETER appears in model code | search table, model | `data.frame(cov_to_test, COVARIATE, PARAMETER, parameter_found)` | `cat`; `readLines`; `stop`/`warning` | calls `find_model_file`; called-by `validate_setup` |
+
+**Notes:** **Self-heal schema \#2** — `update_model_status_from_files`
+declares a 13-col `required_cols` subset, adds missing via `case_when`
+defaults (`NA_real_` for numerics, `FALSE` for `excluded_from_step`,
+else `NA_character_`). **Status values:**
+`completed/failed/in_progress/unknown/stopped/read_error`. **ΔOFV
+sign:** backward (`action` matches “remove”) uses `child - parent`;
+forward uses `parent - child` (positive=improvement both). Completion
+needs valid OFV AND (if `require_cov_step`) a `.cov`; boundary params
+(`abs >= 8.99990e5`) → failed.
+
+------------------------------------------------------------------------
+
+## File I/O & model modification
+
+### R/file-io.R
+
+*NONMEM file I/O: locate/read/write control files; parse `.ext`/`.lst`
+for status, OFV, covariates, timestamps.*
+
+| Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
+|----|----|----|----|----|----|----|
+| `read_model_file(search_state, run_name, extensions=c(".ctl",".mod"))` | ✓ | Read control file, stash path | `models_folder`+`run_name` | char lines w/ `file_path` attr | [`stop()`](https://rdrr.io/r/base/stop.html) if none | called-by `model_add_cov`, `remove_covariate_from_model` |
+| `find_model_file(base_path, extensions=c(".ctl",".mod"))` | ✓ | Resolve actual model file path | `base_path` (no ext) | full path or `NULL` | — | called-by `adjust_theta_for_covariate`, validation, sim |
+| `write_model_file(search_state, lines)` | ✓ | Write lines back to `file_path` attr | `lines` w/ attr | `search_state` | `writeLines`; [`stop()`](https://rdrr.io/r/base/stop.html) if attr missing | called-by `model_add_cov`, `remove_covariate_from_model` |
+| `read_nonmem_ext(model_path)` | ✓ | OFV+params from `.ext` (last `-1e9` line) | dir or `.ext` | `list(found, file, ofv, parameters, n_parameters)` / `list(found=FALSE, error, ofv=NA, parameters=NULL)` | [`warning()`](https://rdrr.io/r/base/warning.html) | called-by `get_model_status_from_files`, validation, discovery, scm-algorithm, init |
+| `read_nonmem_lst(model_path)` | ✓ | Classify `.lst` run status via regex | dir or `.lst` | `list(found, file, status, error_message, error_excerpt, has_issues)` | — | called-by `get_model_status_from_files`, init |
+| `get_model_status_from_files(model_path)` | ✓ | Combine LST+EXT into one status | model dir | char status (`completed_with_issues` when EXT OFV ok but LST failed) | — | calls `read_nonmem_lst`, `read_nonmem_ext` |
+| `get_model_covariates_from_files(search_state, model_name)` | ✓ | Covariate **tag names** present via bbr tags | `$tags` (`beta_*`) | char vec (names) or `character(0)` | [`bbr::read_model`](https://metrumresearchgroup.github.io/bbr/reference/read_model.html) | called-by `discover_existing_models` |
+| `extract_nonmem_timestamps(model_name, models_folder="models")` | ✓ | Parse start/stop from `.lst` | name, folder | `list(start_time, stop_time, found_start, found_stop)` | — | called-by `submit_and_wait_for_step`, validation |
+
+**Notes:** `read_nonmem_ext` (`$parameters`/`$n_parameters` computed but
+read by **no** caller — dead fields). `read_model_file`’s `file_path`
+attr is a hard contract for `write_model_file`.
+
+### R/model-modification.R
+
+*Add/remove covariates by text-editing NONMEM control streams (THETA
+insert/renumber, FLAG-driven formulae) and appending `search_database`
+rows.*
+
+| Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
+|----|----|----|----|----|----|----|
+| `add_covariate_to_model(search_state, base_model_id, covariate_tag, step_number=NULL, lookup_file=NULL, phase="forward_selection")` | ✓ | Copy parent, add one covariate, append DB row. Needs only two things from `search_state`: the tag in `$tags` and a matching `cov_to_test` row in `$covariate_search`. **`step_number` is REQUIRED** (stops if NULL — it is not auto-derived). `phase="individual_testing"` marks a deliberate one-off add outside the search | tag, base model | `list(status, model_name, covariate_added, step_number, search_state, technical_log, log_file)` / error list | `bbr::read_model/copy_model_from/add_tags/replace_all_notes`; `writeLines` logs; `log_filename <<-`; [`stop()`](https://rdrr.io/r/base/stop.html); rolls back `model_counter` | calls `validate_covariate_parameter_mapping`, `model_add_cov`; called-by `run_univariate_step` |
+| `model_add_cov(search_state, ref_model, cov_on_param, id_var="ID", data_file, covariate_search, capture_log=FALSE, lookup_file=NULL)` | ✓ | **Core control-stream editor:** picks placement (TIME_DEPENDENT → individual/population) and transform (`detect_param_transform`), renders the effect from the registry (`nonmem` mult / `nonmem_log` additive), inserts N `$THETA` lines from `INIT` | `cov_on_param`, `data_file` | `list(search_state, log_entries)` or `search_state` | `write_model_file`; [`stop()`](https://rdrr.io/r/base/stop.html); hardcoded `data/spec/lookup.yaml`; `captured_log <<-` | calls `get_covariate_formula`, `detect_param_transform`, `parse_named_init`, `read_model_file`, `write_model_file`; called-by `add_covariate_to_model`, `prepare_search_base_model` |
+| `strip_covariate_factors(line, theta_nums)` | · | Remove every top-level `* <factor>` / `+ <term>` on a `$PK` line whose factor references one of `theta_nums` (balanced-paren aware), leaving the structural term and other covariates intact — one place for built-ins, user expressions and multi-theta forms | `$PK` line, THETA numbers | the line without those factors | — | called-by `remove_covariate_from_model` |
+| `fix_theta_renumbering(modelcode, theta_numbers_to_remove, log_function)` | ✓ | Renumber `THETA(n)` after removals (temp placeholders) | modelcode, removed nums | char modelcode | — | called-by `remove_covariate_from_model` |
+| `prepare_search_base_model(base_model_path, covariate_tags, new_model_number, data_file_path, covariate_search_path, models_folder="models", idcol="ID", overwrite=TRUE, lookup_file=NULL)` | ✓ | Build one child w/ many covariates + combined log (no DB row) | tags, paths | `list(status, model_name, model_path, parent_model, covariate_tags, covariates_added, log_file)` | [`readr::read_csv`](https://readr.tidyverse.org/reference/read_delim.html); `bbr::*`; `writeLines`; [`stop()`](https://rdrr.io/r/base/stop.html); hardcoded lookup | calls `validate_covariate_parameter_mapping`, `model_add_cov` |
+| `remove_covariate_from_model(search_state, model_name, covariate_tag, save_as_new_model=TRUE, step_number=NULL)` | ✓ | Strip covariate formula+THETA, renumber, append DB row | tag, model | `list(status, model_name, covariate_removed, search_state)` | `bbr::copy_model_from/read_model/remove_tags/add_notes`; `write_model_file`; `writeLines`; `log_messages <<-`; [`stop()`](https://rdrr.io/r/base/stop.html) | calls `read_model_file`, `fix_theta_renumbering`, `write_model_file`; called-by `run_backward_elimination` |
+
+**Notes — row-builders & FLAG logic (the reconciliation core):** -
+**`add_covariate_to_model`** (`bind_rows`): `action="add_covariate"`,
+`phase` from the argument (default `"forward_selection"`), `step_number`
+**required** ([`stop()`](https://rdrr.io/r/base/stop.html) if NULL),
+`parent_model=base_model_id`, `covariate_tested=cov_to_test` (`beta_*`),
+`status="created"`, `tags=I(list(actual .yaml tags))`, rest NA/0L/FALSE.
+Increments `model_counter`→`run<N>`; rolls back on error. -
+**`remove_covariate_from_model`** (`bind_rows`, only if
+`save_as_new_model`): `action="remove_covariate"` (fixed 2026-07-18 at
+the root), `phase="covariate_removal"`, `parent_model=model_name`,
+`tags=I(list(character(0)))` (**discards** computed `remaining_tags`). -
+**`model_add_cov` rendering — the FLAG `case_when` is GONE (verified
+2026-07-28: no `FLAG` in this file).** Dispatch is now the registry in
+`covariate-formula.R`: `get_covariate_formula(status, formula)` returns
+the entry, `$categorical` decides per-level `IF/ELSEIF` (cat.linear) vs
+a single factor, and `nonmem()` / `nonmem_log()` render multiplicative
+vs additive per the target’s transform. `power1`/`power0.75` were
+removed — use `power` + `INIT` `"1 FIX"`/`"0.75 FIX"`. Init comes from
+the table’s `INIT` column (per-theta named spec for multi-theta forms
+via `parse_named_init`), falling back to the entry’s default. THETA
+lines: `beta_<COV>_<PARAM>` (1 theta), `beta_<COV>_<PARAM>_<THETANAME>`
+(multi-theta), `beta_<COV>_<PARAM>_<LABEL>` (categorical, decoded label
+— **not** the numeric level). Rewrites `$TABLE FILE=` to match run
+number. Removal goes through `strip_covariate_factors` +
+`fix_theta_renumbering`, so it no longer mirrors per-shape regexes.
+
+### R/covariate-formula.R
+
+*Registry + source of truth for how a covariate effect is written into
+NONMEM: one entry per `(STATUS, FORMULA)`, parameter-transform
+detection, and user expression parsing. Consumed by the WRITE side
+(`model_add_cov`) and `calculate_covariate_df`. The forest READ side
+(`apply_covariate_model`) evaluates the model’s own `$PK` and does
+**not** use this registry.*
+
+| Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
+|----|----|----|----|----|----|----|
+| `register_covariate_formula(status, formula, nonmem=NULL, init="0.1", categorical=FALSE, nonmem_log=NULL)` | · | Store a form keyed `"status.formula"`. `nonmem(cova, ref, n)` renders the MULTIPLICATIVE factor for a normal-scale TV; `nonmem_log(cova, ref, n)` the ADDITIVE term for a log-scale TV; `categorical=TRUE` flags per-level `IF/ELSEIF` handling. **Internal since 2026-07-28** (`@keywords internal`/`@noRd`) — its only caller is this file, 5× at load time to declare the built-ins | status, formula, renderer fns | `invisible(key)` | `assign` into the load-time registry env | called at load time for the built-ins |
+| `get_covariate_formula(status, formula)` | · | Look up an entry; **falls through to `parse_covariate_expression(formula)`** when the name isn’t registered, so a raw expression works like a built-in | status, formula | entry `list` or `NULL` | — | called-by `model_add_cov`, `calculate_covariate_df` |
+| `list_covariate_formulas()` | · | The registered `"status.formula"` keys. **Internal since 2026-07-28** | — | sorted `character` | — | called-by `model_add_cov` (the “unknown formula” error message) |
+| `detect_param_transform(modelcode, param)` | · | Classify a parameter: `"normal"` (`P = TV*EXP(ETA)`), `"log"` (`P = EXP(TV+ETA)`), `"unknown"` (ETA not inside an `EXP` → exotic, callers reject). No IIV on the parameter ⇒ `"normal"`. Robust to models that already carry covariates | model lines, param name | `character(1)` | — | calls `.exp_inner_containing_eta`; called-by `model_add_cov`, `validate_param_transformations` |
+| `.exp_inner_containing_eta(rhs)` | · | Body of the first paren-balanced `EXP(...)` whose content holds an `ETA(` (`\b` guard so `THETA(` doesn’t match); `NA` if the ETA isn’t wrapped in an `EXP` | RHS of the parameter line | `character(1)` or `NA` | — | called-by `detect_param_transform` |
+| `parse_covariate_expression(formula)` | · | Treat a non-built-in FORMULA as a single-factor expression in reserved `cov` (and optional `ref`); **every other symbol is an estimated THETA**, in order of appearance. Rejects anything using a function outside `.COV_EXPR_ALLOWED` (`+ - * / ^ exp log log10 sqrt`) — notably `if`/`ifelse`, which keeps expressions single-factor | formula string | entry `list(expr, theta_names, nonmem, nonmem_log, ...)` or `NULL`. **`nonmem_log` is the same rendering joined with `+` instead of `*`** — the expression is never transformed | — | `all.vars`/`all.names`; called-by `get_covariate_formula` |
+| `.translate_expr_to_nonmem(expr, cova, ref, thetas, n)` | · | AST walk rendering the R expression as NONMEM: `cov`→covariate column, `ref`→its value, parameter symbols→`THETA(n)`, `THETA(n+1)`…, math fns uppercased, `^`→`**` | parsed expr | `character(1)` | — | called-by the expression entry’s `nonmem()` |
+| `parse_named_init(init_str, theta_names)` | · | Split a `;`-delimited **named** INIT spec (`"EMAX=0.1; EC50=(0,10,1000)"`) into one `$THETA` init string per theta, aligned to `theta_names`, defaulting to `"0.1"`; order-independent, unknown names ignored | INIT cell, theta names | `character(length(theta_names))` | — | called-by `model_add_cov` (multi-theta path) |
+| `.cov_pow_nonmem(cova, ref, n)` | · | Multiplicative power renderer: `* (COV/ref)**THETA(n)` | cova, ref, n | `character(1)` | — | registered for both `con.power` and `cat.power` |
+| `.cov_pow_logadd(cova, ref, n)` | · | Additive (log-scale) power renderer: `+ THETA(n)*LOG(COV/ref)` | cova, ref, n | `character(1)` | — | registered for both `con.power` and `cat.power` |
+
+**Registered built-ins** (byte-exact mirror of the legacy output):
+
+| key | normal (`*` factor) | log (`+` term) |
+|----|----|----|
+| `con.power` | `* (COV/ref)**THETA(n)` | `+ THETA(n)*LOG(COV/ref)` |
+| `con.linear` | `* (1 + (COV-ref) * THETA(n))` | `+ LOG(1 + (COV-ref) * THETA(n))` |
+| `con.exponential` | `* EXP(THETA(n) * (COV-ref))` | `+ THETA(n) * (COV-ref)` |
+| `cat.power` | same as `con.power` — a **numeric-levelled** covariate (e.g. dose 35/70/125/150) as a power relation; **not** categorical, so no `IF` block | same |
+| `cat.linear` | — | — (flagged `categorical=TRUE`; the per-level `$PK` `IF/ELSEIF` block stays in `model_add_cov`) |
+
+**Notes:** `power1`/`power0.75` were **removed** — express them as
+`power` + `INIT` `"1 FIX"` / `"0.75 FIX"`. **A user expression now
+carries a `nonmem_log` too (2026-07-28): the same string joined with `+`
+instead of `*`.** So on a log-scale population parameter the expression
+is ADDED, not multiplied, and it is inserted *verbatim* — writing it on
+the log scale (e.g. `log(EMAX*cov/(EC50+cov))`) is the user’s
+responsibility, flagged by a WARNING. The package deliberately does NOT
+wrap it in `LOG()` for you. The registry’s old read-side `r_eval` fields
+are gone — `apply_covariate_model` evaluates the `$PK` equations
+instead, so write and read cannot drift.
+
+### R/monitoring-files.R
+
+*Single-model `.ext` parser: live OFV/iteration status +
+estimation-issue detection.*
+
+| Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
+|----|----|----|----|----|----|----|
+| `read_ext_file(search_state, model_name)` | ✓ | Parse last data line of final `.ext` table; detect issues | `models_folder`+`model_name` | `list(status, current_ofv, iterations, last_iteration_time, has_estimation_issues, issue_type, estimation_method)` | — | called-by `detect_estimation_problems` |
+
+**Notes:** Expects `.ext` at `models_folder/<m>/<m>.ext` (subdir only),
+unlike `read_nonmem_ext` (flat+subdir). OFV = **last column of last
+line** (monitoring “current”); issue threshold `abs(ofv) > 1e10`;
+`issue_type ∈ {infinite/nan/high/missing_ofv, problematic_parameters, parse_error, read_error:*}`.
+
+------------------------------------------------------------------------
+
+## Recovery
+
+### R/recovery-detection.R
+
+*Scan models for estimation problems (via `.ext`) and produce an
+aggregate recovery report.*
+
+| Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
+|----|----|----|----|----|----|----|
+| `detect_estimation_problems(search_state, model_names, check_interval_minutes=30)` | ✓ | Check each model’s `.ext`; flag DB rows | `model_names` | `list(search_state, models_with_issues)` | mutates `estimation_issue`/`status="estimation_error"`; `cat` | calls `read_ext_file` |
+| `generate_recovery_report(search_state)` | ✓ | Summarize status distribution + retry stats | `search_database` | `list(timestamp, status_distribution, retry_statistics, excluded_covariates, recovery_success_rate)` | — | calls `get_excluded_covariates` |
+
+**Notes:** `check_interval_minutes` unused (dead param). Retry detection
+`grepl("\\d{3}$")` misclassifies `run100` etc.
+
+### R/recovery-actions.R
+
+*Retry/exclusion recovery: build `run<N>001` retries from a perturbed
+covariate THETA init, route retries vs exclusions, mark failed
+covariates.*
+
+| Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
+|----|----|----|----|----|----|----|
+| `create_retry_model(search_state, original_model_name, issue_type="estimation_error")` | ✓ | Copy failed model → `run<num>001`, perturb THETA init, append DB row. **Pre-checks with `dry_run=TRUE` on the ORIGINAL before copying: all-FIX ⇒ returns `status="skipped"`, no files/DB row** | original name | `list(status = "created"/"skipped"/"failed", ...)` | `bbr::copy_model_from/read_model/replace_all_notes`; sets `based_on`; `writeLines`; `log_entries <<-`; [`stop()`](https://rdrr.io/r/base/stop.html) | calls `adjust_theta_for_covariate`; called-by `process_estimation_issues` |
+| `adjust_theta_for_covariate(search_state, model_name, covariate_tag, dry_run=FALSE)` | ✓ | Perturb the covariate’s THETA init(s) — see rules in Notes | tag, model | `list(success, reason, theta_lines_modified, fixed_lines_skipped, covariate, matched_terms)` | `writeLines` model file (not when `dry_run`); `cat` | calls `find_model_file`, `.perturb_theta_init`, `.theta_init_is_fixed`; called-by `create_retry_model` |
+| `.theta_init_is_fixed(spec)` | · | Is this init FIXED? Reads the spec only (text before the first `;`), so a `FIX` in a comment can’t trigger it | one `$THETA` init spec | logical | — | called-by `adjust_theta_for_covariate` |
+| `.perturb_theta_init(spec)` | · | Apply the perturbation rules (see Notes); `NA` when there is nothing to move to (unparseable, or bounds with no room) | one `$THETA` init spec | new spec or `NA` | — | called-by `adjust_theta_for_covariate` |
+| `.format_theta_init_value(value, template)` | · | Render the new value at the precision of the value it replaces, widening only when that would lose information (midpoint `0.05` replacing `0.1`) | new value, old value string | `character(1)` | — | called-by `.perturb_theta_init` |
+| `process_estimation_issues(search_state, models_with_issues)` | ✓ | Route each issue: retry originals / exclude failed retries | `models_with_issues` | `list(search_state, retry_models_created, excluded_covariates, recovery_actions)` | `cat` | calls `create_retry_model`, `handle_failed_retry`; called-by `submit_and_wait_for_step` |
+| `handle_failed_retry(search_state, retry_model_name, exclusion_reason="retry_failed")` | ✓ | Mark retry+original excluded from step | retry name | `list(search_state, status, excluded_covariate, ...)` | mutates several DB cols; `cat` | called-by `process_estimation_issues` |
+
+**Notes:** **3rd row-builder** — `create_retry_model` uses **template
+`db[1,]` + blank + `rbind`** (order-sensitive, not `bind_rows`):
+`action="retry"`, `phase="retry"`, `retry_attempt=1L`,
+`original_model=original`, `estimation_issue=issue_type`. Sets bbr
+`based_on` to the original **parent** (skip failed).
+
+**THETA perturbation rules (2026-07-28)** — the init comes verbatim from
+the covariate table’s `INIT` column, so it can be bounded or FIX. Parsed
+from the text **before the first `;`** (so a `FIX` in a comment can’t
+trigger it):
+
+| init form | new init | note |
+|----|----|----|
+| `0.1` | `-0.1` | sign flip, the long-standing rule |
+| `(0, 0.1, 3)` | `(0, 1.55, 3)` | midpoint of the **wider side**; always strictly inside the bounds |
+| `(0, 0.1)` | `(0, 0.05)` | one-sided: flip if still legal, else midpoint of the bounded side |
+| `0.75 FIX` | untouched | a fixed value is a modelling choice, not a starting point |
+
+Zero perturbable lines: `reason="all_thetas_fixed"` (≥1 matched line,
+all FIX) ⇒ **`create_retry_model` skips the retry entirely**;
+`reason="no_theta_lines"` (nothing matched) still creates the retry — an
+identical rerun is legitimate recovery for a Metworx cluster drop.
+`process_estimation_issues` maps the skip to `action="retry_skipped"`
+(not a failure) and writes `SKIPPED_retry_<model>_log.txt`.
+Multi-theta/categorical: FIX and non-FIX thetas of the same covariate
+are handled per-line, so a partly-FIX covariate still retries.
+
+------------------------------------------------------------------------
+
+## SCM engine
+
+### R/full_scm_search.R
+
+*Top-level orchestrator: (optional initial backward →) forward → final
+backward → excluded-covariate final testing, with checkpoints +
+reporting.*
+
+| Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
+|----|----|----|----|----|----|----|
+| `run_automated_scm_testing(search_state, base_model_id=NULL, scm_type=c("standard","selective"), starting_phase=c("forward","backward"), full_scm=TRUE, forward_p_value=NULL, backward_p_value=NULL, rse_threshold=NULL, require_cov_step=TRUE, auto_submit=TRUE, auto_retry=TRUE, save_checkpoints=TRUE, final_testing=TRUE)` | ✓ | Drive the whole SCM/SCM+ pipeline; dispatch standard vs selective forward + backward | `scm_type ∈ {standard,selective}`, `starting_phase ∈ {forward,backward}`, `full_scm`, p-values, `rse_threshold` | big `list(search_state, status, ..., final_model, forward_results, initial_backward_results, final_backward_results, final_covariates, excluded_covariates, ..., final_summary)` | [`save_search_state()`](https://ollegst.github.io/CovariateSearcher/reference/save_search_state.md)→`scm_rds/NN_phase_event.rds`; [`stop()`](https://rdrr.io/r/base/stop.html); `<<-` in 3 error handlers; heavy `cat` | calls `pvalue_to_threshold`, `run_backward_elimination`, `run_stepwise_covariate_modeling`, `run_scm_selective_forward`, `run_univariate_step`, `submit_and_wait_for_step`, `select_best_model`, `get_model_covariates_from_db`, `get_excluded_covariates`, `save_search_state`; **top-level (no in-repo callers)** |
+
+**Notes:** Phase flags derived from `full_scm`+`starting_phase`.
+Reconciles selective vs standard via
+`final_best_model %||% final_model`. **Return shape is load-bearing**
+(`create_scm_results_table` unwraps `$search_state`, reads
+`forward_results`/`final_backward_results`/`excluded_covariates`/`final_summary`).
+Excluded-covariate final-testing block is **dead** (only fires
+`run_forward && !run_final_backward`, false for `full_scm`; also filters
+`phase=="forward"` never written). Stale “backward not implemented”
+comments; mojibake banner at L318.
+
+### R/scm-algorithm.R
+
+*Standard forward SCM + covariate-set helpers + exclusion-status
+printer.*
+
+| Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
+|----|----|----|----|----|----|----|
+| `get_remaining_covariates(search_state, base_model_id, include_excluded=TRUE)` | ✓ | `^beta_` tags not yet in model, optionally minus excluded | state, base, flag | [`character()`](https://rdrr.io/r/base/character.html) tags | `cat` | calls `get_model_covariates_from_db`, `get_excluded_covariates`; called-by forward drivers |
+| `get_excluded_covariates(search_state, return_details=FALSE, phase_filter=NULL)` | ✓ | Covariates flagged `excluded_from_step==TRUE` | flags | [`character()`](https://rdrr.io/r/base/character.html) or details `data.frame` | — | called-by `get_remaining_covariates`, `run_univariate_step`, `view_exclusion_status`, orchestrator |
+| `run_stepwise_covariate_modeling(search_state, base_model_id=NULL, auto_submit=TRUE, forward_p_value=NULL, rse_threshold=NULL)` | ✓ | **Standard forward SCM:** univariate step 1 then iterative forward until no improvement. DB-driven each step (`get_remaining_covariates(current_base)`), so resume-safe by passing the current best as `base_model_id`. | base, p-value, rse | `list(search_state, status, base_model, final_model, steps_completed, step_results, total_time_minutes, final_covariates)` | reads `.ext`/`.yaml`; [`save_search_state()`](https://ollegst.github.io/CovariateSearcher/reference/save_search_state.md)→`scm_forward_step_<N>.rds` after each step; `cat` | calls `get_remaining_covariates`, `run_univariate_step`, `submit_and_wait_for_step`, `select_best_model`, `get_model_covariates_from_db`, `read_nonmem_ext`, `pvalue_to_threshold`, `save_search_state`; called-by orchestrator + `continue_search` |
+| `view_exclusion_status(search_state)` | ✓ | Pretty-print exclusion table | `search_state` | `invisible(NULL)` | `cat` | calls `get_excluded_covariates` |
+
+**Notes:** Roxygen advertises “final testing of dropped covariates” but
+body only does forward steps (that phase is in the orchestrator). Step
+numbers derived from `max(step_number)+1`.
+
+### R/scm-execution.R
+
+*One univariate SCM step (create candidates) + submit-and-monitor loop
+with auto-retry.*
+
+| Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
+|----|----|----|----|----|----|----|
+| `run_univariate_step(search_state, base_model_id, covariates_to_test=NULL, step_name, include_excluded=TRUE)` | ✓ | One child model per covariate tag at a shared step number | tags, step_name | `list(search_state, ..., models_created, successful/failed_covariates, status)` | [`stop()`](https://rdrr.io/r/base/stop.html) on invalid tags / step inconsistency; `cat` | calls `get_remaining_covariates`, `get_excluded_covariates`, `add_covariate_to_model`; called-by forward drivers + orchestrator |
+| `submit_and_wait_for_step(search_state, model_names, step_name, max_wait_minutes=NULL, threads=NULL, auto_submit=TRUE, auto_retry=TRUE)` | ✓ | Submit via bbr, poll 60s, auto-retry failures until done | `model_names` | `list(search_state, completed_models, failed_models, still_running, ..., retry_models_created, status)` | **`bbr::read_model/submit_model`**; [`save_search_state()`](https://ollegst.github.io/CovariateSearcher/reference/save_search_state.md)→`monitoring_update_<N>.rds` every 5th; `Sys.sleep(60)`; **`<<-` in error handlers**; `cat` | calls `bbr::*`, `find_model_file`, `update_all_model_statuses`, `extract_nonmem_timestamps`, `process_estimation_issues`, `save_search_state`; called-by all drivers |
+
+**Notes:** **BUG** — `run_univariate_step`’s tryCatch error handler
+records failures with `<-` in the handler frame → thrown-error failures
+dropped from tracking. `submit_and_wait_for_step` = the long-running
+monitor (`while(TRUE)` until `models_still_running==0`/timeout); tracks
+completed/failed/already-retried to fire `<failed>001` retries once.
+**`<<-` at L298/L578 mutate the enclosing `search_state` from inside
+`tryCatch` error callbacks — must return state if extracted.**
+
+### R/scm-evaluation.R
+
+*Statistical best-model selection by per-covariate ΔOFV threshold +
+RSE.*
+
+| Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
+|----|----|----|----|----|----|----|
+| `select_best_model(search_state, model_names, p_value=NULL, rse_threshold=NULL)` | ✓ | Pick highest-ΔOFV model clearing its df-specific χ² threshold + RSE | `model_names`, p-value, rse | `list(search_state, best_model, significant_models, evaluation_results, criteria_used, status)` | mutates `delta_ofv` for rows missing it; `cat` | calls `update_all_model_statuses`, `pvalue_to_threshold`, `extract_covariate_name_from_tag`, `calculate_covariate_df`; called-by forward drivers + orchestrator |
+
+**Notes:** Threshold per-model from covariate df (default df=1 when
+unresolved). `NA` RSE treated as acceptable. Best =
+`which.max(delta_ofv)` among significant rows. Re-reads outputs via
+`update_all_model_statuses` first.
+
+### R/scm-selective-forward.R
+
+*Selective forward (propagate only covariates from significant models) +
+redemption phase + checkpoint-resume.*
+
+| Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
+|----|----|----|----|----|----|----|
+| `get_significant_models_from_step(search_state, step_number, p_value, rse_threshold=NULL)` | ✓ | Models in a step clearing per-covariate threshold + RSE | step, p-value | [`character()`](https://rdrr.io/r/base/character.html) model names | [`warning()`](https://rdrr.io/r/base/warning.html) on missing cols | calls `extract_covariate_name_from_tag`, `calculate_covariate_df`, `pvalue_to_threshold`; called-by selective + `get_step_models` |
+| `get_step_models(search_state, step_number, p_value=NULL, rse_threshold=NULL)` | ✓ | **Supportive lookup:** reconstruct a step from the DB — base (common parent), tested models, completed, significant, winner. Excludes the `phase=="base"` row. | step | `list(exists, step_number, base_model, models, completed_models, significant_models, best_model)` | none | calls `get_significant_models_from_step`; called-by `run_scm_selective_forward` (continuation branch) + `continue_search` (fwd & bwd) |
+| `get_covariates_from_models(search_state, model_names)` | ✓ | Unique valid `^beta_` tags tested in given models | `model_names` | [`character()`](https://rdrr.io/r/base/character.html) tags | verbose `cat` | called-by selective + resume |
+| `run_scm_selective_forward(search_state, base_model_id=NULL, forward_p_value=NULL, rse_threshold=NULL, auto_submit=TRUE, auto_retry=TRUE, resume=FALSE)` | ✓ | **Selective forward:** first step = all covariates; later steps = only covariates from prior significant models; then redemption. `resume=TRUE` (from `continue_search`) makes the FIRST pass a continuation (selective from `get_step_models(last_step)`) instead of “test all”. | base, p-value, rse, resume | `list(search_state, status, final_best_model, step_results, total_time_minutes)` | [`save_search_state()`](https://ollegst.github.io/CovariateSearcher/reference/save_search_state.md)→`scm_selective_step_<N>.rds`/`scm_redemption_<N>.rds`/`scm_selective_complete.rds` (cwd); `cat` | calls `get_remaining_covariates`, `get_step_models`, `get_covariates_from_models`, `get_model_covariates_from_db`, `run_univariate_step`, `submit_and_wait_for_step`, `select_best_model`, `pvalue_to_threshold`, `save_search_state`; called-by orchestrator + `continue_search` |
+
+**Notes:** `run_scm_selective_forward` = the biggest fn (main loop +
+Scenario A/B redemption). Fresh vs. continuation is an explicit `resume`
+flag (init `is_continuation <- isTRUE(resume)`, then TRUE after the
+first pass) — **not** inferred from the DB, because the base model can
+sit at any `step_number` (it’s tagged `phase=="base"`, not fixed at step
+0). The continuation branch reconstructs the previous step from the DB
+via `get_step_models`, so no in-memory `step_results` is needed to
+resume. `resume_selective_forward` was **removed** earlier
+(forward-only, broken); `continue_search` (below) replaces it for both
+phases.
+
+### R/continue-search.R
+
+*Resume an interrupted SCM run (forward or backward) from the last full
+step.*
+
+| Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
+|----|----|----|----|----|----|----|
+| `continue_search(search_state=NULL, checkpoint=NULL, scm_type=NULL, full_scm=TRUE, forward_p_value=NULL, backward_p_value=NULL, rse_threshold=NULL, auto_submit=TRUE, auto_retry=TRUE)` | ✓ | Resume from last full step: re-read last-step files (`force=TRUE`), require step complete, detect phase from DB, find current best, re-enter the right method. Fwd→(bwd if `full_scm`). | in-memory state **or** checkpoint path; `scm_type` (req. for fwd resume); `full_scm` | invisibly `list(search_state, status, resumed_phase, final_model, final_covariates)`; `status="incomplete_step"` if last step still running | `cat`; `load_search_state`; delegates → method saves | calls `update_model_status_from_files`, `update_all_model_statuses`, `get_step_models`, `evaluate_removal_impacts`, `run_scm_selective_forward(resume=TRUE)`/`run_stepwise_covariate_modeling`/`run_backward_elimination`, `get_model_covariates_from_db` |
+| `.scm_continue_backward(search_state, last_step, backward_p_value, rse_threshold, auto_submit, auto_retry)` | — | Re-evaluate the last backward step’s removal models (rebuilt via `get_step_models`) → winner → continue `run_backward_elimination` from winner (no re-creation of last step) | last_step | `list(search_state, final_model)` | `cat` | calls `get_step_models`, `evaluate_removal_impacts`, `run_backward_elimination` |
+| `.scm_phase_is_backward(phase)` | — | TRUE if phase matches `backward`/`removal` | phase | logical | none | — |
+
+**Notes:** No new state field — `scm_type`/`full_scm` are **args** (DB
+doesn’t record the forward method; thresholds come from
+`search_config`). Method/phase re-entry reuses the existing methods:
+**standard fwd** and **backward** are already DB-driven (pass the
+current best as the start); **selective fwd** gets `resume=TRUE`.
+Forward is skipped (jump to backward) when the last step yielded no
+significant model. Requires the last step to be fully terminal (no
+`created`/`in_progress`/`submitted`) — else returns `incomplete_step`.
+Winner + significance for the last forward step come from
+`get_step_models` (same evaluator as the live selective loop; RSE-aware)
+— the old `.scm_current_best_forward` heuristic was removed.
+
+### R/resume-reconstruct.R
+
+*Re-register an interrupted step’s models from disk when they’re absent
+from every saved checkpoint (human-gated resume fallback for the gap
+before the first per-step checkpoint).*
+
+| Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
+|----|----|----|----|----|----|----|
+| `reconstruct_step_from_disk(search_state=NULL, step_number=NULL, base_model=NULL, direction=NULL, checkpoint=NULL, models_folder=NULL)` | ✓ | Register on-disk `run<N>` models missing from the DB (excl. `run<N>001` retries). **Auto-detects** base (candidates’ common `based_on`), direction (they *add*→forward / *remove*→backward a covariate), step (`max+1`) — each overridable. Inserts schema-safe rows (`phase`/`action`/beta-tag as a live run), resets counter, reads results from files. **Errors** (not guesses) if candidates disagree (\>1 parent, or mixed add/remove). | in-memory state **or** `checkpoint` path; optional `step_number`/`base_model`/`direction` overrides | updated `search_state`; prints what it registered + any non-`completed`/skipped | `cat`; reads `.yaml`+output files | calls `.scm_unregistered_models`, `.scm_model_parent`, `load_search_state`, [`yaml::read_yaml`](https://yaml.r-lib.org/reference/read_yaml.html), `update_model_status_from_files`, `update_model_counter`; called-by `continue_search` (auto) |
+| `.scm_unregistered_models(search_state, models_folder=NULL)` | · | `run<N>` model dirs on disk not in the DB (excl. `run<N>001` retries) | state | [`character()`](https://rdrr.io/r/base/character.html) model names | none | called-by `reconstruct_step_from_disk`, `continue_search` |
+| `.scm_model_parent(models_folder, model)` | · | Recorded parent (bbr `based_on`) of a model, from its `.yaml` | folder, model | `character(1)` or `NA` | reads `.yaml` | called-by `reconstruct_step_from_disk` |
+
+**Notes:** The **normal** path is the save-at-creation checkpoints
+(`NN_phase_created.rds`) written before each step submits, so a mid-step
+crash already leaves the step in a checkpoint; this is the fallback when
+even that is missing, and `continue_search` calls it automatically when
+it finds on-disk models absent from the DB. Base/direction/step are
+inferred from the files (bbr `based_on`, tag-diff, `max+1`) but
+overridable. What still *can’t* be inferred is a Metworx-dropped run
+(files unchanged) — you rerun that model, then resume.
+
+### R/scm-backward.R
+
+*Backward elimination + removal-impact evaluator + covariate
+name/tag/FIX helpers.*
+
+| Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
+|----|----|----|----|----|----|----|
+| `run_backward_elimination(search_state, starting_model, backward_p_value=NULL, auto_submit=TRUE, auto_retry=TRUE, rse_threshold=NULL)` | ✓ | Iteratively remove least-impactful covariate (smallest ΔOFV increase below threshold) until none qualify | starting model, p-value | `list(search_state, status, starting_model, final_model, removed_covariates, ..., starting_ofv, final_ofv, final_covariates)` | [`save_search_state()`](https://ollegst.github.io/CovariateSearcher/reference/save_search_state.md)→`backward_step_<N>.rds`/`backward_elimination_complete.rds` (cwd); [`stop()`](https://rdrr.io/r/base/stop.html); `cat` | calls `get_model_covariates_from_db`, `get_fixed_covariates`, `get_covariate_tag_from_name`, `remove_covariate_from_model`, `submit_and_wait_for_step`, `evaluate_removal_impacts`, `pvalue_to_threshold`, `save_search_state`; called-by orchestrator |
+| `evaluate_removal_impacts(search_state, base_model, removal_models, completed_models, backward_p_value, rse_threshold=NULL)` | ✓ | ΔOFV per removal candidate; pick smallest meeting criteria | removal_models (cov→model) | `list(search_state, removal_impacts, covariate_to_remove, new_base_model, delta_ofv, ofv_threshold, covariate_df, removable_count)` | writes `delta_ofv` back; [`stop()`](https://rdrr.io/r/base/stop.html); `cat` | calls `extract_covariate_name_from_tag`, `calculate_covariate_df`, `pvalue_to_threshold`; called-by `run_backward_elimination` |
+| `get_fixed_covariates(search_state, covariate_names)` | ✓ | Covariates flagged FIX (via `covariate_search$FIX_STATUS`) | names | [`character()`](https://rdrr.io/r/base/character.html) fixed | — | called-by `run_backward_elimination` |
+| `get_covariate_tag_from_name(search_state, covariate_name)` | ✓ | Reverse-map name→tag w/ pattern fallback | name | tag or `NULL` | — | called-by `run_backward_elimination` |
+
+**Notes:** Removal candidates built via
+`remove_covariate_from_model(save_as_new_model=TRUE)` (wrapped
+`suppressMessages`), then rows stamped `phase="backward_elimination"`,
+**`action="remove_covariate"`** (the patch masking the
+`remove_single_covariate` root bug). `get_fixed_covariates` only checks
+`FIX_STATUS`; THETA-FIX file parse is a TODO (unimplemented).
+`evaluate_removal_impacts` seeds an 8-col frame but rbinds 10-col rows
+(works only because seed is empty).
+
+------------------------------------------------------------------------
+
+## Utilities
+
+### R/utilities.R
+
+*YAML/model-name helpers + SCM statistics (p-value→ΔOFV thresholds,
+covariate df, tag parsing, working-file cleanup).*
+
+| Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
+|----|----|----|----|----|----|----|
+| `clean_dir(models_folder="models")` | ✓ | Delete all `WK_*` NONMEM working files | folder | `integer(1)` count | **file deletion** (`file.remove`); `cat` | — |
+| `extract_covariate_name_from_tag(tag)` | ✓ | Covariate name from `beta_COV_PARAM` | tag | `character(1)` or `NA` | `warning` | called by evaluation/selection/validation |
+| `.scm_checkpoint_name(step, phase, event)` | · | `scm_rds/` checkpoint filename `NN_phase_event.rds` — zero-padded step first so the folder sorts chronologically and highest `NN` is the latest | step, phase, event | `character(1)` | none | called by every `save_search_state` site (fwd/bwd/selective/redemption/monitor/full-SCM) |
+| `pvalue_to_threshold(p_value, df=1)` | ✓ | p-value → χ² ΔOFV threshold via `qchisq`; **`df=0` returns 0** (the fully-FIX case) | p, df | `numeric(1)` | [`stop()`](https://rdrr.io/r/base/stop.html) | called widely |
+| `calculate_covariate_df(covariate_name, covariate_search)` | ✓ | df = number of **ESTIMATED (non-FIX)** parameters the covariate adds: per-level categorical → n_levels−1; single-factor → the formula’s theta count (1 built-in, N for an N-parameter expression) minus those marked `FIX` in `INIT`. A fully-FIX covariate returns **0** → threshold 0 → kept on any ΔOFV \> 0 | name, table | `integer(1)` | `warning` | reads the registry + `INIT`; called widely |
+| `.load_if_path(x, what="input")` | · | Let any data/table argument be the object OR a path: length-1 character → load by extension (`.csv` via [`readr::read_csv`](https://readr.tidyverse.org/reference/read_delim.html), `.rds` via `readRDS`), anything else returned unchanged. Models are deliberately NOT handled (they stay name-based against `models_folder`) | object or path | the in-memory object | [`stop()`](https://rdrr.io/r/base/stop.html) if the path doesn’t exist / extension unsupported | called by the forest + scenario entry points |
+| `decode_dataset(data, yaml_file, column_names)` | ✓ | Replace numeric category codes with their decoded labels for the named columns, using a spec/lookup’s `values`→`decode` mapping | data, lookup/spec, columns | `data` with decoded columns | — | used by the plotting/EDA side |
+
+**Notes:** `analyze_*` contain duplicate `run1`→BASE / `\d{3}$`→RETRY
+regex; both are exported-but-unused. `tags_list` arg unused. No
+`globalVariables`/`@importFrom` here.
+
+------------------------------------------------------------------------
+
+## Reporting & tables
+
+### R/reporting.R
+
+*Renders the search database into a formatted plain-text report file.*
+
+| Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
+|----|----|----|----|----|----|----|
+| `generate_scm_report(search_state, output_file="scm_report.txt", print_console=TRUE)` | ✓ | Step-by-step forward/backward/redemption text report | `search_state`, output path | `invisible(NULL)` | **file write** (`writeLines`); `cat`; [`stop()`](https://rdrr.io/r/base/stop.html) if DB empty | calls `pvalue_to_threshold`; redefines local `%||%` |
+
+**Notes:** Local `%||%` shadow. Classifies via `action`/`phase` (grepl
+“remove”/“backward”/“redemption\|final_test\|retry”). Hardcoded
+`scm_report.txt` (cwd). Backward branch prints `base_ofv` defined only
+in an earlier block — stale/undefined if base row absent.
+
+### R/scm-results.R
+
+*Builds + pretty-prints the enhanced SCM results table with per-model
+RSE/OFV selection verdicts.*
+
+| Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
+|----|----|----|----|----|----|----|
+| `create_scm_results_table(search_state)` | ✓ | Per-model results w/ df-aware forward/backward verdicts (`BEST`/`YES`/`NO`/`KEPT`/`REMOVED`) + comments | `search_state` or wrapper list | `data.frame(Phase_Step, Model, Parent_Model, Description, Status, Covariates_in_Model, OFV, Delta_OFV, RSE_Max, Selected, Comment)` | `cat`; reads per-model `.yaml` | calls `pvalue_to_threshold`, `extract_covariate_name_from_tag`, `calculate_covariate_df`, [`yaml::read_yaml`](https://yaml.r-lib.org/reference/read_yaml.html); called-by `print_scm_results_table` |
+| `print_scm_results_table(search_state, show_rse=TRUE, truncate_covariates=35)` | ✓ | Console-format table + summary | df or state | `invisible(results)` | `cat` | calls `create_scm_results_table` |
+
+**Notes:** Nested helpers `get_model_covariates_display` (YAML
+tags→`COV_on_PARAM`) and `get_selection_info` (verdict engine —
+**df-threshold logic duplicated across forward/backward branches**).
+`Phase_Step` derived from **`phase`+`step_number`, not `action`** (so
+it’s not a pure display-registry lookup). Row-appends via `rbind` in a
+loop (quadratic). Unwraps `$search_state` at L13-14. Sorts by
+`gsub("^run","",Model)`.
+
+### R/model-output-tables.R
+
+*NONMEM control/`.cov`/`.cor` parsers + the flextable parameter-report
+pipeline (`get_param2` → `model_report`).*
+
+| Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
+|----|----|----|----|----|----|----|
+| `theme_pps_table(x)` | ✓ | Apply PPS/Times-New-Roman theme to a flextable | flextable | themed flextable | [`stop()`](https://rdrr.io/r/base/stop.html) if not flextable; `flextable::`/`officer::` | called-by `model_report` |
+| `extract_params(lines, block_tag, remove_prefix=FALSE)` | · | Parse a `$THETA`/`$OMEGA`/`$SIGMA` block → name+transform (split each line on `;`) | ctl lines, tag | `tibble(param, trans)` | — | calls [`purrr::map_dfr`](https://purrr.tidyverse.org/reference/map_dfr.html)/[`tidyr::separate`](https://tidyr.tidyverse.org/reference/separate.html); called-by `extract_model_params` |
+| `extract_model_params(model_name, models_folder="models")` | · | All THETA/OMEGA/SIGMA params for a model | name, folder | `list(THETAS, OMEGAS, SIGMA)` of tibbles | [`stop()`](https://rdrr.io/r/base/stop.html) if no ctl | calls `find_model_file`, `extract_params`, `readLines`; called-by `get_param2`, `sample_individual_thetas` |
+| `calculate_condition_number(model_number, models_folder="models", tolerance=1e-10)` | · | Condition number (max/min eigenvalue) from `.cor` (fallback `.cov`) | model, folder | `numeric(1)`/`Inf`/`NA` | reads `.cor`/`.cov` | calls `stringr::`, `eigen`; called-by `get_param2` |
+| `decode_cov_level(cov_name, level, lookup)` | · | Categorical level→decoded label via lookup | cov, level, lookup | `character(1)` or `NA` | — | called-by `get_param2`; **unit-tested** |
+| `get_param2(model_number, count_model, shrinkage="etasd", models_folder="models", spec_pk=NULL, lookup=NULL)` | · | One model’s formatted parameter/estimate/RSE/shrinkage table (+OFV, cond number, beta\_-tag labels) | model, count, shrinkage | `data.frame` (single- or multi-model shape) | `bbr::read_model/model_summary/param_estimates`; `cat` | calls `calculate_condition_number`, `extract_model_params`, `decode_cov_level`; called-by `model_report`, validation (`get_model_max_rse`, `update_model_status_from_files`) |
+| `model_report(model_names, shrinkage="etasd", models_folder="models", spec_pk=NULL, lookup=NULL)` | ✓ | Per-model `get_param2`, join, group, render flextable | names | `flextable` | `cat`; [`stop()`](https://rdrr.io/r/base/stop.html) if all fail | calls `get_param2`, `theme_pps_table`, `flextable::`/[`purrr::reduce`](https://purrr.tidyverse.org/reference/reduce.html) |
+
+**Notes:** `extract_*`, `calculate_condition_number`,
+`decode_cov_level`, `get_param2` are documented-internal (no `@export`).
+`theme_pps_table` has both `@keywords internal` **and** `@export` →
+exported. `get_param2` beta\_-tag label parse **duplicated** (label
+col + short col). `shrinkage` `case_when` selects a length-2 vector
+(fragile recycling).
+
+### R/plot_nonmem_iterations.R
+
+*Reads NONMEM `.ext` iteration history and plots parameter/OBJ
+trajectories. (Header comment mislabels the file
+`ext-file-utilities.R`.)*
+
+| Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
+|----|----|----|----|----|----|----|
+| `read_ext_iterations(ext_file)` | ✓ | Parse `.ext` → tidy iteration table (split TABLE blocks, standardize OBJ, classify `TYPE` ITER/BURN/FINAL/SE/EIGEN/CONDNUM, flag EVALUATION) | `.ext` path | `data.frame(ITERATION, params…, OBJ, EST.NO, EST.NAME, TYPE, EVALUATION)` or empty | [`stop()`](https://rdrr.io/r/base/stop.html) if multiple OBJ cols | calls [`utils::read.table`](https://rdrr.io/r/utils/read.table.html)/`scan`; called-by `plot_nonmem_iterations`, `sample_individual_thetas` |
+| `plot_nonmem_iterations(model_name, models_dir="models", transform=TRUE, skip_iterations=0, obj_var="OBJ", max_iterations=100)` | ✓ | Faceted ggplot of OBJ + non-fixed parameter trajectories | name, dir | `ggplot` | [`stop()`](https://rdrr.io/r/base/stop.html) on bad input | calls `read_ext_iterations`, [`tidyr::pivot_longer`](https://tidyr.tidyverse.org/reference/pivot_longer.html), `ggplot2::` |
+
+**Notes:** Own
+`utils::globalVariables(c("ITERATION","TYPE","value","variable"))`.
+`transform`/`obj_var` accepted but unused. Uses `@import ggplot2`
+(full). `read_ext_iterations`’ data.frame is consumed **positionally**
+by `sample_individual_thetas` (col 2 → OBJ), so its column layout/`TYPE`
+labels are a hard contract.
+
+------------------------------------------------------------------------
+
+## Exposure-forest simulation pipeline (7 files)
+
+*Data flow: `sample_individual_thetas` → `create_covariate_table` →
+`apply_covariate_model` (via `build_scenario_parameters`) →
+`simulate_scenario_profiles` → `plot_exposure_forest`.
+`create_covariate_boxplots` is a separate branch.*
+
+### R/forest-plots.R — theta uncertainty sampling
+
+| Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
+|----|----|----|----|----|----|----|
+| `sample_individual_thetas(model, models_folder="models", Nsamples=1e+05, seed=1234)` | ✓ | Draw `Nsamples` THETA vectors from estimation uncertainty; returned **raw on the estimation scale** (log params stay log — no back-transform here; it lives in `apply_covariate_model` to avoid a double `exp`) | model, N, seed | `data.frame(ID, THETA1..n)` + attr `sampling_method` | [`mvtnorm::rmvnorm`](https://rdrr.io/pkg/mvtnorm/man/Mvnorm.html); `set.seed`; `stop`/`warning` | calls `.find_model_component`, `read_ext_iterations`, `.read_theta_cov`, `.make_psd` |
+| `.find_model_component(model, models_folder, exts)` | · | Locate model file (flat/subdir) | exts | path or `NA` | — | calls `find_model_file` |
+| `.read_theta_cov(model, models_folder, theta_names)` | · | `n×n` THETA covariance from `.cov`(pref)/`.cor`, zeros for fixed | theta_names | matrix or `NULL` | — | calls `.find_model_component`, `.read_nonmem_matrix` |
+| `.read_nonmem_matrix(mfile)` | · | Parse labelled square `.cov`/`.cor` (last TABLE) | path | matrix or `NULL` | `readLines` | called-by `.read_theta_cov` |
+| `.make_psd(s, tol=1e-08)` | · | Symmetrise + nearest-PSD projection | matrix | PSD matrix | — | called-by `sample_individual_thetas` |
+
+**Notes:** Dup targets: `.read_nonmem_matrix` vs
+`calculate_condition_number`; uses `extract_model_params` for `$THETA`
+trans. Exported and in NAMESPACE.
+
+### R/forest-plots.R — covariate scenario table
+
+| Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
+|----|----|----|----|----|----|----|
+| `create_covariate_table(model_name, covariate_search, data, percentiles=c(0.05,0.95), models_folder="models", id_col="ID", lookup=NULL, spec=NULL, wrap_width=30)` | ✓ | Null-patient + single-covariate-variation scenario table | search table, data, percentiles | `data.frame`: col1 `Scenario` + one col per covariate; row1 all-reference | `readLines`; [`stats::quantile`](https://rdrr.io/r/stats/quantile.html); `warning`/`stop` | nested helpers; called-by `build_scenario_parameters` |
+| `join_wrap/cov_label/cov_unit/decode_level/ordinal/cont_scenario` | · nested | Label/format helpers | — | char scalars | — | nested |
+| `.spec_to_lookup(spec)` | · | Turn a yspec object (or a path to one) into the package’s `lookup` shape (`values`/`decode` per covariate) so spec and lookup are interchangeable wherever categoricals are decoded | yspec object / path | `list` lookup | [`yspec::ys_load`](https://rdrr.io/pkg/yspec/man/ys_load.html) | called by the table + plot entry points |
+
+**Notes:** Independently re-parses `$THETA` to find `beta_<COV>_<PARAM>`
+names + rebuilds `cov_to_test`; nested `decode_level` duplicates
+`decode_cov_level`. No undeclared deps. `man/create_covariate_table.Rd`
+exists.
+
+### R/forest-plots.R — scenario summary tables
+
+*Absolute + relative (ratio-to-reference) summary tables, written as RDS
+next to the plots by both plot functions. No `*_info` argument ⇒ no
+table.*
+
+| Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
+|----|----|----|----|----|----|----|
+| `.scenario_summary_table(long, quantities, q_info, scenario_tbl, reference, percentiles=c(0.05,0.95), lookup=NULL, relative=FALSE, digits=2)` | · | Rows = scenarios, leading covariate columns from the scenario table (decoded, units in the header), one column per quantity. Absolute cell = `median\n[lo,hi]\ngeomean\n(geoCV%)`; relative cell = `ratio [lo,hi]` (median/lo/hi ÷ the reference scenario’s median, ref row = `1 [lo,hi]`). geoCV% = `sqrt(exp(var(log x))−1)·100` | long data, quantity names, label/unit info, scenario table | `data.frame` of formatted strings | — | called-by `plot_exposure_forest`, `plot_parameter_forests` |
+| `.resolve_quantity_info(x)` | · | Normalise `metric_info`/`param_info` given as a named `list(label, unit)` **or** a yspec object / spec path / spec-shaped list (maps `short`→header label + `unit`). Recognises a real yspec object rather than falling back to the long label | list or spec | named list of `list(label, unit)` | [`yspec::ys_load`](https://rdrr.io/pkg/yspec/man/ys_load.html) | called-by both plot functions |
+| `.require_quantity_labels(q_info, quantities, arg="metric_info")` | · | **Stops** if any tabulated quantity has no label/unit — the user must label every quantity that reaches a table | resolved info, quantity names | `invisible` | [`stop()`](https://rdrr.io/r/base/stop.html) | called-by both plot functions |
+
+**Notes:** Metric/parameter **column names must match the spec keys**
+(user’s responsibility). Exposure tables span every metric column of
+`data` and are re-written per metric call; parameter tables cover every
+plotted structural parameter and are a **named list keyed by parameter**
+(one table per parameter, only the covariate columns that vary), saved
+as `<model>-{exposure,parameter}-table-{absolute,relative}.rds`.
+
+### R/apply-covariate-model.R
+
+| Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
+|----|----|----|----|----|----|----|
+| `apply_covariate_model(model_name, covariate_search, individual_thetas, covariates, models_folder="models")` | ✓(in NAMESPACE) | **Evaluate the model’s `$PK` equations** (ETA=0, THETA from draws, covariates from scenario/`REFERENCE`) → natural-scale structural params for one scenario. Handles log/normal/categorical/multi-theta uniformly (equation’s `EXP` does the transform once) — no transform detection, no read-side registry, no drift. Small `$PK` interpreter with `IF/ELSEIF/ENDIF` + operator translation | search table (+REFERENCE), raw estimation-scale thetas, one scenario | `data.frame(ID, structural THETA cols)` natural scale | `readLines`; `warning`/`stop` | self-contained; called-by `build_scenario_parameters` |
+| `get_block/first_theta_index/param_theta_index/cat_level_theta` | · nested | `$THETA`/`$PK` parsing + categorical level→theta from `IF/ELSEIF` | — | block lines / int / named int | — | nested |
+
+**Notes:** No longer a reconciliation target — since the read path was
+rewritten (2026-07-20) it evaluates the model’s own `$PK` instead of
+re-deriving the covariate algebra, so the hardcoded factor list
+(`power`/`linear`/`exponential`, categorical `1 + beta`) and the
+registry `r_eval` fields are **gone**. It still parses `$THETA`
+order/names and the `$PK` `IF(COV.EQ.x)` blocks (level→theta relies on
+that numeric-level parse — the `$THETA` name carries the decoded label,
+not the level). Contract: the downstream mrgsolve model must use the
+returned THETA columns as **natural-scale structural params** (no
+`EXP()`, no covariate terms) or the effect is double-counted.
+`man/apply_covariate_model.Rd` exists.
+
+### R/build-scenario-parameters.R
+
+| Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
+|----|----|----|----|----|----|----|
+| `build_scenario_parameters(model, covariate_search, thetas, data, percentiles=c(0.05,0.95), models_folder="models", lookup=NULL, spec=NULL, id_col="ID", wrap_width=30, scenario_table_path=paste0("scenario_table_",model,".rds"))` | ✓ | For each scenario, apply covariate factors to sampled THETAs; persist table | thetas, search table, data | named list of `data.frame`s (one per scenario; elem1 = typical subject) | **`saveRDS`** to `scenario_table_<model>.rds` (cwd); `dir.create`; `stop` | calls `create_covariate_table`, `apply_covariate_model` |
+
+**Notes:** Pure orchestration. Exported and in NAMESPACE.
+`scenario_table_path` accepts a directory as well as a file path.
+Attaches `scenario_table` / `covariate_lookup` attributes to the
+returned list, which `plot_parameter_forests` reads back.
+
+### R/forest-plots.R — simulate scenario profiles
+
+| Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
+|----|----|----|----|----|----|----|
+| `simulate_scenario_profiles(param_sets, mod, dose, start=0, end=24, delta=0.1, verbose=TRUE)` | ✓ | Simulate every sample of every scenario under a common dose; stack + tag by scenario | param_sets, mrgsolve `mod`, `ev` dose | `data.frame` (Scenario ordered factor, ID, time, captured cols) | `mrgsolve::mrgsim(output="df")`; [`purrr::imap_dfr`](https://purrr.tidyverse.org/reference/map_dfr.html); `stop` | upstream `build_scenario_parameters`; downstream `plot_exposure_forest` |
+
+**Notes:** `mrgsolve` is in `Suggests:`. `inherits(dose,"ev")` couples
+to mrgsolve. Exported and in NAMESPACE. Caller builds `mod`/`dose`.
+**In-package `mrgsim()` must use `output="df"`** —
+`as.data.frame(mrgsims)` fails inside a package namespace (base S3 can’t
+reach mrgsolve’s S4 method).
+
+### R/forest-plots.R — exposure forest plot
+
+| Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
+|----|----|----|----|----|----|----|
+| `plot_exposure_forest(data, metric=c("AUC","Cmax","Cmin"), ss=TRUE, ClinicalRelevanceLow=0.8, ClinicalRelevanceHigh=1.25, outer_range=c(0.5,2), reference="Typical subject", scenario=NULL, fontsize=9, title=NULL, x_lim=NULL, typical_subject=TRUE, filename=NULL, output_format=c("emf","png"), metric_info=NULL, model=NULL, percentiles=c(0.05,0.95), lookup=NULL, spec=NULL, width, height)` | ✓ | Forest plot of one metric normalised to the reference-scenario median (box 2.5/25/50/75/97.5). `scenario` (replaced `scenario_order`) sets axis order **and** the typical-subject subtitle — must be a **data.frame** (or path) for either to apply, and for any table to be written; `metric_info` triggers the absolute+relative summary tables. **`ss=TRUE` appends “ss” to the metric in the auto title AND to the saved file stem** (`AUC_forest` → `AUC_forest_ss.emf`; skipped if the stem already ends in “ss”), so steady-state and single-dose plots don’t overwrite each other | data, metric, bands, filename | `ggplot` (invisibly; saved if `filename`) | **file write** `ggsave` — **[`devEMF::emf`](https://rdrr.io/pkg/devEMF/man/emf.html)**(undeclared)/png; [`tools::file_path_sans_ext`](https://rdrr.io/r/tools/fileutils.html); `stats::`; `dplyr::` | calls `theme_forest`, `boxquantile`; upstream `simulate_scenario_profiles` |
+| `theme_forest(base_size=12, base_family="")` | ✓ | `theme_bw()` variant | sizes | ggplot2 theme | [`grid::unit`](https://rdrr.io/r/grid/unit.html) | called-by `plot_exposure_forest` |
+| `boxquantile(y)` | · | Box stats at 2.5/25/50/75/97.5 | y | named numeric length-5 | [`stats::quantile`](https://rdrr.io/r/stats/quantile.html) | `stat_summary` |
+
+**Notes:** `grid`/`tools`/`grDevices` un-declared base-priority
+(`devEMF` is in `Suggests:`). `plot_exposure_forest` + `theme_forest`
+are exported and **in NAMESPACE**. Hardcoded palette + band strings.
+Gained `x_lim` (fix the ratio axis), `scenario` (merged axis order +
+typical-subject subtitle), `outer_range` (optional 0.5–2 band) and the
+summary-table arguments.
+
+### R/forest-plots.R — parameter forest plots
+
+*Second forest branch: covariate effects on the structural parameters
+themselves, straight from `build_scenario_parameters` output — no
+mrgsolve simulation involved.*
+
+| Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
+|----|----|----|----|----|----|----|
+| `plot_parameter_forests(param_sets, model, parameters=NULL, output_plot_folder="results/figure", output_rds_folder=NULL, output_format=c("emf","png"), combined_pdf=TRUE, width=6, height=6, outer_range=NULL, typical_subject=TRUE, param_info=NULL, scenario=NULL, reference="Typical subject", percentiles=c(0.05,0.95), lookup=NULL, spec=NULL, models_folder="models", verbose=TRUE, ...)` | ✓ | One forest per structural parameter, each showing **only the scenarios that move it** (reference + scenarios whose median differs). **Always skips parameters with no covariate effect** (flat across scenarios — e.g. a non-beta theta like `add_error`); not optional. Plot and RDS outputs go to separate folders | `param_sets` (object or `.rds` path), model | invisibly the plots; files written | **file write** plots (`emf`/`png`, optional combined PDF) + summary-table RDS; `dir.create` | calls `stack_scenario_parameters`, `.structural_param_names`, `.scenario_summary_table`, `.resolve_quantity_info` |
+| `stack_scenario_parameters(param_sets, model=NULL, models_folder="models")` | ✓ | Stack the named per-scenario list into one long frame with an ordered `Scenario` factor; with `model`, relabels `THETA1..n` to their `$PK` parameter names | `param_sets` (object or path), model | long `data.frame(ID, params…, Scenario)` | [`stop()`](https://rdrr.io/r/base/stop.html) | calls `.load_if_path`, `.structural_param_names` |
+| `.structural_param_names(model_name, models_folder="models")` | · | Map structural THETA positions to `$PK` names (`c(THETA1="CL", THETA2="V2")`), mirroring `apply_covariate_model`’s THETA→param logic (leading theta on a line → LHS → strip `TV_`). Label-only: unresolvable positions are omitted and keep `THETAn` | model name, folder | named `character` | `readLines` | called-by `stack_scenario_parameters`, `plot_parameter_forests` |
+
+**Notes:** `build_scenario_parameters` attaches
+`attr(param_sets, "scenario_table")` + `attr(., "covariate_lookup")`,
+and `plot_parameter_forests` falls back to them — so **no
+`scenario`/`lookup` argument is needed** for the parameter table (only
+`param_info`); rebuild `param_sets` to get the attrs.
+`plot_exposure_forest` still needs an explicit `scenario=` (the
+summarise step drops attributes).
+
+### R/covariate-boxplots.R
+
+| Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
+|----|----|----|----|----|----|----|
+| `create_covariate_boxplots(data, spec, con=NULL, cat=NULL, type=c("AUC","Cmax","Cmin"), drug, param_info, stratification=NULL, total_panel=TRUE, output_folder="results/figure/simulations", width=NULL, height=NULL, base_size=10, verbose=TRUE, combined_pdf=TRUE, prefix=NULL, output_format=c("emf","png"), show_median=TRUE, show_n=TRUE, percent_change=FALSE, label_size=NULL)` | ✓ | Boxplots per metric×covariate (continuous→quartile bins, categorical→decoded), + REF box, per-cov `.emf` + combined PDF | data, `spec` (yspec), con/cat, type | nested list `results[[type]][[cov]]` = ggplot (invisible) | **file write** `.emf` via `devEMF`, [`grDevices::cairo_pdf`](https://rdrr.io/r/grDevices/cairo.html); `dir.create`; `yspec::ys_load/ys_get_short_unit`; [`grid::unit`](https://rdrr.io/r/grid/unit.html); `stop` | standalone (not in the forest data flow) |
+
+**Notes:** `devEMF` in `Suggests:`; `grid`/`grDevices` un-declared;
+`yspec` declared. Exported and in NAMESPACE. Hardcoded
+`results/figure/simulations`. `param_info` accepts a spec; the `Total`
+panel is optional and `type` is not locked to AUC/Cmax/Cmin. Defers
+categorical decode to `yspec::decode_dataset` (fails fast on raw numeric
+codes) — conceptually overlaps `create_covariate_table`’s decode but
+doesn’t re-implement it.

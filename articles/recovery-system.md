@@ -1,0 +1,331 @@
+# Understanding the Recovery System
+
+## Understanding the Recovery System
+
+CovariateSearcher includes an intelligent recovery system that
+automatically handles model estimation failures.
+
+### How Recovery Works
+
+#### Detection Phase
+
+The system monitors for several failure indicators:
+
+1.  **Infinite OFV**: OFV \> 10^10
+2.  **Singular Matrix**: “SINGULAR CONVERGENCE CRITERIA”
+3.  **Error 134**: Numerical errors
+4.  **Minimization Failure**: “MINIMIZATION NOT SUCCESSFUL”
+
+#### Automatic Retry
+
+When a failure is detected, the system:
+
+``` r
+# 1. Marks original model as failed
+model$status <- "failed"
+
+# 2. Creates retry model with adjusted parameters
+  original_model = run11
+  retry_number = Creates run11001
+
+
+# 3. Adjusts THETA initial estimate
+# Original: THETA(1) = 0.1
+# Retry:    THETA(1) = -0.1
+
+# 4. Submits retry automatically if auto_retry = TRUE
+```
+
+### Example Recovery Workflow
+
+#### Scenario: AGE on CL fails
+
+``` r
+
+# Step 1: Original model (run11) fails
+search_state$search_database %>%
+  filter(model_name == "run11")
+#   model_name  status  estimation_issue
+#   run11       failed  OFV > 10^10
+
+# Step 2: Retry created automatically (run11001)
+search_state$search_database %>%
+  filter(model_name == "run11001")
+#   model_name  status       phase
+#   run11001    in_progress  retry
+
+# Step 3: If retry succeeds
+search_state$search_database %>%
+  filter(model_name == "run11001")
+#   model_name  status     ofv      delta_ofv
+#   run11001    completed  1234.5   -5.2
+```
+
+### Retry Strategies
+
+#### THETA Sign Adjustment
+
+The most common issue is poor initial estimates. Changing the sign often
+helps:
+
+    Original THETA:
+    $THETA
+    0.1  ; AGE on CL
+
+    Retry THETA:
+    $THETA
+    -0.1  ; AGE on CL
+
+#### When Retries Fail
+
+If retry also fails, the covariate relationship may be:
+
+1.  **Too complex**: Try simpler relationship (linear instead of power)
+2.  **Collinear**: Covariate correlated with another in model
+3.  **Wrong functional form**: Try different relationship type
+
+### Monitoring Recovery
+
+#### Check Recovery Status
+
+``` r
+
+# View all retry models
+retries <- search_state$search_database %>%
+  filter(phase == "retry") %>%
+  arrange(parent_model, model_name)
+
+print(retries)
+```
+
+#### Success Rate
+
+``` r
+
+# Calculate recovery success rate
+recovery_stats <- search_state$search_database %>%
+  filter(phase == "retry") %>%
+  count(status) %>%
+  mutate(rate = n / sum(n))
+
+print(recovery_stats)
+```
+
+### Disabling Auto-Retry
+
+If you prefer manual control:
+
+``` r
+
+search_state <- initialize_covariate_search(
+  base_model_path = "run1",
+  data_file_path = "data/derived/data.csv",
+  covariate_search_path = "data/derived/covariates.csv",
+  lookup_file = "data/spec/lookup.yaml"  # Optional: covariate labels
+)
+
+# Then manually create retries when needed
+retry_model <- create_retry_model(
+  search_state = search_state,
+  original_model_name = "run11"
+  # issue_type defaults to "estimation_error"
+)
+
+# Or disable automatic retry in the search function
+search_result <- run_automated_scm_testing(
+  search_state = search_state,
+  auto_retry = FALSE  # Disable automatic retry for manual control
+)
+```
+
+### Advanced: Custom Recovery
+
+For complex cases, you can implement custom recovery:
+
+``` r
+
+# 1. Identify problematic models
+failed <- search_state$search_database %>%
+  filter(status == "failed", phase != "retry")
+
+# 2. For each failure, create custom retry
+for (model in failed$model_name) {
+  # Read original model
+  model_path <- file.path(search_state$models_folder, model)
+  
+  # Custom modifications beyond THETA sign
+  # - Adjust initial estimates
+  # - Change estimation method
+  # - Simplify covariate relationship
+  
+  # Create modified model
+  # (custom code here)
+}
+```
+
+### Best Practices
+
+1.  **Let auto-retry work first**: Usually fixes 60-80% of failures
+2.  **Check .lst files**: Understand why models failed
+3.  **Review base model**: Ensure it’s stable before SCM
+4.  **Monitor RSE**: High RSE indicates estimation issues
+5.  **Use appropriate thresholds**: ΔOFV=3.84, RSE\<50% are reasonable
+
+### Recovery Statistics
+
+Track recovery performance across your search:
+
+``` r
+
+# Summary of all models
+summary_stats <- search_state$search_database %>%
+  group_by(phase, status) %>%
+  summarize(
+    count = n(),
+    .groups = "drop"
+  )
+
+print(summary_stats)
+
+# Successful recovery rate
+successful_retries <- search_state$search_database %>%
+  filter(phase == "retry", status == "completed") %>%
+  nrow()
+
+total_retries <- search_state$search_database %>%
+  filter(phase == "retry") %>%
+  nrow()
+
+cat("Recovery success rate:", 
+    round(100 * successful_retries / total_retries, 1), "%\n")
+```
+
+### Resuming After Recovery
+
+When your search encounters failures and retries, you can pause and
+resume at any time:
+
+#### Pause and Resume Workflow
+
+``` r
+
+# 1. Load existing search state (continue from last session)
+search_state <- load_existing_search(
+  base_model_path = "run1",
+  data_file_path = "data/derived/data.csv",
+  covariate_search_path = "data/derived/covariates.csv",
+  models_folder = "models",
+  lookup_file = "data/spec/lookup.yaml"  # Optional: restore covariate labels
+)
+
+# 2. Check status of recovery
+retries_completed <- search_state$search_database %>%
+  filter(phase == "retry", status == "completed") %>%
+  arrange(desc(model_name))
+
+print(retries_completed)
+
+# 3. Continue search from last checkpoint
+search_result <- run_automated_scm_testing(
+  search_state = search_state,
+  full_scm = TRUE,           # Continue with full SCM workflow
+  starting_phase = "forward" # Start from forward selection
+)
+```
+
+#### Handling Persistent Failures
+
+If the same covariate repeatedly fails across retries:
+
+``` r
+
+# 1. Load search state
+search_state <- load_existing_search(
+  base_model_path = "run1",
+  data_file_path = "data/derived/data.csv",
+  covariate_search_path = "data/derived/covariates.csv",
+  models_folder = "models"
+)
+
+# 2. Identify problematic covariate
+persistent_failures <- search_state$search_database %>%
+  filter(status == "failed") %>%
+  group_by(covariate) %>%
+  summarize(failure_count = n()) %>%
+  arrange(desc(failure_count))
+
+print(persistent_failures)
+
+# 3. Remove problematic covariate from remaining search
+search_state$search_config$excluded_covariates <- c(
+  search_state$search_config$excluded_covariates,
+  "AGE"  # Example: exclude AGE if it keeps failing
+)
+
+# 4. Continue with updated configuration
+search_result <- run_automated_scm_testing(
+  search_state = search_state,
+  full_scm = TRUE
+)
+```
+
+### FAQ: Resuming from Unfinished Steps
+
+#### Do I need to delete existing models when resuming?
+
+**No.** When you call
+[`load_existing_search()`](https://ollegst.github.io/CovariateSearcher/reference/load_existing_search.md),
+the system automatically:
+
+1.  **Detects existing models** in the models folder
+2.  **Loads the database** of all completed and failed models
+3.  **Updates the model counter** to the highest existing model number
+4.  **Continues with the next available number** for new models
+
+Example:
+
+``` r
+
+# Session 1: Stop after step 4, models run1 through run25 exist
+# (run1 = base, run2-run25 = models from steps 1-4)
+
+# Session 2: Resume the next day
+search_state <- load_existing_search(
+  base_model_path = "run1",
+  data_file_path = "data/derived/data.csv",
+  covariate_search_path = "data/derived/covariates.csv",
+  models_folder = "models"  # Contains run1-run25
+)
+
+# Model counter automatically set to 25
+# Next model created will be run26 (start of step 5)
+# No duplicates of run2-run25 will be created
+```
+
+#### Will existing models be re-tested?
+
+**No.** The system checks the database to see which models have already
+been tested:
+
+- Completed models (with OFV values) are skipped
+- Failed models are recorded but not re-created
+- Only new covariates or covariate combinations are tested in new models
+
+#### Can I do a fresh start from a specific point?
+
+If you want to restart a specific phase (e.g., re-run backward
+elimination), you can:
+
+``` r
+
+# Option 1: Delete specific models from database before resuming
+# (requires direct database manipulation - use with caution)
+
+# Option 2: Create a new search with a different base model
+search_state <- initialize_covariate_search(
+  base_model_path = "run20",  # Start from run20 instead
+  data_file_path = "data/derived/data.csv",
+  covariate_search_path = "data/derived/covariates.csv",
+  models_folder = "models_phase4_retry"  # Separate folder
+)
+```

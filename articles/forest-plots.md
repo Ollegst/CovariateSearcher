@@ -1,0 +1,423 @@
+# Forest Plots and Simulations
+
+## Forest Plots and Simulations
+
+Covariate effects visualised two ways, from the same starting point:
+
+    sample_individual_thetas -> build_scenario_parameters -+-> plot_parameter_forests
+                                                           |
+                                                           +-> simulate_scenario_profiles
+                                                                  -> metrics -> plot_exposure_forest
+
+**Parameter forests** need no simulation - the covariate effect on `CL`,
+`V2`, … comes straight out of the model. **Exposure forests** carry
+those parameters through an mrgsolve model to `AUC`/`Cmax`/`Cmin`.
+
+Both vary one covariate at a time around a typical subject, using
+parameter uncertainty. For exposure in the *real* population, split by
+covariate group, see [Covariate
+Boxplots](https://ollegst.github.io/CovariateSearcher/articles/covariate-boxplots.md).
+
+------------------------------------------------------------------------
+
+### Requirements
+
+| what | why |
+|----|----|
+| `.ext` **and** `.cov` (or `.cor`) next to the model | parameter uncertainty is drawn MVN from the covariance matrix; without it each THETA is drawn independently from its `.ext` standard error, with a warning |
+| `data` **pre-filtered to the modelling population** | the model’s `$DATA IGNORE`/`ACCEPT` is **not** applied - references and levels are computed from the rows you pass (the function warns) |
+| a yspec spec | axis labels, units and decoded categorical levels |
+| `mrgsolve` (exposure forests only) | in `Suggests` - install it yourself |
+| `devEMF` (for `.emf` output) | in `Suggests` |
+
+#### The simulation model
+
+Every parameter draw is simulated as its own subject (`idata`) under a
+common dose (`events`), so the mrgsolve model has to be written for
+that:
+
+1.  **`$PARAM` declares `THETA1..THETAn`.** The numbers written there
+    are only placeholders. For every simulated subject they are replaced
+    by one row of the parameter table, which holds the **final
+    individual parameter values** - natural scale, covariate effect
+    already applied, one row per uncertainty draw. The names must match
+    the table’s columns.
+2.  **Assign the structural parameters straight from them** -
+    `double CL = THETA3;`. **No covariate terms and no `EXP()`**: both
+    are already in the incoming values, and repeating either
+    double-counts.
+3.  **No between-subject variability** - no `$OMEGA`, no `ETA`. The
+    spread you want is the parameter uncertainty already in the draws;
+    adding random effects layers IIV on top of it.
+4.  **`$CAPTURE` the concentration** you will derive metrics from.
+5.  `$SIGMA`/`EPS` only if you also want a noisy `DV`; exposure metrics
+    are normally taken from the noise-free concentration.
+
+``` c
+$PARAM
+THETA1 = 2.8,
+THETA2 = 160,
+THETA3 = 32,
+THETA4 = 1,
+THETA5 = 0.5
+
+$CMT  @annotated
+DEPOT    : Dose compartment
+TRANSIT  : Transit compartment 1
+TRANSIT2 : Transit compartment 2
+CENTRAL  : Central compartment
+
+$PLUGIN autodec, nm-vars
+
+$SIGMA 1
+
+$MAIN
+double KA   = THETA1;
+double V1   = THETA2;
+double CL   = THETA3;
+double ADD  = THETA4;
+double PROP = THETA5;
+
+double K12 = KA;
+double K23 = KA;
+double K34 = KA;
+double K40 = CL/V1;
+double S4  = V1/1000.0;
+
+$ODE
+dxdt_DEPOT    = -K12*DEPOT;
+dxdt_TRANSIT  =  K12*DEPOT    - K23*TRANSIT;
+dxdt_TRANSIT2 =  K23*TRANSIT  - K34*TRANSIT2;
+dxdt_CENTRAL  =  K34*TRANSIT2 - K40*CENTRAL;
+
+$TABLE
+double CP    = CENTRAL/S4;
+double IPRED = CP;
+double W     = sqrt(ADD*ADD + pow(PROP*IPRED,2));
+double DV    = IPRED + W*EPS(1);
+
+$CAPTURE @annotated
+CP    : Plasma concentration (ng/mL)
+IPRED : Individual prediction
+DV    : Simulated observation
+CL    : Clearance (L/h)
+V1    : Central volume (L)
+```
+
+Note `THETA4`/`THETA5` here are the residual-error thetas: they come
+through the same parameter table, so the `$THETA` order in the NONMEM
+model and the `THETA<n>` names in `$PARAM` must line up.
+
+------------------------------------------------------------------------
+
+### Inputs
+
+``` r
+
+library(CovariateSearcher)
+library(yspec)     # ys_load, pull_meta
+library(yaml)      # read_yaml
+library(here)      # here()
+library(dplyr)
+
+## The covariate search table the model was built from - it supplies the
+## covariates to vary, their REFERENCE, and the LEVELS of categorical ones
+covariate_search <- read.csv("./data/derived/covariate_search.csv")
+
+## Two spec files, used for different things:
+##   lookup.yml    - covariate names, units and level decodes -> scenario labels
+##   pk-extend.yml - PK parameter labels and units            -> param_info
+lookup  <- ys_load(here("data", "spec", "lookup.yml"))
+spec_pk <- read_yaml(here("data", "spec", "pk-extend.yml"))
+
+## Analysis dataset, reduced to the modelling population and one row per
+## subject. $DATA IGNORE/ACCEPT is NOT applied for you, so filter here.
+dat <- read.csv("./data/derived/analysis.csv", stringsAsFactors = FALSE) %>%
+  filter(EXFLG == 0) %>%
+  group_by(ID) %>%
+  slice(1)
+
+## Decode categorical covariates to their labels
+flags <- pull_meta(lookup, "flags")
+dat   <- decode_dataset(dat, lookup, flags$diagCatCov)
+
+model_folder <- "models"
+runno        <- "run16"
+
+set.seed(12345)
+```
+
+Decoding is safe here: continuous covariates are the only thing read
+from `dat` (their quantiles), while categorical levels and references
+come from `covariate_search`, so they stay numeric for the model’s
+`IF(SEX.EQ.1)` blocks.
+
+[`sample_individual_thetas()`](https://ollegst.github.io/CovariateSearcher/reference/sample_individual_thetas.md)
+seeds itself through its own `seed` argument; the global
+[`set.seed()`](https://rdrr.io/r/base/Random.html) covers anything else
+in the script.
+
+------------------------------------------------------------------------
+
+### Parameter forests
+
+``` r
+
+# 1. Parameter uncertainty: MVN draws from the model's .ext + covariance matrix
+thetas <- sample_individual_thetas(
+  model         = runno,
+  models_folder = model_folder,
+  Nsamples      = 10000,         # bump to 1e5 for the final figure
+  seed          = 1234           # fixed by default, so the draws reproduce
+)
+
+attr(thetas, "sampling_method")  # "mvn", or "independent" if no .cov/.cor
+
+# 2. Per-scenario structural parameters, covariate effects baked in.
+#    `data` must already be filtered to the modelling population.
+params <- build_scenario_parameters(
+  model               = runno,
+  covariate_search    = covariate_search,   # object or path (.csv/.rds)
+  thetas              = thetas,
+  data                = dat,                # object or path; already filtered
+  spec                = lookup,             # units + decoded levels on the labels
+  percentiles         = c(0.1, 0.9),        # any number of quantiles, not just two:
+                                            # c(0.05, 0.25, 0.75, 0.95) gives 4 scenarios
+                                            # per continuous covariate
+  id_col              = "ID",
+  scenario_table_path = paste0("results/models/", runno, "/forestplots/rds/")
+)
+
+# 3. One forest per structural parameter, saved + combined PDF
+plot_parameter_forests(
+  params,
+  model              = runno,
+  output_plot_folder = paste0("results/models/", runno, "/forestplots/plots/"),
+  output_rds_folder  = paste0("results/models/", runno, "/forestplots/rds/"),
+  output_format      = c("emf", "png"),
+  param_info         = spec_pk,
+  combined_pdf       = TRUE,
+  typical_subject    = TRUE,     # subtitle describing the reference subject;
+                                 # FALSE removes it, or pass your own string
+
+  width              = 7,
+  height             = 6
+)
+```
+
+[`build_scenario_parameters()`](https://ollegst.github.io/CovariateSearcher/reference/build_scenario_parameters.md)
+returns a **named list** - one data frame of per-sample parameters per
+scenario, the first being the typical subject (all covariates at
+`REFERENCE`).
+
+| argument | default | effect |
+|----|----|----|
+| `percentiles` | `c(0.05, 0.95)` | quantiles of each **continuous** covariate to build scenarios from. Any length: `c(0.05, 0.25, 0.75, 0.95)` gives four scenarios per covariate. Categorical covariates instead get one scenario per non-reference level |
+| `models_folder` | `"models"` | where the model and its `.ext`/`.cov` live |
+| `id_col` | `"ID"` | de-duplicates `data` to one row per subject before computing the quantiles |
+| `lookup`, `spec` | `NULL` | covariate names, units and decoded levels used in the scenario labels |
+| `wrap_width` | `30` | break a long scenario label onto a second line; `Inf`/`NULL` disables |
+| `scenario_table_path` | `scenario_table_<model>.rds` | where the scenario table is saved. A **directory** gets `scenario_table_<model>.rds` written into it |
+
+Note `percentiles` means something different in the plot functions,
+where it is the interval used in the **summary tables** (`c(0.05, 0.95)`
+→ median `[5th, 95th]`).
+
+[`plot_parameter_forests()`](https://ollegst.github.io/CovariateSearcher/reference/plot_parameter_forests.md)
+options:
+
+| argument | default | effect |
+|----|----|----|
+| `parameters` | `NULL` | restrict to named parameters; `NULL` plots all |
+| `output_plot_folder` / `output_rds_folder` | `"results/figure"` / `NULL` | plots and summary-table RDS can go to different folders |
+| `output_format` | `c("emf","png")` | one file per format |
+| `combined_pdf` | `TRUE` | also write every forest into one multi-page PDF |
+| `outer_range` | `NULL` | second, wider shaded band (ratio scale) |
+| `typical_subject` | `TRUE` | subtitle describing the reference subject, taken from the attribute [`build_scenario_parameters()`](https://ollegst.github.io/CovariateSearcher/reference/build_scenario_parameters.md) attaches. `FALSE`/`NULL` shows no subtitle; a character string is used verbatim |
+| `param_info` | `NULL` | labels/units - a named `list(label=, unit=)` or a spec. Supplying it also writes the summary tables |
+| `scenario`, `lookup` | `NULL` | not needed here: [`build_scenario_parameters()`](https://ollegst.github.io/CovariateSearcher/reference/build_scenario_parameters.md) attaches the scenario table and lookup as attributes, and they are read back automatically |
+| `reference` | `"Typical subject"` | scenario used as the ratio denominator |
+| `percentiles` | `c(0.05, 0.95)` | interval shown in the summary tables |
+| `models_folder` | `"models"` | used to map THETA positions to parameter names |
+| `verbose` | `TRUE` | print each parameter as it is plotted |
+| `width`, `height` | `6`, `6` | inches |
+
+Parameters with no covariate acting on them are skipped, and each forest
+shows only the scenarios that actually move that parameter.
+
+------------------------------------------------------------------------
+
+### Exposure forests
+
+Add a simulation step. The model is compiled once, by you:
+
+``` r
+
+library(mrgsolve)
+
+mod  <- mread("models/sim_model.cpp")                     # structural only
+dose <- ev(amt = 300, cmt = 1, ii = 24, addl = 6, ss = 1)
+
+profiles <- simulate_scenario_profiles(
+  param_sets = params,
+  mod        = mod,
+  dose       = dose,
+  start      = 0,
+  end        = 24,       # one dosing interval for steady-state AUC
+  delta      = 0.1,
+  verbose    = TRUE      # per-scenario progress line
+)
+```
+
+`profiles` is one row per (scenario, sample, time). Reduce it to
+per-subject metrics yourself - the package does not impose a definition:
+
+``` r
+
+metrics <- profiles |>
+  dplyr::group_by(Scenario, ID) |>
+  dplyr::summarise(
+    AUC  = sum(diff(time) * (head(CP, -1) + tail(CP, -1)) / 2),
+    Cmax = max(CP),
+    Cmin = min(CP),
+    .groups = "drop"
+  )
+
+saveRDS(metrics, paste0("results/models/", runno, "/exposure_metrics.rds"))
+```
+
+Then one forest per metric:
+
+``` r
+
+for (m in c("AUC", "Cmax", "Cmin")) {
+  plot_exposure_forest(
+    metrics,
+    metric      = m,
+    ss          = TRUE,   # steady state: "ss" is appended to the metric name in
+                          # the auto title AND to the saved file name, so the
+                          # ss and non-ss versions never overwrite each other.
+                          # Applied to whatever `metric` is, so a parameter
+                          # would read "CLss" - use ss = FALSE there.
+    scenario    = attr(params, "scenario_table"),  # the scenario TABLE, not the
+                                             # parameter list: sets the axis order,
+                                             # supplies the typical-subject
+                                             # subtitle, and is required for the
+                                             # summary tables. The saved
+                                             # scenario_table_<model>.rds works too
+    metric_info = spec_pk,                   # labels/units -> also writes the tables
+    model       = runno,
+    reference   = "Typical subject",   # scenario used as the ratio denominator;
+                                       # it stays as a row - `typical_subject`
+                                       # only controls the subtitle
+
+    filename    = paste0("results/models/", runno, "/forestplots/plots/", m, "_forest"),
+                          # no need to write "ss" yourself - with ss = TRUE the
+                          # saved file becomes AUC_forest_ss.emf / .png
+    output_format = c("emf", "png"),
+    width = 7, height = 6
+  )
+}
+```
+
+| argument | default | effect |
+|----|----|----|
+| `metric` | `"AUC"` | any numeric column of `data`, not only exposure metrics |
+| `ss` | `TRUE` | steady state. Appends “ss” to the metric name in the auto-generated title (`"Covariate effects on AUCss"`) **and** to the saved file stem (`AUC_forest` → `AUC_forest_ss.emf`), so the two versions cannot overwrite each other. Applied to any `metric`, so set `FALSE` for parameters. The title part is ignored when `title` is given |
+| `ClinicalRelevanceLow` | `0.8` | lower bound of the inner shaded band (ratio scale) |
+| `ClinicalRelevanceHigh` | `1.25` | upper bound of the inner shaded band |
+| `outer_range` | `c(0.5, 2)` | outer band; `NULL` removes it |
+| `reference` | `"Typical subject"` | denominator scenario, highlighted |
+| `scenario` | `NULL` | the scenario **table** - a data frame, or a path to the saved `scenario_table_<model>.rds`. Sets the axis order, supplies the typical-subject subtitle, and is required before any summary table is written. A plain character vector gives the order only. Needed here because [`group_by()`](https://dplyr.tidyverse.org/reference/group_by.html)/[`summarise()`](https://dplyr.tidyverse.org/reference/summarise.html) dropped both |
+| `x_lim` | `NULL` | fix the ratio axis |
+| `fontsize` | `9` | base font size |
+| `title` | `NULL` | built from the metric when `NULL` |
+| `filename` | `NULL` | no file written when `NULL`; `width`/`height` are required when set |
+
+Because `metric` accepts any numeric column, a parameter forest can also
+be drawn this way:
+
+``` r
+
+long <- stack_scenario_parameters(params, model = runno)
+plot_exposure_forest(long, metric = "CL", ss = FALSE, width = 6, height = 6)
+```
+
+------------------------------------------------------------------------
+
+### Summary tables
+
+Both forest functions can write **two tables per run - absolute and
+relative**. They are produced only when you pass the labels
+(`param_info` / `metric_info`); without them you get plots only.
+
+[TABLE]
+
+Both tables have the same shape: one row per scenario, the covariate
+columns that vary across those scenarios (decoded, with units in the
+header), then one column per quantity headed `label [unit]`.
+
+The cells differ:
+
+[TABLE]
+
+Everything is rounded to 2 dp and stored as formatted strings, ready to
+drop into a report table.
+
+``` r
+
+rds_dir <- paste0("results/models/", runno, "/forestplots/rds/")
+
+## absolute: median / [lo, hi] / geomean / (geoCV%) per scenario
+abs_tbl <- readRDS(file.path(rds_dir, paste0(runno, "-parameter-table-absolute.rds")))
+
+## relative: ratio [lo, hi] versus the reference scenario's median
+rel_tbl <- readRDS(file.path(rds_dir, paste0(runno, "-parameter-table-relative.rds")))
+
+names(abs_tbl)     # one entry per parameter
+abs_tbl$CL
+rel_tbl$CL         # same rows and covariate columns, ratios instead of values
+```
+
+The exposure pair is read the same way, from the plot folder:
+
+``` r
+
+plot_dir <- paste0("results/models/", runno, "/forestplots/plots/")
+
+abs_exp <- readRDS(file.path(plot_dir, paste0(runno, "-exposure-table-absolute.rds")))
+rel_exp <- readRDS(file.path(plot_dir, paste0(runno, "-exposure-table-relative.rds")))
+```
+
+Every quantity must have a label, so the metric/parameter column names
+have to match the spec keys - a missing one stops the call rather than
+silently producing an unlabelled column.
+
+------------------------------------------------------------------------
+
+### Function reference
+
+| function | in | out |
+|----|----|----|
+| [`sample_individual_thetas()`](https://ollegst.github.io/CovariateSearcher/reference/sample_individual_thetas.md) | model name | `data.frame(ID, THETA1..n)`, estimation scale |
+| [`create_covariate_table()`](https://ollegst.github.io/CovariateSearcher/reference/create_covariate_table.md) | search table + data | scenario table (one row per scenario) |
+| [`apply_covariate_model()`](https://ollegst.github.io/CovariateSearcher/reference/apply_covariate_model.md) | thetas + one scenario | natural-scale structural parameters |
+| [`build_scenario_parameters()`](https://ollegst.github.io/CovariateSearcher/reference/build_scenario_parameters.md) | the three above | named list of per-scenario parameter sets |
+| [`stack_scenario_parameters()`](https://ollegst.github.io/CovariateSearcher/reference/stack_scenario_parameters.md) | that list | one long data frame with a `Scenario` column |
+| [`simulate_scenario_profiles()`](https://ollegst.github.io/CovariateSearcher/reference/simulate_scenario_profiles.md) | parameter sets + mrgsolve model | stacked concentration-time profiles |
+| [`plot_parameter_forests()`](https://ollegst.github.io/CovariateSearcher/reference/plot_parameter_forests.md) | parameter sets | one forest per parameter (+ tables) |
+| [`plot_exposure_forest()`](https://ollegst.github.io/CovariateSearcher/reference/plot_exposure_forest.md) | metrics table | one forest per metric (+ tables) |
+
+------------------------------------------------------------------------
+
+### See also
+
+- [Covariate
+  Boxplots](https://ollegst.github.io/CovariateSearcher/articles/covariate-boxplots.md) -
+  exposure in the real population, by covariate group
+- [Complete
+  Workflow](https://ollegst.github.io/CovariateSearcher/articles/complete-workflow.md) -
+  producing the model these plots describe
+- [Covariate
+  Formulas](https://ollegst.github.io/CovariateSearcher/articles/covariate-formulas.md) -
+  how the effects being plotted are parameterised
