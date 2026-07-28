@@ -40,14 +40,14 @@ with no covariate effect are then skipped automatically).}
 
 \item{output_plot_folder}{Base output directory for the plots (per-parameter
 \code{.emf}/\code{.png} and the combined PDF); the model name is appended, so files
-land in \code{output_plot_folder/<model>/}. If \code{model} is already a folder in
+land in \verb{output_plot_folder/<model>/}. If \code{model} is already a folder in
 \code{output_plot_folder} (you passed a fully qualified path such as
 \code{"results/models/run19/forestplots/plots/"}), it is \strong{not} appended again,
-so you don't get a redundant \code{<model>/<model>/}. Default \code{"results/figure"}.}
+so you don't get a redundant \verb{<model>/<model>/}. Default \code{"results/figure"}.}
 
 \item{output_rds_folder}{Base output directory for the summary-table RDS
-(\code{<model>-parameter-table-{absolute,relative}.rds}), with the same
-\code{<model>}-append / no-double behaviour as \code{output_plot_folder}. \code{NULL}
+(\verb{<model>-parameter-table-\{absolute,relative\}.rds}), with the same
+\verb{<model>}-append / no-double behaviour as \code{output_plot_folder}. \code{NULL}
 (default) writes the tables alongside the plots; pass e.g.
 \code{"results/models/run19/forestplots/rds/"} to keep them in a separate folder.}
 
@@ -74,10 +74,10 @@ named list \code{list(label=, unit=)} per parameter (e.g.
 \code{CL = list(label="CL", unit="L/h")}) OR a spec (yspec object / path /
 spec-shaped list, using each entry's \code{short} + \code{unit}). When supplied (with
 a \code{scenario}), two RDS are written to the output folder,
-\verb{<model>-parameter-table-absolute.rds} and \verb{...-relative.rds}, each a \strong{named
+\verb{<model>-parameter-table-absolute.rds} and \verb{…-relative.rds}, each a \strong{named
 list with one table per parameter} (that parameter's relevant scenarios and
 the covariate columns that vary). \strong{Every plotted parameter must have a
-label} or the call stops (restrict with \code{parameters=} or add it). Cell
+label} or the call stops (restrict with \verb{parameters=} or add it). Cell
 content as in the exposure tables - see \code{\link[=plot_exposure_forest]{plot_exposure_forest()}}'s
 \code{metric_info}. No \code{param_info} -> no table.}
 
@@ -119,16 +119,18 @@ such as a residual-error term) are \strong{skipped}, since their forest would be
 flat. Only the remaining parameters need a \code{param_info}/\code{pk.yaml} label.
 
 Each parameter's forest shows only the scenarios that \strong{move that parameter}
-- the reference ("Typical subject") plus any scenario whose value differs
+\itemize{
+\item the reference ("Typical subject") plus any scenario whose value differs
 from it - so \code{CL}'s forest shows only the covariates that act on \code{CL}, not
 every covariate. The summary table (when \code{param_info} is given) is likewise
 \strong{one table per parameter} (its relevant scenarios and the covariate columns
 that vary), saved as a named list.
+}
 
-Plots are written under \code{output_plot_folder/<model>/} (created if missing):
-one \code{<model>-forest-plot-<param>.emf}/\code{.png} per parameter, plus
-\code{<model>-forest-plots.pdf} containing every parameter forest (one per page).
-The summary-table RDS go to \code{output_rds_folder/<model>/} when supplied, else
+Plots are written under \verb{output_plot_folder/<model>/} (created if missing):
+one \verb{<model>-forest-plot-<param>.emf}/\code{.png} per parameter, plus
+\verb{<model>-forest-plots.pdf} containing every parameter forest (one per page).
+The summary-table RDS go to \verb{output_rds_folder/<model>/} when supplied, else
 alongside the plots.
 }
 \examples{

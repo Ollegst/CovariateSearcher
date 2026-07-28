@@ -2,14 +2,15 @@
 % Please edit documentation in R/model-modification.R
 \name{add_covariate_to_model}
 \alias{add_covariate_to_model}
-\title{Add Covariate to Model (FIXED - WITH PROPER LOG FILE SAVING)}
+\title{Add Covariate to Model}
 \usage{
 add_covariate_to_model(
   search_state,
   base_model_id,
   covariate_tag,
   step_number = NULL,
-  lookup_file = NULL
+  lookup_file = NULL,
+  phase = "forward_selection"
 )
 }
 \arguments{
@@ -19,14 +20,22 @@ add_covariate_to_model(
 
 \item{covariate_tag}{Character. Covariate tag to add (e.g., "beta_cl_wt")}
 
-\item{step_number}{Integer. Optional step number (NULL for auto-calculation)}
+\item{step_number}{Integer. Step number this model belongs to. Required -
+the automated search passes its current step; a manual add must say which
+step the model belongs to.}
 
 \item{lookup_file}{Character or NULL. Optional path to lookup YAML for
 categorical labels. If NULL, uses search_state configuration/default.}
+
+\item{phase}{Character. Phase recorded in the search database. Defaults to
+\code{"forward_selection"}, which is what the automated forward search
+creates. Use \code{"individual_testing"} for a deliberate one-off add
+outside the search (e.g. trying an extra covariate on the final model), so
+the row is not mistaken for a step of the search itself.}
 }
 \value{
 List with updated search_state and new model information
 }
 \description{
-Add Covariate to Model (FIXED - WITH PROPER LOG FILE SAVING)
+Add Covariate to Model
 }

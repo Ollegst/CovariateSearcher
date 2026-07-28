@@ -28,7 +28,5 @@ Returns model names from a step that have ΔOFV above threshold.
 Threshold is calculated per model based on covariate degrees of freedom.
 }
 \details{
-Run SCM Forward Selection (CORRECTED VERSION)
-
 Get Significant Models from Step
 }

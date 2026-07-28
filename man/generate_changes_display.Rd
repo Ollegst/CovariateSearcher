@@ -2,7 +2,7 @@
 % Please edit documentation in R/database-management.R
 \name{generate_changes_display}
 \alias{generate_changes_display}
-\title{Generate Changes Display (NEW FUNCTION FOR CHANGES COLUMN)}
+\title{Generate Changes Display}
 \usage{
 generate_changes_display(action, covariate_tested)
 }
@@ -15,5 +15,5 @@ generate_changes_display(action, covariate_tested)
 Character vector of changes descriptions
 }
 \description{
-Generate Changes Display (NEW FUNCTION FOR CHANGES COLUMN)
+Generate Changes Display
 }

@@ -21,14 +21,18 @@ create_covariate_boxplots(
   verbose = TRUE,
   combined_pdf = TRUE,
   prefix = NULL,
-  output_format = c("emf", "png")
+  output_format = c("emf", "png"),
+  show_median = TRUE,
+  show_n = TRUE,
+  percent_change = FALSE,
+  label_size = NULL
 )
 }
 \arguments{
 \item{data}{One row per subject/replicate, containing columns for
 AUC/Cmax/Cmin (as named in \code{param_info}) and all baseline covariates listed
 in \code{con}/\code{cat}; categorical covariates should already be decoded (see
-\code{\link{decode_dataset}}). Given as either a \code{data.frame} OR a character
+\code{\link[=decode_dataset]{decode_dataset()}}). Given as either a \code{data.frame} OR a character
 path to a \code{.csv}/\code{.rds} file to load.}
 
 \item{spec}{A loaded yspec object (from \code{\link[yspec:ys_load]{yspec::ys_load()}}), or a path to
@@ -49,9 +53,11 @@ must have an entry in \code{param_info}.}
 \item{param_info}{Metric labels/units, keyed by the \code{type} names, as EITHER a
 named list \code{list(label=, unit=)} per metric (e.g.
 \code{list(AUC = list(label="AUCss", unit="mg*hr/L"))}) OR a spec supplying them
-- a yspec object, a path to a spec YAML, or a spec-shaped list (each entry's
+\itemize{
+\item a yspec object, a path to a spec YAML, or a spec-shaped list (each entry's
 \code{short} becomes the label, plus its \code{unit}). Every \code{type} must have an
-entry or the call stops.}
+entry or the call stops.
+}}
 
 \item{stratification}{optional column name (string) in \code{data} to split
 plots into side-by-side panels (e.g. "COMB"). NULL = single panel.}
@@ -89,6 +95,23 @@ nothing. E.g. \code{prefix = "run19"} gives
 image format(s) to save each per-plot figure as. Default both. \code{.emf} is
 written with \code{\link[devEMF:emf]{devEMF::emf()}}, \code{.png} with the \code{\link[ggplot2:ggsave]{ggplot2::ggsave()}} default
 device. (The combined multi-page file is always a PDF.)}
+
+\item{show_median}{logical; if TRUE (default) each box carries its median
+value in a small white label sitting on the median line.}
+
+\item{show_n}{logical; if TRUE (default) the number of subjects in each box
+is printed underneath it as "n = \if{html}{\out{<count>}}".}
+
+\item{percent_change}{logical; if TRUE the median label also shows the change
+from the \strong{first level of the same panel}, e.g. \verb{1,234 (-10\%)}. The first
+level is the reference and carries no suffix, and a panel holding a single
+box (the pooled \code{Total} panel) gets none either. Requires
+\code{show_median = TRUE} to be visible. Default FALSE.}
+
+\item{label_size}{numeric or NULL. Text size of the median label, in the
+usual ggplot \code{size} units. \code{NULL} (default) derives it from \code{base_size}
+(\code{base_size/.pt * 0.65}); give a number to shrink it where the boxes are
+narrow or the panel count is high, e.g. \code{label_size = 1.8}.}
 }
 \value{
 A nested list: results[\link{type}][\link{covariate}] = the faceted ggplot
@@ -106,7 +129,7 @@ of every plot.
 
 Covariate axis labels come straight from the yspec \code{spec} via
 \code{\link[yspec:ys_get_short_unit]{yspec::ys_get_short_unit()}} ("Short (unit)"). Categorical covariates are
-expected to be decoded already (via \code{\link{decode_dataset}}); if a
+expected to be decoded already (via \code{\link[=decode_dataset]{decode_dataset()}}); if a
 categorical covariate still holds raw numeric codes the function stops and
 tells you how to decode.
 }

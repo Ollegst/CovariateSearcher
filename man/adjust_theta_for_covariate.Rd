@@ -2,9 +2,14 @@
 % Please edit documentation in R/recovery-actions.R
 \name{adjust_theta_for_covariate}
 \alias{adjust_theta_for_covariate}
-\title{Modify THETA values from 0.1 to -0.1 for specified covariate}
+\title{Perturb the initial estimate of a covariate THETA for a retry}
 \usage{
-adjust_theta_for_covariate(search_state, model_name, covariate_tag)
+adjust_theta_for_covariate(
+  search_state,
+  model_name,
+  covariate_tag,
+  dry_run = FALSE
+)
 }
 \arguments{
 \item{search_state}{List containing covariate search state and configuration}
@@ -12,13 +17,21 @@ adjust_theta_for_covariate(search_state, model_name, covariate_tag)
 \item{model_name}{Character. Model to modify (e.g., "run2001")}
 
 \item{covariate_tag}{Character. Covariate tag that was added (e.g., "cov_cl_wt")}
+
+\item{dry_run}{Logical. When TRUE, work out what would change but leave the
+model file untouched and stay silent. Used to decide whether a retry is
+worth creating at all.}
 }
 \value{
-List with success status and details
+List with success status, \code{reason}, and details
 }
 \description{
-Reads the model file and adjusts THETA initial estimates
-from 0.1 to -0.1 for the problematic covariate to improve convergence.
+Reads the model file and moves the initial estimate of the
+problematic covariate's THETA to give the retry a different starting point:
+an unbounded value is sign-flipped (0.1 to -0.1), a bounded value moves to
+the midpoint of the wider side of its range, and a FIXED value is left
+untouched. When every THETA for the covariate is FIXED there is nothing to
+perturb and the function reports \code{reason = "all_thetas_fixed"}.
 }
 \details{
 Adjust THETA Values for Covariate

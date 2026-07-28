@@ -32,7 +32,7 @@ readable categories instead of raw codes.
 The specification may be a loaded \pkg{yspec} object (from
 \code{\link[yspec:ys_load]{yspec::ys_load()}}) \strong{or} a plain list read from a spec YAML with
 \code{\link[yaml:read_yaml]{yaml::read_yaml()}}. In both cases the fields are read with \code{$}
-(\code{spec[[col]]$values} / \code{$decode}): on a yspec column that resolves the yspec
+(\code{spec[[col]]$values} / \verb{$decode}): on a yspec column that resolves the yspec
 accessor, and on a raw list it reads the list element - so the same call
 works for either input. (Note: routing the same fields through \code{as.list()}
 first does \strong{not} work on a yspec column - it bypasses the accessor and the

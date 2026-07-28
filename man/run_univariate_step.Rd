@@ -2,7 +2,7 @@
 % Please edit documentation in R/scm-execution.R
 \name{run_univariate_step}
 \alias{run_univariate_step}
-\title{Run Univariate Step (ENHANCED WITH EXCLUSION FILTERING)}
+\title{Run Univariate Step}
 \usage{
 run_univariate_step(
   search_state,
@@ -27,5 +27,5 @@ run_univariate_step(
 List with created model information and updated search_state
 }
 \description{
-Run Univariate Step (ENHANCED WITH EXCLUSION FILTERING)
+Run Univariate Step
 }

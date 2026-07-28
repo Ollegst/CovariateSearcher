@@ -15,8 +15,8 @@ update_all_model_statuses(search_state, show_progress = TRUE)
 List with updated search_state
 }
 \description{
-Enhanced version with comprehensive error handling and validation
+Refreshes every active model's status from its NONMEM output files
 }
 \details{
-Update All Model Statuses (FIXED)
+Update All Model Statuses
 }

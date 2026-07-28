@@ -72,5 +72,5 @@ recovery, progress monitoring, and comprehensive reporting. Designed for hands-o
 execution with intelligent decision making.
 }
 \details{
-Run Complete Automated SCM Testing from Base Model (FIXED)
+Run Complete Automated SCM Testing from Base Model
 }

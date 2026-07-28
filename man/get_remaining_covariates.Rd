@@ -21,5 +21,5 @@ Identifies which covariates from the search definition haven't
 been added to the specified base model yet, with exclusion filtering.
 }
 \details{
-Get Remaining Covariates for Testing (ENHANCED WITH EXCLUSION)
+Get Remaining Covariates for Testing
 }

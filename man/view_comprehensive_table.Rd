@@ -2,7 +2,7 @@
 % Please edit documentation in R/database-management.R
 \name{view_comprehensive_table}
 \alias{view_comprehensive_table}
-\title{View Comprehensive Table (UPDATED FOR SIMPLIFIED SCHEMA)}
+\title{View Comprehensive Table}
 \usage{
 view_comprehensive_table(search_state, use_separate_columns = TRUE)
 }
@@ -12,5 +12,5 @@ view_comprehensive_table(search_state, use_separate_columns = TRUE)
 \item{use_separate_columns}{Logical. Whether to use separate Step and Changes columns (default: TRUE)}
 }
 \description{
-View Comprehensive Table (UPDATED FOR SIMPLIFIED SCHEMA)
+View Comprehensive Table
 }

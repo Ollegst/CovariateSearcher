@@ -10,11 +10,12 @@ get_model_status_from_files(model_path)
 \item{model_path}{Character. Path to model directory}
 }
 \value{
-Character. Overall model status with enhanced error detection
+Character. Overall model status
 }
 \description{
-Enhanced version that provides detailed failure information
+Classifies a model's run status from its output files, with
+detailed failure information
 }
 \details{
-Get Model Status from Files with Enhanced Error Detection
+Get Model Status from Files
 }

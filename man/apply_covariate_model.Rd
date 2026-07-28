@@ -17,8 +17,9 @@ apply_covariate_model(
 
 \item{covariate_search}{Covariate-search table with columns \code{COVARIATE},
 \code{PARAMETER}, \code{STATUS}, \code{FORMULA}, \code{REFERENCE} (\code{REFERENCE} supplies the
-value for any covariate an equation references that is not in \code{covariates}),
-given as either a \code{data.frame} OR a character path to a \code{.csv}/\code{.rds} file to load.}
+value for any covariate an equation references that is not in
+\code{covariates}), given as either a \code{data.frame} OR a character path to a
+\code{.csv}/\code{.rds} file to load.}
 
 \item{individual_thetas}{Data frame whose columns are \code{THETA1}, \code{THETA2}, ...
 the sampled THETA draws on the \strong{estimation scale} (raw, as returned by

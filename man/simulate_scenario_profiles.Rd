@@ -31,8 +31,7 @@ regimen, applied to every subject, e.g.
 Defaults \code{0}, \code{24}, \code{0.1}. For AUC over one steady-state interval set \code{end}
 to one dosing interval (\code{ii}).}
 
-\item{verbose}{Logical. When \code{TRUE} (default) print a \verb{[i/n] Simulating
-scenario: <name>} progress line as each scenario is simulated. Set \code{FALSE}
+\item{verbose}{Logical. When \code{TRUE} (default) print a \verb{[i/n] Simulating scenario: <name>} progress line as each scenario is simulated. Set \code{FALSE}
 to silence.}
 }
 \value{

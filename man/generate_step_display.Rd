@@ -2,7 +2,7 @@
 % Please edit documentation in R/database-management.R
 \name{generate_step_display}
 \alias{generate_step_display}
-\title{Generate Step Display (NEW FUNCTION FOR STEP COLUMN)}
+\title{Generate Step Display}
 \usage{
 generate_step_display(step_number, action)
 }
@@ -15,5 +15,5 @@ generate_step_display(step_number, action)
 Character vector of step displays
 }
 \description{
-Generate Step Display (NEW FUNCTION FOR STEP COLUMN)
+Generate Step Display
 }

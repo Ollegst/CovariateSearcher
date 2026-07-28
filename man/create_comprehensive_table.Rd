@@ -2,7 +2,7 @@
 % Please edit documentation in R/database-management.R
 \name{create_comprehensive_table}
 \alias{create_comprehensive_table}
-\title{Create Comprehensive Table (UPDATED FOR SIMPLIFIED SCHEMA - FIXED)}
+\title{Create Comprehensive Table}
 \usage{
 create_comprehensive_table(search_state, use_separate_columns = TRUE)
 }
@@ -15,5 +15,5 @@ create_comprehensive_table(search_state, use_separate_columns = TRUE)
 Data frame with model summary using generated descriptions
 }
 \description{
-Create Comprehensive Table (UPDATED FOR SIMPLIFIED SCHEMA - FIXED)
+Create Comprehensive Table
 }

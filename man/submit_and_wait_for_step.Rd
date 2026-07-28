@@ -2,7 +2,7 @@
 % Please edit documentation in R/scm-execution.R
 \name{submit_and_wait_for_step}
 \alias{submit_and_wait_for_step}
-\title{Submit models and wait for all to complete with corrected status tracking}
+\title{Submit models and wait for all to complete with status tracking}
 \usage{
 submit_and_wait_for_step(
   search_state,
@@ -33,8 +33,9 @@ submit_and_wait_for_step(
 List with completion results and updated search_state
 }
 \description{
-Fixed version that properly handles retry model creation and status locking
+Submits a step's models, monitors them to completion, and creates
+retry models for any that hit estimation issues
 }
 \details{
-Submit Models and Wait for Completion with Auto-Updates (FIXED MONITORING)
+Submit Models and Wait for Completion with Auto-Updates
 }

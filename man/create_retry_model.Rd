@@ -18,12 +18,16 @@ create_retry_model(
 \item{issue_type}{Character. Type of estimation issue detected}
 }
 \value{
-List with retry model information and updated search_state
+List with retry model information and updated search_state;
+\code{status} is one of \code{"created"}, \code{"skipped"} or \code{"failed"}
 }
 \description{
-Creates a retry model (e.g., run2001 from run2) with THETA values
-adjusted from 0.1 to -0.1 for the problematic covariate.
+Creates a retry model (e.g., run2001 from run2) with the
+problematic covariate's THETA started from a different initial estimate
+(see \code{\link{adjust_theta_for_covariate}}). When every THETA for that
+covariate is FIXED there is nothing to perturb, so no retry is created and
+the result carries \code{status = "skipped"}.
 }
 \details{
-Create Retry Model with Adjusted THETA Values (FIXED - STANDARDIZED LOGGING)
+Create Retry Model with Adjusted THETA Values
 }

@@ -13,8 +13,8 @@ read_nonmem_lst(model_path)
 List with status and error information
 }
 \description{
-Enhanced version with comprehensive input validation and error handling
+Reads a model's .lst file and classifies the run status
 }
 \details{
-Read NONMEM LST File with Basic Error Detection (FIXED)
+Read NONMEM LST File with Basic Error Detection
 }

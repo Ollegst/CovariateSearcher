@@ -19,5 +19,5 @@ Orchestrates the recovery process for models with estimation
 issues. Creates retries for original models or excludes covariates for failed retries.
 }
 \details{
-Process Estimation Issues (ENHANCED WITH NO-RETRY LOGIC)
+Process Estimation Issues
 }

@@ -2,7 +2,7 @@
 % Please edit documentation in R/database-management.R
 \name{initialize_search_database_core}
 \alias{initialize_search_database_core}
-\title{Initialize Search Database (SIMPLIFIED SCHEMA)}
+\title{Initialize Search Database}
 \usage{
 initialize_search_database_core(search_state)
 }
@@ -10,8 +10,8 @@ initialize_search_database_core(search_state)
 \item{search_state}{List containing search state}
 }
 \value{
-Updated search_state with simplified database schema
+Updated search_state with an empty search database
 }
 \description{
-Initialize Search Database (SIMPLIFIED SCHEMA)
+Initialize Search Database
 }

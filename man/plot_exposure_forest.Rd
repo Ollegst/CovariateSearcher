@@ -40,7 +40,10 @@ structural parameter column (\code{"CL"}, \code{"V2"}, ...) from
 \code{\link[=stack_scenario_parameters]{stack_scenario_parameters()}} for a parameter forest.}
 
 \item{ss}{Logical. Steady state? Adds an "ss" suffix to the metric in the
-title (e.g. "AUC" vs "AUCss"). Default \code{TRUE}.}
+title (e.g. "AUC" vs "AUCss") \strong{and} to the saved file stem, so a
+steady-state and a single-dose plot of the same metric do not overwrite
+each other (\code{AUC_forest} -> \code{AUC_forest_ss.emf}). The suffix is not added
+when the stem already ends in "ss". Default \code{TRUE}.}
 
 \item{ClinicalRelevanceLow, ClinicalRelevanceHigh}{Numeric. Bounds of the
 shaded (inner) clinical-relevance band (ratio scale). Defaults \code{0.8},
@@ -82,8 +85,8 @@ verbatim (custom text, e.g. "Typical subject: 70 kg male, ECOG 0").}
 
 \item{filename}{Character or NULL. Base path for saved output; any extension
 is stripped and one file per \code{output_format} is written as
-\verb{<stem>.<format>}. Missing parent folders are created. \code{NULL} (default)
-does not save.}
+\verb{<stem>.<format>}, or \verb{<stem>_ss.<format>} when \code{ss = TRUE} (see \code{ss}).
+Missing parent folders are created. \code{NULL} (default) does not save.}
 
 \item{output_format}{Character. Which format(s) to save when \code{filename} is
 given: one or both of \code{"emf"} and \code{"png"}. Default both. \code{.emf} is written
@@ -96,9 +99,9 @@ yspec object, a path to a spec YAML, or a spec-shaped list (each entry's
 \code{short} becomes the label, plus its \code{unit}). When supplied (with \code{filename}
 and a \code{scenario} data.frame), two summary tables covering \strong{every} metric
 column of \code{data} are written next to the plot as
-\verb{<model>-exposure-table-absolute.rds} and \verb{...-relative.rds}. \strong{Every metric
+\verb{<model>-exposure-table-absolute.rds} and \verb{…-relative.rds}. \strong{Every metric
 must have a label} or the call stops (add it to the spec/list). Absolute
-cell = \verb{median / [lo,hi] / geomean / (geoCV\%)}; relative = \verb{ratio [lo,hi]}
+cell = \verb{median / [lo,hi] / geomean / (geoCV\%)}; relative = \code{ratio [lo,hi]}
 vs the \code{reference} median. Covariate columns come from \code{scenario} (decoded
 via \code{lookup}/\code{spec}); interval at \code{percentiles}; 2 dp. No \code{metric_info} ->
 no table.}
