@@ -1298,3 +1298,102 @@ update_tags_yaml <- function(search_state = NULL,
     verbose = verbose
   )
 }
+
+
+#' Add Covariates to an Existing Search
+#'
+#' @title Extend a running search with covariates it did not start with
+#' @description Appends rows to \code{search_state$covariate_search}, revalidates
+#'   the merged table, regenerates \code{tags.yaml} and refreshes
+#'   \code{search_state$tags}. Use it when a covariate that was not part of the
+#'   original search table has to be tested -- typically an extra covariate tried
+#'   on the final model after the search has finished. Without this the new
+#'   covariate has no \code{beta_<COV>_<PARAM>} tag and no table row, so
+#'   \code{\link{add_covariate_to_model}} cannot see it.
+#'
+#'   The alternative -- re-running \code{\link{initialize_covariate_search}} on a
+#'   folder that already holds the finished search -- rebuilds the database from
+#'   the model files, which loses every \code{step_number}, \code{delta_ofv} and
+#'   the real phase labels. Extending the live \code{search_state} keeps them.
+#'
+#' @param search_state List. The live search state to extend (e.g.
+#'   \code{results$search_state}, or a checkpoint loaded with
+#'   \code{\link{load_search_state}}).
+#' @param additions Data frame of new covariate rows (as built by
+#'   \code{\link{build_covariate_reference_table}}), or a path to a \code{.csv}
+#'   holding them. \code{cov_to_test} is derived when absent.
+#' @param tags_yaml_path Character. Tags file to regenerate.
+#'   Default \code{"data/spec/tags.yaml"}.
+#' @param verbose Logical. Print what was added. Default \code{TRUE}.
+#' @return The updated \code{search_state}, with the merged
+#'   \code{covariate_search} and refreshed \code{tags}.
+#' @seealso \code{\link{build_covariate_reference_table}},
+#'   \code{\link{add_covariate_to_model}}
+#' @export
+add_covariates_to_search <- function(search_state, additions,
+                                     tags_yaml_path = "data/spec/tags.yaml",
+                                     verbose = TRUE) {
+
+  if (is.null(search_state$covariate_search) ||
+      !is.data.frame(search_state$covariate_search)) {
+    stop("search_state does not contain a covariate_search table.")
+  }
+  if (is.null(search_state$data_file) || !is.data.frame(search_state$data_file)) {
+    stop("search_state does not contain the analysis dataset (data_file), ",
+         "which is needed to validate the new rows.")
+  }
+
+  additions <- .load_if_path(additions, "additions")
+  if (!is.data.frame(additions) || nrow(additions) == 0) {
+    stop("`additions` must be a non-empty data frame of covariate rows ",
+         "(or a path to a .csv holding them).")
+  }
+
+  # A table read back from CSV types numeric-looking columns as numbers
+  # (REFERENCE 0, LEVELS 1) while the live table holds them as character, and
+  # bind_rows refuses to combine the two. Reconcile only the columns that
+  # actually disagree, so columns already of one type keep it.
+  existing <- search_state$covariate_search
+  for (nm in intersect(names(existing), names(additions))) {
+    if (!identical(class(existing[[nm]]), class(additions[[nm]]))) {
+      existing[[nm]]  <- as.character(existing[[nm]])
+      additions[[nm]] <- as.character(additions[[nm]])
+    }
+  }
+
+  merged <- dplyr::bind_rows(existing, additions)
+
+  # The existing table already carries cov_to_test, so validate_covariate_search_table
+  # would leave the new rows' value empty -- fill it here with the same rule.
+  if (!"cov_to_test" %in% names(merged)) merged$cov_to_test <- NA_character_
+  needs_tag <- is.na(merged$cov_to_test) | !nzchar(as.character(merged$cov_to_test))
+  merged$cov_to_test[needs_tag] <- paste0("beta_", merged$COVARIATE[needs_tag],
+                                          "_", merged$PARAMETER[needs_tag])
+
+  # Revalidates the WHOLE table: a covariate-parameter pair already under test
+  # shows up as a duplicate cov_to_test and stops here.
+  merged <- validate_covariate_search_table(merged, search_state$data_file)
+
+  new_tags <- merged$cov_to_test[needs_tag]
+  if (verbose) {
+    cat(sprintf("Adding %d covariate row(s): %s\n",
+                length(new_tags), paste(new_tags, collapse = ", ")))
+  }
+
+  generate_tags_from_covariate_search(
+    covariate_search = merged,
+    tags_yaml_path   = tags_yaml_path,
+    verbose          = verbose
+  )
+
+  search_state$covariate_search <- merged
+  search_state <- load_tags(search_state)
+
+  missing_tags <- setdiff(new_tags, names(search_state$tags))
+  if (length(missing_tags) > 0) {
+    warning("These tags were not found after regenerating ", tags_yaml_path, ": ",
+            paste(missing_tags, collapse = ", "))
+  }
+
+  search_state
+}

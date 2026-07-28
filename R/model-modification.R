@@ -11,14 +11,22 @@
 #' @param search_state List. Current search state from initialize_covariate_search()
 #' @param base_model_id Character. Base model identifier (e.g., "run1")
 #' @param covariate_tag Character. Covariate tag to add (e.g., "beta_cl_wt")
-#' @param step_number Integer. Optional step number (NULL for auto-calculation)
+#' @param step_number Integer. Step number this model belongs to. Required -
+#'   the automated search passes its current step; a manual add must say which
+#'   step the model belongs to.
 #' @param lookup_file Character or NULL. Optional path to lookup YAML for
 #'   categorical labels. If NULL, uses search_state configuration/default.
+#' @param phase Character. Phase recorded in the search database. Defaults to
+#'   \code{"forward_selection"}, which is what the automated forward search
+#'   creates. Use \code{"individual_testing"} for a deliberate one-off add
+#'   outside the search (e.g. trying an extra covariate on the final model), so
+#'   the row is not mistaken for a step of the search itself.
 #' @return List with updated search_state and new model information
 #' @export
 add_covariate_to_model <- function(search_state, base_model_id, covariate_tag,
                                    step_number = NULL,
-                                   lookup_file = NULL) {
+                                   lookup_file = NULL,
+                                   phase = "forward_selection") {
   cat(sprintf("[+] Adding covariate %s to model %s\n", covariate_tag, base_model_id))
 
   # STEP 1: Validate inputs and calculate step number FIRST
@@ -180,7 +188,7 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag,
       new_row <- data.frame(
         model_name = new_model_name,
         step_description = sprintf("Add %s", covariate_name),  # ← Move to position 2
-        phase = "forward_selection",                           # ← Position 3
+        phase = phase,                                         # ← Position 3
         step_number = final_step_number,                       # ← Position 4
         parent_model = base_model_id,                          # ← Position 5
         covariate_tested = matching_cov$cov_to_test[1],
