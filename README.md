@@ -7,7 +7,8 @@ CovariateSearcher Package
 
 ``` r
 # Install from GitHub
-remotes::install_github("Ollegst/CovariateSearcher", ref = "main", dependencies = TRUE)
+remotes::install_github("Ollegst/CovariateSearcher",
+                        ref = "feature/package-rebuild", dependencies = TRUE)
 
 library(CovariateSearcher)
 
@@ -181,6 +182,12 @@ separated by `;`. `cov_to_test` (`beta_WT_CL`, …) is generated for you.
 in `cov` (the covariate) and `ref` (its REFERENCE); every remaining
 symbol becomes an estimated THETA, e.g. `EMAX*cov/(EC50+cov)` estimates
 `EMAX` and `EC50`.
+
+See [Covariate
+Formulas](https://ollegst.github.io/CovariateSearcher/articles/covariate-formulas.html)
+for how each form is written into the control stream, categorical
+per-level effects, placement on log- and normal-scale parameters,
+degrees of freedom, and registering your own formula.
 
 **INIT** (optional) sets the initial `$THETA` for the covariate beta:
 

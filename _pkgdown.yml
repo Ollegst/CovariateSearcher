@@ -19,6 +19,12 @@ navbar:
       menu:
       - text: Complete Workflow
         href: articles/complete-workflow.html
+      - text: Covariate Formulas
+        href: articles/covariate-formulas.html
+      - text: Forest Plots and Simulations
+        href: articles/forest-plots.html
+      - text: Covariate Boxplots
+        href: articles/covariate-boxplots.html
       - text: YAML Specification Files
         href: articles/yaml-specification-files.html
       - text: Parameter Tables with model_report()
@@ -38,6 +44,9 @@ articles:
   navbar: Extended Docs
   contents:
   - articles/complete-workflow
+  - articles/covariate-formulas
+  - articles/forest-plots
+  - articles/covariate-boxplots
   - articles/yaml-specification-files
   - articles/model-report-usage
   - articles/troubleshooting
@@ -53,6 +62,13 @@ reference:
   - run_scm_selective_forward
   - run_backward_elimination
 
+- title: Covariate Table and Formulas
+  desc: Building the covariate search table and defining covariate effects
+  contents:
+  - build_covariate_reference_table
+  - add_covariates_to_search
+  - validate_param_transformations
+
 - title: Model Operations
   desc: Functions for model creation and modification
   contents:
@@ -60,6 +76,28 @@ reference:
   - remove_covariate_from_model
   - prepare_search_base_model
   - create_retry_model
+
+- title: Resume and Checkpoints
+  desc: Continuing an interrupted search
+  contents:
+  - continue_search
+  - get_step_models
+  - reconstruct_step_from_disk
+
+- title: Simulation and Forest Plots
+  desc: Covariate effect simulation, forest plots and boxplots
+  contents:
+  - sample_individual_thetas
+  - create_covariate_table
+  - apply_covariate_model
+  - build_scenario_parameters
+  - stack_scenario_parameters
+  - simulate_scenario_profiles
+  - plot_exposure_forest
+  - plot_parameter_forests
+  - create_covariate_boxplots
+  - theme_forest
+  - decode_dataset
 
 - title: Evaluation and Selection
   desc: Functions for model evaluation and selection
@@ -108,7 +146,6 @@ reference:
   - calculate_covariate_df
   - clean_dir
   - create_comprehensive_table
-  - create_model_info_log
   - detect_estimation_problems
   - evaluate_removal_impacts
   - extract_covariate_name_from_tag

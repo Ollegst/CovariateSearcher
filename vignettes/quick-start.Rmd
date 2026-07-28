@@ -150,6 +150,11 @@ multi-parameter expression:
 INIT = c("0.1", "(0, 0.5, 2)", "0.75 FIX", "EMAX=0.5; EC50=10")
 ```
 
+The [Covariate Formulas](articles/covariate-formulas.html) article covers all of
+this in full: how each form is written into the control stream, categorical
+per-level effects, placement on log- and normal-scale parameters, degrees of
+freedom, and registering your own formula.
+
 ---
 
 ## Run a search

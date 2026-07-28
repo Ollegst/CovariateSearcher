@@ -10,194 +10,312 @@ knitr::opts_chunk$set(
 )
 ```
 
-# Complete Stepwise Covariate Modeling Workflow
+# Complete SCM Workflow
 
-This comprehensive guide walks through a complete SCM analysis from start to finish.
+A full run: build the covariate table, optionally start from a model that
+already carries covariates, strip it back, extend the table, search, then test
+extras on the final model.
 
+```
+build table -> [prepare base] -> initialize -> backward -> extend table -> forward+backward -> extras
+```
 
-## Overview
+Formula and `INIT` details are in
+[Covariate Formulas](covariate-formulas.html). Interrupted runs are covered
+separately by `?continue_search`.
 
-The stepwise covariate modeling (SCM/SCM+) process consists of:
+---
 
-0. **Backward elimination**: Remove non-significant covariates (optional)
-1. **Forward Selection**: Add covariates that improve model fit
-2. **Backward Elimination**: Remove non-significant covariates
-3. **Final Model**: Select the best parsimonious model
+## 1. Covariate table
 
-## Prerequisites
-
-```{r prerequisites}
+```{r table}
 library(CovariateSearcher)
-library(dplyr)
-```
 
-## Step 1: Prepare Your Data
+data <- read.csv("data/derived/analysis.csv")
+spec <- yspec::ys_load("data/spec/lookup.yml")
 
-### NONMEM Dataset
-Your dataset should include:
-
-- `ID`: Subject identifier
-- `TIME`: Time points
-- `DV`: Dependent variable (concentrations)
-- `EVID`: Event ID (0=observation, 1=dose)
-- Covariates (WT, AGE, SEX, etc.)
-
-```{r data-example}
-# Example dataset structure
-head(nonmem_data)
-#   ID TIME  DV EVID  WT AGE SEX
-#    1  0.0  NA    1  70  45   1
-#    1  0.5 5.2    0  70  45   1
-#    1  1.0 8.1    0  70  45   1
-```
-
-### Covariate Search Configuration
-
-Create a CSV file defining which covariates to test:
-
-```{r covariate-config}
-# Example: covariate_search.csv
-covariate_config <- tribble(
-  ~PARAMETER, ~COVARIATE, ~STATUS,        ~FORMULA, ~LEVELS, ~REFERENCE,
-  "CL",       "WT",        "con",          "power",      NA,         70,
-  "CL",       "AGE",       "con",         "linear",      NA,         50,
-  "CL",       "SEX",       "cat",            "cat",   "0;1",          1,
-  "V",        "WT",        "con",          "power",      NA,      70
+cov <- build_covariate_reference_table(
+  data      = data,
+  id        = "ID",
+  time      = "TIME",
+  Parameter = c("CL",           "V1"),
+  Covariate = c("AGE",          "ASIAN"),
+  Category  = c("con",          "cat"),
+  Formula   = c("power",        "linear"),
+  INIT      = c("(0, 0.5, 2)",  "0.1"),   ## optional - default 0.1 for every beta
+  yaml_data = spec
 )
 
-write.csv(covariate_config, "data/derived/covariate_search.csv", row.names = FALSE)
+## optional - REFERENCE is computed from the data; override it afterwards
+cov$REFERENCE[cov$COVARIATE == "AGE"] <- "50"
+
+write.csv(cov, "data/derived/covariate_search.csv", row.names = FALSE)
 ```
 
-**FORMULA options for continuous covariates (`STATUS = "con"`):**
-- `linear`: `PARAM * (1 + (COV - REF) * THETA)`
-- `power`: `PARAM * (COV / REF) ** THETA`
-- `power1`: `PARAM * (COV / REF) ** THETA` with THETA fixed to 1
-- `power0.75`: `PARAM * (COV / REF) ** THETA` with THETA fixed to 0.75
-- `exponential`: `PARAM * EXP(THETA * (COV - REF))`
+You supply `Parameter`, `Covariate`, `Category` and `Formula`. Everything else
+is derived:
 
-## Step 2: Initialize Search
+| column | derived from |
+|---|---|
+| `REFERENCE` | median of the baseline values (`con`) or the most frequent level (`cat`) |
+| `LEVELS` | observed baseline levels, `;`-separated (`cat` only) |
+| `TIME_DEPENDENT` | `Yes` if a subject has more than one value in the full dataset |
+| `cov_to_test` | `beta_<COVARIATE>_<PARAMETER>` |
 
-```{r initialize}
-search_state <- initialize_covariate_search(
-  base_model_path = "run10",
-  data_file_path = "data/derived/analysis.csv",
+`INIT` is optional - without it every covariate beta starts at `0.1`. Use it to
+bound (`"(0, 0.5, 2)"`) or fix (`"0.75 FIX"`) a beta; a multi-theta formula
+takes one entry per theta, by name (`"EMAX=0.5; EC50=10"`).
+
+`REFERENCE` is not an argument - it is always computed from the data. Override
+it on the returned table when you want a round number instead of the observed
+median.
+
+---
+
+## 2. Optional: base model that already has covariates
+
+Skip this if your base model is structural only.
+
+```{r prepare}
+prep <- prepare_search_base_model(
+  base_model_path       = "run1",
+  covariate_tags        = c("beta_AGE_CL", "beta_ASIAN_V1"),
+  new_model_number      = 2,
+  data_file_path        = "data/derived/analysis.csv",
   covariate_search_path = "data/derived/covariate_search.csv",
-  lookup_file = "data/spec/lookup.yaml", # optional
-  models_folder = "models", 
-  threads = 40)
+  models_folder         = "models",
+  idcol                 = "ID"
+)
 
+prep$model_name        # "run2"
+prep$covariates_added
+prep$log_file          # combined log of every covariate added
 ```
 
-If you are continuing an existing project with pre-existing models, use:
+**It does not submit the model.** Submit it yourself and wait for it to finish:
 
-```{r load-existing}
-search_state <- load_existing_search(
-  base_model_path = "run10",
-  data_file_path = "data/derived/analysis.csv",
+```{r submit_prep}
+mod <- bbr::read_model(file.path("models", prep$model_name))
+bbr::submit_model(mod, .bbi_args = list(threads = 12), .overwrite = TRUE)
+```
+
+---
+
+## 3. Initialize
+
+```{r init_search}
+ss <- initialize_covariate_search(
+  base_model_path       = "run2",
+  data_file_path        = "data/derived/analysis.csv",
   covariate_search_path = "data/derived/covariate_search.csv",
-  models_folder = "models",
-  threads = 40,
-  lookup_file = "data/spec/lookup.yaml" # optional
+  models_folder         = "models",
+  threads               = 12
 )
 ```
 
-## Step 3: Run Forward Selection
+| argument | default | note |
+|---|---|---|
+| `models_folder` | `"models"` | where models live and new ones are written |
+| `timecol`, `idcol` | `"TIME"`, `"ID"` | dataset columns |
+| `threads` | `60` | passed to bbi on submission |
+| `require_base_run` | `TRUE` | base model must have a finished run with an OFV. `FALSE` only to build/inspect control streams - a search cannot run without a base OFV |
+| `lookup_file` | `NULL` | decodes categorical levels in THETA names |
+| `starting_model_number` | `NULL` | sets the model counter: `10` means the next model created is `run11`. Default continues from the models already discovered in `models_folder` |
 
-```{r forward-selection}
-# Standard forward selection
- results <- run_automated_scm_testing(
-  search_state = search_state,
-  base_model_id = "run10",
-  scm_type = "standard",      # or "selective"
-  starting_phase = "forward",
-  full_scm = FALSE,           # This runs ONLY forward selection
-  forward_p_value = 0.05,
-  rse_threshold = 50,
-  require_cov_step = TRUE,
-  auto_submit = TRUE,
-  auto_retry = TRUE
-)
+The base model is validated here: parameters that will receive a population
+covariate must be classifiable as normal (`P = TV*EXP(ETA)`) or log
+(`P = EXP(TV + ETA)`), and a log-scale one needs its own `TV_` line.
 
-# Check results
-print(results$final_model)
-print(results$final_covariates)
-```
+---
 
-### Understanding Selection Criteria
+## 4. Backward elimination
 
-Models are selected if they meet BOTH criteria:
-- **ΔOFV > 3.84**: Statistically significant improvement (p < 0.05)
-- **RSE < 50%**: Parameter estimates are reasonably precise
-
-## Step 4: Backward Elimination
-
-Backward elimination keeps/removes covariates using both criteria:
-
-- Removal must satisfy backward ΔOFV criterion (`backward_p_value`)
-- Removal must satisfy RSE criterion (`rse_threshold`)
-- If RSE is not available (NA), it is accepted
-
-```{r backward-elimination}
-results <- run_automated_scm_testing(
-  search_state = search_state,
-  base_model_id = "run10",
-  starting_phase = "backward",
-  full_scm = FALSE,            # This runs ONLY the specified phase
+```{r backward}
+bw <- run_automated_scm_testing(
+  search_state     = ss,
+  base_model_id    = "run2",
+  starting_phase   = "backward",
+  full_scm         = FALSE,        # this phase only
   backward_p_value = 0.01,
-  auto_submit = TRUE,
-  auto_retry = TRUE
+  rse_threshold    = 50
 )
 
-print(results$final_model)
+bw$final_model
+bw$final_covariates
 ```
 
-## Step 5: Full SCM+ Workflow in One Call
+`run_backward_elimination(ss, starting_model = "run2")` is the lower-level call
+if you want the phase without checkpointing.
 
-Use this when you want a complete SCM+ sequence starting from a developed model:
+---
 
-```{r full-scm-plus}
-results <- run_automated_scm_testing(
-  search_state = search_state,
-  base_model_id = "run10",
-  scm_type = "selective",
-  starting_phase = "backward",
-  full_scm = TRUE,              # Backward -> Forward -> Backward
-  forward_p_value = 0.05,
-  backward_p_value = 0.01,
-  rse_threshold = 50,
-  require_cov_step = TRUE,
-  auto_submit = TRUE,
-  auto_retry = TRUE,
-  save_checkpoints = TRUE
+## 5. Extend the covariate table
+
+Build the additional covariate/parameter pairs the same way, then add them to
+the search state you just got back:
+
+```{r extend}
+cov_extra <- build_covariate_reference_table(
+  data      = data,
+  id        = "ID",
+  time      = "TIME",
+  Parameter = c("CL",     "CL",    "V1"),
+  Covariate = c("SMK",    "EGFR",  "SEX"),
+  Category  = c("cat",    "con",   "cat"),
+  Formula   = c("linear", "power", "linear"),
+  yaml_data = spec
 )
+
+write.csv(cov_extra, "data/derived/covariate_search_extra.csv", row.names = FALSE)
+
+ss <- add_covariates_to_search(bw$search_state,
+                               "data/derived/covariate_search_extra.csv")
 ```
 
-## Step 6: Review Results
+`add_covariates_to_search()` takes the table either as an object or as a path to
+a `.csv`, so writing it out first keeps a record of exactly what was added.
 
-```{r review}
-search_state <-readRDS("./models/scm_rds/scm_auto_final_complete.rds")
-results_table <- create_scm_results_table(search_state)
-print_scm_results_table(search_state)
-```
+This appends the rows, revalidates the whole table, regenerates `tags.yaml` and
+refreshes `ss$tags`. Use `bw$search_state`, not a fresh
+`initialize_covariate_search()` - re-initializing rebuilds the database from the
+model files and loses every step number and ΔOFV.
 
-## Step 7: Resume from Checkpoints
+A covariate/parameter pair already in the table is rejected as a duplicate.
 
-```{r resume-checkpoint}
-search_state <- load_search_state("scm_auto_forward_complete.rds")
+---
 
-results <- run_automated_scm_testing(
-  search_state = search_state,
-  base_model_id = "run10",
-  starting_phase = "backward",
-  full_scm = FALSE,
-  backward_p_value = 0.01
+## 6. Forward, then backward
+
+```{r forward}
+res <- run_automated_scm_testing(
+  search_state     = ss,
+  base_model_id    = bw$final_model,  # model the search starts from
+  scm_type         = "selective",     # "standard" or "selective"
+  starting_phase   = "forward",       # "forward" or "backward"
+  full_scm         = TRUE,            # TRUE = both phases, FALSE = starting_phase only
+  forward_p_value  = 0.05,            # entry criterion
+  backward_p_value = 0.01,            # retention criterion
+  rse_threshold    = 50,              # max RSE (%)
+  require_cov_step = TRUE,            # require a successful $COVARIANCE step
+  auto_submit      = TRUE,            # FALSE = create the models, submit them yourself
+  auto_retry       = TRUE,            # retry a failed model from a different init
+  save_checkpoints = TRUE             # write scm_rds/NN_phase_event.rds each step
 )
+
+res$final_model
+res$final_covariates
+res$excluded_covariates
+view_comprehensive_table(res$search_state)
 ```
 
+| argument | default | effect |
+|---|---|---|
+| `search_state` | — | required |
+| `base_model_id` | `NULL` | model to start from; `NULL` uses `search_state$base_model` |
+| `scm_type` | `"standard"` | `"standard"` tests every remaining covariate each step; `"selective"` carries forward only those significant in step 1 |
+| `starting_phase` | `"forward"` | which phase runs first |
+| `full_scm` | `TRUE` | `TRUE` runs both phases (`backward` start gives backward → forward → backward); `FALSE` runs only `starting_phase` |
+| `forward_p_value` | `NULL` | entry p-value; `NULL` uses the search config (0.05) |
+| `backward_p_value` | `NULL` | retention p-value; `NULL` uses the search config (0.01) |
+| `rse_threshold` | `NULL` | maximum RSE %; `NULL` uses the search config (50) |
+| `require_cov_step` | `TRUE` | a model counts as completed only with a successful `$COVARIANCE` step |
+| `auto_submit` | `TRUE` | `FALSE` creates the models without submitting them |
+| `auto_retry` | `TRUE` | on an estimation failure, create `run<N>001` from a different initial estimate and submit it |
+| `save_checkpoints` | `TRUE` | write `<models_folder>/scm_rds/NN_phase_event.rds` after each step |
 
-## Next Steps
+The p-value and RSE arguments fall back to `search_state$search_config`, so set
+them once at initialization or per call here.
 
-- See [Troubleshooting Guide](troubleshooting.html) for common issues
-- See [Recovery System](recovery-system.html) for handling model failures
-- See [Case Studies](case-studies.html) for real-world examples
+---
 
+## 7. Test extra covariates on the final model
+
+Same two calls, pointed at the final model:
+
+```{r extras}
+cov_smk <- build_covariate_reference_table(
+  data = data, id = "ID", time = "TIME",
+  Parameter = "V1", Covariate = "SMK", Category = "cat", Formula = "linear",
+  yaml_data = spec
+)
+
+write.csv(cov_smk, "data/derived/covariate_search_smk.csv", row.names = FALSE)
+
+ss <- add_covariates_to_search(res$search_state,
+                               "data/derived/covariate_search_smk.csv")
+
+add <- add_covariate_to_model(
+  ss,
+  base_model_id = res$final_model,
+  covariate_tag = "beta_SMK_V1",
+  step_number   = max(ss$search_database$step_number, na.rm = TRUE) + 1,
+  phase         = "individual_testing"
+)
+
+ss <- add$search_state
+bbr::submit_model(bbr::read_model(file.path(ss$models_folder, add$model_name)),
+                  .bbi_args = list(threads = 12), .overwrite = TRUE)
+```
+
+### Step numbers
+
+Every model in the database carries a `step_number`. The search assigns one per
+step, so all models tested against the same parent share it. A manual add takes
+whatever you pass - `max(...) + 1` above puts the extra tests in a step of their
+own, after the search.
+
+```{r steps}
+table(ss$search_database$step_number, ss$search_database$phase)
+
+## models belonging to one step
+subset(ss$search_database, step_number == 7,
+       c("model_name", "covariate_tested", "status", "ofv", "delta_ofv"))
+```
+
+### Results
+
+Statuses and OFVs come from the NONMEM output files, so refresh them once the
+runs finish:
+
+```{r results}
+ss <- update_all_model_statuses(ss)
+
+view_comprehensive_table(ss)                 # printed table
+tab <- create_comprehensive_table(ss)        # same thing as a data frame
+```
+
+In a new session `ss` is gone - load it back from a checkpoint first. They are
+written to `<models_folder>/scm_rds/` as `NN_phase_event.rds`, zero-padded by
+step, so the last one alphabetically is the most recent:
+
+```{r reload}
+list.files("models/scm_rds")
+#> "00_base_complete.rds" "01_forward_step_complete.rds" ...
+
+ss <- load_search_state("models/scm_rds/07_forward_selection_complete.rds")
+ss <- update_all_model_statuses(ss)
+```
+
+`load_search_state()` needs the full path; `save_search_state()` accepts a bare
+file name and writes it to `<models_folder>/scm_rds/`.
+
+The table has one row per model: `model_name`, parent, `step` (`Base`,
+`Step 3`, `Step 3 (Retry)`), `changes` (the covariate added or removed),
+`status`, OFV, ΔOFV and the parameter count.
+
+For the ΔOFV-versus-threshold view of a search:
+
+```{r scm_table}
+print_scm_results_table(ss)
+```
+
+`phase = "individual_testing"` marks the row as a one-off test rather than a
+step of the search.
+
+---
+
+## See also
+
+- [Quick Start](../quick-start.html)
+- [Covariate Formulas](covariate-formulas.html) - FORMULA vocabulary, `INIT`, degrees of freedom
+- `?continue_search` - resuming an interrupted search
