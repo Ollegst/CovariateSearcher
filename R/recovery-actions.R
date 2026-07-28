@@ -7,15 +7,19 @@
 
 
 
-#' Create Retry Model with Adjusted THETA Values (FIXED - STANDARDIZED LOGGING)
+#' Create Retry Model with Adjusted THETA Values
 #'
 #' @title Create retry model with modified initial estimates
-#' @description Creates a retry model (e.g., run2001 from run2) with THETA values
-#'   adjusted from 0.1 to -0.1 for the problematic covariate.
+#' @description Creates a retry model (e.g., run2001 from run2) with the
+#'   problematic covariate's THETA started from a different initial estimate
+#'   (see \code{\link{adjust_theta_for_covariate}}). When every THETA for that
+#'   covariate is FIXED there is nothing to perturb, so no retry is created and
+#'   the result carries \code{status = "skipped"}.
 #' @param search_state List containing covariate search state and configuration
 #' @param original_model_name Character. Name of problematic model
 #' @param issue_type Character. Type of estimation issue detected
-#' @return List with retry model information and updated search_state
+#' @return List with retry model information and updated search_state;
+#'   \code{status} is one of \code{"created"}, \code{"skipped"} or \code{"failed"}
 #' @export
 create_retry_model <- function(search_state, original_model_name, issue_type = "estimation_error") {
   cat(sprintf("🔧 Creating retry model for %s (issue: %s)\n", original_model_name, issue_type))
@@ -45,6 +49,50 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
     }
 
     log_msg("✓ Original model found in database")
+
+    # Step 1.5: Is there anything to retry WITH?
+    # The only lever a retry has is the covariate THETA's initial estimate. If
+    # every THETA for that covariate is FIXED there is no starting point to
+    # move, so the retry would just rerun an identical model - skip it before
+    # any files or database rows are created.
+    latest_covariate_tag <- original_row$covariate_tested[1]
+    has_covariate_tag <- !is.na(latest_covariate_tag) && nchar(latest_covariate_tag) > 0
+
+    if (has_covariate_tag) {
+      precheck <- adjust_theta_for_covariate(search_state, original_model_name,
+                                             latest_covariate_tag, dry_run = TRUE)
+
+      if (identical(precheck$reason, "all_thetas_fixed")) {
+        log_msg(precheck$message)
+        log_msg("⏭️  Retry skipped - an identical rerun would gain nothing")
+
+        # Record the failure on the original model, as the retry path does.
+        orig_idx <- which(search_state$search_database$model_name == original_model_name)
+        if (length(orig_idx) > 0) {
+          search_state$search_database$status[orig_idx] <- "error"
+          search_state$search_database$estimation_issue[orig_idx] <- issue_type
+        }
+
+        skip_log_filename <- file.path(
+          search_state$models_folder,
+          paste0("SKIPPED_retry_", original_model_name, "_log.txt"))
+        writeLines(log_entries, skip_log_filename)
+
+        cat(sprintf("⏭️  No retry for %s: %s\n", original_model_name, precheck$message))
+
+        return(list(
+          search_state = search_state,
+          retry_model_name = NULL,
+          original_model_name = original_model_name,
+          issue_type = issue_type,
+          latest_covariate = search_state$tags[[latest_covariate_tag]] %||% latest_covariate_tag,
+          log_file = skip_log_filename,
+          status = "skipped",
+          reason = "all_thetas_fixed",
+          message = precheck$message
+        ))
+      }
+    }
 
     # Step 2: Create BBR model copy
     log_msg("Creating BBR model copy...")
@@ -81,11 +129,8 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
     log_msg("Adjusting THETA values for latest covariate...")
 
     latest_covariate_name <- NULL
-    latest_covariate_tag <- NULL
 
-    latest_covariate_tag <- original_row$covariate_tested[1]
-
-    if (!is.na(latest_covariate_tag) && nchar(latest_covariate_tag) > 0) {
+    if (has_covariate_tag) {
       latest_covariate_name <- search_state$tags[[latest_covariate_tag]] %||% latest_covariate_tag
       log_msg(sprintf("Latest covariate identified: %s", latest_covariate_tag))
       log_msg(sprintf("Covariate name: %s", latest_covariate_name))
@@ -106,11 +151,10 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
 
     log_msg("✓ BBR YAML metadata updated")
 
-    # Step 4: Add retry model to database (FIXED - TEMPLATE APPROACH)
+    # Step 4: Add retry model to database
     log_msg("Adding to database...")
 
     tryCatch({
-      # FIXED: Use template approach to avoid column structure mismatches
       # Take the first row as a template to ensure exact structure match
       template_row <- search_state$search_database[1, , drop = FALSE]
       new_row <- template_row
@@ -122,8 +166,8 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
       new_row$parent_model <- original_row$parent_model[1]
       new_row$covariate_tested <- original_row$covariate_tested[1]
       new_row$action <- "retry"
-      new_row$step_description <- sprintf("Retry %s", original_row$covariate_tested[1])  # FIX: Add this line
-      new_row$phase <- "retry"  # FIX: Add this line
+      new_row$step_description <- sprintf("Retry %s", original_row$covariate_tested[1])
+      new_row$phase <- "retry"
       new_row$ofv <- NA_real_
       new_row$delta_ofv <- NA_real_
       new_row$rse_max <- NA_real_
@@ -153,7 +197,7 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
       search_state$search_database$estimation_issue[orig_idx] <- issue_type
     }
 
-    # FIXED: Save standardized log file instead of simple info file
+    # Save the standardized log file
     if (!is.null(latest_covariate_name)) {
       log_filename <- file.path(search_state$models_folder,
                                 paste0(retry_model_name, "_retry_", latest_covariate_name, "_log.txt"))
@@ -217,17 +261,118 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
 
 
 
+# -----------------------------------------------------------------------------
+# THETA initial-estimate perturbation (retry models)
+# -----------------------------------------------------------------------------
+# A covariate $THETA initial estimate comes verbatim from the INIT column of the
+# covariate table, so it can be a bare value ("0.1"), a FIXED value ("0.75 FIX")
+# or a bounded triple ("(0, 0.1, 3)"). The retry perturbation rules are:
+#   * FIXED     -> never touched; a fixed value is a modelling choice, not a
+#                  starting point (handled in adjust_theta_for_covariate).
+#   * unbounded -> sign flip, the long-standing behaviour (0.1 -> -0.1).
+#   * bounded   -> midpoint of the wider side of the range, which is always
+#                  strictly inside the bounds ((0, 0.1, 3) -> (0, 1.55, 3)).
+#   * one-sided -> sign flip if it stays inside the single bound, otherwise the
+#                  midpoint of the bounded side ((0, 0.1) -> (0, 0.05)).
+
+# Is this initial estimate FIXED? Reads the spec only (text before the first
+# ";"), so a "FIX" appearing in a comment cannot trigger it.
+.theta_init_is_fixed <- function(spec) {
+  grepl("\\bFIX(ED)?\\b", spec, ignore.case = TRUE)
+}
+
+# Render a new initial estimate at the precision of the value it replaces,
+# falling back to a fuller representation when that would lose information
+# (e.g. the midpoint 0.05 replacing 0.1).
+.format_theta_init_value <- function(value, template) {
+  decimals <- if (grepl("\\.", template)) {
+    nchar(sub(".*\\.", "", sub("[eE].*$", "", template)))
+  } else {
+    0L
+  }
+
+  out <- formatC(value, format = "f", digits = decimals)
+
+  if (isTRUE(all.equal(as.numeric(out), value))) {
+    out
+  } else {
+    format(signif(value, 6), trim = TRUE, scientific = FALSE)
+  }
+}
+
+# Perturb one initial-estimate spec per the rules above. Returns the rewritten
+# spec, or NA when there is nothing to move to (unparseable value, or bounds
+# that leave no room).
+.perturb_theta_init <- function(spec) {
+  spec <- trimws(spec)
+  num_re <- "^[+-]?[0-9]*\\.?[0-9]+([eE][+-]?[0-9]+)?"
+  bounded <- grepl("^\\(", spec)
+
+  if (bounded) {
+    inner <- sub("^\\(([^)]*)\\).*$", "\\1", spec)
+    parts <- trimws(strsplit(inner, ",")[[1]])
+    if (length(parts) == 0L) return(NA_character_)
+
+    # "(0.1)" is an initial estimate with no bounds; "(lower, init)" has no
+    # upper bound; "(lower, init, upper)" is the full form.
+    init_idx <- if (length(parts) == 1L) 1L else 2L
+    lower <- if (length(parts) >= 2L) suppressWarnings(as.numeric(parts[1])) else NA_real_
+    upper <- if (length(parts) >= 3L) suppressWarnings(as.numeric(parts[3])) else NA_real_
+    init_str <- parts[init_idx]
+  } else {
+    init_str <- regmatches(spec, regexpr(num_re, spec))
+    if (length(init_str) == 0L) return(NA_character_)
+    lower <- NA_real_
+    upper <- NA_real_
+  }
+
+  init <- suppressWarnings(as.numeric(init_str))
+  if (is.na(init)) return(NA_character_)
+
+  flipped <- -init
+
+  new_value <- if (!is.na(lower) && !is.na(upper)) {
+    if ((init - lower) >= (upper - init)) (lower + init) / 2 else (init + upper) / 2
+  } else if (!is.na(lower)) {
+    if (flipped > lower) flipped else (lower + init) / 2
+  } else if (!is.na(upper)) {
+    if (flipped < upper) flipped else (init + upper) / 2
+  } else {
+    flipped
+  }
+
+  if (!is.finite(new_value) || isTRUE(all.equal(new_value, init))) return(NA_character_)
+
+  new_str <- .format_theta_init_value(new_value, init_str)
+
+  if (bounded) {
+    parts[init_idx] <- new_str
+    paste0("(", paste(parts, collapse = ", "), ")")
+  } else {
+    sub(num_re, new_str, spec)
+  }
+}
+
+
 #' Adjust THETA Values for Covariate
 #'
-#' @title Modify THETA values from 0.1 to -0.1 for specified covariate
-#' @description Reads the model file and adjusts THETA initial estimates
-#'   from 0.1 to -0.1 for the problematic covariate to improve convergence.
+#' @title Perturb the initial estimate of a covariate THETA for a retry
+#' @description Reads the model file and moves the initial estimate of the
+#'   problematic covariate's THETA to give the retry a different starting point:
+#'   an unbounded value is sign-flipped (0.1 to -0.1), a bounded value moves to
+#'   the midpoint of the wider side of its range, and a FIXED value is left
+#'   untouched. When every THETA for the covariate is FIXED there is nothing to
+#'   perturb and the function reports \code{reason = "all_thetas_fixed"}.
 #' @param search_state List containing covariate search state and configuration
 #' @param model_name Character. Model to modify (e.g., "run2001")
 #' @param covariate_tag Character. Covariate tag that was added (e.g., "cov_cl_wt")
-#' @return List with success status and details
+#' @param dry_run Logical. When TRUE, work out what would change but leave the
+#'   model file untouched and stay silent. Used to decide whether a retry is
+#'   worth creating at all.
+#' @return List with success status, \code{reason}, and details
 #' @export
-adjust_theta_for_covariate <- function(search_state, model_name, covariate_tag) {
+adjust_theta_for_covariate <- function(search_state, model_name, covariate_tag,
+                                       dry_run = FALSE) {
   tryCatch({
 
     model_file_path <- find_model_file(file.path(search_state$models_folder, model_name))
@@ -259,10 +404,13 @@ adjust_theta_for_covariate <- function(search_state, model_name, covariate_tag) 
       return(list(success = FALSE, message = paste("No valid covariate terms found for", covariate_value)))
     }
 
-    cat(sprintf("    Looking for THETA with: %s\n", paste(cov_to_test_values, collapse = ", ")))
+    if (!dry_run) {
+      cat(sprintf("    Looking for THETA with: %s\n", paste(cov_to_test_values, collapse = ", ")))
+    }
 
     # Find and modify THETA lines
     theta_lines_modified <- 0
+    fixed_lines_skipped <- 0
 
     token_match_counts <- stats::setNames(integer(length(cov_to_test_values)), cov_to_test_values)
 
@@ -282,38 +430,41 @@ adjust_theta_for_covariate <- function(search_state, model_name, covariate_tag) 
 
         original_line <- line
 
-        # Pattern to match a number at the beginning of the line (with optional spaces)
-        # This will match: 0.1, -0.1, 0.5, 1, -2.5, 1 FIX, 0.75 FIX, etc.
-        if (grepl("^\\s*-?[0-9]+(\\.[0-9]+)?", line)) {
-          # Extract the current value (handle both regular and FIXED values)
-          current_value_match <- regmatches(line, regexpr("^\\s*-?[0-9]+(\\.[0-9]+)?", line))
-          current_value_str <- trimws(current_value_match)
-          current_value <- as.numeric(current_value_str)
+        # The initial estimate is everything before the first ";" -- the $THETA
+        # lines this package writes are "<init> ; <tag> ;  ; RATIO". Splitting
+        # there keeps the label and RATIO comment out of the parse and lets the
+        # bounded form "(0, 0.1, 3)" be read as a whole.
+        semi <- regexpr(";", line, fixed = TRUE)
+        spec_raw <- if (semi > 0) substr(line, 1, semi - 1) else line
+        line_rest <- if (semi > 0) substr(line, semi, nchar(line)) else ""
+        spec <- trimws(spec_raw)
 
-          # Change the sign
-          new_value <- -current_value
+        if (!nzchar(spec)) next
 
-          # Format the new value to match original precision
-          if (grepl("\\.", current_value_str)) {
-            # Has decimal point - preserve decimal places
-            decimal_places <- nchar(sub(".*\\.", "", current_value_str))
-            new_value_str <- format(new_value, nsmall = decimal_places)
-          } else {
-            # No decimal point - keep as integer
-            new_value_str <- as.character(as.integer(new_value))
+        # A FIXED initial estimate stays exactly as written.
+        if (.theta_init_is_fixed(spec)) {
+          fixed_lines_skipped <- fixed_lines_skipped + 1
+          if (!dry_run) {
+            cat(sprintf("    THETA line %d left unchanged (FIXED): %s\n",
+                        i, trimws(original_line)))
           }
+          next
+        }
 
-          # Replace the value in the line
-          modified_line <- sub("^(\\s*)(-?[0-9]+(\\.[0-9]+)?)",
-                               paste0("\\1", new_value_str),
-                               line)
+        new_spec <- .perturb_theta_init(spec)
+        if (is.na(new_spec)) next
 
-          # Only update if something actually changed
-          if (modified_line != original_line) {
-            modelcode[i] <- modified_line
-            theta_lines_modified <- theta_lines_modified + 1
-            token_match_counts[matched_token] <- token_match_counts[matched_token] + 1
+        lead_ws <- regmatches(spec_raw, regexpr("^\\s*", spec_raw))
+        trail_ws <- regmatches(spec_raw, regexpr("\\s*$", spec_raw))
+        modified_line <- paste0(lead_ws, new_spec, trail_ws, line_rest)
 
+        # Only update if something actually changed
+        if (modified_line != original_line) {
+          modelcode[i] <- modified_line
+          theta_lines_modified <- theta_lines_modified + 1
+          token_match_counts[matched_token] <- token_match_counts[matched_token] + 1
+
+          if (!dry_run) {
             cat(sprintf("    THETA line %d modified:\n", i))
             cat(sprintf("      Before: %s\n", trimws(original_line)))
             cat(sprintf("      After:  %s\n", trimws(modified_line)))
@@ -323,12 +474,42 @@ adjust_theta_for_covariate <- function(search_state, model_name, covariate_tag) 
     }
 
     if (theta_lines_modified == 0) {
-      return(list(success = FALSE, message = "No THETA lines found for covariate"))
+      if (fixed_lines_skipped > 0) {
+        # Every THETA for this covariate is FIXED: there is no initial estimate
+        # to move, so a retry would rerun an identical model.
+        return(list(
+          success = FALSE,
+          reason = "all_thetas_fixed",
+          fixed_lines_skipped = fixed_lines_skipped,
+          covariate = covariate_value,
+          message = sprintf(
+            "All %d THETA line(s) for covariate %s are FIXED - no initial estimate to perturb",
+            fixed_lines_skipped, covariate_value)
+        ))
+      }
+
+      return(list(
+        success = FALSE,
+        reason = "no_theta_lines",
+        message = "No THETA lines found for covariate"
+      ))
     }
 
     matched_tokens <- names(token_match_counts[token_match_counts > 0])
-    if (length(matched_tokens) > 0) {
+    if (length(matched_tokens) > 0 && !dry_run) {
       cat(sprintf("    Matched covariate terms: %s\n", paste(matched_tokens, collapse = ", ")))
+    }
+
+    # A dry run answers "is there anything to perturb?" without touching the file.
+    if (dry_run) {
+      return(list(
+        success = TRUE,
+        reason = "ok",
+        theta_lines_modified = theta_lines_modified,
+        fixed_lines_skipped = fixed_lines_skipped,
+        covariate = covariate_value,
+        matched_terms = matched_tokens
+      ))
     }
 
     # Update $TABLE FILE= names to match retry model number
@@ -354,7 +535,9 @@ adjust_theta_for_covariate <- function(search_state, model_name, covariate_tag) 
 
     return(list(
       success = TRUE,
+      reason = "ok",
       theta_lines_modified = theta_lines_modified,
+      fixed_lines_skipped = fixed_lines_skipped,
       covariate = covariate_value,
       matched_terms = matched_tokens
     ))
@@ -365,7 +548,7 @@ adjust_theta_for_covariate <- function(search_state, model_name, covariate_tag) 
 }
 
 
-#' Process Estimation Issues (ENHANCED WITH NO-RETRY LOGIC)
+#' Process Estimation Issues
 #'
 #' @title Process detected estimation issues with smart retry/exclusion logic
 #' @description Orchestrates the recovery process for models with estimation
@@ -439,6 +622,17 @@ process_estimation_issues <- function(search_state, models_with_issues) {
         )
 
         cat(sprintf("  ✅ Retry model '%s' created\n", retry_result$retry_model_name))
+
+      } else if (identical(retry_result$status, "skipped")) {
+        # Nothing to perturb (all THETAs FIXED) - deliberately not a failure.
+        recovery_actions[[model_name]] <- list(
+          action = "retry_skipped",
+          reason = retry_result$reason,
+          result = retry_result
+        )
+
+        cat(sprintf("  ⏭️  No retry created: %s\n", retry_result$message))
+
       } else {
         recovery_actions[[model_name]] <- list(
           action = "retry_creation_failed",
@@ -471,7 +665,7 @@ process_estimation_issues <- function(search_state, models_with_issues) {
 }
 
 
-#' Handle Failed Retry Model (ENHANCED VERSION)
+#' Handle Failed Retry Model
 #'
 #' @title Handle failed retry model by excluding covariate from step
 #' @description When a retry model fails, exclude the associated covariate
