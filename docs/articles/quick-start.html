@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">CovariateSearcher</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.25</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -40,6 +40,9 @@
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-extended-docs" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Extended Docs</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-extended-docs">
 <li><a class="dropdown-item" href="../articles/complete-workflow.html">Complete Workflow</a></li>
+    <li><a class="dropdown-item" href="../articles/covariate-formulas.html">Covariate Formulas</a></li>
+    <li><a class="dropdown-item" href="../articles/forest-plots.html">Forest Plots and Simulations</a></li>
+    <li><a class="dropdown-item" href="../articles/covariate-boxplots.html">Covariate Boxplots</a></li>
     <li><a class="dropdown-item" href="../articles/yaml-specification-files.html">YAML Specification Files</a></li>
     <li><a class="dropdown-item" href="../articles/model-report-usage.html">Parameter Tables with model_report()</a></li>
     <li><a class="dropdown-item" href="../articles/troubleshooting.html">Troubleshooting Guide</a></li>
@@ -77,29 +80,31 @@
 <div class="section level2">
 <h2 id="covariatesearcher-quick-start">CovariateSearcher Quick Start<a class="anchor" aria-label="anchor" href="#covariatesearcher-quick-start"></a>
 </h2>
-<p>This is a minimal vignette included in the package installation.</p>
-<p>For complete documentation, see the <a href="https://ollegst.github.io/CovariateSearcher/">online
+<p>A minimal end-to-end walkthrough: prepare three inputs, run a
+stepwise covariate search, read the results, resume if it stops.</p>
+<p>For the full reference see the <a href="https://ollegst.github.io/CovariateSearcher/">online
 documentation</a>.</p>
 <hr>
 <div class="section level3">
-<h3 id="what-you-need">📋 What You Need<a class="anchor" aria-label="anchor" href="#what-you-need"></a>
+<h3 id="what-you-need">What you need<a class="anchor" aria-label="anchor" href="#what-you-need"></a>
 </h3>
 <div class="section level4">
-<h4 id="base-model">1. Base Model<a class="anchor" aria-label="anchor" href="#base-model"></a>
+<h4 id="a-base-model">1. A base model<a class="anchor" aria-label="anchor" href="#a-base-model"></a>
 </h4>
-<p>NONMEM control file with properly formatted parameters:</p>
+<p>A NONMEM control stream whose parameters are named and whose typical
+values are written on their own <code>TV_</code> lines.</p>
 <pre><code>$THETA
-; Simple names (NO TV_ prefix in THETA block!)
+; Simple names in $THETA - no TV_ prefix here
 0.5 ; CL ; L/h ; RATIO
 10  ; V  ; L   ; RATIO
 
 $PK
-; Use TV_ prefix HERE in PK block
+; TV_ prefix HERE, in $PK
 TV_CL = THETA(1)
 TV_V  = THETA(2)
 
-CL = TV_CL * EXP(ETA(1))
-V  = TV_V  * EXP(ETA(2))
+CL = TV_CL * EXP(ETA(1))     ; normal scale
+V  = EXP(TV_V + ETA(2))      ; log scale - both are fine
 
 $OMEGA BLOCK(2)
 0.1 ; IIV_CL   ; ; LOG
@@ -108,44 +113,91 @@ $OMEGA BLOCK(2)
 
 $SIGMA
 0.1 ; RUV_PROP ; ; LOG</code></pre>
-<p><strong>Parameter Format</strong>:
-<code>value ; NAME ; units ; RATIO|LOG</code></p>
-<p><strong>Important</strong>: - In <code>$THETA</code> block: Use
-<code>CL</code>, <code>V</code> (simple names) OR <code>1_CL</code>,
-<code>2_V</code> (numbered) - In <code>$PK/$PRED</code> block: Use
-<code>TV_CL</code>, <code>TV_V</code> (with TV_ prefix) - <strong>OMEGA
-BLOCK</strong>: One value per line (not multiple values on same line) -
-<strong>Four fields required</strong>:
-<code>value ; name ; units ; transform</code></p>
-<p><strong>❌ Wrong OMEGA format:</strong></p>
-<pre><code>$OMEGA BLOCK(2)
-0.1     ; IIV_CL   
-0.1 0.1 ; IIV_V   ← Don't put multiple values per line!</code></pre>
-<p><strong>✅ Correct OMEGA format:</strong></p>
-<pre><code>$OMEGA BLOCK(2)
-0.1 ; IIV_CL   ; ; LOG
-0.1 ; IIV_CL_V ; ; RATIO
-0.1 ; IIV_V    ; ; LOG</code></pre>
-</div>
-<div class="section level4">
-<h4 id="analysis-dataset">2. Analysis Dataset<a class="anchor" aria-label="anchor" href="#analysis-dataset"></a>
-</h4>
-<p>NONMEM dataset with covariates (CSV format)</p>
-</div>
-<div class="section level4">
-<h4 id="covariate-search-configuration">3. Covariate Search Configuration<a class="anchor" aria-label="anchor" href="#covariate-search-configuration"></a>
-</h4>
-<p>CSV file defining which covariates to test: link :
-data/derived/covariate_search.csv (optional)</p>
-<table style="width:100%;" class="table">
+<p><code>$THETA</code> line format is
+<code>value ; NAME ; units ; RATIO|LOG</code>, and
+<code>$OMEGA BLOCK</code> needs <strong>one value per line</strong>:</p>
+<pre><code># Wrong                          # Right
+$OMEGA BLOCK(2)                  $OMEGA BLOCK(2)
+0.1     ; IIV_CL                 0.1 ; IIV_CL   ; ; LOG
+0.1 0.1 ; IIV_V                  0.1 ; IIV_CL_V ; ; RATIO
+                                 0.1 ; IIV_V    ; ; LOG</code></pre>
+<p><strong>The <code>TV_</code> line is not cosmetic.</strong> A
+time-constant covariate goes on the typical value, and on a log-scale
+parameter it has to be <em>added inside</em> the <code>EXP()</code>. The
+package checks this at initialization and stops, with a message telling
+you how to rewrite, if a parameter you are testing covariates on is
+written as:</p>
+<table class="table">
 <colgroup>
-<col width="13%">
-<col width="13%">
-<col width="16%">
-<col width="11%">
+<col width="50%">
+<col width="50%">
+</colgroup>
+<thead><tr class="header">
+<th>Rejected</th>
+<th>Why</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td><code>V = EXP(THETA(2) + ETA(2))</code></td>
+<td>no separate <code>TV_V</code> line, so the covariate term would land
+outside the <code>EXP</code>
+</td>
+</tr>
+<tr class="even">
+<td>
+<code>TV_V = EXP(THETA(2))</code> with
+<code>V = TV_V*EXP(ETA(2))</code>
+</td>
+<td>log scale disguised as normal - the covariate would be placed
+multiplicatively on a log value</td>
+</tr>
+<tr class="odd">
+<td><code>V = EXP(TV_V + EXP(ETA(2))</code></td>
+<td>unbalanced parentheses - the transform cannot be detected</td>
+</tr>
+</tbody>
+</table>
+<p>Only parameters that actually receive a covariate are checked.</p>
+</div>
+<div class="section level4">
+<h4 id="an-analysis-dataset">2. An analysis dataset<a class="anchor" aria-label="anchor" href="#an-analysis-dataset"></a>
+</h4>
+<p>A standard NONMEM dataset (CSV) containing every covariate you want
+to test.</p>
+</div>
+<div class="section level4">
+<h4 id="a-covariate-search-table">3. A covariate search table<a class="anchor" aria-label="anchor" href="#a-covariate-search-table"></a>
+</h4>
+<p>Rather than writing this by hand, build it from your data -
+references, levels and time-dependence are then computed for you:</p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/Ollegst/CovariateSearcher" class="external-link">CovariateSearcher</a></span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">spec</span> <span class="op">&lt;-</span> <span class="fu">yspec</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/yspec/man/ys_load.html" class="external-link">ys_load</a></span><span class="op">(</span><span class="st">"data/spec/lookup.yml"</span><span class="op">)</span>   <span class="co"># or a plain parsed YAML list</span></span>
+<span><span class="va">data</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/utils/read.table.html" class="external-link">read.csv</a></span><span class="op">(</span><span class="st">"data/derived/analysis.csv"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">cov_tbl</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/build_covariate_reference_table.html">build_covariate_reference_table</a></span><span class="op">(</span></span>
+<span>  data      <span class="op">=</span> <span class="va">data</span>,</span>
+<span>  id        <span class="op">=</span> <span class="st">"ID"</span>,</span>
+<span>  time      <span class="op">=</span> <span class="st">"TIME"</span>,</span>
+<span>  Parameter <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"CL"</span>,  <span class="st">"CL"</span>,     <span class="st">"V"</span><span class="op">)</span>,</span>
+<span>  Covariate <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"WT"</span>,  <span class="st">"SEX"</span>,    <span class="st">"WT"</span><span class="op">)</span>,</span>
+<span>  Category  <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"con"</span>, <span class="st">"cat"</span>,    <span class="st">"con"</span><span class="op">)</span>,</span>
+<span>  Formula   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"power"</span>, <span class="st">"linear"</span>, <span class="st">"linear"</span><span class="op">)</span>,</span>
+<span>  yaml_data <span class="op">=</span> <span class="va">spec</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/write.table.html" class="external-link">write.csv</a></span><span class="op">(</span><span class="va">cov_tbl</span>, <span class="st">"data/derived/covariate_search.csv"</span>, row.names <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
+<p>The result is one row per parameter-covariate pair:</p>
+<table class="table">
+<colgroup>
+<col width="14%">
+<col width="14%">
 <col width="10%">
-<col width="13%">
-<col width="20%">
+<col width="12%">
+<col width="10%">
+<col width="14%">
+<col width="21%">
 </colgroup>
 <thead><tr class="header">
 <th>PARAMETER</th>
@@ -163,285 +215,320 @@ data/derived/covariate_search.csv (optional)</p>
 <td>con</td>
 <td>power</td>
 <td>NA</td>
-<td>NA</td>
-<td>FALSE</td>
+<td>71.7</td>
+<td>No</td>
 </tr>
 <tr class="even">
-<td>CL</td>
-<td>AGE</td>
-<td>con</td>
-<td>linear</td>
-<td>NA</td>
-<td>NA</td>
-<td>FALSE</td>
-</tr>
-<tr class="odd">
 <td>CL</td>
 <td>SEX</td>
 <td>cat</td>
 <td>linear</td>
 <td>0;1</td>
 <td>1</td>
-<td>FALSE</td>
+<td>No</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>V</td>
 <td>WT</td>
 <td>con</td>
 <td>linear</td>
 <td>NA</td>
-<td>NA</td>
-<td>FALSE</td>
+<td>71.7</td>
+<td>No</td>
 </tr>
 </tbody>
 </table>
-<p><strong>Column Descriptions:</strong> - <code>PARAMETER</code>: Model
-parameter to test covariate on (e.g., CL, V, KA) -
-<code>COVARIATE</code>: Covariate column name from dataset -
-<code>STATUS</code>: “continuous” or “categorical” -
-<code>FORMULA</code>: “linear”, “power”, or “exponential” (for
-continuous covariates) - <code>LEVELS</code>: Number of categories (for
-categorical), NA otherwise - <code>REFERENCE</code>: Reference category
-value (for categorical), NA otherwise - <code>TIME_DEPENDENT</code>:
-TRUE if covariate changes over time, usually FALSE
-<strong>Note:</strong> The package automatically generates the
-<code>cov_to_test</code> column (e.g., <code>beta_WT_CL</code>) during
-initialization. You don’t need to include this column in your CSV
-file.</p>
+<table class="table">
+<colgroup>
+<col width="50%">
+<col width="50%">
+</colgroup>
+<thead><tr class="header">
+<th>Column</th>
+<th>Meaning</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td><code>PARAMETER</code></td>
+<td>model parameter the covariate acts on (<code>CL</code>,
+<code>V</code>, <code>KA</code>, …)</td>
+</tr>
+<tr class="even">
+<td><code>COVARIATE</code></td>
+<td>column name in the dataset</td>
+</tr>
+<tr class="odd">
+<td><code>STATUS</code></td>
+<td>
+<strong>exactly <code>con</code> or <code>cat</code></strong> -
+continuous or categorical</td>
+</tr>
+<tr class="even">
+<td><code>FORMULA</code></td>
+<td>continuous: <code>linear</code>, <code>power</code>,
+<code>exponential</code>; categorical: <code>linear</code> (one theta
+per non-reference level) or <code>power</code> (covariates whose levels
+are numeric, e.g. dose); or a custom expression</td>
+</tr>
+<tr class="odd">
+<td><code>LEVELS</code></td>
+<td>
+<code>;</code>-separated <strong>observed level values</strong> for
+categorical covariates (<code>0;1</code>), <code>NA</code> for
+continuous</td>
+</tr>
+<tr class="even">
+<td><code>REFERENCE</code></td>
+<td>value the effect is normalised to: median (continuous) or most
+frequent level (categorical)</td>
+</tr>
+<tr class="odd">
+<td><code>TIME_DEPENDENT</code></td>
+<td>
+<code>Yes</code>/<code>No</code>, computed from the data; decides
+whether the effect is placed at individual or population level</td>
+</tr>
+<tr class="even">
+<td><code>INIT</code></td>
+<td>
+<em>optional</em> initial <code>$THETA</code> value - see below</td>
+</tr>
+</tbody>
+</table>
+<p><code>cov_to_test</code> (<code>beta_WT_CL</code>, …) is generated
+for you; you never write it.</p>
+<blockquote>
+<p><strong><code>STATUS</code> must be <code>con</code> or
+<code>cat</code>.</strong> Writing <code>continuous</code> does
+<strong>not</strong> raise an error - the value is not recognised, so
+<code>FORMULA</code> is then treated as a custom expression and you
+silently get a wrong model. Use
+<code><a href="../reference/build_covariate_reference_table.html">build_covariate_reference_table()</a></code> and this cannot happen:
+it rejects anything else up front.</p>
+</blockquote>
+<p>Custom formulas are written as an expression in the reserved names
+<code>cov</code> (the covariate) and <code>ref</code> (its REFERENCE);
+every other symbol becomes an estimated THETA:</p>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">Formula</span> <span class="op">=</span> <span class="st">"EMAX*cov/(EC50+cov)"</span>     <span class="co"># two thetas: EMAX, EC50</span></span></code></pre></div>
+<p>The optional <code>INIT</code> column sets the initial estimate of
+the covariate THETA - a plain value, a bounded triple, <code>FIX</code>,
+or one entry per theta for a multi-parameter expression:</p>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">INIT</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"0.1"</span>, <span class="st">"(0, 0.5, 2)"</span>, <span class="st">"0.75 FIX"</span>, <span class="st">"EMAX=0.5; EC50=10"</span><span class="op">)</span></span></code></pre></div>
+<p>The <a href="articles/covariate-formulas.html">Covariate Formulas</a>
+article covers all of this in full: how each form is written into the
+control stream, categorical per-level effects, placement on log- and
+normal-scale parameters, degrees of freedom, and registering your own
+formula.</p>
 <hr>
 </div>
 </div>
 <div class="section level3">
-<h3 id="basic-usage">🚀 Basic Usage<a class="anchor" aria-label="anchor" href="#basic-usage"></a>
+<h3 id="run-a-search">Run a search<a class="anchor" aria-label="anchor" href="#run-a-search"></a>
 </h3>
 <div class="section level4">
-<h4 id="initialize-search">Initialize Search<a class="anchor" aria-label="anchor" href="#initialize-search"></a>
-</h4>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">CovariateSearcher</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Initialize a new search</span></span>
-<span><span class="va">search_state</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/initialize_covariate_search.html">initialize_covariate_search</a></span><span class="op">(</span></span>
-<span>  base_model_path <span class="op">=</span> <span class="st">"models/run1"</span>,</span>
-<span>  data_file_path <span class="op">=</span> <span class="st">"data/derived/analysis.csv"</span>,</span>
-<span>  covariate_search_path <span class="op">=</span> <span class="st">"data/derived/covariate_search.csv"</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-</div>
-<div class="section level4">
-<h4 id="run-stepwise-covariate-modeling">Run Stepwise Covariate Modeling<a class="anchor" aria-label="anchor" href="#run-stepwise-covariate-modeling"></a>
-</h4>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Run standard SCM (Forward → Backward)</span></span>
-<span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_automated_scm_testing.html">run_automated_scm_testing</a></span><span class="op">(</span></span>
-<span>  search_state <span class="op">=</span> <span class="va">search_state</span>,</span>
-<span>  base_model_id <span class="op">=</span> <span class="st">"run1"</span>,</span>
-<span>  scm_type <span class="op">=</span> <span class="st">"standard"</span>,</span>
-<span>  starting_phase <span class="op">=</span> <span class="st">"forward"</span>,</span>
-<span>  full_scm <span class="op">=</span> <span class="cn">TRUE</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-</div>
-<div class="section level4">
-<h4 id="check-results">Check Results<a class="anchor" aria-label="anchor" href="#check-results"></a>
+<h4 id="initialize">Initialize<a class="anchor" aria-label="anchor" href="#initialize"></a>
 </h4>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Final model</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">results</span><span class="op">$</span><span class="va">final_model</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Final covariates</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">results</span><span class="op">$</span><span class="va">final_covariates</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># View complete database</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/View.html" class="external-link">View</a></span><span class="op">(</span><span class="va">results</span><span class="op">$</span><span class="va">search_state</span><span class="op">$</span><span class="va">search_database</span><span class="op">)</span></span></code></pre></div>
-<hr>
+<code class="sourceCode R"><span><span class="va">ss</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/initialize_covariate_search.html">initialize_covariate_search</a></span><span class="op">(</span></span>
+<span>  base_model_path       <span class="op">=</span> <span class="st">"run1"</span>,</span>
+<span>  data_file_path        <span class="op">=</span> <span class="st">"data/derived/analysis.csv"</span>,</span>
+<span>  covariate_search_path <span class="op">=</span> <span class="st">"data/derived/covariate_search.csv"</span>,</span>
+<span>  models_folder         <span class="op">=</span> <span class="st">"models"</span></span>
+<span><span class="op">)</span></span></code></pre></div>
 </div>
-</div>
-<div class="section level3">
-<h3 id="model-selection-criteria">📊 Model Selection Criteria<a class="anchor" aria-label="anchor" href="#model-selection-criteria"></a>
-</h3>
-<p>Models are selected if they meet <strong>BOTH</strong> criteria:</p>
-<ol style="list-style-type: decimal">
-<li>
-<strong>ΔOFV &gt; threshold</strong>
-<ul>
-<li>Forward: ΔOFV &gt; 3.84 (p &lt; 0.05)</li>
-<li>Backward: ΔOFV &gt; 6.63 (p &lt; 0.01)</li>
-</ul>
-</li>
-<li>
-<strong>RSE &lt; threshold</strong> (default: 50%)</li>
-</ol>
-<ul>
-<li>For backward elimination, NA RSE is accepted (for workflows without
-covariance/RSE output)</li>
-</ul>
-<hr>
-</div>
-<div class="section level3">
-<h3 id="common-options">⚙️ Common Options<a class="anchor" aria-label="anchor" href="#common-options"></a>
-</h3>
 <div class="section level4">
-<h4 id="selective-scm-faster-forward-backward">Selective SCM (faster Forward → Backward)<a class="anchor" aria-label="anchor" href="#selective-scm-faster-forward-backward"></a>
+<h4 id="forward-then-backward-standard-scm">Forward then backward (standard SCM)<a class="anchor" aria-label="anchor" href="#forward-then-backward-standard-scm"></a>
 </h4>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_automated_scm_testing.html">run_automated_scm_testing</a></span><span class="op">(</span></span>
-<span>  search_state <span class="op">=</span> <span class="va">search_state</span>,</span>
-<span>  base_model_id <span class="op">=</span> <span class="st">"run1"</span>,  </span>
-<span>  scm_type <span class="op">=</span> <span class="st">"selective"</span>,     <span class="co"># Only test significant covariates from step 1</span></span>
-<span>  starting_phase <span class="op">=</span> <span class="st">"forward"</span>, <span class="co"># Start with forward selection</span></span>
-<span>  full_scm <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span>  search_state   <span class="op">=</span> <span class="va">ss</span>,</span>
+<span>  base_model_id  <span class="op">=</span> <span class="st">"run1"</span>,</span>
+<span>  scm_type       <span class="op">=</span> <span class="st">"standard"</span>,   <span class="co"># test every remaining covariate each step</span></span>
+<span>  starting_phase <span class="op">=</span> <span class="st">"forward"</span>,</span>
+<span>  full_scm       <span class="op">=</span> <span class="cn">TRUE</span>          <span class="co"># forward -&gt; backward</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level4">
-<h4 id="full-scm-workflow-backward-forward-backward">Full SCM Workflow (Backward → Forward → Backward)<a class="anchor" aria-label="anchor" href="#full-scm-workflow-backward-forward-backward"></a>
+<h4 id="one-phase-only">One phase only<a class="anchor" aria-label="anchor" href="#one-phase-only"></a>
 </h4>
+<p><code>full_scm = FALSE</code> runs just the phase you name:</p>
 <div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_automated_scm_testing.html">run_automated_scm_testing</a></span><span class="op">(</span></span>
-<span>  search_state <span class="op">=</span> <span class="va">search_state</span>,</span>
-<span>  base_model_id <span class="op">=</span> <span class="st">"run1"</span>,</span>
-<span>  scm_type <span class="op">=</span> <span class="st">"standard"</span>,        <span class="co"># Standard SCM</span></span>
-<span>  starting_phase <span class="op">=</span> <span class="st">"backward"</span>,  <span class="co"># Start with backward elimination</span></span>
-<span>  full_scm <span class="op">=</span> <span class="cn">TRUE</span></span>
-<span><span class="op">)</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="co"># Forward selection only</span></span>
+<span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_automated_scm_testing.html">run_automated_scm_testing</a></span><span class="op">(</span><span class="va">ss</span>, <span class="st">"run1"</span>,</span>
+<span>                                     starting_phase <span class="op">=</span> <span class="st">"forward"</span>,</span>
+<span>                                     full_scm <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Backward elimination only - start from a model that already has covariates</span></span>
+<span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_automated_scm_testing.html">run_automated_scm_testing</a></span><span class="op">(</span><span class="va">ss</span>, <span class="st">"run20"</span>,</span>
+<span>                                     starting_phase <span class="op">=</span> <span class="st">"backward"</span>,</span>
+<span>                                     full_scm <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
+<p>With <code>full_scm = TRUE</code> and
+<code>starting_phase = "backward"</code> you get the full SCM+ sequence:
+backward, then forward, then backward again.</p>
 </div>
 <div class="section level4">
-<h4 id="custom-thresholds">Custom Thresholds<a class="anchor" aria-label="anchor" href="#custom-thresholds"></a>
+<h4 id="faster-selective-scm">Faster: selective SCM<a class="anchor" aria-label="anchor" href="#faster-selective-scm"></a>
 </h4>
+<p><code>scm_type = "selective"</code> carries only the covariates that
+were significant in step 1 into later steps, instead of retesting all of
+them:</p>
 <div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_automated_scm_testing.html">run_automated_scm_testing</a></span><span class="op">(</span></span>
-<span>  search_state <span class="op">=</span> <span class="va">search_state</span>,</span>
-<span>  base_model_id <span class="op">=</span> <span class="st">"run1"</span>,</span>
-<span>  forward_p_value <span class="op">=</span> <span class="fl">0.01</span>,    <span class="co"># More stringent (ΔOFV &gt; 6.63)</span></span>
-<span>  backward_p_value <span class="op">=</span> <span class="fl">0.001</span>,  <span class="co"># Very stringent (ΔOFV &gt; 10.83)</span></span>
-<span>  rse_threshold <span class="op">=</span> <span class="fl">30</span>,        <span class="co"># Stricter RSE requirement</span></span>
-<span>  require_cov_step <span class="op">=</span> <span class="cn">TRUE</span>    <span class="co"># Require successful covariance step</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-<hr>
+<code class="sourceCode R"><span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_automated_scm_testing.html">run_automated_scm_testing</a></span><span class="op">(</span><span class="va">ss</span>, <span class="st">"run1"</span>, scm_type <span class="op">=</span> <span class="st">"selective"</span>,</span>
+<span>                                     starting_phase <span class="op">=</span> <span class="st">"forward"</span>, full_scm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
 </div>
-</div>
-<div class="section level3">
-<h3 id="save-and-resume">💾 Save and Resume<a class="anchor" aria-label="anchor" href="#save-and-resume"></a>
-</h3>
 <div class="section level4">
-<h4 id="save-progress">Save Progress<a class="anchor" aria-label="anchor" href="#save-progress"></a>
+<h4 id="thresholds">Thresholds<a class="anchor" aria-label="anchor" href="#thresholds"></a>
 </h4>
 <div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Save search state</span></span>
-<span><span class="fu"><a href="../reference/save_search_state.html">save_search_state</a></span><span class="op">(</span><span class="va">search_state</span>, <span class="st">"scm_state.rds"</span><span class="op">)</span></span></code></pre></div>
-</div>
-<div class="section level4">
-<h4 id="resume-interrupted-search">Resume Interrupted Search<a class="anchor" aria-label="anchor" href="#resume-interrupted-search"></a>
-</h4>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Load saved state</span></span>
-<span><span class="va">search_state</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/load_search_state.html">load_search_state</a></span><span class="op">(</span><span class="st">"scm_state.rds"</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Continue from where you left off</span></span>
-<span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_automated_scm_testing.html">run_automated_scm_testing</a></span><span class="op">(</span></span>
-<span>  search_state <span class="op">=</span> <span class="va">search_state</span>,</span>
-<span>  base_model_id <span class="op">=</span> <span class="st">"run25"</span>,  <span class="co"># Last completed model</span></span>
-<span>  starting_phase <span class="op">=</span> <span class="st">"backward"</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-<hr>
-</div>
-</div>
-<div class="section level3">
-<h3 id="common-issues">⚠️ Common Issues<a class="anchor" aria-label="anchor" href="#common-issues"></a>
-</h3>
-<div class="section level4">
-<h4 id="base-model-validation-fails">Base model validation fails<a class="anchor" aria-label="anchor" href="#base-model-validation-fails"></a>
-</h4>
-<p><strong>Problem</strong>: Parameter format incorrect</p>
-<p><strong>Solution</strong>: Ensure parameters follow format:
-<code>value ; NAME ; units ; RATIO|LOG</code></p>
-</div>
-<div class="section level4">
-<h4 id="high-rse-rejecting-good-models">High RSE rejecting good models<a class="anchor" aria-label="anchor" href="#high-rse-rejecting-good-models"></a>
-</h4>
-<p><strong>Problem</strong>: RSE threshold too strict</p>
-<p><strong>Solution</strong>: Increase threshold</p>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_automated_scm_testing.html">run_automated_scm_testing</a></span><span class="op">(</span></span>
-<span>  search_state <span class="op">=</span> <span class="va">search_state</span>,</span>
-<span>  base_model_id <span class="op">=</span> <span class="st">"run1"</span>,</span>
-<span>  rse_threshold <span class="op">=</span> <span class="fl">100</span>,        <span class="co"># More lenient</span></span>
-<span>  require_cov_step <span class="op">=</span> <span class="cn">FALSE</span>    <span class="co"># Skip covariance step check</span></span>
+<span>  search_state     <span class="op">=</span> <span class="va">ss</span>,</span>
+<span>  base_model_id    <span class="op">=</span> <span class="st">"run1"</span>,</span>
+<span>  forward_p_value  <span class="op">=</span> <span class="fl">0.01</span>,   <span class="co"># stricter entry</span></span>
+<span>  backward_p_value <span class="op">=</span> <span class="fl">0.001</span>,  <span class="co"># stricter retention</span></span>
+<span>  rse_threshold    <span class="op">=</span> <span class="fl">30</span>,     <span class="co"># max RSE (%)</span></span>
+<span>  require_cov_step <span class="op">=</span> <span class="cn">TRUE</span>    <span class="co"># require a successful $COVARIANCE step</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <hr>
 </div>
 </div>
 <div class="section level3">
-<h3 id="next-steps">📚 Next Steps<a class="anchor" aria-label="anchor" href="#next-steps"></a>
+<h3 id="what-counts-as-an-improvement">What counts as an improvement<a class="anchor" aria-label="anchor" href="#what-counts-as-an-improvement"></a>
 </h3>
-<p>Visit the <a href="https://ollegst.github.io/CovariateSearcher/">online
-documentation</a> for:</p>
-<ul>
+<p>A model is kept when <strong>both</strong> hold:</p>
+<ol style="list-style-type: decimal">
 <li>
-<strong>User Guide</strong>: Complete reference with all
-options</li>
-<li>
-<strong>Complete Workflow</strong>: Detailed step-by-step
-tutorial</li>
-<li>
-<strong>Recovery System</strong>: Understanding automatic error
-handling</li>
-<li>
-<strong>Troubleshooting</strong>: Solutions to common problems</li>
-</ul>
-<div class="section level4">
-<h4 id="function-documentation">Function Documentation<a class="anchor" aria-label="anchor" href="#function-documentation"></a>
-</h4>
+<p><strong>ΔOFV beyond the p-value threshold.</strong> The threshold
+is a chi-square quantile for the covariate’s degrees of freedom, so it
+is <em>not</em> a fixed 3.84. df is the number of
+<strong>estimated</strong> (non-<code>FIX</code>) thetas the covariate
+adds:</p>
+<table class="table">
+<thead><tr class="header">
+<th>covariate</th>
+<th>df</th>
+<th>forward threshold at p = 0.05</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td>continuous, one theta</td>
+<td>1</td>
+<td>3.84</td>
+</tr>
+<tr class="even">
+<td>categorical, 3 levels</td>
+<td>2</td>
+<td>5.99</td>
+</tr>
+<tr class="odd">
+<td><code>EMAX*cov/(EC50+cov)</code></td>
+<td>2</td>
+<td>5.99</td>
+</tr>
+<tr class="even">
+<td>every theta <code>FIX</code>
+</td>
+<td>0</td>
+<td>kept on any ΔOFV &gt; 0</td>
+</tr>
+</tbody>
+</table>
+</li>
+<li><p><strong>Maximum RSE below <code>rse_threshold</code></strong>
+(default 50%). In backward elimination an <code>NA</code> RSE is
+tolerated, for workflows that run without
+<code>$COVARIANCE</code>.</p></li>
+</ol>
+<hr>
+</div>
+<div class="section level3">
+<h3 id="results">Results<a class="anchor" aria-label="anchor" href="#results"></a>
+</h3>
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">results</span><span class="op">$</span><span class="va">final_model</span>        <span class="co"># e.g. "run85"</span></span>
+<span><span class="va">results</span><span class="op">$</span><span class="va">final_covariates</span>   <span class="co"># covariates in the final model</span></span>
+<span><span class="va">results</span><span class="op">$</span><span class="va">excluded_covariates</span></span>
+<span></span>
+<span><span class="fu"><a href="../reference/view_comprehensive_table.html">view_comprehensive_table</a></span><span class="op">(</span><span class="va">results</span><span class="op">$</span><span class="va">search_state</span><span class="op">)</span>   <span class="co"># every model, step by step</span></span></code></pre></div>
+<hr>
+</div>
+<div class="section level3">
+<h3 id="save-and-resume">Save and resume<a class="anchor" aria-label="anchor" href="#save-and-resume"></a>
+</h3>
+<p>Checkpoints are written automatically to
+<code>&lt;models_folder&gt;/scm_rds/</code> as
+<code>NN_phase_event.rds</code>, numbered by step so the highest
+<code>NN</code> is the most recent. You can also save at any time:</p>
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/save_search_state.html">save_search_state</a></span><span class="op">(</span><span class="va">ss</span>, <span class="st">"my_state.rds"</span><span class="op">)</span>   <span class="co"># bare name -&gt; &lt;models_folder&gt;/scm_rds/</span></span></code></pre></div>
+<p>To resume an interrupted search, point <code><a href="../reference/continue_search.html">continue_search()</a></code>
+at the latest checkpoint. It works out where the search stopped and
+carries on:</p>
 <div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/continue_search.html">continue_search</a></span><span class="op">(</span></span>
+<span>  checkpoint <span class="op">=</span> <span class="st">"models/scm_rds/07_forward_selection_complete.rds"</span>,</span>
+<span>  scm_type   <span class="op">=</span> <span class="st">"selective"</span>,</span>
+<span>  full_scm   <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<hr>
+</div>
+<div class="section level3">
+<h3 id="testing-an-extra-covariate-afterwards">Testing an extra covariate afterwards<a class="anchor" aria-label="anchor" href="#testing-an-extra-covariate-afterwards"></a>
+</h3>
+<p>To try a covariate that was never in the original table, add it to
+the live search state - then the search’s history, step numbers and ΔOFV
+are all kept:</p>
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">cov_smk</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/build_covariate_reference_table.html">build_covariate_reference_table</a></span><span class="op">(</span></span>
+<span>  data <span class="op">=</span> <span class="va">data</span>, id <span class="op">=</span> <span class="st">"ID"</span>, time <span class="op">=</span> <span class="st">"TIME"</span>,</span>
+<span>  Parameter <span class="op">=</span> <span class="st">"V"</span>, Covariate <span class="op">=</span> <span class="st">"SMK"</span>, Category <span class="op">=</span> <span class="st">"cat"</span>, Formula <span class="op">=</span> <span class="st">"linear"</span>,</span>
+<span>  yaml_data <span class="op">=</span> <span class="va">spec</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">ss</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/add_covariates_to_search.html">add_covariates_to_search</a></span><span class="op">(</span><span class="va">results</span><span class="op">$</span><span class="va">search_state</span>, <span class="va">cov_smk</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">res</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/add_covariate_to_model.html">add_covariate_to_model</a></span><span class="op">(</span></span>
+<span>  <span class="va">ss</span>,</span>
+<span>  base_model_id <span class="op">=</span> <span class="va">results</span><span class="op">$</span><span class="va">final_model</span>,</span>
+<span>  covariate_tag <span class="op">=</span> <span class="st">"beta_SMK_V"</span>,</span>
+<span>  step_number   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="va">ss</span><span class="op">$</span><span class="va">search_database</span><span class="op">$</span><span class="va">step_number</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span> <span class="op">+</span> <span class="fl">1</span>,</span>
+<span>  phase         <span class="op">=</span> <span class="st">"individual_testing"</span>   <span class="co"># not part of the search itself</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu">bbr</span><span class="fu">::</span><span class="fu"><a href="https://metrumresearchgroup.github.io/bbr/reference/submit_model.html" class="external-link">submit_model</a></span><span class="op">(</span><span class="fu">bbr</span><span class="fu">::</span><span class="fu"><a href="https://metrumresearchgroup.github.io/bbr/reference/read_model.html" class="external-link">read_model</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="va">ss</span><span class="op">$</span><span class="va">models_folder</span>, <span class="va">res</span><span class="op">$</span><span class="va">model_name</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>                  .bbi_args <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>threads <span class="op">=</span> <span class="fl">12</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<hr>
+</div>
+<div class="section level3">
+<h3 id="common-issues">Common issues<a class="anchor" aria-label="anchor" href="#common-issues"></a>
+</h3>
+<p><strong>Base model rejected at initialization.</strong> Read the
+message: it names the parameter and the exact rewrite (usually a missing
+<code>TV_</code> line - see the table above).</p>
+<p><strong>Good models rejected on RSE.</strong> Raise the threshold, or
+drop the covariance requirement:</p>
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_automated_scm_testing.html">run_automated_scm_testing</a></span><span class="op">(</span><span class="va">ss</span>, <span class="st">"run1"</span>,</span>
+<span>                                     rse_threshold <span class="op">=</span> <span class="fl">100</span>,</span>
+<span>                                     require_cov_step <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
+<p><strong>A model failed to estimate.</strong> The search creates a
+retry (<code>run12</code> -&gt; <code>run12001</code>) with a different
+initial estimate for the covariate THETA, and submits it when
+<code>auto_retry = TRUE</code>.</p>
+<hr>
+</div>
+<div class="section level3">
+<h3 id="where-next">Where next<a class="anchor" aria-label="anchor" href="#where-next"></a>
+</h3>
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="op">?</span><span class="va">initialize_covariate_search</span></span>
 <span><span class="op">?</span><span class="va">run_automated_scm_testing</span></span>
-<span><span class="op">?</span><span class="va">validate_base_model_parameters</span></span>
-<span><span class="op">?</span><span class="va">save_search_state</span></span>
-<span><span class="op">?</span><span class="va">load_search_state</span></span></code></pre></div>
-<hr>
-</div>
-</div>
-<div class="section level3">
-<h3 id="workflow-summary">📊 Workflow Summary<a class="anchor" aria-label="anchor" href="#workflow-summary"></a>
-</h3>
-<pre><code>1. Prepare Files
-   ├─ Base model (.ctl)
-   ├─ Dataset (.csv)
-   └─ Covariate config (.csv)
-   
-2. Initialize
-   └─ initialize_covariate_search()
-   
-3. Run SCM
-   └─ run_automated_scm_testing()
-   
-4. Check Results
-   ├─ results$final_model
-   ├─ results$final_covariates
-   └─ View(search_state$search_database)</code></pre>
-<hr>
-</div>
-<div class="section level3">
-<h3 id="example-output">✅ Example Output<a class="anchor" aria-label="anchor" href="#example-output"></a>
-</h3>
-<p>After successful SCM run:</p>
-<pre><code>🎉 AUTOMATED SCM TESTING COMPLETE!
-======================================================================
-Final model: run85
-Final covariates: WT_CL, SEX_V
-OFV improvement: -23.45
-
-Models tested: 47
-Models completed: 45
-Models failed: 2
-Models retried: 2
-
-Forward steps: 3
-Backward removals: 1
-======================================================================</code></pre>
-<hr>
-<p><strong>That’s it!</strong> CovariateSearcher handles the complex
-workflow automatically.</p>
-<p>For detailed examples and advanced usage, see the <a href="https://ollegst.github.io/CovariateSearcher/">complete
-documentation</a>.</p>
+<span><span class="op">?</span><span class="va">build_covariate_reference_table</span></span>
+<span><span class="op">?</span><span class="va">continue_search</span></span></code></pre></div>
+<p>The <a href="https://ollegst.github.io/CovariateSearcher/">online
+documentation</a> covers covariate formulas in depth, the recovery
+system, forest plots and simulation, and troubleshooting.</p>
 </div>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
@@ -455,7 +542,7 @@ documentation</a>.</p>
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.1.1.</p>
 </div>
 
     </footer>

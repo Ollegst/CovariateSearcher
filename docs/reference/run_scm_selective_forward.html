@@ -11,7 +11,7 @@ standard pharmacometrics SCM methodology."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">CovariateSearcher</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.25</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -27,6 +27,9 @@ standard pharmacometrics SCM methodology."></head><body>
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-extended-docs" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Extended Docs</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-extended-docs"><li><a class="dropdown-item" href="../articles/complete-workflow.html">Complete Workflow</a></li>
+    <li><a class="dropdown-item" href="../articles/covariate-formulas.html">Covariate Formulas</a></li>
+    <li><a class="dropdown-item" href="../articles/forest-plots.html">Forest Plots and Simulations</a></li>
+    <li><a class="dropdown-item" href="../articles/covariate-boxplots.html">Covariate Boxplots</a></li>
     <li><a class="dropdown-item" href="../articles/yaml-specification-files.html">YAML Specification Files</a></li>
     <li><a class="dropdown-item" href="../articles/model-report-usage.html">Parameter Tables with model_report()</a></li>
     <li><a class="dropdown-item" href="../articles/troubleshooting.html">Troubleshooting Guide</a></li>
@@ -62,7 +65,8 @@ standard pharmacometrics SCM methodology.</p>
 <span>  forward_p_value <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  rse_threshold <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  auto_submit <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  auto_retry <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span>  auto_retry <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  resume <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -92,6 +96,14 @@ standard pharmacometrics SCM methodology.</p>
 
 <dt id="arg-auto-retry">auto_retry<a class="anchor" aria-label="anchor" href="#arg-auto-retry"></a></dt>
 <dd><p>Logical. Whether to enable automatic retry (default: TRUE)</p></dd>
+
+
+<dt id="arg-resume">resume<a class="anchor" aria-label="anchor" href="#arg-resume"></a></dt>
+<dd><p>Logical. If TRUE, treat this call as a continuation (used by
+<code><a href="continue_search.html">continue_search</a></code>): the first loop pass skips the "test all"
+step and goes straight to selective narrowing, reconstructing the previous
+step from the database via <code><a href="get_step_models.html">get_step_models</a></code>. Fresh runs use
+FALSE (default) and begin by testing all available covariates.</p></dd>
 
 </dl></div>
     <div class="section level2">

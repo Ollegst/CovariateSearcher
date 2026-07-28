@@ -22,7 +22,7 @@
 
     <a class="navbar-brand me-2" href="index.html">CovariateSearcher</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.25</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -42,6 +42,9 @@
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-extended-docs" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Extended Docs</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-extended-docs">
 <li><a class="dropdown-item" href="articles/complete-workflow.html">Complete Workflow</a></li>
+    <li><a class="dropdown-item" href="articles/covariate-formulas.html">Covariate Formulas</a></li>
+    <li><a class="dropdown-item" href="articles/forest-plots.html">Forest Plots and Simulations</a></li>
+    <li><a class="dropdown-item" href="articles/covariate-boxplots.html">Covariate Boxplots</a></li>
     <li><a class="dropdown-item" href="articles/yaml-specification-files.html">YAML Specification Files</a></li>
     <li><a class="dropdown-item" href="articles/model-report-usage.html">Parameter Tables with model_report()</a></li>
     <li><a class="dropdown-item" href="articles/troubleshooting.html">Troubleshooting Guide</a></li>
@@ -64,13 +67,14 @@
   <main id="main" class="col-md-9"><div class="section level1">
 <div class="page-header"><h1 id="covariatesearcher-quick-reference">CovariateSearcher: Quick Reference<a class="anchor" aria-label="anchor" href="#covariatesearcher-quick-reference"></a>
 </h1></div>
-<p>CovariateSearcher Package 2026-05-27</p>
+<p>CovariateSearcher Package 2026-07-28</p>
 <div class="section level2">
 <h2 id="rocket-minimal-working-example">🚀 Minimal Working Example<a class="anchor" aria-label="anchor" href="#rocket-minimal-working-example"></a>
 </h2>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Install from GitHub</span></span>
-<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu"><a href="https://remotes.r-lib.org/reference/install_github.html" class="external-link">install_github</a></span><span class="op">(</span><span class="st">"Ollegst/CovariateSearcher"</span>, ref <span class="op">=</span> <span class="st">"main"</span>, dependencies <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu"><a href="https://remotes.r-lib.org/reference/install_github.html" class="external-link">install_github</a></span><span class="op">(</span><span class="st">"Ollegst/CovariateSearcher"</span>,</span>
+<span>                        ref <span class="op">=</span> <span class="st">"feature/package-rebuild"</span>, dependencies <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/Ollegst/CovariateSearcher" class="external-link">CovariateSearcher</a></span><span class="op">)</span></span>
 <span></span>
@@ -97,7 +101,6 @@
 <span>    auto_submit <span class="op">=</span> <span class="cn">TRUE</span>,                         <span class="co"># if FALSE – only model creation </span></span>
 <span>    auto_retry <span class="op">=</span> <span class="cn">TRUE</span>,                          <span class="co"># Retry model in case of failure</span></span>
 <span>    save_checkpoints <span class="op">=</span> <span class="cn">TRUE</span>,                    <span class="co"># Save each step</span></span>
-<span>    checkpoint_prefix <span class="op">=</span> <span class="st">"scm_auto"</span>,</span>
 <span>    final_testing <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>                       <span class="co"># Test excluded covariates form failed model</span></span>
 <span></span>
 <span></span>
@@ -162,7 +165,6 @@
 <span>    auto_submit <span class="op">=</span> <span class="cn">TRUE</span>,                         <span class="co"># if FALSE – only model creation </span></span>
 <span>    auto_retry <span class="op">=</span> <span class="cn">TRUE</span>,                          <span class="co"># Retry model in case of failure</span></span>
 <span>    save_checkpoints <span class="op">=</span> <span class="cn">TRUE</span>,                    <span class="co"># Save each step</span></span>
-<span>    checkpoint_prefix <span class="op">=</span> <span class="st">"scm_auto"</span>,</span>
 <span>    final_testing <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>                       <span class="co"># Test excluded covariates from failed model</span></span>
 <span></span>
 <span></span>
@@ -216,13 +218,14 @@
 <p><code>data/derived/covariate_search.csv</code></p>
 <table class="table">
 <colgroup>
-<col width="14%">
-<col width="14%">
-<col width="10%">
 <col width="12%">
-<col width="10%">
-<col width="14%">
-<col width="21%">
+<col width="12%">
+<col width="12%">
+<col width="12%">
+<col width="12%">
+<col width="12%">
+<col width="12%">
+<col width="12%">
 </colgroup>
 <thead><tr>
 <th>PARAMETER</th>
@@ -232,6 +235,7 @@
 <th>LEVELS</th>
 <th>REFERENCE</th>
 <th>TIME_DEPENDENT</th>
+<th>INIT</th>
 </tr></thead>
 <tbody>
 <tr>
@@ -241,7 +245,8 @@
 <td>power</td>
 <td>NA</td>
 <td>70</td>
-<td>FALSE</td>
+<td>No</td>
+<td></td>
 </tr>
 <tr>
 <td>CL</td>
@@ -250,7 +255,8 @@
 <td>linear</td>
 <td>NA</td>
 <td>50</td>
-<td>FALSE</td>
+<td>No</td>
+<td></td>
 </tr>
 <tr>
 <td>CL</td>
@@ -259,7 +265,8 @@
 <td>linear</td>
 <td>0;1;2</td>
 <td>1</td>
-<td>FALSE</td>
+<td>No</td>
+<td></td>
 </tr>
 <tr>
 <td>V2</td>
@@ -268,11 +275,73 @@
 <td>power</td>
 <td>NA</td>
 <td>70</td>
-<td>FALSE</td>
+<td>No</td>
+<td>0.75 FIX</td>
+</tr>
+<tr>
+<td>V2</td>
+<td>AGE</td>
+<td>con</td>
+<td>EMAX*cov/(EC50+cov)</td>
+<td>NA</td>
+<td>50</td>
+<td>No</td>
+<td>EMAX=0.5; EC50=10</td>
 </tr>
 </tbody>
 </table>
-<p><strong>FORMULA options for continuous covariates (<code>STATUS = "con"</code>):</strong> - <code>linear</code>: <code>PARAM * (1 + (COV - REF) * THETA)</code> - <code>power</code>: <code>PARAM * (COV / REF) ** THETA</code> - <code>power1</code>: <code>PARAM * (COV / REF) ** THETA</code> with THETA fixed to 1 - <code>power0.75</code>: <code>PARAM * (COV / REF) ** THETA</code> with THETA fixed to 0.75 - <code>exponential</code>: <code>PARAM * EXP(THETA * (COV - REF))</code></p>
+<p><code>STATUS</code> is <code>con</code> or <code>cat</code>; <code>LEVELS</code> lists the observed level values, separated by <code>;</code>. <code>cov_to_test</code> (<code>beta_WT_CL</code>, …) is generated for you.</p>
+<p><strong>FORMULA options for continuous covariates (<code>STATUS = "con"</code>):</strong></p>
+<ul>
+<li>
+<code>linear</code>: <code>PARAM * (1 + (COV - REF) * THETA)</code>
+</li>
+<li>
+<code>power</code>: <code>PARAM * (COV / REF) ** THETA</code>
+</li>
+<li>
+<code>exponential</code>: <code>PARAM * EXP(THETA * (COV - REF))</code>
+</li>
+</ul>
+<p><strong>FORMULA options for categorical covariates (<code>STATUS = "cat"</code>):</strong></p>
+<ul>
+<li>
+<code>linear</code>: one THETA per non-reference level, written as an <code>IF/ELSEIF</code> block</li>
+<li>
+<code>power</code>: for covariates whose levels are numeric (e.g. dose 35/70/125)</li>
+</ul>
+<p><strong>User-defined formulas</strong>: any other <code>FORMULA</code> is read as an expression in <code>cov</code> (the covariate) and <code>ref</code> (its REFERENCE); every remaining symbol becomes an estimated THETA, e.g. <code>EMAX*cov/(EC50+cov)</code> estimates <code>EMAX</code> and <code>EC50</code>.</p>
+<p>See <a href="https://ollegst.github.io/CovariateSearcher/articles/covariate-formulas.html">Covariate Formulas</a> for how each form is written into the control stream, categorical per-level effects, placement on log- and normal-scale parameters, degrees of freedom, and registering your own formula.</p>
+<p><strong>INIT</strong> (optional) sets the initial <code>$THETA</code> for the covariate beta:</p>
+<table class="table">
+<colgroup>
+<col width="50%">
+<col width="50%">
+</colgroup>
+<thead><tr>
+<th>INIT</th>
+<th>meaning</th>
+</tr></thead>
+<tbody>
+<tr>
+<td><em>(blank)</em></td>
+<td>default <code>0.1</code>
+</td>
+</tr>
+<tr>
+<td><code>(0, 0.5, 2)</code></td>
+<td>bounded: lower, initial, upper</td>
+</tr>
+<tr>
+<td><code>0.75 FIX</code></td>
+<td>fixed - adds no degree of freedom</td>
+</tr>
+<tr>
+<td><code>EMAX=0.5; EC50=10</code></td>
+<td>one entry per theta, <strong>by name</strong>, for a multi-theta formula</td>
+</tr>
+</tbody>
+</table>
 <hr>
 </div>
 <div class="section level3">

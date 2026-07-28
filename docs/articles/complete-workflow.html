@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">CovariateSearcher</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.25</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -40,6 +40,9 @@
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-extended-docs" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Extended Docs</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-extended-docs">
 <li><a class="dropdown-item" href="../articles/complete-workflow.html">Complete Workflow</a></li>
+    <li><a class="dropdown-item" href="../articles/covariate-formulas.html">Covariate Formulas</a></li>
+    <li><a class="dropdown-item" href="../articles/forest-plots.html">Forest Plots and Simulations</a></li>
+    <li><a class="dropdown-item" href="../articles/covariate-boxplots.html">Covariate Boxplots</a></li>
     <li><a class="dropdown-item" href="../articles/yaml-specification-files.html">YAML Specification Files</a></li>
     <li><a class="dropdown-item" href="../articles/model-report-usage.html">Parameter Tables with model_report()</a></li>
     <li><a class="dropdown-item" href="../articles/troubleshooting.html">Troubleshooting Guide</a></li>
@@ -75,218 +78,436 @@
     
     
 <div class="section level2">
-<h2 id="complete-stepwise-covariate-modeling-workflow">Complete Stepwise Covariate Modeling Workflow<a class="anchor" aria-label="anchor" href="#complete-stepwise-covariate-modeling-workflow"></a>
+<h2 id="complete-scm-workflow">Complete SCM Workflow<a class="anchor" aria-label="anchor" href="#complete-scm-workflow"></a>
 </h2>
-<p>This comprehensive guide walks through a complete SCM analysis from
-start to finish.</p>
+<p>A full run: build the covariate table, optionally start from a model
+that already carries covariates, strip it back, extend the table,
+search, then test extras on the final model.</p>
+<pre><code>build table -&gt; [prepare base] -&gt; initialize -&gt; backward -&gt; extend table -&gt; forward+backward -&gt; extras</code></pre>
+<p>Formula and <code>INIT</code> details are in <a href="covariate-formulas.html">Covariate Formulas</a>. Interrupted runs
+are covered separately by <code><a href="../reference/continue_search.html">?continue_search</a></code>.</p>
+<hr>
 <div class="section level3">
-<h3 id="overview">Overview<a class="anchor" aria-label="anchor" href="#overview"></a>
+<h3 id="covariate-table">1. Covariate table<a class="anchor" aria-label="anchor" href="#covariate-table"></a>
 </h3>
-<p>The stepwise covariate modeling (SCM/SCM+) process consists of:</p>
-<ol start="0" style="list-style-type: decimal">
-<li>
-<strong>Backward elimination</strong>: Remove non-significant
-covariates (optional)</li>
-<li>
-<strong>Forward Selection</strong>: Add covariates that improve
-model fit</li>
-<li>
-<strong>Backward Elimination</strong>: Remove non-significant
-covariates</li>
-<li>
-<strong>Final Model</strong>: Select the best parsimonious
-model</li>
-</ol>
-</div>
-<div class="section level3">
-<h3 id="prerequisites">Prerequisites<a class="anchor" aria-label="anchor" href="#prerequisites"></a>
-</h3>
-<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">CovariateSearcher</span><span class="op">)</span></span>
-<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://dplyr.tidyverse.org" class="external-link">dplyr</a></span><span class="op">)</span></span></code></pre></div>
-</div>
-<div class="section level3">
-<h3 id="step-1-prepare-your-data">Step 1: Prepare Your Data<a class="anchor" aria-label="anchor" href="#step-1-prepare-your-data"></a>
-</h3>
-<div class="section level4">
-<h4 id="nonmem-dataset">NONMEM Dataset<a class="anchor" aria-label="anchor" href="#nonmem-dataset"></a>
-</h4>
-<p>Your dataset should include:</p>
-<ul>
-<li>
-<code>ID</code>: Subject identifier</li>
-<li>
-<code>TIME</code>: Time points</li>
-<li>
-<code>DV</code>: Dependent variable (concentrations)</li>
-<li>
-<code>EVID</code>: Event ID (0=observation, 1=dose)</li>
-<li>Covariates (WT, AGE, SEX, etc.)</li>
-</ul>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Example dataset structure</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">nonmem_data</span><span class="op">)</span></span>
-<span><span class="co">#   ID TIME  DV EVID  WT AGE SEX</span></span>
-<span><span class="co">#    1  0.0  NA    1  70  45   1</span></span>
-<span><span class="co">#    1  0.5 5.2    0  70  45   1</span></span>
-<span><span class="co">#    1  1.0 8.1    0  70  45   1</span></span></code></pre></div>
-</div>
-<div class="section level4">
-<h4 id="covariate-search-configuration">Covariate Search Configuration<a class="anchor" aria-label="anchor" href="#covariate-search-configuration"></a>
-</h4>
-<p>Create a CSV file defining which covariates to test:</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Example: covariate_search.csv</span></span>
-<span><span class="va">covariate_config</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://tibble.tidyverse.org/reference/tribble.html" class="external-link">tribble</a></span><span class="op">(</span></span>
-<span>  <span class="op">~</span><span class="va">PARAMETER</span>, <span class="op">~</span><span class="va">COVARIATE</span>, <span class="op">~</span><span class="va">STATUS</span>,        <span class="op">~</span><span class="va">FORMULA</span>, <span class="op">~</span><span class="va">LEVELS</span>, <span class="op">~</span><span class="va">REFERENCE</span>,</span>
-<span>  <span class="st">"CL"</span>,       <span class="st">"WT"</span>,        <span class="st">"con"</span>,          <span class="st">"power"</span>,      <span class="cn">NA</span>,         <span class="fl">70</span>,</span>
-<span>  <span class="st">"CL"</span>,       <span class="st">"AGE"</span>,       <span class="st">"con"</span>,         <span class="st">"linear"</span>,      <span class="cn">NA</span>,         <span class="fl">50</span>,</span>
-<span>  <span class="st">"CL"</span>,       <span class="st">"SEX"</span>,       <span class="st">"cat"</span>,            <span class="st">"cat"</span>,   <span class="st">"0;1"</span>,          <span class="fl">1</span>,</span>
-<span>  <span class="st">"V"</span>,        <span class="st">"WT"</span>,        <span class="st">"con"</span>,          <span class="st">"power"</span>,      <span class="cn">NA</span>,      <span class="fl">70</span></span>
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/Ollegst/CovariateSearcher" class="external-link">CovariateSearcher</a></span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">data</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/utils/read.table.html" class="external-link">read.csv</a></span><span class="op">(</span><span class="st">"data/derived/analysis.csv"</span><span class="op">)</span></span>
+<span><span class="va">spec</span> <span class="op">&lt;-</span> <span class="fu">yspec</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/yspec/man/ys_load.html" class="external-link">ys_load</a></span><span class="op">(</span><span class="st">"data/spec/lookup.yml"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">cov</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/build_covariate_reference_table.html">build_covariate_reference_table</a></span><span class="op">(</span></span>
+<span>  data      <span class="op">=</span> <span class="va">data</span>,</span>
+<span>  id        <span class="op">=</span> <span class="st">"ID"</span>,</span>
+<span>  time      <span class="op">=</span> <span class="st">"TIME"</span>,</span>
+<span>  Parameter <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"CL"</span>,           <span class="st">"V1"</span><span class="op">)</span>,</span>
+<span>  Covariate <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"AGE"</span>,          <span class="st">"ASIAN"</span><span class="op">)</span>,</span>
+<span>  Category  <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"con"</span>,          <span class="st">"cat"</span><span class="op">)</span>,</span>
+<span>  Formula   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"power"</span>,        <span class="st">"linear"</span><span class="op">)</span>,</span>
+<span>  INIT      <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"(0, 0.5, 2)"</span>,  <span class="st">"0.1"</span><span class="op">)</span>,   <span class="co">## optional - default 0.1 for every beta</span></span>
+<span>  yaml_data <span class="op">=</span> <span class="va">spec</span></span>
 <span><span class="op">)</span></span>
 <span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/write.table.html" class="external-link">write.csv</a></span><span class="op">(</span><span class="va">covariate_config</span>, <span class="st">"data/derived/covariate_search.csv"</span>, row.names <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
-<p><strong>FORMULA options for continuous covariates
-(<code>STATUS = "con"</code>):</strong> - <code>linear</code>:
-<code>PARAM * (1 + (COV - REF) * THETA)</code> - <code>power</code>:
-<code>PARAM * (COV / REF) ** THETA</code> - <code>power1</code>:
-<code>PARAM * (COV / REF) ** THETA</code> with THETA fixed to 1 -
-<code>power0.75</code>: <code>PARAM * (COV / REF) ** THETA</code> with
-THETA fixed to 0.75 - <code>exponential</code>:
-<code>PARAM * EXP(THETA * (COV - REF))</code></p>
-</div>
+<span><span class="co">## optional - REFERENCE is computed from the data; override it afterwards</span></span>
+<span><span class="va">cov</span><span class="op">$</span><span class="va">REFERENCE</span><span class="op">[</span><span class="va">cov</span><span class="op">$</span><span class="va">COVARIATE</span> <span class="op">==</span> <span class="st">"AGE"</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="st">"50"</span></span>
+<span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/write.table.html" class="external-link">write.csv</a></span><span class="op">(</span><span class="va">cov</span>, <span class="st">"data/derived/covariate_search.csv"</span>, row.names <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
+<p>You supply <code>Parameter</code>, <code>Covariate</code>,
+<code>Category</code> and <code>Formula</code>. Everything else is
+derived:</p>
+<table class="table">
+<colgroup>
+<col width="50%">
+<col width="50%">
+</colgroup>
+<thead><tr class="header">
+<th>column</th>
+<th>derived from</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td><code>REFERENCE</code></td>
+<td>median of the baseline values (<code>con</code>) or the most
+frequent level (<code>cat</code>)</td>
+</tr>
+<tr class="even">
+<td><code>LEVELS</code></td>
+<td>observed baseline levels, <code>;</code>-separated (<code>cat</code>
+only)</td>
+</tr>
+<tr class="odd">
+<td><code>TIME_DEPENDENT</code></td>
+<td>
+<code>Yes</code> if a subject has more than one value in the full
+dataset</td>
+</tr>
+<tr class="even">
+<td><code>cov_to_test</code></td>
+<td><code>beta_&lt;COVARIATE&gt;_&lt;PARAMETER&gt;</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>INIT</code> is optional - without it every covariate beta
+starts at <code>0.1</code>. Use it to bound (<code>"(0, 0.5, 2)"</code>)
+or fix (<code>"0.75 FIX"</code>) a beta; a multi-theta formula takes one
+entry per theta, by name (<code>"EMAX=0.5; EC50=10"</code>).</p>
+<p><code>REFERENCE</code> is not an argument - it is always computed
+from the data. Override it on the returned table when you want a round
+number instead of the observed median.</p>
+<hr>
 </div>
 <div class="section level3">
-<h3 id="step-2-initialize-search">Step 2: Initialize Search<a class="anchor" aria-label="anchor" href="#step-2-initialize-search"></a>
+<h3 id="optional-base-model-that-already-has-covariates">2. Optional: base model that already has covariates<a class="anchor" aria-label="anchor" href="#optional-base-model-that-already-has-covariates"></a>
 </h3>
+<p>Skip this if your base model is structural only.</p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">prep</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/prepare_search_base_model.html">prepare_search_base_model</a></span><span class="op">(</span></span>
+<span>  base_model_path       <span class="op">=</span> <span class="st">"run1"</span>,</span>
+<span>  covariate_tags        <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"beta_AGE_CL"</span>, <span class="st">"beta_ASIAN_V1"</span><span class="op">)</span>,</span>
+<span>  new_model_number      <span class="op">=</span> <span class="fl">2</span>,</span>
+<span>  data_file_path        <span class="op">=</span> <span class="st">"data/derived/analysis.csv"</span>,</span>
+<span>  covariate_search_path <span class="op">=</span> <span class="st">"data/derived/covariate_search.csv"</span>,</span>
+<span>  models_folder         <span class="op">=</span> <span class="st">"models"</span>,</span>
+<span>  idcol                 <span class="op">=</span> <span class="st">"ID"</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">prep</span><span class="op">$</span><span class="va">model_name</span>        <span class="co"># "run2"</span></span>
+<span><span class="va">prep</span><span class="op">$</span><span class="va">covariates_added</span></span>
+<span><span class="va">prep</span><span class="op">$</span><span class="va">log_file</span>          <span class="co"># combined log of every covariate added</span></span></code></pre></div>
+<p><strong>It does not submit the model.</strong> Submit it yourself and
+wait for it to finish:</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">search_state</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/initialize_covariate_search.html">initialize_covariate_search</a></span><span class="op">(</span></span>
-<span>  base_model_path <span class="op">=</span> <span class="st">"run10"</span>,</span>
-<span>  data_file_path <span class="op">=</span> <span class="st">"data/derived/analysis.csv"</span>,</span>
-<span>  covariate_search_path <span class="op">=</span> <span class="st">"data/derived/covariate_search.csv"</span>,</span>
-<span>  lookup_file <span class="op">=</span> <span class="st">"data/spec/lookup.yaml"</span>, <span class="co"># optional</span></span>
-<span>  models_folder <span class="op">=</span> <span class="st">"models"</span>, </span>
-<span>  threads <span class="op">=</span> <span class="fl">40</span><span class="op">)</span></span></code></pre></div>
-<p>If you are continuing an existing project with pre-existing models,
-use:</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">search_state</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/load_existing_search.html">load_existing_search</a></span><span class="op">(</span></span>
-<span>  base_model_path <span class="op">=</span> <span class="st">"run10"</span>,</span>
-<span>  data_file_path <span class="op">=</span> <span class="st">"data/derived/analysis.csv"</span>,</span>
-<span>  covariate_search_path <span class="op">=</span> <span class="st">"data/derived/covariate_search.csv"</span>,</span>
-<span>  models_folder <span class="op">=</span> <span class="st">"models"</span>,</span>
-<span>  threads <span class="op">=</span> <span class="fl">40</span>,</span>
-<span>  lookup_file <span class="op">=</span> <span class="st">"data/spec/lookup.yaml"</span> <span class="co"># optional</span></span>
-<span><span class="op">)</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="va">mod</span> <span class="op">&lt;-</span> <span class="fu">bbr</span><span class="fu">::</span><span class="fu"><a href="https://metrumresearchgroup.github.io/bbr/reference/read_model.html" class="external-link">read_model</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="st">"models"</span>, <span class="va">prep</span><span class="op">$</span><span class="va">model_name</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="fu">bbr</span><span class="fu">::</span><span class="fu"><a href="https://metrumresearchgroup.github.io/bbr/reference/submit_model.html" class="external-link">submit_model</a></span><span class="op">(</span><span class="va">mod</span>, .bbi_args <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>threads <span class="op">=</span> <span class="fl">12</span><span class="op">)</span>, .overwrite <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
+<hr>
 </div>
 <div class="section level3">
-<h3 id="step-3-run-forward-selection">Step 3: Run Forward Selection<a class="anchor" aria-label="anchor" href="#step-3-run-forward-selection"></a>
+<h3 id="initialize">3. Initialize<a class="anchor" aria-label="anchor" href="#initialize"></a>
+</h3>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">ss</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/initialize_covariate_search.html">initialize_covariate_search</a></span><span class="op">(</span></span>
+<span>  base_model_path       <span class="op">=</span> <span class="st">"run2"</span>,</span>
+<span>  data_file_path        <span class="op">=</span> <span class="st">"data/derived/analysis.csv"</span>,</span>
+<span>  covariate_search_path <span class="op">=</span> <span class="st">"data/derived/covariate_search.csv"</span>,</span>
+<span>  models_folder         <span class="op">=</span> <span class="st">"models"</span>,</span>
+<span>  threads               <span class="op">=</span> <span class="fl">12</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<table class="table">
+<colgroup>
+<col width="33%">
+<col width="33%">
+<col width="33%">
+</colgroup>
+<thead><tr class="header">
+<th>argument</th>
+<th>default</th>
+<th>note</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td><code>models_folder</code></td>
+<td><code>"models"</code></td>
+<td>where models live and new ones are written</td>
+</tr>
+<tr class="even">
+<td>
+<code>timecol</code>, <code>idcol</code>
+</td>
+<td>
+<code>"TIME"</code>, <code>"ID"</code>
+</td>
+<td>dataset columns</td>
+</tr>
+<tr class="odd">
+<td><code>threads</code></td>
+<td><code>60</code></td>
+<td>passed to bbi on submission</td>
+</tr>
+<tr class="even">
+<td><code>require_base_run</code></td>
+<td><code>TRUE</code></td>
+<td>base model must have a finished run with an OFV. <code>FALSE</code>
+only to build/inspect control streams - a search cannot run without a
+base OFV</td>
+</tr>
+<tr class="odd">
+<td><code>lookup_file</code></td>
+<td><code>NULL</code></td>
+<td>decodes categorical levels in THETA names</td>
+</tr>
+<tr class="even">
+<td><code>starting_model_number</code></td>
+<td><code>NULL</code></td>
+<td>sets the model counter: <code>10</code> means the next model created
+is <code>run11</code>. Default continues from the models already
+discovered in <code>models_folder</code>
+</td>
+</tr>
+</tbody>
+</table>
+<p>The base model is validated here: parameters that will receive a
+population covariate must be classifiable as normal
+(<code>P = TV*EXP(ETA)</code>) or log (<code>P = EXP(TV + ETA)</code>),
+and a log-scale one needs its own <code>TV_</code> line.</p>
+<hr>
+</div>
+<div class="section level3">
+<h3 id="backward-elimination">4. Backward elimination<a class="anchor" aria-label="anchor" href="#backward-elimination"></a>
 </h3>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Standard forward selection</span></span>
-<span> <span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_automated_scm_testing.html">run_automated_scm_testing</a></span><span class="op">(</span></span>
-<span>  search_state <span class="op">=</span> <span class="va">search_state</span>,</span>
-<span>  base_model_id <span class="op">=</span> <span class="st">"run10"</span>,</span>
-<span>  scm_type <span class="op">=</span> <span class="st">"standard"</span>,      <span class="co"># or "selective"</span></span>
-<span>  starting_phase <span class="op">=</span> <span class="st">"forward"</span>,</span>
-<span>  full_scm <span class="op">=</span> <span class="cn">FALSE</span>,           <span class="co"># This runs ONLY forward selection</span></span>
-<span>  forward_p_value <span class="op">=</span> <span class="fl">0.05</span>,</span>
-<span>  rse_threshold <span class="op">=</span> <span class="fl">50</span>,</span>
-<span>  require_cov_step <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  auto_submit <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  auto_retry <span class="op">=</span> <span class="cn">TRUE</span></span>
+<code class="sourceCode R"><span><span class="va">bw</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_automated_scm_testing.html">run_automated_scm_testing</a></span><span class="op">(</span></span>
+<span>  search_state     <span class="op">=</span> <span class="va">ss</span>,</span>
+<span>  base_model_id    <span class="op">=</span> <span class="st">"run2"</span>,</span>
+<span>  starting_phase   <span class="op">=</span> <span class="st">"backward"</span>,</span>
+<span>  full_scm         <span class="op">=</span> <span class="cn">FALSE</span>,        <span class="co"># this phase only</span></span>
+<span>  backward_p_value <span class="op">=</span> <span class="fl">0.01</span>,</span>
+<span>  rse_threshold    <span class="op">=</span> <span class="fl">50</span></span>
 <span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Check results</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">results</span><span class="op">$</span><span class="va">final_model</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">results</span><span class="op">$</span><span class="va">final_covariates</span><span class="op">)</span></span></code></pre></div>
-<div class="section level4">
-<h4 id="understanding-selection-criteria">Understanding Selection Criteria<a class="anchor" aria-label="anchor" href="#understanding-selection-criteria"></a>
-</h4>
-<p>Models are selected if they meet BOTH criteria: - <strong>ΔOFV &gt;
-3.84</strong>: Statistically significant improvement (p &lt; 0.05) -
-<strong>RSE &lt; 50%</strong>: Parameter estimates are reasonably
-precise</p>
-</div>
+<span><span class="va">bw</span><span class="op">$</span><span class="va">final_model</span></span>
+<span><span class="va">bw</span><span class="op">$</span><span class="va">final_covariates</span></span></code></pre></div>
+<p><code>run_backward_elimination(ss, starting_model = "run2")</code> is
+the lower-level call if you want the phase without checkpointing.</p>
+<hr>
 </div>
 <div class="section level3">
-<h3 id="step-4-backward-elimination">Step 4: Backward Elimination<a class="anchor" aria-label="anchor" href="#step-4-backward-elimination"></a>
+<h3 id="extend-the-covariate-table">5. Extend the covariate table<a class="anchor" aria-label="anchor" href="#extend-the-covariate-table"></a>
 </h3>
-<p>Backward elimination keeps/removes covariates using both
-criteria:</p>
-<ul>
-<li>Removal must satisfy backward ΔOFV criterion
-(<code>backward_p_value</code>)</li>
-<li>Removal must satisfy RSE criterion (<code>rse_threshold</code>)</li>
-<li>If RSE is not available (NA), it is accepted</li>
-</ul>
+<p>Build the additional covariate/parameter pairs the same way, then add
+them to the search state you just got back:</p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_automated_scm_testing.html">run_automated_scm_testing</a></span><span class="op">(</span></span>
-<span>  search_state <span class="op">=</span> <span class="va">search_state</span>,</span>
-<span>  base_model_id <span class="op">=</span> <span class="st">"run10"</span>,</span>
-<span>  starting_phase <span class="op">=</span> <span class="st">"backward"</span>,</span>
-<span>  full_scm <span class="op">=</span> <span class="cn">FALSE</span>,            <span class="co"># This runs ONLY the specified phase</span></span>
-<span>  backward_p_value <span class="op">=</span> <span class="fl">0.01</span>,</span>
-<span>  auto_submit <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  auto_retry <span class="op">=</span> <span class="cn">TRUE</span></span>
+<code class="sourceCode R"><span><span class="va">cov_extra</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/build_covariate_reference_table.html">build_covariate_reference_table</a></span><span class="op">(</span></span>
+<span>  data      <span class="op">=</span> <span class="va">data</span>,</span>
+<span>  id        <span class="op">=</span> <span class="st">"ID"</span>,</span>
+<span>  time      <span class="op">=</span> <span class="st">"TIME"</span>,</span>
+<span>  Parameter <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"CL"</span>,     <span class="st">"CL"</span>,    <span class="st">"V1"</span><span class="op">)</span>,</span>
+<span>  Covariate <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"SMK"</span>,    <span class="st">"EGFR"</span>,  <span class="st">"SEX"</span><span class="op">)</span>,</span>
+<span>  Category  <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"cat"</span>,    <span class="st">"con"</span>,   <span class="st">"cat"</span><span class="op">)</span>,</span>
+<span>  Formula   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"linear"</span>, <span class="st">"power"</span>, <span class="st">"linear"</span><span class="op">)</span>,</span>
+<span>  yaml_data <span class="op">=</span> <span class="va">spec</span></span>
 <span><span class="op">)</span></span>
 <span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">results</span><span class="op">$</span><span class="va">final_model</span><span class="op">)</span></span></code></pre></div>
-</div>
-<div class="section level3">
-<h3 id="step-5-full-scm-workflow-in-one-call">Step 5: Full SCM+ Workflow in One Call<a class="anchor" aria-label="anchor" href="#step-5-full-scm-workflow-in-one-call"></a>
-</h3>
-<p>Use this when you want a complete SCM+ sequence starting from a
-developed model:</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_automated_scm_testing.html">run_automated_scm_testing</a></span><span class="op">(</span></span>
-<span>  search_state <span class="op">=</span> <span class="va">search_state</span>,</span>
-<span>  base_model_id <span class="op">=</span> <span class="st">"run10"</span>,</span>
-<span>  scm_type <span class="op">=</span> <span class="st">"selective"</span>,</span>
-<span>  starting_phase <span class="op">=</span> <span class="st">"backward"</span>,</span>
-<span>  full_scm <span class="op">=</span> <span class="cn">TRUE</span>,              <span class="co"># Backward -&gt; Forward -&gt; Backward</span></span>
-<span>  forward_p_value <span class="op">=</span> <span class="fl">0.05</span>,</span>
-<span>  backward_p_value <span class="op">=</span> <span class="fl">0.01</span>,</span>
-<span>  rse_threshold <span class="op">=</span> <span class="fl">50</span>,</span>
-<span>  require_cov_step <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  auto_submit <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  auto_retry <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  save_checkpoints <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  checkpoint_prefix <span class="op">=</span> <span class="st">"scm_auto"</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-</div>
-<div class="section level3">
-<h3 id="step-6-review-results">Step 6: Review Results<a class="anchor" aria-label="anchor" href="#step-6-review-results"></a>
-</h3>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">search_state</span> <span class="op">&lt;-</span><span class="fu"><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">readRDS</a></span><span class="op">(</span><span class="st">"./models/scm_rds/scm_auto_final_complete.rds"</span><span class="op">)</span></span>
-<span><span class="va">results_table</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/create_scm_results_table.html">create_scm_results_table</a></span><span class="op">(</span><span class="va">search_state</span><span class="op">)</span></span>
-<span><span class="fu"><a href="../reference/print_scm_results_table.html">print_scm_results_table</a></span><span class="op">(</span><span class="va">search_state</span><span class="op">)</span></span></code></pre></div>
-</div>
-<div class="section level3">
-<h3 id="step-7-resume-from-checkpoints">Step 7: Resume from Checkpoints<a class="anchor" aria-label="anchor" href="#step-7-resume-from-checkpoints"></a>
-</h3>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">search_state</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/load_search_state.html">load_search_state</a></span><span class="op">(</span><span class="st">"scm_auto_forward_complete.rds"</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/write.table.html" class="external-link">write.csv</a></span><span class="op">(</span><span class="va">cov_extra</span>, <span class="st">"data/derived/covariate_search_extra.csv"</span>, row.names <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_automated_scm_testing.html">run_automated_scm_testing</a></span><span class="op">(</span></span>
-<span>  search_state <span class="op">=</span> <span class="va">search_state</span>,</span>
-<span>  base_model_id <span class="op">=</span> <span class="st">"run10"</span>,</span>
-<span>  starting_phase <span class="op">=</span> <span class="st">"backward"</span>,</span>
-<span>  full_scm <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  backward_p_value <span class="op">=</span> <span class="fl">0.01</span></span>
-<span><span class="op">)</span></span></code></pre></div>
+<span><span class="va">ss</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/add_covariates_to_search.html">add_covariates_to_search</a></span><span class="op">(</span><span class="va">bw</span><span class="op">$</span><span class="va">search_state</span>,</span>
+<span>                               <span class="st">"data/derived/covariate_search_extra.csv"</span><span class="op">)</span></span></code></pre></div>
+<p><code><a href="../reference/add_covariates_to_search.html">add_covariates_to_search()</a></code> takes the table either as an
+object or as a path to a <code>.csv</code>, so writing it out first
+keeps a record of exactly what was added.</p>
+<p>This appends the rows, revalidates the whole table, regenerates
+<code>tags.yaml</code> and refreshes <code>ss$tags</code>. Use
+<code>bw$search_state</code>, not a fresh
+<code><a href="../reference/initialize_covariate_search.html">initialize_covariate_search()</a></code> - re-initializing rebuilds
+the database from the model files and loses every step number and
+ΔOFV.</p>
+<p>A covariate/parameter pair already in the table is rejected as a
+duplicate.</p>
+<hr>
 </div>
 <div class="section level3">
-<h3 id="next-steps">Next Steps<a class="anchor" aria-label="anchor" href="#next-steps"></a>
+<h3 id="forward-then-backward">6. Forward, then backward<a class="anchor" aria-label="anchor" href="#forward-then-backward"></a>
+</h3>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">res</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_automated_scm_testing.html">run_automated_scm_testing</a></span><span class="op">(</span></span>
+<span>  search_state     <span class="op">=</span> <span class="va">ss</span>,</span>
+<span>  base_model_id    <span class="op">=</span> <span class="va">bw</span><span class="op">$</span><span class="va">final_model</span>,  <span class="co"># model the search starts from</span></span>
+<span>  scm_type         <span class="op">=</span> <span class="st">"selective"</span>,     <span class="co"># "standard" or "selective"</span></span>
+<span>  starting_phase   <span class="op">=</span> <span class="st">"forward"</span>,       <span class="co"># "forward" or "backward"</span></span>
+<span>  full_scm         <span class="op">=</span> <span class="cn">TRUE</span>,            <span class="co"># TRUE = both phases, FALSE = starting_phase only</span></span>
+<span>  forward_p_value  <span class="op">=</span> <span class="fl">0.05</span>,            <span class="co"># entry criterion</span></span>
+<span>  backward_p_value <span class="op">=</span> <span class="fl">0.01</span>,            <span class="co"># retention criterion</span></span>
+<span>  rse_threshold    <span class="op">=</span> <span class="fl">50</span>,              <span class="co"># max RSE (%)</span></span>
+<span>  require_cov_step <span class="op">=</span> <span class="cn">TRUE</span>,            <span class="co"># require a successful $COVARIANCE step</span></span>
+<span>  auto_submit      <span class="op">=</span> <span class="cn">TRUE</span>,            <span class="co"># FALSE = create the models, submit them yourself</span></span>
+<span>  auto_retry       <span class="op">=</span> <span class="cn">TRUE</span>,            <span class="co"># retry a failed model from a different init</span></span>
+<span>  save_checkpoints <span class="op">=</span> <span class="cn">TRUE</span>             <span class="co"># write scm_rds/NN_phase_event.rds each step</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">res</span><span class="op">$</span><span class="va">final_model</span></span>
+<span><span class="va">res</span><span class="op">$</span><span class="va">final_covariates</span></span>
+<span><span class="va">res</span><span class="op">$</span><span class="va">excluded_covariates</span></span>
+<span><span class="fu"><a href="../reference/view_comprehensive_table.html">view_comprehensive_table</a></span><span class="op">(</span><span class="va">res</span><span class="op">$</span><span class="va">search_state</span><span class="op">)</span></span></code></pre></div>
+<table class="table">
+<colgroup>
+<col width="33%">
+<col width="33%">
+<col width="33%">
+</colgroup>
+<thead><tr class="header">
+<th>argument</th>
+<th>default</th>
+<th>effect</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td><code>search_state</code></td>
+<td>—</td>
+<td>required</td>
+</tr>
+<tr class="even">
+<td><code>base_model_id</code></td>
+<td><code>NULL</code></td>
+<td>model to start from; <code>NULL</code> uses
+<code>search_state$base_model</code>
+</td>
+</tr>
+<tr class="odd">
+<td><code>scm_type</code></td>
+<td><code>"standard"</code></td>
+<td>
+<code>"standard"</code> tests every remaining covariate each step;
+<code>"selective"</code> carries forward only those significant in step
+1</td>
+</tr>
+<tr class="even">
+<td><code>starting_phase</code></td>
+<td><code>"forward"</code></td>
+<td>which phase runs first</td>
+</tr>
+<tr class="odd">
+<td><code>full_scm</code></td>
+<td><code>TRUE</code></td>
+<td>
+<code>TRUE</code> runs both phases (<code>backward</code> start
+gives backward → forward → backward); <code>FALSE</code> runs only
+<code>starting_phase</code>
+</td>
+</tr>
+<tr class="even">
+<td><code>forward_p_value</code></td>
+<td><code>NULL</code></td>
+<td>entry p-value; <code>NULL</code> uses the search config (0.05)</td>
+</tr>
+<tr class="odd">
+<td><code>backward_p_value</code></td>
+<td><code>NULL</code></td>
+<td>retention p-value; <code>NULL</code> uses the search config
+(0.01)</td>
+</tr>
+<tr class="even">
+<td><code>rse_threshold</code></td>
+<td><code>NULL</code></td>
+<td>maximum RSE %; <code>NULL</code> uses the search config (50)</td>
+</tr>
+<tr class="odd">
+<td><code>require_cov_step</code></td>
+<td><code>TRUE</code></td>
+<td>a model counts as completed only with a successful
+<code>$COVARIANCE</code> step</td>
+</tr>
+<tr class="even">
+<td><code>auto_submit</code></td>
+<td><code>TRUE</code></td>
+<td>
+<code>FALSE</code> creates the models without submitting them</td>
+</tr>
+<tr class="odd">
+<td><code>auto_retry</code></td>
+<td><code>TRUE</code></td>
+<td>on an estimation failure, create <code>run&lt;N&gt;001</code> from a
+different initial estimate and submit it</td>
+</tr>
+<tr class="even">
+<td><code>save_checkpoints</code></td>
+<td><code>TRUE</code></td>
+<td>write <code>&lt;models_folder&gt;/scm_rds/NN_phase_event.rds</code>
+after each step</td>
+</tr>
+</tbody>
+</table>
+<p>The p-value and RSE arguments fall back to
+<code>search_state$search_config</code>, so set them once at
+initialization or per call here.</p>
+<hr>
+</div>
+<div class="section level3">
+<h3 id="test-extra-covariates-on-the-final-model">7. Test extra covariates on the final model<a class="anchor" aria-label="anchor" href="#test-extra-covariates-on-the-final-model"></a>
+</h3>
+<p>Same two calls, pointed at the final model:</p>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">cov_smk</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/build_covariate_reference_table.html">build_covariate_reference_table</a></span><span class="op">(</span></span>
+<span>  data <span class="op">=</span> <span class="va">data</span>, id <span class="op">=</span> <span class="st">"ID"</span>, time <span class="op">=</span> <span class="st">"TIME"</span>,</span>
+<span>  Parameter <span class="op">=</span> <span class="st">"V1"</span>, Covariate <span class="op">=</span> <span class="st">"SMK"</span>, Category <span class="op">=</span> <span class="st">"cat"</span>, Formula <span class="op">=</span> <span class="st">"linear"</span>,</span>
+<span>  yaml_data <span class="op">=</span> <span class="va">spec</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/write.table.html" class="external-link">write.csv</a></span><span class="op">(</span><span class="va">cov_smk</span>, <span class="st">"data/derived/covariate_search_smk.csv"</span>, row.names <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">ss</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/add_covariates_to_search.html">add_covariates_to_search</a></span><span class="op">(</span><span class="va">res</span><span class="op">$</span><span class="va">search_state</span>,</span>
+<span>                               <span class="st">"data/derived/covariate_search_smk.csv"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">add</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/add_covariate_to_model.html">add_covariate_to_model</a></span><span class="op">(</span></span>
+<span>  <span class="va">ss</span>,</span>
+<span>  base_model_id <span class="op">=</span> <span class="va">res</span><span class="op">$</span><span class="va">final_model</span>,</span>
+<span>  covariate_tag <span class="op">=</span> <span class="st">"beta_SMK_V1"</span>,</span>
+<span>  step_number   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="va">ss</span><span class="op">$</span><span class="va">search_database</span><span class="op">$</span><span class="va">step_number</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span> <span class="op">+</span> <span class="fl">1</span>,</span>
+<span>  phase         <span class="op">=</span> <span class="st">"individual_testing"</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">ss</span> <span class="op">&lt;-</span> <span class="va">add</span><span class="op">$</span><span class="va">search_state</span></span>
+<span><span class="fu">bbr</span><span class="fu">::</span><span class="fu"><a href="https://metrumresearchgroup.github.io/bbr/reference/submit_model.html" class="external-link">submit_model</a></span><span class="op">(</span><span class="fu">bbr</span><span class="fu">::</span><span class="fu"><a href="https://metrumresearchgroup.github.io/bbr/reference/read_model.html" class="external-link">read_model</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="va">ss</span><span class="op">$</span><span class="va">models_folder</span>, <span class="va">add</span><span class="op">$</span><span class="va">model_name</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>                  .bbi_args <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>threads <span class="op">=</span> <span class="fl">12</span><span class="op">)</span>, .overwrite <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
+<div class="section level4">
+<h4 id="step-numbers">Step numbers<a class="anchor" aria-label="anchor" href="#step-numbers"></a>
+</h4>
+<p>Every model in the database carries a <code>step_number</code>. The
+search assigns one per step, so all models tested against the same
+parent share it. A manual add takes whatever you pass -
+<code>max(...) + 1</code> above puts the extra tests in a step of their
+own, after the search.</p>
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/table.html" class="external-link">table</a></span><span class="op">(</span><span class="va">ss</span><span class="op">$</span><span class="va">search_database</span><span class="op">$</span><span class="va">step_number</span>, <span class="va">ss</span><span class="op">$</span><span class="va">search_database</span><span class="op">$</span><span class="va">phase</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co">## models belonging to one step</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/subset.html" class="external-link">subset</a></span><span class="op">(</span><span class="va">ss</span><span class="op">$</span><span class="va">search_database</span>, <span class="va">step_number</span> <span class="op">==</span> <span class="fl">7</span>,</span>
+<span>       <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"model_name"</span>, <span class="st">"covariate_tested"</span>, <span class="st">"status"</span>, <span class="st">"ofv"</span>, <span class="st">"delta_ofv"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level4">
+<h4 id="results">Results<a class="anchor" aria-label="anchor" href="#results"></a>
+</h4>
+<p>Statuses and OFVs come from the NONMEM output files, so refresh them
+once the runs finish:</p>
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">ss</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/update_all_model_statuses.html">update_all_model_statuses</a></span><span class="op">(</span><span class="va">ss</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="../reference/view_comprehensive_table.html">view_comprehensive_table</a></span><span class="op">(</span><span class="va">ss</span><span class="op">)</span>                 <span class="co"># printed table</span></span>
+<span><span class="va">tab</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/create_comprehensive_table.html">create_comprehensive_table</a></span><span class="op">(</span><span class="va">ss</span><span class="op">)</span>        <span class="co"># same thing as a data frame</span></span></code></pre></div>
+<p>In a new session <code>ss</code> is gone - load it back from a
+checkpoint first. They are written to
+<code>&lt;models_folder&gt;/scm_rds/</code> as
+<code>NN_phase_event.rds</code>, zero-padded by step, so the last one
+alphabetically is the most recent:</p>
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/list.files.html" class="external-link">list.files</a></span><span class="op">(</span><span class="st">"models/scm_rds"</span><span class="op">)</span></span>
+<span><span class="co">#&gt; "00_base_complete.rds" "01_forward_step_complete.rds" ...</span></span>
+<span></span>
+<span><span class="va">ss</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/load_search_state.html">load_search_state</a></span><span class="op">(</span><span class="st">"models/scm_rds/07_forward_selection_complete.rds"</span><span class="op">)</span></span>
+<span><span class="va">ss</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/update_all_model_statuses.html">update_all_model_statuses</a></span><span class="op">(</span><span class="va">ss</span><span class="op">)</span></span></code></pre></div>
+<p><code><a href="../reference/load_search_state.html">load_search_state()</a></code> needs the full path;
+<code><a href="../reference/save_search_state.html">save_search_state()</a></code> accepts a bare file name and writes it
+to <code>&lt;models_folder&gt;/scm_rds/</code>.</p>
+<p>The table has one row per model: <code>model_name</code>, parent,
+<code>step</code> (<code>Base</code>, <code>Step 3</code>,
+<code>Step 3 (Retry)</code>), <code>changes</code> (the covariate added
+or removed), <code>status</code>, OFV, ΔOFV and the parameter count.</p>
+<p>For the ΔOFV-versus-threshold view of a search:</p>
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/print_scm_results_table.html">print_scm_results_table</a></span><span class="op">(</span><span class="va">ss</span><span class="op">)</span></span></code></pre></div>
+<p><code>phase = "individual_testing"</code> marks the row as a one-off
+test rather than a step of the search.</p>
+<hr>
+</div>
+</div>
+<div class="section level3">
+<h3 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a>
 </h3>
 <ul>
-<li>See <a href="troubleshooting.html">Troubleshooting Guide</a> for
-common issues</li>
-<li>See <a href="recovery-system.html">Recovery System</a> for handling
-model failures</li>
-<li>See <a href="case-studies.html">Case Studies</a> for real-world
-examples</li>
+<li><a href="../quick-start.html">Quick Start</a></li>
+<li>
+<a href="covariate-formulas.html">Covariate Formulas</a> - FORMULA
+vocabulary, <code>INIT</code>, degrees of freedom</li>
+<li>
+<code><a href="../reference/continue_search.html">?continue_search</a></code> - resuming an interrupted search</li>
 </ul>
 </div>
 </div>
@@ -301,7 +522,7 @@ examples</li>
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.1.1.</p>
 </div>
 
     </footer>
