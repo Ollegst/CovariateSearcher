@@ -656,7 +656,61 @@ validate_covariate_search_table <- function(covariate_search, data_file) {
     }
   }
 
-  cat("Covariate search table check passed.\n")
+  # Validate INIT against the number of THETAs the FORMULA declares. A
+  # single-theta form (power/linear/exponential, cat.power, and the shared init
+  # of cat.linear) takes ONE plain NONMEM initial estimate; a multi-parameter
+  # expression takes one entry per theta, named. Without this the INIT cell is
+  # written into $THETA verbatim, so a mismatch reaches NONMEM as a broken record.
+  if ("INIT" %in% names(covariate_search)) {
+    for (i in seq_len(nrow(covariate_search))) {
+      init_val <- as.character(covariate_search$INIT[i])
+      if (is.na(init_val) || trimws(init_val) == "") next
+      init_val <- trimws(init_val)
+
+      cov_i   <- covariate_search$COVARIATE[i]
+      param_i <- covariate_search$PARAMETER[i]
+      form_i  <- as.character(covariate_search$FORMULA[i])
+      def <- tryCatch(get_covariate_formula(covariate_search$STATUS[i], form_i),
+                      error = function(e) NULL)
+      if (is.null(def)) next          # FORMULA itself is validated elsewhere
+
+      theta_names <- if (isTRUE(def$categorical)) NULL else def$theta_names
+      n_thetas    <- if (is.null(theta_names)) 1L else length(theta_names)
+      named       <- grepl("=", init_val, fixed = TRUE)
+
+      if (n_thetas == 1L) {
+        if (named || grepl(";", init_val, fixed = TRUE)) {
+          stop(
+            "Row ", i, ": FORMULA '", form_i, "' for covariate '", cov_i,
+            "' on parameter '", param_i, "' has a single THETA, so INIT takes ",
+            "one initial estimate, but got a named/multi-entry spec: '", init_val, "'.\n",
+            "  Use e.g. \"0.1\", \"(0, 0.5, 2)\" or \"0.75 FIX\"."
+          )
+        }
+      } else {
+        if (!named) {
+          stop(
+            "Row ", i, ": FORMULA '", form_i, "' for covariate '", cov_i,
+            "' on parameter '", param_i, "' declares ", n_thetas, " THETAs (",
+            paste(theta_names, collapse = ", "), "), so INIT must name each one.\n",
+            "  Got '", init_val, "'; expected e.g. \"",
+            paste(paste0(theta_names, "=0.1"), collapse = "; "), "\"."
+          )
+        }
+        given <- trimws(sub("=.*$", "", trimws(strsplit(init_val, ";", fixed = TRUE)[[1]])))
+        given <- given[nzchar(given)]
+        unknown <- setdiff(given, theta_names)
+        if (length(unknown) > 0) {
+          stop(
+            "Row ", i, ": INIT for covariate '", cov_i, "' on parameter '", param_i,
+            "' names THETA(s) that FORMULA '", form_i, "' does not declare: ",
+            paste(unknown, collapse = ", "), ".\n",
+            "  Valid names: ", paste(theta_names, collapse = ", "), "."
+          )
+        }
+      }
+    }
+  }
 
   # Validate LEVELS column for all rows: must be empty/NA or numeric semicolon-separated
   for (i in seq_len(nrow(covariate_search))) {
@@ -675,6 +729,8 @@ validate_covariate_search_table <- function(covariate_search, data_file) {
       }
     }
   }
+
+  cat("Covariate search table check passed.\n")
 
   return(covariate_search)
 }

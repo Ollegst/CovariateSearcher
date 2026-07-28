@@ -28,11 +28,12 @@
 
 #' Register a Covariate Formula
 #'
-#' @title Register a covariate-effect formula for the NONMEM writer
-#' @description Adds (or overrides) a covariate-effect form keyed on
-#'   \code{(STATUS, FORMULA)}, used by \code{model_add_cov} to write the covariate
-#'   into the control stream (and by \code{calculate_covariate_df} for the LRT
-#'   degrees of freedom).
+#' @title Declare a built-in covariate-effect form
+#' @description Stores a covariate-effect form in the registry under
+#'   \code{(STATUS, FORMULA)}. Called at load time to declare the built-ins
+#'   below; the entries are then read by \code{model_add_cov} (to write the
+#'   covariate into the control stream) and \code{calculate_covariate_df} (for
+#'   the LRT degrees of freedom).
 #' @param status Character. Covariate status, \code{"con"} or \code{"cat"}.
 #' @param formula Character. Formula name, e.g. \code{"power"}, \code{"linear"},
 #'   \code{"exponential"}, or a user name such as \code{"logit"}.
@@ -52,7 +53,8 @@
 #'   expressions) means no additive form is available, so the covariate is written
 #'   multiplicatively regardless of scale.
 #' @return Invisibly, the registry key.
-#' @export
+#' @keywords internal
+#' @noRd
 register_covariate_formula <- function(status, formula, nonmem = NULL,
                                         init = "0.1",
                                         categorical = FALSE, nonmem_log = NULL) {
@@ -86,8 +88,10 @@ get_covariate_formula <- function(status, formula) {
 #'
 #' @title List the registered covariate-effect forms
 #' @description Returns the \code{"status.formula"} keys currently registered.
+#'   Used in the "unknown formula" error message.
 #' @return Character vector of registry keys, sorted.
-#' @export
+#' @keywords internal
+#' @noRd
 list_covariate_formulas <- function() {
   sort(ls(.covariate_formula_registry))
 }
@@ -174,6 +178,12 @@ parse_covariate_expression <- function(formula) {
     init        = "0.1",
     nonmem = function(cova, ref, n) {
       paste0(" * (", .translate_expr_to_nonmem(expr, cova, ref, thetas, n), ")")
+    },
+    # On a log-scale typical value the expression is JOINED with '+' instead of
+    # '*'. The expression itself is never transformed: writing it on the log
+    # scale (e.g. log(EMAX*cov/(EC50+cov))) is the user's responsibility.
+    nonmem_log = function(cova, ref, n) {
+      paste0(" + (", .translate_expr_to_nonmem(expr, cova, ref, thetas, n), ")")
     }
   )
 }

@@ -56,6 +56,19 @@ utils::globalVariables(c("y", "facet_grp", "xlev", "Freq"))
 #' @param width,height optional numeric; if both supplied, overrides the
 #'   automatic sizing logic based on number of stratification levels.
 #' @param base_size base font size passed to theme_bw().
+#' @param show_median logical; if TRUE (default) each box carries its median
+#'   value in a small white label sitting on the median line.
+#' @param show_n logical; if TRUE (default) the number of subjects in each box
+#'   is printed underneath it as "n = <count>".
+#' @param label_size numeric or NULL. Text size of the median label, in the
+#'   usual ggplot `size` units. `NULL` (default) derives it from `base_size`
+#'   (`base_size/.pt * 0.65`); give a number to shrink it where the boxes are
+#'   narrow or the panel count is high, e.g. `label_size = 1.8`.
+#' @param percent_change logical; if TRUE the median label also shows the change
+#'   from the **first level of the same panel**, e.g. `1,234 (-10%)`. The first
+#'   level is the reference and carries no suffix, and a panel holding a single
+#'   box (the pooled `Total` panel) gets none either. Requires
+#'   `show_median = TRUE` to be visible. Default FALSE.
 #' @param verbose logical; if TRUE (default) prints progress messages
 #'   ("[i/n] AUC: processing WT ... done -> path/to/file.emf") as each
 #'   parameter type / covariate combination is processed.
@@ -119,7 +132,11 @@ create_covariate_boxplots <- function(data,
                                       verbose = TRUE,
                                       combined_pdf = TRUE,
                                       prefix = NULL,
-                                      output_format = c("emf", "png")) {
+                                      output_format = c("emf", "png"),
+                                      show_median = TRUE,
+                                      show_n = TRUE,
+                                      percent_change = FALSE,
+                                      label_size = NULL) {
 
   type <- as.character(type)
   output_format <- match.arg(output_format, choices = c("emf", "png"),
@@ -292,28 +309,69 @@ create_covariate_boxplots <- function(data,
       cnt$facet_grp <- factor(cnt$facet_grp, levels = panel_levels)
       cnt$xlev      <- factor(cnt$xlev, levels = c(grp_levels, "All subjects"))
 
-      # Boxes with all raw points jittered behind, the median value in a small
-      # box on the median line, and N under each box; strata + REF as panels.
+      # Median per (panel, box), precomputed so the label can also carry the
+      # change versus the first level of that panel.
+      med <- stats::aggregate(
+        valid[[t]],
+        by = list(facet_grp = valid$facet_grp, xlev = valid[[covariate]]),
+        FUN = stats::median, na.rm = TRUE
+      )
+      names(med)[ncol(med)] <- "y"
+      med$label <- format(signif(med$y, 3), trim = TRUE, big.mark = ",")
+
+      if (isTRUE(percent_change)) {
+        # Within each panel, express every box as a % change from the FIRST
+        # level; the first level is the reference and carries no suffix.
+        med <- do.call(rbind, lapply(split(med, med$facet_grp), function(d) {
+          if (nrow(d) == 0) return(d)
+          d   <- d[order(match(as.character(d$xlev), x_levels)), , drop = FALSE]
+          ref <- d$y[1]
+          if (!is.na(ref) && ref != 0 && nrow(d) > 1) {
+            pct <- (d$y - ref) / ref * 100
+            d$label[-1] <- paste0(d$label[-1], " (",
+                                  sprintf("%+.0f%%", pct[-1]), ")")
+          }
+          d
+        }))
+      }
+      med$facet_grp <- factor(med$facet_grp, levels = panel_levels)
+      med$xlev      <- factor(as.character(med$xlev),
+                              levels = c(grp_levels, "All subjects"))
+
+      # Boxes with all raw points jittered behind, optionally the median value in
+      # a small box on the median line and N under each box; strata + REF panels.
       combined <- ggplot(alld, aes(x = .data[[covariate]], y = .data[[t]])) +
         geom_jitter(width = 0.18, height = 0, size = 0.4, alpha = 0.3,
                     colour = "royalblue", na.rm = TRUE) +
         geom_boxplot(width = 0.6, fill = NA, colour = "grey20",
-                     outlier.shape = NA, na.rm = TRUE) +
-        stat_summary(
-          fun   = stats::median,
-          geom  = "label",
-          aes(label = format(signif(after_stat(y), 3), trim = TRUE, big.mark = ",")),
-          vjust = 0.5,                              # box centred on the median line
-          size  = base_size / .pt * 0.65,           # a bit smaller than the axis text
-          label.size = 0.25,                        # thin border box around the number
-          label.padding = grid::unit(0.12, "lines"),
-          fill = "white",
-          colour = "grey15",
-          na.rm = TRUE
-        ) +
-        geom_text(data = cnt, aes(x = xlev, label = paste0("n = ", Freq)),
-                  y = -Inf, vjust = -0.5, size = base_size / .pt * 0.6,
-                  colour = "grey30", inherit.aes = FALSE) +
+                     outlier.shape = NA, na.rm = TRUE)
+
+      if (isTRUE(show_median)) {
+        # Default is a bit smaller than the axis text; `label_size` overrides it
+        # outright, for narrow boxes where the label would otherwise dominate.
+        med_size <- if (is.null(label_size)) base_size / .pt * 0.65 else label_size
+        combined <- combined +
+          geom_label(
+            data = med, aes(x = xlev, y = y, label = label),
+            inherit.aes = FALSE,
+            vjust = 0.5,                            # box centred on the median line
+            size  = med_size,
+            label.size = 0.25,                      # thin border box around the number
+            label.padding = grid::unit(0.12, "lines"),
+            fill = "white",
+            colour = "grey15",
+            na.rm = TRUE
+          )
+      }
+
+      if (isTRUE(show_n)) {
+        combined <- combined +
+          geom_text(data = cnt, aes(x = xlev, label = paste0("n = ", Freq)),
+                    y = -Inf, vjust = -0.5, size = base_size / .pt * 0.6,
+                    colour = "grey30", inherit.aes = FALSE)
+      }
+
+      combined <- combined +
         facet_grid(cols = vars(facet_grp), scales = "free_x", space = "free_x") +
         scale_y_continuous(expand = expansion(mult = c(0.10, 0.05))) +
         labs(x = x_lab, y = y_label_text) +

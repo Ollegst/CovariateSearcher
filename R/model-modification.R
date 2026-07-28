@@ -406,22 +406,23 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
                        if (op_mode == "add") "additive (log-scale parameter)" else "multiplicative"))
   }
 
-  # Generate the covariate factor/term per op_mode: single-factor built-ins render
-  # from the registry -- multiplicative nonmem() for "mult", additive nonmem_log()
-  # for "add". A user expression has no additive form -> it is inserted
-  # multiplicatively (its correctness on a log scale is the user's responsibility).
+  # Generate the covariate factor/term per op_mode: multiplicative nonmem() for
+  # "mult", additive nonmem_log() for "add". Built-ins render their own additive
+  # form; a user expression is joined with '+' instead of '*' but is otherwise
+  # inserted as written -- putting it on the log scale (e.g. wrapping it in
+  # LOG()) is the user's responsibility.
   # cat.linear keeps the per-level IF/ELSEIF block below, with the assignment and
   # join operator switched to the additive form when op_mode is "add".
   thetanmulti <- tibble()
   if (!is_categorical) {
     if (op_mode == "add" && !is.null(cov_formula_def$nonmem_log)) {
       formule <- cov_formula_def$nonmem_log(cova, ref, newtheta)
-    } else {
-      if (op_mode == "add") {
-        log_function(paste0("WARNING: user expression on log-scale parameter '", param,
-                            "' inserted as a multiplicative factor; ensure the expression ",
-                            "is written correctly for the log scale."))
+      if (!is.null(cov_formula_def$expr)) {
+        log_function(paste0("WARNING: user expression added to log-scale parameter '",
+                            param, "' with '+'; the expression is inserted as written, ",
+                            "so it must already be on the log scale (e.g. LOG(...))."))
       }
+    } else {
       formule <- cov_formula_def$nonmem(cova, ref, newtheta)
     }
   } else {

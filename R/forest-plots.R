@@ -967,7 +967,10 @@ utils::globalVariables(c("Scenario", "VALUE", "NAME", "COLOR", "MIN", "MAX",
 #'   structural parameter column (`"CL"`, `"V2"`, ...) from
 #'   [stack_scenario_parameters()] for a parameter forest.
 #' @param ss Logical. Steady state? Adds an "ss" suffix to the metric in the
-#'   title (e.g. "AUC" vs "AUCss"). Default `TRUE`.
+#'   title (e.g. "AUC" vs "AUCss") **and** to the saved file stem, so a
+#'   steady-state and a single-dose plot of the same metric do not overwrite
+#'   each other (`AUC_forest` -> `AUC_forest_ss.emf`). The suffix is not added
+#'   when the stem already ends in "ss". Default `TRUE`.
 #' @param ClinicalRelevanceLow,ClinicalRelevanceHigh Numeric. Bounds of the
 #'   shaded (inner) clinical-relevance band (ratio scale). Defaults `0.8`,
 #'   `1.25`.
@@ -1000,8 +1003,8 @@ utils::globalVariables(c("Scenario", "VALUE", "NAME", "COLOR", "MIN", "MAX",
 #'   verbatim (custom text, e.g. "Typical subject: 70 kg male, ECOG 0").
 #' @param filename Character or NULL. Base path for saved output; any extension
 #'   is stripped and one file per `output_format` is written as
-#'   `<stem>.<format>`. Missing parent folders are created. `NULL` (default)
-#'   does not save.
+#'   `<stem>.<format>`, or `<stem>_ss.<format>` when `ss = TRUE` (see `ss`).
+#'   Missing parent folders are created. `NULL` (default) does not save.
 #' @param output_format Character. Which format(s) to save when `filename` is
 #'   given: one or both of `"emf"` and `"png"`. Default both. `.emf` is written
 #'   with `devEMF::emf`, `.png` with the [ggplot2::ggsave()] default device.
@@ -1231,6 +1234,10 @@ plot_exposure_forest <- function(data,
 
   if (!is.null(filename)) {
     stem <- tools::file_path_sans_ext(filename)
+    # Steady-state and single-dose versions of the same metric would otherwise
+    # be written to the same file, so the flag is carried into the name. Not
+    # added twice if the caller already put it there.
+    if (isTRUE(ss) && !grepl("ss$", stem)) stem <- paste0(stem, "_ss")
     out_dir <- dirname(stem)                     # create the folder if missing
     if (nzchar(out_dir) && !dir.exists(out_dir)) {
       dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
