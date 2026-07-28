@@ -27,6 +27,6 @@ migration.R
 scripts/
 inst/doc
 
-# NOTE: docs/ is the pkgdown site and IS tracked, so GitHub Pages can serve it
-# from the docs/ folder. It stays in .Rbuildignore so it never ships in the
-# package tarball.
+# The pkgdown site is built by the pkgdown workflow and published from the
+# gh-pages branch, so local build output stays out of the repository.
+docs/
