@@ -25,7 +25,8 @@ create_covariate_boxplots(
   show_median = TRUE,
   show_n = TRUE,
   percent_change = FALSE,
-  label_size = NULL
+  label_size = NULL,
+  ss = TRUE
 )
 }
 \arguments{
@@ -82,14 +83,14 @@ parameter type / covariate combination is processed.}
 multi-page PDF containing every plot generated in this call (one page
 per parameter type x covariate combination, in the order processed),
 directly under \code{output_folder}. Filename is
-"\if{html}{\out{<prefix>}}\if{html}{\out{<drug>}}-\if{html}{\out{<type1>}}-\if{html}{\out{<type2>}}-...-\if{html}{\out{<HHMM>}}.pdf", e.g.
-"Camizestrant-AUC-Cmax-Cmin-1405.pdf", where HHMM is the current time.}
+"\if{html}{\out{<prefix>}}\if{html}{\out{<drug>}}-\if{html}{\out{<type1>}}-\if{html}{\out{<type2>}}-...\link{_ss}-\if{html}{\out{<HHMM>}}.pdf", e.g.
+"Camizestrant-AUC-Cmax-Cmin_ss-1405.pdf", where HHMM is the current time.}
 
 \item{prefix}{optional string prepended to every output filename (both the
 per-plot image files and the combined PDF), so different simulation runs
 do not overwrite each other in the same folder. \code{NULL}/\code{""} (default) adds
 nothing. E.g. \code{prefix = "run19"} gives
-"run19-\if{html}{\out{<drug>}}-\if{html}{\out{<covariate>}}-\if{html}{\out{<type>}}.emf".}
+"run19-\if{html}{\out{<drug>}}-\if{html}{\out{<covariate>}}-\if{html}{\out{<type>}}\link{_ss}.emf".}
 
 \item{output_format}{character vector, subset of c("emf","png"); which
 image format(s) to save each per-plot figure as. Default both. \code{.emf} is
@@ -112,6 +113,13 @@ box (the pooled \code{Total} panel) gets none either. Requires
 usual ggplot \code{size} units. \code{NULL} (default) derives it from \code{base_size}
 (\code{base_size/.pt * 0.65}); give a number to shrink it where the boxes are
 narrow or the panel count is high, e.g. \code{label_size = 1.8}.}
+
+\item{ss}{logical; steady state? If TRUE (default) an "ss" suffix is added to
+the metric label on the y axis ("\if{html}{\out{<drug>}} AUCss, \if{html}{\out{<unit>}}") and "_ss" to every
+saved file name, so steady-state and single-dose runs of the same drug do
+not overwrite each other. Nothing is appended where the label or file stem
+already ends in "ss", which is common when the labels come from a spec
+holding \code{AUCss}. Matches the \code{ss} argument of \code{\link[=plot_exposure_forest]{plot_exposure_forest()}}.}
 }
 \value{
 A nested list: results[\link{type}][\link{covariate}] = the faceted ggplot

@@ -167,6 +167,10 @@ results <- create_covariate_boxplots(
   type          = c("AUC", "Cmax", "Cmin"),   # or just "AUC"
   drug          = compound_name,
   param_info    = spec_pk,        # labels/units per metric, from pk-extend.yml
+  ss            = TRUE,           # steady state: "ss" on the y-axis metric label
+                                  # and "_ss" on every file name, so a single-dose
+                                  # run never overwrites these. Labels that already
+                                  # end in "ss" are left alone
   total_panel   = FALSE,          # TRUE adds a right-most panel pooling everyone
   output_folder = "results/figure/simulations"
 )
@@ -219,13 +223,14 @@ Every entry of `type` must have a label there, or the call stops.
 |---|---|---|
 | `con`, `cat` | `NULL` | continuous and categorical covariate columns to plot |
 | `type` | `c("AUC","Cmax","Cmin")` | metric columns of `data`; any numeric column works |
+| `ss` | `TRUE` | steady state. Appends "ss" to the metric label on the y axis (`Drug X AUCss, mg*hr/L`) **and** `_ss` to every saved file name (`Drug X-WT-AUC_ss.emf`, `Drug X-AUC-Cmax-Cmin_ss-1405.pdf`), so single-dose and steady-state runs cannot overwrite each other. Nothing is appended where the label or file stem already ends in "ss" |
 | `stratification` | `NULL` | column to split into side-by-side panels |
 | `total_panel` | `TRUE` | add the pooled `Total` panel |
 | `output_folder` | `"results/figure/simulations"` | where files are written |
 | `output_format` | `c("emf","png")` | one file per format |
 | `combined_pdf` | `TRUE` | additionally write every plot to one PDF |
 | `prefix` | `NULL` | prepended to every output file name |
-| `base_size` | `10` | ggplot base font size |
+| `base_size` | `10` | ggplot base font size; also scales the `n =` text and, unless `label_size` is given, the median label |
 | `width`, `height` | `NULL` | supply **both** to override the automatic sizing |
 | `verbose` | `TRUE` | per-covariate progress line |
 

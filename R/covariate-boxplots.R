@@ -46,6 +46,12 @@ utils::globalVariables(c("y", "facet_grp", "xlev", "Freq"))
 #'   - a yspec object, a path to a spec YAML, or a spec-shaped list (each entry's
 #'   `short` becomes the label, plus its `unit`). Every `type` must have an
 #'   entry or the call stops.
+#' @param ss logical; steady state? If TRUE (default) an "ss" suffix is added to
+#'   the metric label on the y axis ("<drug> AUCss, <unit>") and "_ss" to every
+#'   saved file name, so steady-state and single-dose runs of the same drug do
+#'   not overwrite each other. Nothing is appended where the label or file stem
+#'   already ends in "ss", which is common when the labels come from a spec
+#'   holding `AUCss`. Matches the `ss` argument of [plot_exposure_forest()].
 #' @param stratification optional column name (string) in `data` to split
 #'   plots into side-by-side panels (e.g. "COMB"). NULL = single panel.
 #' @param total_panel logical; if TRUE (default) add a right-most `Total` panel
@@ -76,13 +82,13 @@ utils::globalVariables(c("y", "facet_grp", "xlev", "Freq"))
 #'   multi-page PDF containing every plot generated in this call (one page
 #'   per parameter type x covariate combination, in the order processed),
 #'   directly under `output_folder`. Filename is
-#'   "<prefix><drug>-<type1>-<type2>-...-<HHMM>.pdf", e.g.
-#'   "Camizestrant-AUC-Cmax-Cmin-1405.pdf", where HHMM is the current time.
+#'   "<prefix><drug>-<type1>-<type2>-...[_ss]-<HHMM>.pdf", e.g.
+#'   "Camizestrant-AUC-Cmax-Cmin_ss-1405.pdf", where HHMM is the current time.
 #' @param prefix optional string prepended to every output filename (both the
 #'   per-plot image files and the combined PDF), so different simulation runs
 #'   do not overwrite each other in the same folder. `NULL`/`""` (default) adds
 #'   nothing. E.g. `prefix = "run19"` gives
-#'   "run19-<drug>-<covariate>-<type>.emf".
+#'   "run19-<drug>-<covariate>-<type>[_ss].emf".
 #' @param output_format character vector, subset of c("emf","png"); which
 #'   image format(s) to save each per-plot figure as. Default both. `.emf` is
 #'   written with [devEMF::emf()], `.png` with the [ggplot2::ggsave()] default
@@ -136,7 +142,8 @@ create_covariate_boxplots <- function(data,
                                       show_median = TRUE,
                                       show_n = TRUE,
                                       percent_change = FALSE,
-                                      label_size = NULL) {
+                                      label_size = NULL,
+                                      ss = TRUE) {
 
   type <- as.character(type)
   output_format <- match.arg(output_format, choices = c("emf", "png"),
@@ -154,6 +161,12 @@ create_covariate_boxplots <- function(data,
   # Optional filename prefix so different simulation runs do not overwrite each
   # other in the same folder (e.g. prefix = "run19" -> run19-<drug>-<cov>-<type>).
   pfx <- if (is.null(prefix) || !nzchar(trimws(prefix))) "" else paste0(trimws(prefix), "-")
+
+  # Steady-state marker for the metric label and the file names. Skipped where
+  # the text already ends in "ss" (spec labels often read "AUCss" already).
+  add_ss <- function(x, sep = "") {
+    if (isTRUE(ss) && length(x) == 1L && !grepl("ss$", x)) paste0(x, sep, "ss") else x
+  }
 
   if (is.null(con) && is.null(cat)) {
     stop("At least one of `con` or `cat` must be supplied.")
@@ -235,7 +248,7 @@ create_covariate_boxplots <- function(data,
     # Unit is used verbatim from param_info (e.g. "µg·day/mL"); no symbol
     # substitution here. The combined PDF uses cairo_pdf (below) so the unit's
     # unicode renders there.
-    y_label_text <- paste0(drug, " ", pinfo$label, ", ", pinfo$unit)
+    y_label_text <- paste0(drug, " ", add_ss(pinfo$label), ", ", pinfo$unit)
     results[[t]] <- list()
 
     if (verbose) {
@@ -389,7 +402,7 @@ create_covariate_boxplots <- function(data,
 
       results[[t]][[covariate]] <- combined
 
-      base_name <- paste0(pfx, drug, "-", covariate, "-", t)
+      base_name <- add_ss(paste0(pfx, drug, "-", covariate, "-", t), "_")
       saved <- character(0)
       for (fmt in output_format) {
         fname <- file.path(output_folder, t, paste0(base_name, ".", fmt))
@@ -418,7 +431,9 @@ create_covariate_boxplots <- function(data,
 
   if (combined_pdf) {
     hhmm <- format(Sys.time(), "%H%M")
-    pdf_name <- paste0(pfx, drug, "-", paste(type, collapse = "-"), "-", hhmm, ".pdf")
+    pdf_name <- paste0(pfx, drug, "-",
+                       add_ss(paste(type, collapse = "-"), "_"),
+                       "-", hhmm, ".pdf")
     pdf_path <- file.path(output_folder, pdf_name)
 
     if (verbose) {
