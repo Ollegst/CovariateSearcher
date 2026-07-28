@@ -7,7 +7,7 @@
 
 
 
-#' Add Covariate to Model (FIXED - WITH PROPER LOG FILE SAVING)
+#' Add Covariate to Model
 #' @param search_state List. Current search state from initialize_covariate_search()
 #' @param base_model_id Character. Base model identifier (e.g., "run1")
 #' @param covariate_tag Character. Covariate tag to add (e.g., "beta_cl_wt")
@@ -157,7 +157,6 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag,
     technical_log <- model_result$log_entries
     cat("  [OK] Covariate added to model file\n")
 
-    # FIXED: Save log file with standardized naming
     if (!is.null(technical_log) && length(technical_log) > 0) {
       log_filename <- file.path(search_state$models_folder,
                                 paste0(new_model_name, "_add_", covariate_name, "_log.txt"))
@@ -167,7 +166,7 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag,
       cat("  ⚠️  No log entries captured\n")
     }
 
-    # Sub-step 3c: Add to database (SIMPLIFIED SCHEMA)
+    # Sub-step 3c: Add to database
     cat("  Adding to database...\n")
     yaml_path <- file.path(search_state$models_folder,  paste0(new_model_name, ".yaml"))
     yaml_data <- yaml::read_yaml(yaml_path)
@@ -1154,7 +1153,7 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
   modelcode <- read_model_file(search_state, model_to_modify)
   original_file_path <- attr(modelcode, "file_path")
 
-  # Step 4: FIXED THETA DETECTION - Count actual THETA parameters, not line positions
+  # Step 4: Count actual THETA parameters, not line positions
   theta_start <- grep("^\\$THETA", modelcode)
   if (length(theta_start) == 0) {
     stop("No $THETA section found in model file for ", model_to_modify)
@@ -1235,7 +1234,7 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
           # Found a line that sets our beta variable
           # Now find the complete IF-THEN-ELSE block containing this line
 
-          # Search backwards for the IF statement (FIXED: proper sequence)
+          # Search backwards for the IF statement
           block_start <- NULL
           for (j in seq(from = i, to = pk_start, by = -1)) {
             if (grepl(paste0("IF\\s*\\(", cova, "\\.EQ\\."), modelcode[j])) {

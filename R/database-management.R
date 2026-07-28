@@ -153,9 +153,9 @@ load_search_state <- function(filename) {
   return(search_state)
 }
 
-#' Initialize Search Database (SIMPLIFIED SCHEMA)
+#' Initialize Search Database
 #' @param search_state List containing search state
-#' @return Updated search_state with simplified database schema
+#' @return Updated search_state with an empty search database
 #' @export
 initialize_search_database_core <- function(search_state) {
   search_state$search_database <- data.frame(
@@ -326,7 +326,7 @@ update_model_counter <- function(search_state) {
 
 
 
-#' Create Comprehensive Table (UPDATED FOR SIMPLIFIED SCHEMA - FIXED)
+#' Create Comprehensive Table
 #' @param search_state List. Current search state
 #' @param use_separate_columns Logical. Whether to use separate Step and Changes columns (default: TRUE)
 #' @return Data frame with model summary using generated descriptions
@@ -388,7 +388,7 @@ create_comprehensive_table <- function(search_state, use_separate_columns = TRUE
     result_df$model_type <- "Development"
 
     if (use_separate_columns) {
-      # NEW VERSION: Separate Step and Changes columns
+      # Separate Step and Changes columns
       result_df$step <- generate_step_display(
         result_df$step_number,
         result_df$action
@@ -478,7 +478,7 @@ create_comprehensive_table <- function(search_state, use_separate_columns = TRUE
 }
 
 
-#' Generate Step Display (NEW FUNCTION FOR STEP COLUMN)
+#' Generate Step Display
 #' @param step_number Integer vector of step numbers
 #' @param action Character vector of action types
 #' @return Character vector of step displays
@@ -499,7 +499,7 @@ generate_step_display <- function(step_number, action) {
 
 
 
-#' View Comprehensive Table (UPDATED FOR SIMPLIFIED SCHEMA)
+#' View Comprehensive Table
 #' @param search_state List. Current search state
 #' @param use_separate_columns Logical. Whether to use separate Step and Changes columns (default: TRUE)
 #' @export
@@ -523,7 +523,7 @@ view_comprehensive_table <- function(search_state, use_separate_columns = TRUE) 
   })
 }
 
-#' Generate Changes Display (NEW FUNCTION FOR CHANGES COLUMN)
+#' Generate Changes Display
 #' @param action Character vector of action types
 #' @param covariate_tested Character vector of covariate names
 #' @return Character vector of changes descriptions

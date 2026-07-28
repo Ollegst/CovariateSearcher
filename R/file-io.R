@@ -185,15 +185,15 @@ read_nonmem_ext <- function(model_path) {
 
 
 
-#' Read NONMEM LST File with Basic Error Detection (FIXED)
+#' Read NONMEM LST File with Basic Error Detection
 #'
 #' @title Robust LST file reader with comprehensive error handling
-#' @description Enhanced version with comprehensive input validation and error handling
+#' @description Reads a model's .lst file and classifies the run status
 #' @param model_path Character. Path to model directory or lst file
 #' @return List with status and error information
 #' @export
 read_nonmem_lst <- function(model_path) {
-  # FIXED: Comprehensive input validation
+  # Validate the model path
   if (is.null(model_path) || length(model_path) == 0 ||
       nchar(as.character(model_path)) == 0 || as.character(model_path) == "") {
     return(list(
@@ -205,7 +205,6 @@ read_nonmem_lst <- function(model_path) {
     ))
   }
 
-  # FIXED: Safer file path handling
   model_path_str <- as.character(model_path)
 
   # Find the .lst file
@@ -213,7 +212,7 @@ read_nonmem_lst <- function(model_path) {
     lst_file <- model_path_str
   } else {
     model_name <- basename(model_path_str)
-    # FIXED: Comprehensive model_name validation
+    # Validate the model name derived from the path
     if (is.null(model_name) || length(model_name) == 0 ||
         nchar(as.character(model_name)) == 0 || as.character(model_name) == "") {
       return(list(
@@ -247,7 +246,7 @@ read_nonmem_lst <- function(model_path) {
       status = "not_run",
       error_message = "LST file not found",
       error_excerpt = "",
-      has_issues = FALSE  # FIXED: Not having LST file yet is not an "issue"
+      has_issues = FALSE  # no LST file yet is not an "issue"
     ))
   }
 
@@ -255,7 +254,7 @@ read_nonmem_lst <- function(model_path) {
   tryCatch({
     lst_content <- readLines(lst_file, warn = FALSE)
 
-    # FIXED: Handle empty LST file
+    # Empty LST file
     if (is.null(lst_content) || length(lst_content) == 0) {
       return(list(
         found = TRUE,
@@ -354,7 +353,7 @@ read_nonmem_lst <- function(model_path) {
       }
 
     } else {
-      # FIXED: Better detection of incomplete vs running models
+      # Distinguish an incomplete run from one still going
       has_execution <- any(grepl("NONMEM EXECUTION", lst_content, ignore.case = FALSE))
 
       if (has_execution) {
@@ -389,12 +388,13 @@ read_nonmem_lst <- function(model_path) {
 }
 
 
-#' Get Model Status from Files with Enhanced Error Detection
+#' Get Model Status from Files
 #'
 #' @title Determine overall model status with detailed error reporting
-#' @description Enhanced version that provides detailed failure information
+#' @description Classifies a model's run status from its output files, with
+#'   detailed failure information
 #' @param model_path Character. Path to model directory
-#' @return Character. Overall model status with enhanced error detection
+#' @return Character. Overall model status
 #' @export
 get_model_status_from_files <- function(model_path) {
 

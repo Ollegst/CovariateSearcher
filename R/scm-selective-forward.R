@@ -3,8 +3,6 @@
 # File: R/scm-selective-forward.R
 # Part of CovariateSearcher Package
 # =============================================================================
-#' Run SCM Forward Selection (CORRECTED VERSION)
-#'
 #' Get Significant Models from Step
 #'
 #' @title Extract models that showed significant improvement in a specific step
@@ -404,7 +402,7 @@ run_scm_selective_forward <- function(search_state,
 
       cat(sprintf("📋 Extracted %d covariates from significant models\n", length(covariates_to_test)))
 
-      # CRITICAL: Filter out covariates already in current best model
+      # Filter out covariates already in the current best model
       if (length(covariates_to_test) > 0) {
         # Get covariates already in current best model
         current_model_covariates <- tryCatch({

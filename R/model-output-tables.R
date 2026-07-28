@@ -72,7 +72,7 @@ extract_params <- function(lines, block_tag, remove_prefix = FALSE) {
   # Process each block header found
   params <- purrr::map_dfr(block_starts, function(start_idx) {
 
-    # NEW: extract the remainder of the header line (after the $TAG token)
+    # Extract the remainder of the header line (after the $TAG token)
     header_remainder <- stringr::str_remove(
       lines[start_idx],
       stringr::regex(paste0("^\\$", block_tag, "\\S*\\s*"), ignore_case = TRUE)
@@ -98,7 +98,7 @@ extract_params <- function(lines, block_tag, remove_prefix = FALSE) {
       character(0)
     }
 
-    # NEW: prepend the header remainder if it contains content
+    # Prepend the header remainder if it contains content
     if (stringr::str_detect(header_remainder, "\\S")) {
       block_lines <- c(header_remainder, block_lines)
     }
@@ -199,17 +199,17 @@ calculate_condition_number<- function(model_number,
 
   lines <- readLines(matrix_file, warn = FALSE)
 
-  # --- NEW: keep only the last TABLE block ---
+  # --- keep only the last TABLE block ---
   table_starts <- which(stringr::str_detect(lines, "^TABLE NO"))
   if (length(table_starts) > 0) {
     last_start <- table_starts[length(table_starts)]
     lines <- lines[(last_start + 1):length(lines)]
   }
 
-  # --- NEW: drop the column-header row (NAME THETA1 THETA2 ...) ---
+  # --- drop the column-header row (NAME THETA1 THETA2 ...) ---
   lines <- lines[!stringr::str_detect(lines, "^\\s*NAME\\s")]
 
-  # --- NEW: keep only rows that start with a parameter label ---
+  # --- keep only rows that start with a parameter label ---
   data_rows_mask <- stringr::str_detect(
     lines,
     "^\\s*(THETA|OMEGA|SIGMA)"
@@ -220,7 +220,7 @@ calculate_condition_number<- function(model_number,
     return(NA_real_)
   }
 
-  # --- NEW: strip the first token (the row label) before number extraction ---
+  # --- strip the first token (the row label) before number extraction ---
   data_lines <- stringr::str_replace(
     data_lines,
     "^\\s*\\S+\\s+",
@@ -641,9 +641,6 @@ get_param2 <- function(model_number,
   return(param_est)
 }
 
-
-# FINAL CORRECTED model_report WITH COMPLETE ERROR HANDLING
-# Replace the entire model_report function in model-output-tables.R
 
 #' Generate Parameter Table Report for Multiple Models
 #'

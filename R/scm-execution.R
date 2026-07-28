@@ -7,7 +7,7 @@
 
 
 
-#' Run Univariate Step (ENHANCED WITH EXCLUSION FILTERING)
+#' Run Univariate Step
 #' @param search_state List containing covariate search state and configuration
 #' @param base_model_id Character. Base model to test from
 #' @param covariates_to_test Character vector. Covariate tags to test (optional)
@@ -215,10 +215,11 @@ run_univariate_step <- function(search_state, base_model_id, covariates_to_test 
 }
 
 
-#' Submit Models and Wait for Completion with Auto-Updates (FIXED MONITORING)
+#' Submit Models and Wait for Completion with Auto-Updates
 #'
-#' @title Submit models and wait for all to complete with corrected status tracking
-#' @description Fixed version that properly handles retry model creation and status locking
+#' @title Submit models and wait for all to complete with status tracking
+#' @description Submits a step's models, monitors them to completion, and creates
+#'   retry models for any that hit estimation issues
 #' @param search_state List containing covariate search state and configuration
 #' @param model_names Character vector. Model names to submit and monitor
 #' @param step_name Character. Description of current step
@@ -340,8 +341,9 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
   }
 
   active_monitoring_list <- successful_submissions
-  # ADD THE MONITORING LOOP - this was missing!
-  while (TRUE) {  # Or use: repeat {
+
+  # Poll model statuses until every submitted model has finished
+  while (TRUE) {
 
     update_count <- update_count + 1
 

@@ -71,7 +71,7 @@ select_best_model <- function(search_state, model_names, p_value = NULL, rse_thr
     }
   }
 
-  # CRITICAL: Calculate threshold per model based on covariate df
+  # Calculate the threshold per model based on covariate df
   model_data$ofv_threshold <- NA_real_
   model_data$covariate_df <- NA_integer_
 

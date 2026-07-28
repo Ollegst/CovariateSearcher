@@ -7,7 +7,7 @@
 
 
 
-#' Get Remaining Covariates for Testing (ENHANCED WITH EXCLUSION)
+#' Get Remaining Covariates for Testing
 #'
 #' @title Get list of covariate tags that haven't been tested from base model
 #' @description Identifies which covariates from the search definition haven't
@@ -112,7 +112,6 @@ get_excluded_covariates <- function(search_state, return_details = FALSE, phase_
   }
 
   if (return_details) {
-    # FIXED: Handle the original_model column properly - check if it exists
     if ("original_model" %in% names(excluded_models)) {
       # Use original_model column if it exists
       exclusion_details <- excluded_models %>%
@@ -148,7 +147,7 @@ get_excluded_covariates <- function(search_state, return_details = FALSE, phase_
 
 
 
-#' Run Complete Stepwise Covariate Modeling (FIXED CRITICAL FIELD NAME ERRORS)
+#' Run Complete Stepwise Covariate Modeling
 #'
 #' @title Execute complete stepwise covariate modeling algorithm
 #' @description Main orchestration function that runs the complete SCM workflow:
@@ -301,7 +300,6 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id = NULL,
     selection = step1_selection
   )
 
-  # FIXED: Update tracking with correct field name
   all_tested_covariates <- c(all_tested_covariates, step1_creation$successful_covariates)
 
   if (is.null(step1_selection$best_model)) {
@@ -412,7 +410,6 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id = NULL,
       selection = step_selection
     )
 
-    # FIXED: Update tracking with correct field name
     all_tested_covariates <- c(all_tested_covariates, step_creation$successful_covariates)
 
     # Check if we found improvement

@@ -1,4 +1,4 @@
-#' Run Complete Automated SCM Testing from Base Model (FIXED)
+#' Run Complete Automated SCM Testing from Base Model
 #'
 #' @title Execute full automated stepwise covariate modeling workflow from scratch
 #' @description Runs complete end-to-end SCM testing starting from base model through
@@ -49,7 +49,6 @@ run_automated_scm_testing <- function(search_state,
                                       save_checkpoints = TRUE,
                                       final_testing = TRUE) {
 
-  # FIXED: Input validation with proper match.arg()
   if (is.null(search_state) || !is.list(search_state)) {
     stop("search_state must be a valid list")
   }
@@ -57,14 +56,13 @@ run_automated_scm_testing <- function(search_state,
     base_model_id <- search_state$base_model
   }
   scm_type <- match.arg(scm_type)
-  starting_phase <- match.arg(starting_phase)  # FIXED: Added missing match.arg()
+  starting_phase <- match.arg(starting_phase)
 
-  # FIXED: Consistent workflow logic variables
+  # Which phases this call will run
   run_forward <- FALSE
   run_initial_backward <- FALSE
   run_final_backward <- FALSE
 
-  # FIXED: Clear workflow logic
   if (full_scm) {
     if (starting_phase == "forward") {
       # Standard SCM: Forward → Backward
@@ -89,7 +87,6 @@ run_automated_scm_testing <- function(search_state,
     }
   }
 
-  # FIXED: Enhanced input validation
   if (!is.null(forward_p_value) && (forward_p_value <= 0 || forward_p_value >= 1)) {
     stop("forward_p_value must be between 0 and 1")
   }
@@ -281,10 +278,9 @@ run_automated_scm_testing <- function(search_state,
       ))
     }
 
-    # FIXED: Update search state and current model from forward results with proper field names
     search_state <- forward_results$search_state
 
-    # FIXED: Access correct field names from different SCM functions
+    # The two forward implementations name their result field differently
     current_model <- forward_results$final_best_model %||%  # from run_scm_selective_forward
       forward_results$final_model %||%                      # from run_stepwise_covariate_modeling
       current_model                                         # fallback to original
@@ -377,7 +373,6 @@ run_automated_scm_testing <- function(search_state,
   final_model <- current_model
   cat(sprintf("Final model determined: %s\n", final_model))
 
-  # FIXED: Get final model composition with proper error handling
   final_covariates <- tryCatch({
     get_model_covariates_from_db(search_state, final_model)
   }, error = function(e) {
@@ -419,7 +414,7 @@ run_automated_scm_testing <- function(search_state,
                   length(excluded_covariates), final_model))
       cat(sprintf("Excluded covariates: %s\n", paste(excluded_covariates, collapse = ", ")))
 
-      # FIXED: Convert excluded covariate names back to tags with proper error handling
+      # Covariate names back to tags
       excluded_tags <- character(0)
       for (cov_name in excluded_covariates) {
         tryCatch({
@@ -480,7 +475,7 @@ run_automated_scm_testing <- function(search_state,
                 NULL
               })
 
-              # FIXED: Access correct field name - select_best_model() returns 'best_model'
+              # select_best_model() returns 'best_model'
               if (!is.null(final_evaluation) && !is.null(final_evaluation$best_model)) {
                 search_state <- final_evaluation$search_state
                 cat(sprintf("🎉 Final testing found better model: %s\n", final_evaluation$best_model))
@@ -586,7 +581,6 @@ run_automated_scm_testing <- function(search_state,
   cat(sprintf("💾 Checkpoints saved: %d files\n", length(checkpoint_files)))
   cat(paste(rep("=", 80), collapse=""), "\n")
 
-  # FIXED: Return comprehensive results with consistent naming
   return(list(
     search_state = search_state,
     status = "completed",

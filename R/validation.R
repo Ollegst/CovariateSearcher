@@ -115,7 +115,7 @@ update_model_status_from_files <- function(search_state, model_name, force = FAL
       return(results)
     }
 
-    # Read LST file - SIMPLIFIED: Only check Stop Time
+    # Read LST file - only check Stop Time
     lst_info <- tryCatch({
       lst_content <- readLines(lst_file, warn = FALSE)
 
@@ -160,7 +160,6 @@ update_model_status_from_files <- function(search_state, model_name, force = FAL
       results$error_message <- "No EXT file found"
       results$ofv <- NA_real_
     } else {
-      # Use read_nonmem_ext() instead of duplicating logic
       ext_results <- read_nonmem_ext(model_path)
 
       if (!ext_results$found) {
@@ -176,7 +175,7 @@ update_model_status_from_files <- function(search_state, model_name, force = FAL
         # SIMPLE STATUS DETERMINATION: Valid OFV = success, Invalid OFV = failed
         is_valid_ofv <- !is.na(ofv_value) && is.finite(ofv_value) && abs(ofv_value) <= 1e10
 
-        # NEW: Check for parameters at boundary limits
+        # Check for parameters at boundary limits
         if (is_valid_ofv && !is.null(ext_results$parameters)) {
           # Check if any parameter is at boundary (±8.99990E+05)
           boundary_limit <- 8.99990e5
@@ -404,16 +403,15 @@ force_update_models <- function(search_state, model_names) {
   return(search_state)
 }
 
-#' Update All Model Statuses (FIXED)
+#' Update All Model Statuses
 #'
 #' @title Updates all models with robust error handling and concise progress reporting
-#' @description Enhanced version with comprehensive error handling and validation
+#' @description Refreshes every active model's status from its NONMEM output files
 #' @param search_state List. Current search state
 #' @param show_progress Logical. Whether to show progress summary (default: TRUE)
 #' @return List with updated search_state
 #' @export
 update_all_model_statuses <- function(search_state, show_progress = TRUE) {
-  # FIXED: Comprehensive input validation
   if (is.null(search_state) || is.null(search_state$search_database)) {
     cat("❌ Invalid search_state or missing database\n")
     return(search_state)
@@ -423,7 +421,6 @@ update_all_model_statuses <- function(search_state, show_progress = TRUE) {
     cat("📊 Updating model statuses...\n")
   }
 
-  # FIXED: Safer extraction with validation
   models_to_update <- tryCatch({
     if (is.data.frame(search_state$search_database) &&
         "model_name" %in% names(search_state$search_database) &&
@@ -471,7 +468,6 @@ update_all_model_statuses <- function(search_state, show_progress = TRUE) {
     character(0)
   })
 
-  # FIXED: Handle empty database
   if (length(models_to_update) == 0) {
     if (show_progress) {
       cat("  ✅ No active models to update\n")
@@ -483,13 +479,11 @@ update_all_model_statuses <- function(search_state, show_progress = TRUE) {
   status_changes <- list(newly_completed = character(0), newly_failed = character(0))
 
   for (model_name in models_to_update) {
-    # FIXED: Comprehensive validation for model_name
     if (is.na(model_name) || is.null(model_name) ||
         length(model_name) == 0 || nchar(as.character(model_name)) == 0) {
       next
     }
 
-    # FIXED: Safer status extraction with validation
     old_status_idx <- which(search_state$search_database$model_name == model_name)
     if (length(old_status_idx) == 0) {
       next
@@ -505,7 +499,6 @@ update_all_model_statuses <- function(search_state, show_progress = TRUE) {
       NA_character_
     })
 
-    # FIXED: Comprehensive error handling for update function
     search_state <- tryCatch({
       # Validate that the update function exists
       if (exists("update_model_status_from_files") &&
@@ -520,7 +513,6 @@ update_all_model_statuses <- function(search_state, show_progress = TRUE) {
       search_state  # Return unchanged state on error
     })
 
-    # FIXED: Safer new status extraction
     new_status_idx <- which(search_state$search_database$model_name == model_name)
     if (length(new_status_idx) == 0) {
       next
@@ -536,7 +528,7 @@ update_all_model_statuses <- function(search_state, show_progress = TRUE) {
       NA_character_
     })
 
-    # FIXED: Comprehensive status comparison with validation
+    # Record the transition when the status actually changed
     if (!is.na(old_status) && !is.na(new_status) &&
         !is.null(old_status) && !is.null(new_status) &&
         nchar(as.character(old_status)) > 0 &&
@@ -552,7 +544,6 @@ update_all_model_statuses <- function(search_state, show_progress = TRUE) {
   }
 
   if (show_progress) {
-    # FIXED: Safer summary statistics with comprehensive validation
     total_completed <- tryCatch({
       if ("status" %in% names(search_state$search_database)) {
         sum(search_state$search_database$status == "completed" &
@@ -578,10 +569,9 @@ update_all_model_statuses <- function(search_state, show_progress = TRUE) {
     cat(sprintf("✅ Status update complete: %d completed, %d failed total\n",
                 total_completed, total_failed))
 
-    # FIXED: Safer significance reporting with comprehensive validation
+    # Report models that just became significant
     if (length(status_changes$newly_completed) > 0) {
       tryCatch({
-        # FIXED: Comprehensive column validation before dplyr operations
         required_cols_for_summary <- c("model_name", "delta_ofv", "covariate_tested")
         if (all(required_cols_for_summary %in% names(search_state$search_database))) {
 
@@ -623,14 +613,12 @@ update_all_model_statuses <- function(search_state, show_progress = TRUE) {
             db_filtered <- db_candidates[significant_rows, ]
 
             if (nrow(db_filtered) > 0) {
-              # FIXED: Safe ordering without dplyr
               order_idx <- order(db_filtered$delta_ofv, decreasing = TRUE)
               significant_new <- db_filtered[order_idx, ]
 
               cat("⭐ New significant improvements:\n")
               for (i in seq_len(nrow(significant_new))) {
                 row <- significant_new[i, ]
-              # FIXED: Comprehensive validation for covariate display
               covariate_display <- tryCatch({
                 cov_val <- row$covariate_tested
                 if (is.na(cov_val) || is.null(cov_val) ||
@@ -643,7 +631,6 @@ update_all_model_statuses <- function(search_state, show_progress = TRUE) {
                 "Unknown"
               })
 
-              # FIXED: Safe sprintf with validation
               delta_val <- tryCatch({
                 if (is.numeric(row$delta_ofv) && !is.na(row$delta_ofv)) {
                   sprintf("%.2f", row$delta_ofv)
