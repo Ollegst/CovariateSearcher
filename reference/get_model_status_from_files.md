@@ -6,7 +6,7 @@ failure information
 ## Usage
 
 ``` r
-get_model_status_from_files(model_path)
+get_model_status_from_files(model_path, require_cov_step = TRUE)
 ```
 
 ## Arguments
@@ -14,6 +14,11 @@ get_model_status_from_files(model_path)
 - model_path:
 
   Character. Path to model directory
+
+- require_cov_step:
+
+  Logical. Whether a successful covariance step (the presence of a
+  `.cov` file) is required for success (default: TRUE).
 
 ## Value
 

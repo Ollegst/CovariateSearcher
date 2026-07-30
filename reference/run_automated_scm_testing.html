@@ -13,7 +13,7 @@ execution with intelligent decision making."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">CovariateSearcher</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -35,7 +35,7 @@ execution with intelligent decision making."></head><body>
     <li><a class="dropdown-item" href="../articles/yaml-specification-files.html">YAML Specification Files</a></li>
     <li><a class="dropdown-item" href="../articles/model-report-usage.html">Parameter Tables with model_report()</a></li>
     <li><a class="dropdown-item" href="../articles/troubleshooting.html">Troubleshooting Guide</a></li>
-    <li><a class="dropdown-item" href="../articles/recovery-system.html">Recovery System</a></li>
+    <li><a class="dropdown-item" href="../articles/recovery-system.html">Recovery and Resuming a Search</a></li>
   </ul></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="../search.json"></form></li>
@@ -127,7 +127,10 @@ If NULL, uses search_state$search_config$max_rse_threshold (default: 50)</p></dd
 
 <dt id="arg-require-cov-step">require_cov_step<a class="anchor" aria-label="anchor" href="#arg-require-cov-step"></a></dt>
 <dd><p>Logical. Whether to require a successful covariance step
-(presence of .cov file) for a model to be considered completed (default: TRUE)</p></dd>
+(presence of a .cov file) for a model to be considered completed
+(default: TRUE). Leave it out to keep whatever was set at
+<code><a href="initialize_covariate_search.html">initialize_covariate_search()</a></code>; pass TRUE or FALSE here to change it for
+this run.</p></dd>
 
 
 <dt id="arg-auto-submit">auto_submit<a class="anchor" aria-label="anchor" href="#arg-auto-submit"></a></dt>

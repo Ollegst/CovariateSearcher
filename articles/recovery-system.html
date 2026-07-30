@@ -5,12 +5,12 @@
 <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<title>Understanding the Recovery System • CovariateSearcher</title>
+<title>Recovery and Resuming a Search • CovariateSearcher</title>
 <script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <link href="../deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet">
 <script src="../deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="../deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
-<script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><meta property="og:title" content="Understanding the Recovery System">
+<script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><meta property="og:title" content="Recovery and Resuming a Search">
 </head>
 <body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">CovariateSearcher</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -46,7 +46,7 @@
     <li><a class="dropdown-item" href="../articles/yaml-specification-files.html">YAML Specification Files</a></li>
     <li><a class="dropdown-item" href="../articles/model-report-usage.html">Parameter Tables with model_report()</a></li>
     <li><a class="dropdown-item" href="../articles/troubleshooting.html">Troubleshooting Guide</a></li>
-    <li><a class="dropdown-item" href="../articles/recovery-system.html">Recovery System</a></li>
+    <li><a class="dropdown-item" href="../articles/recovery-system.html">Recovery and Resuming a Search</a></li>
   </ul>
 </li>
       </ul>
@@ -68,7 +68,7 @@
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
 
-      <h1>Understanding the Recovery System</h1>
+      <h1>Recovery and Resuming a Search</h1>
             
       
       <small class="dont-index">Source: <a href="https://github.com/Ollegst/CovariateSearcher/blob/feature/package-rebuild/vignettes/articles/recovery-system.Rmd" class="external-link"><code>vignettes/articles/recovery-system.Rmd</code></a></small>
@@ -78,362 +78,359 @@
     
     
 <div class="section level2">
-<h2 id="understanding-the-recovery-system">Understanding the Recovery System<a class="anchor" aria-label="anchor" href="#understanding-the-recovery-system"></a>
+<h2 id="recovery-and-resuming-a-search">Recovery and Resuming a Search<a class="anchor" aria-label="anchor" href="#recovery-and-resuming-a-search"></a>
 </h2>
-<p>CovariateSearcher includes an intelligent recovery system that
-automatically handles model estimation failures.</p>
+<p>Two things are described here: what the search does on its own when a
+model fails, including exactly how the initial estimate is changed, and
+how to pick a search back up from a checkpoint once model states on disk
+have moved on.</p>
 <div class="section level3">
 <h3 id="how-recovery-works">How Recovery Works<a class="anchor" aria-label="anchor" href="#how-recovery-works"></a>
 </h3>
 <div class="section level4">
 <h4 id="detection-phase">Detection Phase<a class="anchor" aria-label="anchor" href="#detection-phase"></a>
 </h4>
-<p>The system monitors for several failure indicators:</p>
-<ol style="list-style-type: decimal">
-<li>
-<strong>Infinite OFV</strong>: OFV &gt; 10^10</li>
-<li>
-<strong>Singular Matrix</strong>: “SINGULAR CONVERGENCE
-CRITERIA”</li>
-<li>
-<strong>Error 134</strong>: Numerical errors</li>
-<li>
-<strong>Minimization Failure</strong>: “MINIMIZATION NOT
-SUCCESSFUL”</li>
-</ol>
+<p>A model’s status is read from its output files, never from the
+cluster. Three separate checks contribute.</p>
+<p><strong>The <code>.ext</code> file</strong> is parsed for a usable
+objective function value. The issue recorded on the model is one of:</p>
+<table class="table">
+<colgroup>
+<col width="50%">
+<col width="50%">
+</colgroup>
+<thead><tr class="header">
+<th><code>estimation_issue</code></th>
+<th>Meaning</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td><code>infinite_ofv</code></td>
+<td>OFV is infinite</td>
+</tr>
+<tr class="even">
+<td><code>nan_ofv</code></td>
+<td>OFV is <code>NaN</code>
+</td>
+</tr>
+<tr class="odd">
+<td><code>high_ofv</code></td>
+<td><code>abs(OFV) &gt; 1e10</code></td>
+</tr>
+<tr class="even">
+<td><code>missing_ofv</code></td>
+<td>no OFV present</td>
+</tr>
+<tr class="odd">
+<td><code>problematic_parameters</code></td>
+<td>some parameter is infinite, <code>NaN</code>, or
+<code>abs(value) &gt; 1e10</code>
+</td>
+</tr>
+</tbody>
+</table>
+<p><strong>The <code>.lst</code> file</strong> is scanned for status
+markers, matched case-insensitively so they survive differences between
+NONMEM versions:</p>
+<ul>
+<li>completed: <code>MINIMIZATION SUCCESSFUL</code>,
+<code>OPTIMIZATION COMPLETED</code>,
+<code>ESTIMATION STEP WAS COMPLETED</code>
+</li>
+<li>hard failure: <code>MINIMIZATION TERMINATED</code>,
+<code>PROGRAM TERMINATED BY OBJ</code>, <code>TERMINATED DUE TO</code>,
+<code>FATAL ERROR</code>
+</li>
+<li>severe warning: <code>WARNING…SEVERE</code>,
+<code>NUMERICAL DIFFICULT</code>, <code>SINGULAR</code>
+</li>
+<li>runtime error: <code>ERROR=</code>, <code>ERROR IN</code>,
+<code>PROGRAM TERMINATED</code>, <code>ABORTING</code>
+</li>
+</ul>
+<p><strong>The covariance step</strong> is required by default. With
+<code>require_cov_step = TRUE</code>, a model that otherwise completed
+but has no <code>.cov</code> file is recorded as failed with
+<code>Covariance step failed (no .cov file)</code>, since NONMEM writes
+that file only when the covariance step succeeds. Set it to
+<code>FALSE</code> to accept such models.</p>
+<p>A model with no output directory at all is a separate case, recorded
+as <code>NONMEM never started - no output directory</code>: the run
+never reached NONMEM.</p>
 </div>
 <div class="section level4">
 <h4 id="automatic-retry">Automatic Retry<a class="anchor" aria-label="anchor" href="#automatic-retry"></a>
 </h4>
-<p>When a failure is detected, the system:</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="co"># 1. Marks original model as failed</span></span>
-<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a>model<span class="sc">$</span>status <span class="ot">&lt;-</span> <span class="st">"failed"</span></span>
-<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a></span>
-<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a><span class="co"># 2. Creates retry model with adjusted parameters</span></span>
-<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a>  original_model <span class="ot">=</span> run11</span>
-<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a>  retry_number <span class="ot">=</span> Creates run11001</span>
-<span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a></span>
-<span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a></span>
-<span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a><span class="co"># 3. Adjusts THETA initial estimate</span></span>
-<span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a><span class="co"># Original: THETA(1) = 0.1</span></span>
-<span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a><span class="co"># Retry:    THETA(1) = -0.1</span></span>
-<span id="cb1-12"><a href="#cb1-12" tabindex="-1"></a></span>
-<span id="cb1-13"><a href="#cb1-13" tabindex="-1"></a><span class="co"># 4. Submits retry automatically if auto_retry = TRUE</span></span></code></pre></div>
+<p>When a failure is detected, the search marks the model
+<code>failed</code> and creates a retry named after it
+(<code>run11</code> becomes <code>run11001</code>) with the covariate’s
+THETA moved to a different initial estimate, then submits it. The
+console stays blocked throughout; <code>auto_retry = FALSE</code> turns
+the whole thing off, leaving failures recorded but untouched. Which move
+the THETA makes is set out under <a href="#moving-the-theta-initial-estimate">Moving the THETA initial
+estimate</a>.</p>
+<p>Retry does not apply to backward elimination: a removal takes a
+parameter out, so there is nothing to perturb. A model that never
+started is resubmitted once instead.</p>
 </div>
 </div>
 <div class="section level3">
-<h3 id="example-recovery-workflow">Example Recovery Workflow<a class="anchor" aria-label="anchor" href="#example-recovery-workflow"></a>
+<h3 id="what-a-retry-looks-like">What a retry looks like<a class="anchor" aria-label="anchor" href="#what-a-retry-looks-like"></a>
 </h3>
-<div class="section level4">
-<h4 id="scenario-age-on-cl-fails">Scenario: AGE on CL fails<a class="anchor" aria-label="anchor" href="#scenario-age-on-cl-fails"></a>
-</h4>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Step 1: Original model (run11) fails</span></span>
-<span><span class="va">search_state</span><span class="op">$</span><span class="va">search_database</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">model_name</span> <span class="op">==</span> <span class="st">"run11"</span><span class="op">)</span></span>
-<span><span class="co">#   model_name  status  estimation_issue</span></span>
-<span><span class="co">#   run11       failed  OFV &gt; 10^10</span></span>
-<span></span>
-<span><span class="co"># Step 2: Retry created automatically (run11001)</span></span>
-<span><span class="va">search_state</span><span class="op">$</span><span class="va">search_database</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">model_name</span> <span class="op">==</span> <span class="st">"run11001"</span><span class="op">)</span></span>
-<span><span class="co">#   model_name  status       phase</span></span>
-<span><span class="co">#   run11001    in_progress  retry</span></span>
-<span></span>
-<span><span class="co"># Step 3: If retry succeeds</span></span>
-<span><span class="va">search_state</span><span class="op">$</span><span class="va">search_database</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">model_name</span> <span class="op">==</span> <span class="st">"run11001"</span><span class="op">)</span></span>
-<span><span class="co">#   model_name  status     ofv      delta_ofv</span></span>
-<span><span class="co">#   run11001    completed  1234.5   -5.2</span></span></code></pre></div>
-</div>
-</div>
-<div class="section level3">
-<h3 id="retry-strategies">Retry Strategies<a class="anchor" aria-label="anchor" href="#retry-strategies"></a>
-</h3>
-<div class="section level4">
-<h4 id="theta-sign-adjustment">THETA Sign Adjustment<a class="anchor" aria-label="anchor" href="#theta-sign-adjustment"></a>
-</h4>
-<p>The most common issue is poor initial estimates. Changing the sign
-often helps:</p>
-<pre><code>Original THETA:
-$THETA
-0.1  ; AGE on CL
+<p>Console output while it happens, abridged — none of this is
+typed:</p>
+<pre class="text"><code>❌ NEW failures: run11
+🔒 Locked run11 status as 'failed'
+🔧 IMMEDIATE RETRY: 1 models just failed - creating retries
+  run11: estimation_error
 
-Retry THETA:
-$THETA
--0.1  ; AGE on CL</code></pre>
+🔍 Processing run11 (issue: estimation_error)
+  This is original model - creating retry with adjusted THETA
+🔧 Creating retry model for run11 (issue: estimation_error)
+  Original: run11 → Retry: run11001
+  ✅ Retry model 'run11001' created
+✅ Created 1 retry models: run11001
+🚀 Submitting retry model run11001... ✓
+
+[Step 3] ✅ Model run11001 (beta_AGE_CL) completed: OFV 1239.70 → 1234.50 (ΔOFV: 5.20)</code></pre>
+<p>The original keeps its <code>failed</code> status as the record of
+what happened; the retry carries the result. If the retry fails too, the
+covariate is excluded from later forward steps rather than retried
+again, and <code><a href="../reference/get_excluded_covariates.html">get_excluded_covariates()</a></code> will list it.</p>
+</div>
+<div class="section level3">
+<h3 id="a-retry-can-win-its-step">A retry can win its step<a class="anchor" aria-label="anchor" href="#a-retry-can-win-its-step"></a>
+</h3>
+<p>A retry competes in its step like any other model, and if it comes
+out best the search continues from it. Step evaluation selects on step
+number, <code>completed</code> status and a non-missing ΔOFV — it does
+not filter on <code>phase</code>, so a <code>retry</code> row is a
+candidate, and <code><a href="../reference/create_retry_model.html">create_retry_model()</a></code> copies the original’s
+<code>step_number</code> so it lands in the right step.</p>
+<p>It is scored as a full replacement for the model it retries, not as
+something bolted on afterwards. <code>covariate_tested</code> and
+<code>parent_model</code> are copied too, so its ΔOFV is measured
+against the step’s base model rather than against the failed run, and
+its significance threshold uses the degrees of freedom of the right
+covariate. The only things that differ from the model it replaces are
+its <code>phase</code>/<code>action</code> (<code>retry</code>) and the
+initial estimate it started from.</p>
+<p>So a chain like
+<code>run9 → run11 (failed) → run11001 (best of step 3)</code> leaves
+<code>run11001</code> as the base that step 4 adds covariates to.</p>
+</div>
+<div class="section level3">
+<h3 id="moving-the-theta-initial-estimate">Moving the THETA initial estimate<a class="anchor" aria-label="anchor" href="#moving-the-theta-initial-estimate"></a>
+</h3>
+<p>A covariate’s <code>$THETA</code> entry comes verbatim from the
+<code>INIT</code> column of the covariate table, so it can be a bare
+value, a bounded triple or a fixed value, and the move has to respect
+which. A sign flip is only valid when nothing constrains the
+parameter.</p>
+<table class="table">
+<colgroup>
+<col width="25%">
+<col width="25%">
+<col width="25%">
+<col width="25%">
+</colgroup>
+<thead><tr class="header">
+<th>
+<code>INIT</code> as written</th>
+<th>Form</th>
+<th>Retry uses</th>
+<th>Example</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td><code>0.1</code></td>
+<td>unbounded</td>
+<td>sign flip</td>
+<td>
+<code>0.1</code> → <code>-0.1</code>
+</td>
+</tr>
+<tr class="even">
+<td><code>(0, 0.1, 3)</code></td>
+<td>bounded</td>
+<td>midpoint of the wider side of the range</td>
+<td>
+<code>(0, 0.1, 3)</code> → <code>(0, 1.55, 3)</code>
+</td>
+</tr>
+<tr class="odd">
+<td><code>(0, 0.1)</code></td>
+<td>one-sided</td>
+<td>sign flip when it stays inside the bound, otherwise the midpoint of
+the bounded side</td>
+<td>
+<code>(0, 0.1)</code> → <code>(0, 0.05)</code>
+</td>
+</tr>
+<tr class="even">
+<td><code>0.75 FIX</code></td>
+<td>fixed</td>
+<td>never touched</td>
+<td>
+<code>0.75 FIX</code> → <code>0.75 FIX</code>
+</td>
+</tr>
+</tbody>
+</table>
+<p>The bounded rule always lands strictly inside the bounds, so a retry
+cannot be born invalid — which a sign flip would be for a parameter with
+a lower bound of 0.</p>
+<p><code>FIX</code> is read from the spec only, the text before the
+first <code>;</code>, so the word <code>FIX</code> appearing in a
+comment cannot trigger it. When <em>every</em> THETA belonging to the
+covariate is fixed there is nothing to perturb, so no retry model is
+created and <code><a href="../reference/create_retry_model.html">create_retry_model()</a></code> returns
+<code>status = "skipped"</code> rather than a failure.</p>
+</div>
+<div class="section level3">
+<h3 id="resuming-a-search">Resuming a Search<a class="anchor" aria-label="anchor" href="#resuming-a-search"></a>
+</h3>
+<p>A run writes a checkpoint to
+<code>&lt;models_folder&gt;/scm_rds/</code> at each step boundary, named
+<code>NN_phase_event.rds</code> where <code>NN</code> is the step
+number, so the highest <code>NN</code> is the most recent state.
+<code>*_created.rds</code> is written once a step’s models exist but
+before they are submitted; <code>*_done.rds</code> after the step was
+evaluated.</p>
+<p>Resuming is one call, pointed at the newest checkpoint:</p>
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">res</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/continue_search.html">continue_search</a></span><span class="op">(</span></span>
+<span>  checkpoint <span class="op">=</span> <span class="st">"models/scm_rds/03_forward_created.rds"</span>,</span>
+<span>  scm_type   <span class="op">=</span> <span class="st">"selective"</span>,   <span class="co"># "standard" or "selective"</span></span>
+<span>  full_scm   <span class="op">=</span> <span class="cn">TRUE</span>           <span class="co"># FALSE if the original run was forward-only</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">res</span><span class="op">$</span><span class="va">status</span>             <span class="co"># "completed" or "incomplete_step"</span></span>
+<span><span class="va">res</span><span class="op">$</span><span class="va">final_model</span></span>
+<span><span class="va">res</span><span class="op">$</span><span class="va">final_covariates</span></span></code></pre></div>
+<p>You supply only <code>scm_type</code> and <code>full_scm</code>. The
+database does not record which forward method was used, so that one
+cannot be inferred; everything else is worked out from the state,
+including which phase was interrupted, the current best model, and the
+thresholds (which default to the state’s
+<code>search_config</code>).</p>
+<p>Before continuing, <code><a href="../reference/continue_search.html">continue_search()</a></code> does three things
+worth knowing about.</p>
+<p><strong>It re-reads the last step from disk.</strong> Every model at
+the highest step number is refreshed with <code>force = TRUE</code>, so
+output that appeared after the checkpoint was written is picked up even
+when the checkpoint recorded that model as <code>completed</code> or
+<code>failed</code>. This is what makes a manual rerun visible to the
+search.</p>
+<p><strong>It registers models the checkpoint never saw.</strong> If a
+run died between creating a step’s models and saving it, those models
+are on disk but absent from the database.
+<code><a href="../reference/reconstruct_step_from_disk.html">reconstruct_step_from_disk()</a></code> is called automatically to add
+them, detecting base model, direction and step number from the
+files.</p>
+<p><strong>It refuses to continue from a half-finished step.</strong> If
+any model in the last step is still <code>created</code>,
+<code>in_progress</code> or <code>submitted</code>, the call returns
+<code>status = "incomplete_step"</code> and names what is pending rather
+than evaluating a step on partial results.</p>
+<div class="section level4">
+<h4 id="scenario-checkpoint-from-the-start-of-a-step-failures-rerun-by-hand">Scenario: checkpoint from the start of a step, failures rerun by
+hand<a class="anchor" aria-label="anchor" href="#scenario-checkpoint-from-the-start-of-a-step-failures-rerun-by-hand"></a>
+</h4>
+<p>The common case when a cluster drops jobs: you have
+<code>NN_phase_created.rds</code> from before submission, you
+resubmitted the failures yourself, and their output is now on disk. The
+call above is all that is needed, because the refresh picks those reruns
+up. If it reports <code>incomplete_step</code> instead, one of the
+step’s models still has no readable output; finish that model and call
+again.</p>
 </div>
 <div class="section level4">
-<h4 id="when-retries-fail">When Retries Fail<a class="anchor" aria-label="anchor" href="#when-retries-fail"></a>
+<h4 id="refreshing-statuses-without-continuing">Refreshing statuses without continuing<a class="anchor" aria-label="anchor" href="#refreshing-statuses-without-continuing"></a>
 </h4>
-<p>If retry also fails, the covariate relationship may be:</p>
-<ol style="list-style-type: decimal">
-<li>
-<strong>Too complex</strong>: Try simpler relationship (linear
-instead of power)</li>
-<li>
-<strong>Collinear</strong>: Covariate correlated with another in
-model</li>
-<li>
-<strong>Wrong functional form</strong>: Try different relationship
-type</li>
-</ol>
+<p>To inspect the state first, or to refresh a step other than the last
+one, do it explicitly. <code><a href="../reference/update_model_status_from_files.html">update_model_status_from_files()</a></code>
+<strong>returns</strong> a modified state and changes nothing in place,
+so its return value has to be assigned:</p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">ss</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/load_search_state.html">load_search_state</a></span><span class="op">(</span><span class="st">"models/scm_rds/03_forward_created.rds"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Models rerun by hand. force = TRUE re-reads a model even when the database</span></span>
+<span><span class="co"># already calls it completed or failed.</span></span>
+<span><span class="kw">for</span> <span class="op">(</span><span class="va">m</span> <span class="kw">in</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"run24"</span>, <span class="st">"run27"</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">ss</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/update_model_status_from_files.html">update_model_status_from_files</a></span><span class="op">(</span><span class="va">ss</span>, <span class="va">m</span>, force <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span></span>
+<span><span class="co"># Everything else not already in a terminal state</span></span>
+<span><span class="va">ss</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/update_all_model_statuses.html">update_all_model_statuses</a></span><span class="op">(</span><span class="va">ss</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="../reference/save_search_state.html">save_search_state</a></span><span class="op">(</span><span class="va">ss</span>, <span class="st">"03_forward_refreshed.rds"</span><span class="op">)</span>   <span class="co"># bare name -&gt; scm_rds/</span></span>
+<span></span>
+<span><span class="co"># Resume from the state in memory instead of a file</span></span>
+<span><span class="va">res</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/continue_search.html">continue_search</a></span><span class="op">(</span>search_state <span class="op">=</span> <span class="va">ss</span>, scm_type <span class="op">=</span> <span class="st">"selective"</span>, full_scm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
+<p>The automatic refresh inside <code><a href="../reference/continue_search.html">continue_search()</a></code> covers
+the <strong>highest</strong> step only. A model you reran from an
+earlier step keeps its stale status unless you refresh it explicitly as
+above, because <code><a href="../reference/update_all_model_statuses.html">update_all_model_statuses()</a></code> skips anything
+already in a terminal state (<code>completed</code>,
+<code>failed</code>, <code>estimation_error</code>).</p>
+</div>
+<div class="section level4">
+<h4 id="why-not-load_existing_search">Why not <code>load_existing_search()</code><a class="anchor" aria-label="anchor" href="#why-not-load_existing_search"></a>
+</h4>
+<p><code><a href="../reference/load_existing_search.html">load_existing_search()</a></code> rebuilds a state by discovering
+models on disk. That is what you want when picking a project back up
+after its checkpoints are gone, but it is not a resume: the checkpoint’s
+database is discarded, and step numbers, phases and ΔOFV are re-derived
+from files. It also records every model it finds as one this search did
+not create, so their results are read but they are never resubmitted.
+When a checkpoint exists, prefer <code><a href="../reference/continue_search.html">continue_search()</a></code>.</p>
 </div>
 </div>
 <div class="section level3">
-<h3 id="monitoring-recovery">Monitoring Recovery<a class="anchor" aria-label="anchor" href="#monitoring-recovery"></a>
+<h3 id="faq">FAQ<a class="anchor" aria-label="anchor" href="#faq"></a>
 </h3>
 <div class="section level4">
-<h4 id="check-recovery-status">Check Recovery Status<a class="anchor" aria-label="anchor" href="#check-recovery-status"></a>
+<h4 id="do-i-need-to-delete-existing-models-before-resuming">Do I need to delete existing models before resuming?<a class="anchor" aria-label="anchor" href="#do-i-need-to-delete-existing-models-before-resuming"></a>
 </h4>
+<p>No. Numbering continues from the highest existing
+<code>run&lt;N&gt;</code>, so nothing is overwritten and no duplicates
+are created.</p>
+</div>
+<div class="section level4">
+<h4 id="will-models-that-already-ran-be-run-again">Will models that already ran be run again?<a class="anchor" aria-label="anchor" href="#will-models-that-already-ran-be-run-again"></a>
+</h4>
+<p>No. Completed models are read from the output they already have, and
+the search creates models only for covariates it still has to test.
+Beyond that, the search submits only models it created itself: anything
+already sitting in <code>models/</code> when the search was initialised
+is never submitted, whatever its run number.</p>
+</div>
+<div class="section level4">
+<h4 id="a-covariate-keeps-failing--how-do-i-take-it-out">A covariate keeps failing. How do I take it out?<a class="anchor" aria-label="anchor" href="#a-covariate-keeps-failing--how-do-i-take-it-out"></a>
+</h4>
+<p>Exclusions live in the database, on the
+<code>excluded_from_step</code> flag, not in <code>search_config</code>.
+Inspect them with the exported helpers:</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># View all retry models</span></span>
-<span><span class="va">retries</span> <span class="op">&lt;-</span> <span class="va">search_state</span><span class="op">$</span><span class="va">search_database</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">phase</span> <span class="op">==</span> <span class="st">"retry"</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/arrange.html" class="external-link">arrange</a></span><span class="op">(</span><span class="va">parent_model</span>, <span class="va">model_name</span><span class="op">)</span></span>
-<span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">retries</span><span class="op">)</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/get_excluded_covariates.html">get_excluded_covariates</a></span><span class="op">(</span><span class="va">search_state</span><span class="op">)</span>                        <span class="co"># covariate names</span></span>
+<span><span class="fu"><a href="../reference/get_excluded_covariates.html">get_excluded_covariates</a></span><span class="op">(</span><span class="va">search_state</span>, return_details <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span> <span class="co"># with the models</span></span>
+<span><span class="fu"><a href="../reference/view_exclusion_status.html">view_exclusion_status</a></span><span class="op">(</span><span class="va">search_state</span><span class="op">)</span></span></code></pre></div>
+<p>A covariate is excluded automatically when its retry also fails. To
+keep one out of a search from the beginning, drop its row from the
+covariate search table rather than editing the state.</p>
 </div>
 <div class="section level4">
-<h4 id="success-rate">Success Rate<a class="anchor" aria-label="anchor" href="#success-rate"></a>
+<h4 id="can-i-restart-one-phase-from-a-specific-model">Can I restart one phase from a specific model?<a class="anchor" aria-label="anchor" href="#can-i-restart-one-phase-from-a-specific-model"></a>
 </h4>
+<p>Start a separate search from that model, in its own models folder, so
+that the two runs cannot interleave numbering:</p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Calculate recovery success rate</span></span>
-<span><span class="va">recovery_stats</span> <span class="op">&lt;-</span> <span class="va">search_state</span><span class="op">$</span><span class="va">search_database</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">phase</span> <span class="op">==</span> <span class="st">"retry"</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/count.html" class="external-link">count</a></span><span class="op">(</span><span class="va">status</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html" class="external-link">mutate</a></span><span class="op">(</span>rate <span class="op">=</span> <span class="va">n</span> <span class="op">/</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">n</span><span class="op">)</span><span class="op">)</span></span>
-<span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">recovery_stats</span><span class="op">)</span></span></code></pre></div>
-</div>
-</div>
-<div class="section level3">
-<h3 id="disabling-auto-retry">Disabling Auto-Retry<a class="anchor" aria-label="anchor" href="#disabling-auto-retry"></a>
-</h3>
-<p>If you prefer manual control:</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">search_state</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/initialize_covariate_search.html">initialize_covariate_search</a></span><span class="op">(</span></span>
-<span>  base_model_path <span class="op">=</span> <span class="st">"run1"</span>,</span>
-<span>  data_file_path <span class="op">=</span> <span class="st">"data/derived/data.csv"</span>,</span>
+<span>  base_model_path       <span class="op">=</span> <span class="st">"run20"</span>,               <span class="co"># start from run20 instead</span></span>
+<span>  data_file_path        <span class="op">=</span> <span class="st">"data/derived/data.csv"</span>,</span>
 <span>  covariate_search_path <span class="op">=</span> <span class="st">"data/derived/covariates.csv"</span>,</span>
-<span>  lookup_file <span class="op">=</span> <span class="st">"data/spec/lookup.yaml"</span>  <span class="co"># Optional: covariate labels</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Then manually create retries when needed</span></span>
-<span><span class="va">retry_model</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/create_retry_model.html">create_retry_model</a></span><span class="op">(</span></span>
-<span>  search_state <span class="op">=</span> <span class="va">search_state</span>,</span>
-<span>  original_model_name <span class="op">=</span> <span class="st">"run11"</span></span>
-<span>  <span class="co"># issue_type defaults to "estimation_error"</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Or disable automatic retry in the search function</span></span>
-<span><span class="va">search_result</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_automated_scm_testing.html">run_automated_scm_testing</a></span><span class="op">(</span></span>
-<span>  search_state <span class="op">=</span> <span class="va">search_state</span>,</span>
-<span>  auto_retry <span class="op">=</span> <span class="cn">FALSE</span>  <span class="co"># Disable automatic retry for manual control</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-</div>
-<div class="section level3">
-<h3 id="advanced-custom-recovery">Advanced: Custom Recovery<a class="anchor" aria-label="anchor" href="#advanced-custom-recovery"></a>
-</h3>
-<p>For complex cases, you can implement custom recovery:</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># 1. Identify problematic models</span></span>
-<span><span class="va">failed</span> <span class="op">&lt;-</span> <span class="va">search_state</span><span class="op">$</span><span class="va">search_database</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">status</span> <span class="op">==</span> <span class="st">"failed"</span>, <span class="va">phase</span> <span class="op">!=</span> <span class="st">"retry"</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># 2. For each failure, create custom retry</span></span>
-<span><span class="kw">for</span> <span class="op">(</span><span class="va">model</span> <span class="kw">in</span> <span class="va">failed</span><span class="op">$</span><span class="va">model_name</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="co"># Read original model</span></span>
-<span>  <span class="va">model_path</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="va">search_state</span><span class="op">$</span><span class="va">models_folder</span>, <span class="va">model</span><span class="op">)</span></span>
-<span>  </span>
-<span>  <span class="co"># Custom modifications beyond THETA sign</span></span>
-<span>  <span class="co"># - Adjust initial estimates</span></span>
-<span>  <span class="co"># - Change estimation method</span></span>
-<span>  <span class="co"># - Simplify covariate relationship</span></span>
-<span>  </span>
-<span>  <span class="co"># Create modified model</span></span>
-<span>  <span class="co"># (custom code here)</span></span>
-<span><span class="op">}</span></span></code></pre></div>
-</div>
-<div class="section level3">
-<h3 id="best-practices">Best Practices<a class="anchor" aria-label="anchor" href="#best-practices"></a>
-</h3>
-<ol style="list-style-type: decimal">
-<li>
-<strong>Let auto-retry work first</strong>: Usually fixes 60-80% of
-failures</li>
-<li>
-<strong>Check .lst files</strong>: Understand why models failed</li>
-<li>
-<strong>Review base model</strong>: Ensure it’s stable before
-SCM</li>
-<li>
-<strong>Monitor RSE</strong>: High RSE indicates estimation
-issues</li>
-<li>
-<strong>Use appropriate thresholds</strong>: ΔOFV=3.84, RSE&lt;50%
-are reasonable</li>
-</ol>
-</div>
-<div class="section level3">
-<h3 id="recovery-statistics">Recovery Statistics<a class="anchor" aria-label="anchor" href="#recovery-statistics"></a>
-</h3>
-<p>Track recovery performance across your search:</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Summary of all models</span></span>
-<span><span class="va">summary_stats</span> <span class="op">&lt;-</span> <span class="va">search_state</span><span class="op">$</span><span class="va">search_database</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/group_by.html" class="external-link">group_by</a></span><span class="op">(</span><span class="va">phase</span>, <span class="va">status</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/summarise.html" class="external-link">summarize</a></span><span class="op">(</span></span>
-<span>    count <span class="op">=</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/context.html" class="external-link">n</a></span><span class="op">(</span><span class="op">)</span>,</span>
-<span>    .groups <span class="op">=</span> <span class="st">"drop"</span></span>
-<span>  <span class="op">)</span></span>
-<span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">summary_stats</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Successful recovery rate</span></span>
-<span><span class="va">successful_retries</span> <span class="op">&lt;-</span> <span class="va">search_state</span><span class="op">$</span><span class="va">search_database</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">phase</span> <span class="op">==</span> <span class="st">"retry"</span>, <span class="va">status</span> <span class="op">==</span> <span class="st">"completed"</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="op">)</span></span>
-<span></span>
-<span><span class="va">total_retries</span> <span class="op">&lt;-</span> <span class="va">search_state</span><span class="op">$</span><span class="va">search_database</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">phase</span> <span class="op">==</span> <span class="st">"retry"</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="op">)</span></span>
-<span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"Recovery success rate:"</span>, </span>
-<span>    <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fl">100</span> <span class="op">*</span> <span class="va">successful_retries</span> <span class="op">/</span> <span class="va">total_retries</span>, <span class="fl">1</span><span class="op">)</span>, <span class="st">"%\n"</span><span class="op">)</span></span></code></pre></div>
-</div>
-<div class="section level3">
-<h3 id="resuming-after-recovery">Resuming After Recovery<a class="anchor" aria-label="anchor" href="#resuming-after-recovery"></a>
-</h3>
-<p>When your search encounters failures and retries, you can pause and
-resume at any time:</p>
-<div class="section level4">
-<h4 id="pause-and-resume-workflow">Pause and Resume Workflow<a class="anchor" aria-label="anchor" href="#pause-and-resume-workflow"></a>
-</h4>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># 1. Load existing search state (continue from last session)</span></span>
-<span><span class="va">search_state</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/load_existing_search.html">load_existing_search</a></span><span class="op">(</span></span>
-<span>  base_model_path <span class="op">=</span> <span class="st">"run1"</span>,</span>
-<span>  data_file_path <span class="op">=</span> <span class="st">"data/derived/data.csv"</span>,</span>
-<span>  covariate_search_path <span class="op">=</span> <span class="st">"data/derived/covariates.csv"</span>,</span>
-<span>  models_folder <span class="op">=</span> <span class="st">"models"</span>,</span>
-<span>  lookup_file <span class="op">=</span> <span class="st">"data/spec/lookup.yaml"</span>  <span class="co"># Optional: restore covariate labels</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># 2. Check status of recovery</span></span>
-<span><span class="va">retries_completed</span> <span class="op">&lt;-</span> <span class="va">search_state</span><span class="op">$</span><span class="va">search_database</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">phase</span> <span class="op">==</span> <span class="st">"retry"</span>, <span class="va">status</span> <span class="op">==</span> <span class="st">"completed"</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/arrange.html" class="external-link">arrange</a></span><span class="op">(</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/desc.html" class="external-link">desc</a></span><span class="op">(</span><span class="va">model_name</span><span class="op">)</span><span class="op">)</span></span>
-<span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">retries_completed</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># 3. Continue search from last checkpoint</span></span>
-<span><span class="va">search_result</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_automated_scm_testing.html">run_automated_scm_testing</a></span><span class="op">(</span></span>
-<span>  search_state <span class="op">=</span> <span class="va">search_state</span>,</span>
-<span>  full_scm <span class="op">=</span> <span class="cn">TRUE</span>,           <span class="co"># Continue with full SCM workflow</span></span>
-<span>  starting_phase <span class="op">=</span> <span class="st">"forward"</span> <span class="co"># Start from forward selection</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-</div>
-<div class="section level4">
-<h4 id="handling-persistent-failures">Handling Persistent Failures<a class="anchor" aria-label="anchor" href="#handling-persistent-failures"></a>
-</h4>
-<p>If the same covariate repeatedly fails across retries:</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># 1. Load search state</span></span>
-<span><span class="va">search_state</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/load_existing_search.html">load_existing_search</a></span><span class="op">(</span></span>
-<span>  base_model_path <span class="op">=</span> <span class="st">"run1"</span>,</span>
-<span>  data_file_path <span class="op">=</span> <span class="st">"data/derived/data.csv"</span>,</span>
-<span>  covariate_search_path <span class="op">=</span> <span class="st">"data/derived/covariates.csv"</span>,</span>
-<span>  models_folder <span class="op">=</span> <span class="st">"models"</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># 2. Identify problematic covariate</span></span>
-<span><span class="va">persistent_failures</span> <span class="op">&lt;-</span> <span class="va">search_state</span><span class="op">$</span><span class="va">search_database</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">status</span> <span class="op">==</span> <span class="st">"failed"</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/group_by.html" class="external-link">group_by</a></span><span class="op">(</span><span class="va">covariate</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/summarise.html" class="external-link">summarize</a></span><span class="op">(</span>failure_count <span class="op">=</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/context.html" class="external-link">n</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/arrange.html" class="external-link">arrange</a></span><span class="op">(</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/desc.html" class="external-link">desc</a></span><span class="op">(</span><span class="va">failure_count</span><span class="op">)</span><span class="op">)</span></span>
-<span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">persistent_failures</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># 3. Remove problematic covariate from remaining search</span></span>
-<span><span class="va">search_state</span><span class="op">$</span><span class="va">search_config</span><span class="op">$</span><span class="va">excluded_covariates</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
-<span>  <span class="va">search_state</span><span class="op">$</span><span class="va">search_config</span><span class="op">$</span><span class="va">excluded_covariates</span>,</span>
-<span>  <span class="st">"AGE"</span>  <span class="co"># Example: exclude AGE if it keeps failing</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># 4. Continue with updated configuration</span></span>
-<span><span class="va">search_result</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_automated_scm_testing.html">run_automated_scm_testing</a></span><span class="op">(</span></span>
-<span>  search_state <span class="op">=</span> <span class="va">search_state</span>,</span>
-<span>  full_scm <span class="op">=</span> <span class="cn">TRUE</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-</div>
-</div>
-<div class="section level3">
-<h3 id="faq-resuming-from-unfinished-steps">FAQ: Resuming from Unfinished Steps<a class="anchor" aria-label="anchor" href="#faq-resuming-from-unfinished-steps"></a>
-</h3>
-<div class="section level4">
-<h4 id="do-i-need-to-delete-existing-models-when-resuming">Do I need to delete existing models when resuming?<a class="anchor" aria-label="anchor" href="#do-i-need-to-delete-existing-models-when-resuming"></a>
-</h4>
-<p><strong>No.</strong> When you call
-<code><a href="../reference/load_existing_search.html">load_existing_search()</a></code>, the system automatically:</p>
-<ol style="list-style-type: decimal">
-<li>
-<strong>Detects existing models</strong> in the models folder</li>
-<li>
-<strong>Loads the database</strong> of all completed and failed
-models</li>
-<li>
-<strong>Updates the model counter</strong> to the highest existing
-model number</li>
-<li>
-<strong>Continues with the next available number</strong> for new
-models</li>
-</ol>
-<p>Example:</p>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Session 1: Stop after step 4, models run1 through run25 exist</span></span>
-<span><span class="co"># (run1 = base, run2-run25 = models from steps 1-4)</span></span>
-<span></span>
-<span><span class="co"># Session 2: Resume the next day</span></span>
-<span><span class="va">search_state</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/load_existing_search.html">load_existing_search</a></span><span class="op">(</span></span>
-<span>  base_model_path <span class="op">=</span> <span class="st">"run1"</span>,</span>
-<span>  data_file_path <span class="op">=</span> <span class="st">"data/derived/data.csv"</span>,</span>
-<span>  covariate_search_path <span class="op">=</span> <span class="st">"data/derived/covariates.csv"</span>,</span>
-<span>  models_folder <span class="op">=</span> <span class="st">"models"</span>  <span class="co"># Contains run1-run25</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Model counter automatically set to 25</span></span>
-<span><span class="co"># Next model created will be run26 (start of step 5)</span></span>
-<span><span class="co"># No duplicates of run2-run25 will be created</span></span></code></pre></div>
-</div>
-<div class="section level4">
-<h4 id="will-existing-models-be-re-tested">Will existing models be re-tested?<a class="anchor" aria-label="anchor" href="#will-existing-models-be-re-tested"></a>
-</h4>
-<p><strong>No.</strong> The system checks the database to see which
-models have already been tested:</p>
-<ul>
-<li>Completed models (with OFV values) are skipped</li>
-<li>Failed models are recorded but not re-created</li>
-<li>Only new covariates or covariate combinations are tested in new
-models</li>
-</ul>
-</div>
-<div class="section level4">
-<h4 id="can-i-do-a-fresh-start-from-a-specific-point">Can I do a fresh start from a specific point?<a class="anchor" aria-label="anchor" href="#can-i-do-a-fresh-start-from-a-specific-point"></a>
-</h4>
-<p>If you want to restart a specific phase (e.g., re-run backward
-elimination), you can:</p>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Option 1: Delete specific models from database before resuming</span></span>
-<span><span class="co"># (requires direct database manipulation - use with caution)</span></span>
-<span></span>
-<span><span class="co"># Option 2: Create a new search with a different base model</span></span>
-<span><span class="va">search_state</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/initialize_covariate_search.html">initialize_covariate_search</a></span><span class="op">(</span></span>
-<span>  base_model_path <span class="op">=</span> <span class="st">"run20"</span>,  <span class="co"># Start from run20 instead</span></span>
-<span>  data_file_path <span class="op">=</span> <span class="st">"data/derived/data.csv"</span>,</span>
-<span>  covariate_search_path <span class="op">=</span> <span class="st">"data/derived/covariates.csv"</span>,</span>
-<span>  models_folder <span class="op">=</span> <span class="st">"models_phase4_retry"</span>  <span class="co"># Separate folder</span></span>
+<span>  models_folder         <span class="op">=</span> <span class="st">"models_phase4_retry"</span>  <span class="co"># separate folder</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 </div>
 </div>

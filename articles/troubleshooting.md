@@ -138,11 +138,22 @@ result <- run_scm_selective_forward(
 
 ``` r
 
-# Update all model statuses from files
-for (model_name in search_state$search_database$model_name) {
-  update_model_status_from_files(search_state, model_name)
+# Re-read every model that is not already in a terminal state
+search_state <- update_all_model_statuses(search_state)
+
+# A model whose status is already terminal (completed, failed, estimation_error)
+# is skipped by the call above. To pick up output that appeared afterwards -- a
+# model you resubmitted by hand, say -- refresh it with force = TRUE.
+# Note the assignment: the function returns a modified state and changes nothing
+# in place.
+for (m in c("run24", "run27")) {
+  search_state <- update_model_status_from_files(search_state, m, force = TRUE)
 }
 ```
+
+Resuming a search refreshes the last step for you; see [Understanding
+the Recovery
+System](https://ollegst.github.io/CovariateSearcher/articles/recovery-system.html#resuming-a-search).
 
 #### Issue: Tags not showing all covariates
 

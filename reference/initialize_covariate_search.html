@@ -9,7 +9,7 @@ loads data files, validates configuration, and discovers existing models."></hea
 
     <a class="navbar-brand me-2" href="../index.html">CovariateSearcher</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -31,7 +31,7 @@ loads data files, validates configuration, and discovers existing models."></hea
     <li><a class="dropdown-item" href="../articles/yaml-specification-files.html">YAML Specification Files</a></li>
     <li><a class="dropdown-item" href="../articles/model-report-usage.html">Parameter Tables with model_report()</a></li>
     <li><a class="dropdown-item" href="../articles/troubleshooting.html">Troubleshooting Guide</a></li>
-    <li><a class="dropdown-item" href="../articles/recovery-system.html">Recovery System</a></li>
+    <li><a class="dropdown-item" href="../articles/recovery-system.html">Recovery and Resuming a Search</a></li>
   </ul></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="../search.json"></form></li>
@@ -66,6 +66,7 @@ loads data files, validates configuration, and discovers existing models.</p>
 <span>  threads <span class="op">=</span> <span class="fl">60</span>,</span>
 <span>  validate_parameters <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  require_base_run <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  require_cov_step <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  lookup_file <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  starting_model_number <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -115,6 +116,15 @@ in-memory <code>data.frame</code> OR a character path to a <code>.csv</code>/<co
 to FALSE for SETUP/TESTING only – it skips the run/OFV check so you can build
 the search_state and exercise covariate add/remove on control streams without
 running NONMEM. A real search still needs a completed base model OFV.</p></dd>
+
+
+<dt id="arg-require-cov-step">require_cov_step<a class="anchor" aria-label="anchor" href="#arg-require-cov-step"></a></dt>
+<dd><p>Logical. Whether a successful covariance step (a
+<code>.cov</code> file) is required for a model to count as completed
+(default: TRUE). Set here, it applies from the start – to the base model
+check and to every model discovered on disk – so the base model is judged by
+the same rule as the rest of the search. <code><a href="run_automated_scm_testing.html">run_automated_scm_testing()</a></code>
+takes the same argument and overrides this for the run.</p></dd>
 
 
 <dt id="arg-lookup-file">lookup_file<a class="anchor" aria-label="anchor" href="#arg-lookup-file"></a></dt>

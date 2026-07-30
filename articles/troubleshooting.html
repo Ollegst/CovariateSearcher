@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">CovariateSearcher</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -46,7 +46,7 @@
     <li><a class="dropdown-item" href="../articles/yaml-specification-files.html">YAML Specification Files</a></li>
     <li><a class="dropdown-item" href="../articles/model-report-usage.html">Parameter Tables with model_report()</a></li>
     <li><a class="dropdown-item" href="../articles/troubleshooting.html">Troubleshooting Guide</a></li>
-    <li><a class="dropdown-item" href="../articles/recovery-system.html">Recovery System</a></li>
+    <li><a class="dropdown-item" href="../articles/recovery-system.html">Recovery and Resuming a Search</a></li>
   </ul>
 </li>
       </ul>
@@ -217,10 +217,19 @@ instead of full search</p>
 </h4>
 <p><strong>Solution</strong>: Force database update:</p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Update all model statuses from files</span></span>
-<span><span class="kw">for</span> <span class="op">(</span><span class="va">model_name</span> <span class="kw">in</span> <span class="va">search_state</span><span class="op">$</span><span class="va">search_database</span><span class="op">$</span><span class="va">model_name</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="fu"><a href="../reference/update_model_status_from_files.html">update_model_status_from_files</a></span><span class="op">(</span><span class="va">search_state</span>, <span class="va">model_name</span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="co"># Re-read every model that is not already in a terminal state</span></span>
+<span><span class="va">search_state</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/update_all_model_statuses.html">update_all_model_statuses</a></span><span class="op">(</span><span class="va">search_state</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># A model whose status is already terminal (completed, failed, estimation_error)</span></span>
+<span><span class="co"># is skipped by the call above. To pick up output that appeared afterwards -- a</span></span>
+<span><span class="co"># model you resubmitted by hand, say -- refresh it with force = TRUE.</span></span>
+<span><span class="co"># Note the assignment: the function returns a modified state and changes nothing</span></span>
+<span><span class="co"># in place.</span></span>
+<span><span class="kw">for</span> <span class="op">(</span><span class="va">m</span> <span class="kw">in</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"run24"</span>, <span class="st">"run27"</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">search_state</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/update_model_status_from_files.html">update_model_status_from_files</a></span><span class="op">(</span><span class="va">search_state</span>, <span class="va">m</span>, force <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span><span class="op">}</span></span></code></pre></div>
+<p>Resuming a search refreshes the last step for you; see <a href="recovery-system.html#resuming-a-search">Understanding the Recovery
+System</a>.</p>
 </div>
 <div class="section level4">
 <h4 id="issue-tags-not-showing-all-covariates">Issue: Tags not showing all covariates<a class="anchor" aria-label="anchor" href="#issue-tags-not-showing-all-covariates"></a>

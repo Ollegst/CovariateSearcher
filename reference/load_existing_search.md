@@ -14,6 +14,7 @@ load_existing_search(
   timecol = "TIME",
   idcol = "ID",
   threads = 60,
+  require_cov_step = TRUE,
   lookup_file = NULL
 )
 ```
@@ -47,6 +48,13 @@ load_existing_search(
 - threads:
 
   Integer. Number of threads for execution (default: 60)
+
+- require_cov_step:
+
+  Logical. Whether a successful covariance step (a `.cov` file) is
+  required for a model to count as completed (default: TRUE). Passed to
+  [`initialize_covariate_search()`](https://ollegst.github.io/CovariateSearcher/reference/initialize_covariate_search.md),
+  so it governs the base model check and every model discovered on disk.
 
 - lookup_file:
 

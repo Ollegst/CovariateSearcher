@@ -9,7 +9,7 @@ the search database. Use this to continue work on an existing project."></head><
 
     <a class="navbar-brand me-2" href="../index.html">CovariateSearcher</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -31,7 +31,7 @@ the search database. Use this to continue work on an existing project."></head><
     <li><a class="dropdown-item" href="../articles/yaml-specification-files.html">YAML Specification Files</a></li>
     <li><a class="dropdown-item" href="../articles/model-report-usage.html">Parameter Tables with model_report()</a></li>
     <li><a class="dropdown-item" href="../articles/troubleshooting.html">Troubleshooting Guide</a></li>
-    <li><a class="dropdown-item" href="../articles/recovery-system.html">Recovery System</a></li>
+    <li><a class="dropdown-item" href="../articles/recovery-system.html">Recovery and Resuming a Search</a></li>
   </ul></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="../search.json"></form></li>
@@ -64,6 +64,7 @@ the search database. Use this to continue work on an existing project.</p>
 <span>  timecol <span class="op">=</span> <span class="st">"TIME"</span>,</span>
 <span>  idcol <span class="op">=</span> <span class="st">"ID"</span>,</span>
 <span>  threads <span class="op">=</span> <span class="fl">60</span>,</span>
+<span>  require_cov_step <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  lookup_file <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -98,6 +99,13 @@ the search database. Use this to continue work on an existing project.</p>
 
 <dt id="arg-threads">threads<a class="anchor" aria-label="anchor" href="#arg-threads"></a></dt>
 <dd><p>Integer. Number of threads for execution (default: 60)</p></dd>
+
+
+<dt id="arg-require-cov-step">require_cov_step<a class="anchor" aria-label="anchor" href="#arg-require-cov-step"></a></dt>
+<dd><p>Logical. Whether a successful covariance step (a
+<code>.cov</code> file) is required for a model to count as completed
+(default: TRUE). Passed to <code><a href="initialize_covariate_search.html">initialize_covariate_search()</a></code>, so it
+governs the base model check and every model discovered on disk.</p></dd>
 
 
 <dt id="arg-lookup-file">lookup_file<a class="anchor" aria-label="anchor" href="#arg-lookup-file"></a></dt>

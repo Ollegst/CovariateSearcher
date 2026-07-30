@@ -16,6 +16,7 @@ initialize_covariate_search(
   threads = 60,
   validate_parameters = TRUE,
   require_base_run = TRUE,
+  require_cov_step = TRUE,
   lookup_file = NULL,
   starting_model_number = NULL
 )
@@ -65,6 +66,16 @@ initialize_covariate_search(
   build the search_state and exercise covariate add/remove on control
   streams without running NONMEM. A real search still needs a completed
   base model OFV.
+
+- require_cov_step:
+
+  Logical. Whether a successful covariance step (a `.cov` file) is
+  required for a model to count as completed (default: TRUE). Set here,
+  it applies from the start – to the base model check and to every model
+  discovered on disk – so the base model is judged by the same rule as
+  the rest of the search.
+  [`run_automated_scm_testing()`](https://ollegst.github.io/CovariateSearcher/reference/run_automated_scm_testing.md)
+  takes the same argument and overrides this for the run.
 
 - lookup_file:
 

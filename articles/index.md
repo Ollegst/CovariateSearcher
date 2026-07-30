@@ -21,5 +21,5 @@
   model_report()](https://ollegst.github.io/CovariateSearcher/articles/model-report-usage.md):
 - [Troubleshooting
   Guide](https://ollegst.github.io/CovariateSearcher/articles/troubleshooting.md):
-- [Understanding the Recovery
-  System](https://ollegst.github.io/CovariateSearcher/articles/recovery-system.md):
+- [Recovery and Resuming a
+  Search](https://ollegst.github.io/CovariateSearcher/articles/recovery-system.md):

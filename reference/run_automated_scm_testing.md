@@ -79,7 +79,10 @@ run_automated_scm_testing(
 - require_cov_step:
 
   Logical. Whether to require a successful covariance step (presence of
-  .cov file) for a model to be considered completed (default: TRUE)
+  a .cov file) for a model to be considered completed (default: TRUE).
+  Leave it out to keep whatever was set at
+  [`initialize_covariate_search()`](https://ollegst.github.io/CovariateSearcher/reference/initialize_covariate_search.md);
+  pass TRUE or FALSE here to change it for this run.
 
 - auto_submit:
 
