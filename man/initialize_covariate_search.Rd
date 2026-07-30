@@ -14,6 +14,7 @@ initialize_covariate_search(
   threads = 60,
   validate_parameters = TRUE,
   require_base_run = TRUE,
+  require_cov_step = TRUE,
   lookup_file = NULL,
   starting_model_number = NULL
 )
@@ -42,6 +43,13 @@ in-memory \code{data.frame} OR a character path to a \code{.csv}/\code{.rds} fil
 to FALSE for SETUP/TESTING only -- it skips the run/OFV check so you can build
 the search_state and exercise covariate add/remove on control streams without
 running NONMEM. A real search still needs a completed base model OFV.}
+
+\item{require_cov_step}{Logical. Whether a successful covariance step (a
+\code{.cov} file) is required for a model to count as completed
+(default: TRUE). Set here, it applies from the start -- to the base model
+check and to every model discovered on disk -- so the base model is judged by
+the same rule as the rest of the search. \code{run_automated_scm_testing()}
+takes the same argument and overrides this for the run.}
 
 \item{lookup_file}{Character or NULL. Optional path to lookup YAML for
 categorical covariate labels. If NULL, defaults to data/spec/lookup.yaml.}

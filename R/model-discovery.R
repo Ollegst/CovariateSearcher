@@ -101,7 +101,10 @@ discover_existing_models <- function(search_state) {
       }
     }
 
-    status <- get_model_status_from_files(model_path)
+    status <- get_model_status_from_files(
+      model_path,
+      require_cov_step = search_state$search_config$require_cov_step %||% TRUE
+    )
 
     ofv <- if (status == "completed") {
       tryCatch({

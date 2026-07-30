@@ -4,10 +4,13 @@
 \alias{get_model_status_from_files}
 \title{Determine overall model status with detailed error reporting}
 \usage{
-get_model_status_from_files(model_path)
+get_model_status_from_files(model_path, require_cov_step = TRUE)
 }
 \arguments{
 \item{model_path}{Character. Path to model directory}
+
+\item{require_cov_step}{Logical. Whether a successful covariance step (the
+presence of a \code{.cov} file) is required for success (default: TRUE).}
 }
 \value{
 Character. Overall model status

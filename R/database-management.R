@@ -18,6 +18,10 @@
 #' @param timecol Character. Time column name (default: "TIME")
 #' @param idcol Character. ID column name (default: "ID")
 #' @param threads Integer. Number of threads for execution (default: 60)
+#' @param require_cov_step Logical. Whether a successful covariance step (a
+#'   \code{.cov} file) is required for a model to count as completed
+#'   (default: TRUE). Passed to \code{initialize_covariate_search()}, so it
+#'   governs the base model check and every model discovered on disk.
 #' @param lookup_file Character or NULL. Optional path to lookup YAML for
 #'   categorical labels. If NULL, defaults to data/spec/lookup.yaml.
 #' @return List containing search state with discovered models
@@ -29,6 +33,7 @@ load_existing_search <- function(base_model_path,
                                  timecol = "TIME",
                                  idcol = "ID",
                                  threads = 60,
+                                 require_cov_step = TRUE,
                                  lookup_file = NULL) {
 
   cat("📂 Loading EXISTING Covariate Search (Discovery Mode)...\n")
@@ -54,7 +59,8 @@ load_existing_search <- function(base_model_path,
       models_folder = models_folder,
       timecol = timecol,
       idcol = idcol,
-      threads = threads
+      threads = threads,
+      require_cov_step = require_cov_step
     )
 
     if (!is.null(lookup_file)) {

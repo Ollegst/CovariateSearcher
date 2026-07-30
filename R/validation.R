@@ -81,10 +81,11 @@ update_model_status_from_files <- function(search_state, model_name, force = FAL
       completion_time = NA
     )
 
-    # Check LST file existence
-    lst_file <- file.path(model_path, paste0(model_name, ".lst"))
+    # read_nonmem_lst() is the one resolver for where a model's output can be:
+    # inside the run directory, or beside the control stream.
+    lst_file <- read_nonmem_lst(model_path)$file
 
-    if (!file.exists(lst_file)) {
+    if (is.null(lst_file) || !file.exists(lst_file)) {
       # No LST file - check if bbi even started NONMEM
       output_dir <- model_path  # e.g., models/run19/
 
@@ -152,15 +153,24 @@ update_model_status_from_files <- function(search_state, model_name, force = FAL
     results$completion_time <- timestamps$stop_time
 
     # Extract OFV from EXT file - THIS DETERMINES FINAL STATUS
-    ext_file <- file.path(model_path, paste0(model_name, ".ext"))
+    # read_nonmem_ext() searches the same locations as read_nonmem_lst(), so the
+    # .ext is not resolved a second time here where it could disagree.
+    ext_probe <- read_nonmem_ext(model_path)
 
-    if (!file.exists(ext_file)) {
-      # No EXT file = failed
+    if (!isTRUE(ext_probe$found)) {
+      # read_nonmem_ext() distinguishes absent, empty and unparseable, so keep its
+      # message instead of reporting every case as a missing file.
       results$status <- "failed"
-      results$error_message <- "No EXT file found"
+      results$error_message <- if (!is.null(ext_probe$error) &&
+                                   !is.na(ext_probe$error) &&
+                                   nzchar(ext_probe$error)) {
+        ext_probe$error
+      } else {
+        "No EXT file found"
+      }
       results$ofv <- NA_real_
     } else {
-      ext_results <- read_nonmem_ext(model_path)
+      ext_results <- ext_probe
 
       if (!ext_results$found) {
         # EXT file exists but couldn't be read
@@ -211,7 +221,9 @@ update_model_status_from_files <- function(search_state, model_name, force = FAL
         # Check covariance step: .cov file is only written when covariance succeeds
         require_cov_step <- search_state$search_config$require_cov_step %||% TRUE
         if (require_cov_step && results$status == "completed") {
-          cov_file <- file.path(model_path, paste0(model_name, ".cov"))
+          # The .cov sits with the rest of the run's output, so anchor it to the
+          # directory the .lst was actually found in rather than assuming one.
+          cov_file <- file.path(dirname(lst_file), paste0(model_name, ".cov"))
           if (!file.exists(cov_file)) {
             results$status <- "failed"
             results$error_message <- "Covariance step failed (no .cov file)"

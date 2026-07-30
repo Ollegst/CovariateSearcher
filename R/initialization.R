@@ -27,6 +27,12 @@
 #'   to FALSE for SETUP/TESTING only -- it skips the run/OFV check so you can build
 #'   the search_state and exercise covariate add/remove on control streams without
 #'   running NONMEM. A real search still needs a completed base model OFV.
+#' @param require_cov_step Logical. Whether a successful covariance step (a
+#'   \code{.cov} file) is required for a model to count as completed
+#'   (default: TRUE). Set here, it applies from the start -- to the base model
+#'   check and to every model discovered on disk -- so the base model is judged by
+#'   the same rule as the rest of the search. \code{run_automated_scm_testing()}
+#'   takes the same argument and overrides this for the run.
 #' @param lookup_file Character or NULL. Optional path to lookup YAML for
 #'   categorical covariate labels. If NULL, defaults to data/spec/lookup.yaml.
 #' @param starting_model_number Optional integer. Sets the model counter manually.
@@ -46,6 +52,7 @@ initialize_covariate_search <- function(base_model_path,
                                         threads = 60,
                                         validate_parameters = TRUE,
                                         require_base_run = TRUE,
+                                        require_cov_step = TRUE,
                                         lookup_file = NULL,
                                         starting_model_number = NULL) {
 
@@ -187,7 +194,8 @@ initialize_covariate_search <- function(base_model_path,
   if (isTRUE(require_base_run)) {
     validate_base_model_for_search(
       base_model_path = search_state$base_model,
-      models_folder = search_state$models_folder
+      models_folder = search_state$models_folder,
+      require_cov_step = require_cov_step
     )
   } else {
     # SETUP/TESTING mode: skip the run/OFV requirement, but still confirm the
@@ -210,7 +218,8 @@ initialize_covariate_search <- function(base_model_path,
 
   search_state <- initialize_search_config(
     search_state = search_state,
-    lookup_file = lookup_file
+    lookup_file = lookup_file,
+    require_cov_step = require_cov_step
   )
   search_state <- discover_existing_models(search_state)
 
@@ -953,12 +962,17 @@ validate_param_transformations <- function(covariate_search, data_file, id_col,
 #'
 #' @param base_model_path Character. Base model name, for example `"run6"`.
 #'   Should be provided without file extension.
+#' @param require_cov_step Logical. Whether a successful covariance step (a
+#'   `.cov` file) is required for the base model to count as completed
+#'   (default: TRUE). Passed through from `initialize_covariate_search()` so the
+#'   base model is held to the same standard as the models the search creates.
 #' @param models_folder Character. Path to the folder containing model files.
 #'
 #' @return Logical `TRUE` if the base model is valid for search initialization.
 #' @export
 validate_base_model_for_search <- function(base_model_path,
-                                           models_folder = "models") {
+                                           models_folder = "models",
+                                           require_cov_step = TRUE) {
 
   model_path <- file.path(models_folder, base_model_path)
 
@@ -969,7 +983,8 @@ validate_base_model_for_search <- function(base_model_path,
     stop("Base model file not found: ", model_path, " (.ctl or .mod)")
   }
 
-  model_status <- get_model_status_from_files(model_path)
+  model_status <- get_model_status_from_files(model_path,
+                                             require_cov_step = require_cov_step)
 
   if (!identical(model_status, "completed")) {
     lst_info <- tryCatch(
@@ -1042,9 +1057,14 @@ validate_base_model_for_search <- function(base_model_path,
 #' @param search_state List containing search state
 #' @param lookup_file Character or NULL. Optional path to lookup YAML for
 #'   categorical covariate labels.
+#' @param require_cov_step Logical. Whether a successful covariance step (a
+#'   \code{.cov} file) is required for a model to count as completed
+#'   (default: TRUE). Stored in the config so model discovery, which runs
+#'   straight after this, applies the user's setting rather than a hard-coded one.
 #' @return Updated search_state with initialized configuration
 #' @export
-initialize_search_config <- function(search_state, lookup_file = NULL) {
+initialize_search_config <- function(search_state, lookup_file = NULL,
+                                     require_cov_step = TRUE) {
   resolved_lookup_file <- if (!is.null(lookup_file)) {
     lookup_file
   } else {
@@ -1058,6 +1078,7 @@ initialize_search_config <- function(search_state, lookup_file = NULL) {
     timeout_minutes = 3600,
     threads = search_state$threads,
     lookup_file = resolved_lookup_file,
+    require_cov_step = require_cov_step,
     current_phase = "initialization",
     current_step = 0
   )

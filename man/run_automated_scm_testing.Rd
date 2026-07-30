@@ -52,7 +52,10 @@ If NULL, uses search_state$search_config$backward_p_value (default: 0.001, more 
 If NULL, uses search_state$search_config$max_rse_threshold (default: 50)}
 
 \item{require_cov_step}{Logical. Whether to require a successful covariance step
-(presence of .cov file) for a model to be considered completed (default: TRUE)}
+(presence of a .cov file) for a model to be considered completed
+(default: TRUE). Leave it out to keep whatever was set at
+\code{initialize_covariate_search()}; pass TRUE or FALSE here to change it for
+this run.}
 
 \item{auto_submit}{Logical. Whether to automatically submit models to cluster (default: TRUE)}
 

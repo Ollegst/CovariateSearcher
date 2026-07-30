@@ -394,32 +394,58 @@ read_nonmem_lst <- function(model_path) {
 #' @description Classifies a model's run status from its output files, with
 #'   detailed failure information
 #' @param model_path Character. Path to model directory
+#' @param require_cov_step Logical. Whether a successful covariance step (the
+#'   presence of a \code{.cov} file) is required for success (default: TRUE).
 #' @return Character. Overall model status
 #' @export
-get_model_status_from_files <- function(model_path) {
+get_model_status_from_files <- function(model_path, require_cov_step = TRUE) {
 
   lst_info <- read_nonmem_lst(model_path)
   ext_info <- read_nonmem_ext(model_path)
-  ext_has_valid_ofv <- isTRUE(ext_info$found) &&
-    !is.null(ext_info$ofv) &&
-    length(ext_info$ofv) > 0 &&
-    is.finite(ext_info$ofv[1])
 
   if (!lst_info$found && !ext_info$found) {
     return("not_run")
   }
 
-  if (!lst_info$found) {
-    return(if (ext_has_valid_ofv) "completed_with_issues" else "incomplete")
+  # An OFV means nothing until the run has finished: read_nonmem_ext() falls back
+  # to the last iteration line when there is no final estimate, so a model still
+  # estimating reports a usable-looking value. Establish completion first, which
+  # is also the order update_model_status_from_files() works in.
+  if (!isTRUE(lst_info$found) || identical(lst_info$status, "incomplete")) {
+    return("incomplete")
   }
 
-  # EXT fallback: if LST parser is conservative but EXT has valid final OFV,
-  # keep status non-failing so completed runs are not blocked.
-  if (identical(lst_info$status, "failed") && ext_has_valid_ofv) {
-    return("completed_with_issues")
+  # Success is a usable OFV plus a covariance matrix - the same test
+  # update_model_status_from_files() applies, so both readers agree. How
+  # minimisation ended is deliberately not part of it: a run that stopped on
+  # rounding errors but produced both is a success.
+  ofv_ok <- isTRUE(ext_info$found) &&
+    !is.null(ext_info$ofv) &&
+    length(ext_info$ofv) > 0 &&
+    !is.na(ext_info$ofv[1]) &&
+    is.finite(ext_info$ofv[1]) &&
+    abs(ext_info$ofv[1]) <= 1e10
+
+  # Parameters parked at NONMEM's boundary marker are not a usable estimate.
+  if (ofv_ok && !is.null(ext_info$parameters) &&
+      any(abs(ext_info$parameters) >= 8.9999e5, na.rm = TRUE)) {
+    ofv_ok <- FALSE
   }
 
-  # Return the status from enhanced LST analysis
+  if (ofv_ok) {
+    if (isTRUE(require_cov_step)) {
+      # Look for the .cov beside the rest of the run's output, which is wherever
+      # the .lst turned out to be, not an assumed directory.
+      out_dir <- if (isTRUE(lst_info$found)) dirname(lst_info$file) else model_path
+      cov_file <- file.path(out_dir, paste0(basename(model_path), ".cov"))
+      if (!file.exists(cov_file)) {
+        return("failed")
+      }
+    }
+    return("completed")
+  }
+
+  # No usable OFV: fall back to what the LST itself reported.
   return(lst_info$status)
 }
 

@@ -4,13 +4,22 @@
 \alias{initialize_search_config}
 \title{Initialize search configuration parameters}
 \usage{
-initialize_search_config(search_state, lookup_file = NULL)
+initialize_search_config(
+  search_state,
+  lookup_file = NULL,
+  require_cov_step = TRUE
+)
 }
 \arguments{
 \item{search_state}{List containing search state}
 
 \item{lookup_file}{Character or NULL. Optional path to lookup YAML for
 categorical covariate labels.}
+
+\item{require_cov_step}{Logical. Whether a successful covariance step (a
+\code{.cov} file) is required for a model to count as completed
+(default: TRUE). Stored in the config so model discovery, which runs
+straight after this, applies the user's setting rather than a hard-coded one.}
 }
 \value{
 Updated search_state with initialized configuration

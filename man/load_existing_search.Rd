@@ -12,6 +12,7 @@ load_existing_search(
   timecol = "TIME",
   idcol = "ID",
   threads = 60,
+  require_cov_step = TRUE,
   lookup_file = NULL
 )
 }
@@ -29,6 +30,11 @@ load_existing_search(
 \item{idcol}{Character. ID column name (default: "ID")}
 
 \item{threads}{Integer. Number of threads for execution (default: 60)}
+
+\item{require_cov_step}{Logical. Whether a successful covariance step (a
+\code{.cov} file) is required for a model to count as completed
+(default: TRUE). Passed to \code{initialize_covariate_search()}, so it
+governs the base model check and every model discovered on disk.}
 
 \item{lookup_file}{Character or NULL. Optional path to lookup YAML for
 categorical labels. If NULL, defaults to data/spec/lookup.yaml.}

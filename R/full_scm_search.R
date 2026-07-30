@@ -28,7 +28,10 @@
 #' @param rse_threshold Numeric. Maximum RSE threshold as percentage.
 #'   If NULL, uses search_state$search_config$max_rse_threshold (default: 50)
 #' @param require_cov_step Logical. Whether to require a successful covariance step
-#'   (presence of .cov file) for a model to be considered completed (default: TRUE)
+#'   (presence of a .cov file) for a model to be considered completed
+#'   (default: TRUE). Leave it out to keep whatever was set at
+#'   \code{initialize_covariate_search()}; pass TRUE or FALSE here to change it for
+#'   this run.
 #' @param auto_submit Logical. Whether to automatically submit models to cluster (default: TRUE)
 #' @param auto_retry Logical. Whether to enable automatic retry for failed models (default: TRUE)
 #' @param save_checkpoints Logical. Whether to save state after each major step (default: TRUE)
@@ -115,6 +118,12 @@ run_automated_scm_testing <- function(search_state,
   search_state$search_config$forward_p_value <- forward_p_value
   search_state$search_config$backward_p_value <- backward_p_value
   search_state$search_config$max_rse_threshold <- rse_threshold
+  # Only override the covariance requirement when this call actually supplied one,
+  # so a FALSE chosen at initialize_covariate_search() is not reset by this
+  # argument's default.
+  if (missing(require_cov_step)) {
+    require_cov_step <- search_state$search_config$require_cov_step %||% TRUE
+  }
   search_state$search_config$require_cov_step <- require_cov_step
 
   # Calculate ΔOFV thresholds for display (df=1 for typical single parameter)

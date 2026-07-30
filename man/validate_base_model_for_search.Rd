@@ -4,13 +4,22 @@
 \alias{validate_base_model_for_search}
 \title{Validate base model readiness for covariate search}
 \usage{
-validate_base_model_for_search(base_model_path, models_folder = "models")
+validate_base_model_for_search(
+  base_model_path,
+  models_folder = "models",
+  require_cov_step = TRUE
+)
 }
 \arguments{
 \item{base_model_path}{Character. Base model name, for example \code{"run6"}.
 Should be provided without file extension.}
 
 \item{models_folder}{Character. Path to the folder containing model files.}
+
+\item{require_cov_step}{Logical. Whether a successful covariance step (a
+\code{.cov} file) is required for the base model to count as completed
+(default: TRUE). Passed through from \code{initialize_covariate_search()} so the
+base model is held to the same standard as the models the search creates.}
 }
 \value{
 Logical \code{TRUE} if the base model is valid for search initialization.
