@@ -31,7 +31,7 @@ navbar:
         href: articles/model-report-usage.html
       - text: Troubleshooting Guide
         href: articles/troubleshooting.html
-      - text: Recovery System
+      - text: Recovery and Resuming a Search
         href: articles/recovery-system.html
 
 articles:
