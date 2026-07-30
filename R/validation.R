@@ -298,18 +298,14 @@ update_model_status_from_files <- function(search_state, model_name, force = FAL
         parent_ofv <- search_state$search_database$ofv[parent_idx[1]]
 
         if (!is.na(parent_ofv)) {
-          # Get the action type to determine delta OFV sign convention
-          action_type <- search_state$search_database$action[db_idx]
-
           # Calculate delta OFV with correct sign convention:
           # - For FORWARD (add_covariate): delta = parent - child
           #   Positive delta = child OFV is lower (improvement)
           # - For BACKWARD (remove_covariate): delta = child - parent
           #   Positive delta = child OFV is higher (removal worsened model = keep covariate)
-          if (!is.na(action_type) &&
-              (action_type == "remove_single_covariate" ||
-               action_type == "remove_covariate" ||
-               grepl("remove", action_type, ignore.case = TRUE))) {
+          # .is_removal_model() resolves retry rows to the model they retry, whose
+          # action is the one that names a direction.
+          if (.is_removal_model(search_state, model_name)) {
             # BACKWARD: child - parent (positive = OFV increased = bad removal)
             delta_ofv <- file_results$ofv - parent_ofv
           } else {
@@ -447,6 +443,19 @@ update_all_model_statuses <- function(search_state, show_progress = TRUE) {
           logical(1)
         )
         needs_update <- needs_update & !is_ignored
+      }
+
+      # Skip models this search did not create. They are never submitted or
+      # retried, so re-reading their output on every monitoring cycle adds noise
+      # and can relabel a long-finished run as "failed" (a model with no output
+      # directory reads as a failed launch, which is meaningless for a model the
+      # search was never going to run). The exception is a model that some row
+      # names as its parent: step evaluation needs that model's OFV to compute
+      # delta_ofv, and the base model is the usual case.
+      if ("created_by_search" %in% names(search_state$search_database)) {
+        is_external <- !.is_search_model(search_state, all_models)
+        needed_as_parent <- all_models %in% search_state$search_database$parent_model
+        needs_update <- needs_update & (!is_external | needed_as_parent)
       }
 
       # Get models that need updating

@@ -146,6 +146,7 @@ load_search_state <- function(filename) {
   }
 
   search_state <- readRDS(filename)
+  search_state <- .ensure_provenance_column(search_state)
   cat(sprintf("📁 Search state loaded from %s\n", filename))
   cat(sprintf("📊 Loaded: %d models, counter: %d\n",
               nrow(search_state$search_database), search_state$model_counter))
@@ -177,6 +178,7 @@ initialize_search_database_core <- function(search_state) {
     original_model = character(),
     estimation_issue = character(),
     excluded_from_step = logical(),
+    created_by_search = logical(),
     stringsAsFactors = FALSE
   )
   cat("Simplified search database initialized\n")

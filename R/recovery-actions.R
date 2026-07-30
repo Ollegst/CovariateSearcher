@@ -155,6 +155,10 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
     log_msg("Adding to database...")
 
     tryCatch({
+      # The template must already carry every column the database has, or the
+      # rbind() below fails on a width mismatch.
+      search_state <- .ensure_provenance_column(search_state)
+
       # Take the first row as a template to ensure exact structure match
       template_row <- search_state$search_database[1, , drop = FALSE]
       new_row <- template_row
@@ -179,6 +183,9 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
       new_row$original_model <- original_model_name
       new_row$estimation_issue <- issue_type
       new_row$excluded_from_step <- FALSE
+      # Set explicitly: the template row was copied from whichever model sits
+      # first in the database, which is usually a discovered (non-search) one.
+      new_row$created_by_search <- TRUE
 
       # Add to database using rbind (now structure matches exactly)
       search_state$search_database <- rbind(search_state$search_database, new_row)

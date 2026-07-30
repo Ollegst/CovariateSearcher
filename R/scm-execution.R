@@ -219,7 +219,24 @@ run_univariate_step <- function(search_state, base_model_id, covariates_to_test 
 #'
 #' @title Submit models and wait for all to complete with status tracking
 #' @description Submits a step's models, monitors them to completion, and creates
-#'   retry models for any that hit estimation issues
+#'   retry models for any that hit estimation issues.
+#'
+#'   Only models this search created are submitted. Any name in \code{model_names}
+#'   that the search did not create - anything already on disk when the search was
+#'   initialized - is reported and dropped, and if that leaves nothing to submit the
+#'   call returns \code{status = "no_models"}. Monitoring and retry decisions cover
+#'   this step's own models only, so a model from earlier work cannot be started by
+#'   a covariate step; the printed status summary still reports on every model in
+#'   the database. A model found to have produced no output at all is submitted once
+#'   more rather than sent down the retry path, since nothing about its initial
+#'   estimates is what stopped it from running.
+#'
+#'   A model that removes a covariate is never retried. Backward elimination takes
+#'   a parameter out, so there are no initial estimates left to perturb, and a
+#'   removal that will not estimate already means the covariate stays - the reading
+#'   \code{evaluate_removal_impacts()} takes from the model not completing. Such a
+#'   model keeps its \code{"failed"} status and is offered for removal again at the
+#'   next backward step. Retries of covariate \emph{additions} are unaffected.
 #' @param search_state List containing covariate search state and configuration
 #' @param model_names Character vector. Model names to submit and monitor
 #' @param step_name Character. Description of current step
@@ -240,6 +257,26 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
       failed_models = character(0),
       status = "no_models"
     ))
+  }
+
+  # The search runs only models it created itself. Anything that was already on
+  # disk when the search was initialized is refused here rather than submitted,
+  # so a stale run left in models/ cannot be started by a covariate step.
+  foreign_models <- model_names[!.is_search_model(search_state, model_names)]
+  if (length(foreign_models) > 0) {
+    cat(sprintf("⛔ Not submitting %d model(s) this search did not create: %s\n",
+                length(foreign_models), paste(foreign_models, collapse = ", ")))
+    model_names <- setdiff(model_names, foreign_models)
+
+    if (length(model_names) == 0) {
+      cat("⛔ Nothing left to submit for this step\n")
+      return(list(
+        search_state = search_state,
+        completed_models = character(0),
+        failed_models = character(0),
+        status = "no_models"
+      ))
+    }
   }
 
   if (!auto_submit) {
@@ -341,6 +378,11 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
   }
 
   active_monitoring_list <- successful_submissions
+
+  # Models re-submitted because they had produced no output at all. Each is
+  # re-submitted once; if it comes back with no output a second time the problem
+  # is not the submission, so it goes down the normal failure path.
+  resubmitted_never_started <- character(0)
 
   # Poll model statuses until every submitted model has finished
   while (TRUE) {
@@ -480,21 +522,78 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
                 running_count))
 
 
-    # Identify NEW completions and failures
+    # Identify NEW completions and failures. current_status spans the whole
+    # database because the summary above reports on every model, but only this
+    # step's own models may drive decisions here: acting on the full database lets
+    # a model from earlier work - one this call never submitted - trigger a retry
+    # model and a cluster submission.
+    step_status <- current_status[current_status$model_name %in% active_monitoring_list, , drop = FALSE]
+
     newly_completed <- tryCatch({
-      completed_models <- current_status$model_name[current_status$status == "completed"]
+      completed_models <- step_status$model_name[step_status$status == "completed"]
       setdiff(completed_models, definitively_completed)
     }, error = function(e) {
       character(0)
     })
 
     newly_failed <- tryCatch({
-      failed_models <- current_status$model_name[current_status$status %in% c("failed", "estimation_error")]
+      failed_models <- step_status$model_name[step_status$status %in% c("failed", "estimation_error")]
       candidates <- setdiff(failed_models, definitively_failed)
       setdiff(candidates, already_processed_for_retry)
     }, error = function(e) {
       character(0)
     })
+
+    # A model with no output directory never reached NONMEM, so its initial
+    # estimates are not what went wrong and the retry path would be answering the
+    # wrong question. Submit the model itself instead, once.
+    never_started <- newly_failed[
+      !dir.exists(file.path(search_state$models_folder, newly_failed))
+    ]
+    never_started <- setdiff(never_started, resubmitted_never_started)
+
+    if (length(never_started) > 0) {
+      newly_failed <- setdiff(newly_failed, never_started)
+
+      cat(sprintf("🚀 %d model(s) produced no output - submitting them: %s\n",
+                  length(never_started), paste(never_started, collapse = ", ")))
+
+      for (model_name in never_started) {
+        cat(sprintf("  Submitting %s... ", model_name))
+
+        tryCatch({
+          model_path <- file.path(search_state$models_folder, model_name)
+
+          if (is.null(find_model_file(model_path))) {
+            stop(sprintf("Model file not found for %s (.ctl or .mod)", model_path))
+          }
+
+          mod <- bbr::read_model(model_path)
+          bbr::submit_model(mod, .bbi_args = list(threads = threads), .overwrite = TRUE)
+
+          db_idx <- which(search_state$search_database$model_name == model_name)
+          if (length(db_idx) > 0) {
+            search_state$search_database$submission_time[db_idx] <- Sys.time()
+            search_state$search_database$status[db_idx] <- "in_progress"
+          }
+
+          cat("✓\n")
+
+        }, error = function(submit_error) {
+          cat(sprintf("✗ %s\n", submit_error$message))
+
+          # Record the failure so the model is not left looking merely unfinished:
+          # "submission_failed" is non-terminal, so the next cycle re-reads it,
+          # finds no output, and puts it back on the normal failure path.
+          db_idx <- which(search_state$search_database$model_name == model_name)
+          if (length(db_idx) > 0) {
+            search_state$search_database$status[db_idx] <<- "submission_failed"
+          }
+        })
+
+        resubmitted_never_started <- c(resubmitted_never_started, model_name)
+      }
+    }
 
     # Update definitive tracking
     if (length(newly_completed) > 0) {
@@ -515,6 +614,24 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
       }
 
       definitively_failed <- c(definitively_failed, newly_failed)
+    }
+
+    # A failed removal model gets no retry. Backward elimination takes a parameter
+    # out, so there is nothing left to perturb, and the meaning of a removal that
+    # will not estimate is simply that the covariate stays - which is what
+    # evaluate_removal_impacts() concludes from the model not completing. The row
+    # keeps its "failed" status. Any step that follows re-reads the base model's
+    # covariates, so the covariate is offered for removal again there; a step in
+    # which every removal fails ends backward elimination instead.
+    #
+    # A removal model that never launched is a different case and was already
+    # re-submitted above: it has not been estimated even once, so there is nothing
+    # yet to conclude from it.
+    removal_failures <- newly_failed[.is_removal_model(search_state, newly_failed)]
+    if (length(removal_failures) > 0) {
+      cat(sprintf("↩️  Not retrying %d removal model(s) - covariate stays in the model: %s\n",
+                  length(removal_failures), paste(removal_failures, collapse = ", ")))
+      newly_failed <- setdiff(newly_failed, removal_failures)
     }
 
     # AUTO-RETRY LOGIC
@@ -556,7 +673,10 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
           for (retry_model in recovery_result$retry_models_created) {
             retry_row <- search_state$search_database[search_state$search_database$model_name == retry_model, ]
 
-            if (nrow(retry_row) > 0 && retry_row$status[1] == "created") {
+            if (!.is_search_model(search_state, retry_model)) {
+              cat(sprintf("⛔ Not submitting retry model %s - not created by this search\n",
+                          retry_model))
+            } else if (nrow(retry_row) > 0 && retry_row$status[1] == "created") {
               cat(sprintf("🚀 Submitting retry model %s... ", retry_model))
 
               tryCatch({

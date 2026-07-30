@@ -129,6 +129,120 @@ extract_covariate_name_from_tag <- function(tag) {
 }
 
 
+#' Was a model created by this covariate search?
+#'
+#' @description Provenance check behind the rule that the search submits only
+#'   models it created itself. Models already on disk when
+#'   \code{discover_existing_models()} ran - the base model, structural runs,
+#'   anything left over from earlier work - are recorded with
+#'   \code{created_by_search = FALSE} and are never submitted, retried or
+#'   status-tracked by the search, whatever their run number. Models the package
+#'   creates are \code{TRUE}: covariate add/remove steps, retry models, and steps
+#'   recovered by \code{reconstruct_step_from_disk()} (those were created by an
+#'   earlier session of the same search).
+#'
+#'   Run number is deliberately not the test. The model a phase builds on moves
+#'   as the search runs - a backward step's result becomes the base for the
+#'   forward phase that follows - so "newer than the base model" is not a stable
+#'   property, while "this search created it" is.
+#' @param search_state List containing the search state.
+#' @param model_name Character vector of model names.
+#' @return Logical vector, one element per \code{model_name}. A name with no row
+#'   in the database is \code{FALSE}: the search cannot own a model it never
+#'   recorded. A database with no \code{created_by_search} column at all has no
+#'   provenance to read, so every name reads \code{TRUE} and the search behaves as
+#'   it did before the guard existed - normally that case never arises, because
+#'   \code{.ensure_provenance_column()} adds the column when a checkpoint is
+#'   loaded. An \code{NA} in the column is not the same thing and reads
+#'   \code{FALSE}.
+#' @keywords internal
+#' @noRd
+.is_search_model <- function(search_state, model_name) {
+  if (length(model_name) == 0) return(logical(0))
+
+  db <- search_state$search_database
+  if (is.null(db) || !"model_name" %in% names(db)) {
+    return(rep(FALSE, length(model_name)))
+  }
+  if (!"created_by_search" %in% names(db)) {
+    return(rep(TRUE, length(model_name)))
+  }
+
+  idx <- match(model_name, db$model_name)
+  flag <- db$created_by_search[idx]
+  !is.na(idx) & !is.na(flag) & flag
+}
+
+
+#' Does a model remove a covariate rather than add one?
+#'
+#' @description Reads the direction of a step off its database row, resolving
+#'   retry rows to the model they retry. \code{create_retry_model()} records
+#'   \code{action = "retry"} and \code{phase = "retry"}, so a retry row carries no
+#'   direction of its own - only the \code{original_model} it points at does. Two
+#'   things depend on getting this right: the sign convention for \code{delta_ofv}
+#'   (removals are child minus parent, additions are parent minus child), and
+#'   whether a failed model is eligible for a retry at all.
+#' @param search_state List containing the search state.
+#' @param model_name Character vector of model names.
+#' @return Logical vector, one element per \code{model_name}. \code{FALSE} for a
+#'   name with no row, an \code{NA} action, or an action that names no direction.
+#' @keywords internal
+#' @noRd
+.is_removal_model <- function(search_state, model_name) {
+  if (length(model_name) == 0) return(logical(0))
+
+  db <- search_state$search_database
+  if (is.null(db) || !"action" %in% names(db)) {
+    return(rep(FALSE, length(model_name)))
+  }
+
+  idx <- match(model_name, db$model_name)
+  action <- db$action[idx]
+
+  is_retry <- !is.na(action) & action == "retry"
+  if (any(is_retry) && "original_model" %in% names(db)) {
+    origin_idx <- match(db$original_model[idx[is_retry]], db$model_name)
+    action[is_retry] <- db$action[origin_idx]
+  }
+
+  # "remove_covariate" and "remove_single_covariate" both match; an addition,
+  # a manual modification and an unresolved retry all do not.
+  !is.na(action) & grepl("remove", action, ignore.case = TRUE)
+}
+
+
+#' Add the provenance column to a database that predates it
+#'
+#' @description Checkpoints written before \code{created_by_search} existed carry
+#'   no provenance. Reading a missing column is safe on its own - see
+#'   \code{.is_search_model()} - but only until the first row that has the column
+#'   is appended: \code{dplyr::bind_rows()} then back-fills \code{NA} into every
+#'   older row (which reads as "not search-created", freezing the whole prior
+#'   history out of the search), and \code{rbind()} rejects the width mismatch
+#'   outright. Adding the column when the state is loaded avoids both. Existing
+#'   rows are marked \code{TRUE}, which is how the search treated them before the
+#'   guard existed.
+#' @param search_state List containing the search state.
+#' @return \code{search_state}, with \code{created_by_search} present on its
+#'   database. Unchanged if there is no database or the column is already there.
+#' @keywords internal
+#' @noRd
+.ensure_provenance_column <- function(search_state) {
+  db <- search_state$search_database
+  if (is.null(db) || !is.data.frame(db) || "created_by_search" %in% names(db)) {
+    return(search_state)
+  }
+
+  search_state$search_database$created_by_search <- rep(TRUE, nrow(db))
+  if (nrow(db) > 0) {
+    cat(sprintf("• created_by_search: not recorded in this state, %d existing model(s) marked as search-created\n",
+                nrow(db)))
+  }
+  search_state
+}
+
+
 #' Convert P-Value to Chi-Square ΔOFV Threshold
 #'
 #' @title Calculate ΔOFV threshold from p-value for likelihood ratio test

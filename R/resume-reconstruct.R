@@ -235,6 +235,11 @@ reconstruct_step_from_disk <- function(search_state = NULL,
     r$submission_time  <- as.POSIXct(NA)
     r$completion_time  <- as.POSIXct(NA)
     r$tags             <- I(list(info$tags))
+    # These models are being recovered from disk, but an earlier session of this
+    # search is what created them - so the search still owns them and may resubmit
+    # them. Set explicitly: the row was copied from the base model, which is not
+    # search-created.
+    r$created_by_search <- TRUE
     new_rows[[m]]      <- r
     registered         <- c(registered, m)
   }

@@ -204,6 +204,7 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag,
         original_model = NA_character_,
         estimation_issue = NA_character_,
         excluded_from_step = FALSE,
+        created_by_search = TRUE,
         stringsAsFactors = FALSE
       )
 
@@ -1349,6 +1350,7 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
       original_model = NA_character_,
       estimation_issue = NA_character_,
       excluded_from_step = FALSE,
+      created_by_search = TRUE,
       stringsAsFactors = FALSE
     )
 

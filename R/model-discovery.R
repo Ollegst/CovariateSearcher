@@ -139,6 +139,11 @@ discover_existing_models <- function(search_state) {
       original_model = NA_character_,
       estimation_issue = NA_character_,
       excluded_from_step = FALSE,
+      # Everything discovered here already existed on disk, so none of it belongs
+      # to this search: the base model, structural runs, and any leftovers from
+      # earlier work. Recording that keeps the search from submitting or retrying
+      # them - see .is_search_model().
+      created_by_search = FALSE,
       stringsAsFactors = FALSE
     )
   }
