@@ -25,6 +25,8 @@ Thumbs.db
 R_backup/
 migration.R
 scripts/
+# ...but the agent tooling under .claude/ is part of the repo
+!.claude/scripts/
 inst/doc
 
 # The pkgdown site is built by the pkgdown workflow and published from the
