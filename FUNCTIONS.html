@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="index.html">CovariateSearcher</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -48,7 +48,7 @@
 
 <div id="covariatesearcher--function-reference" class="section level1">
 
-<p><strong>What this is:</strong> an agent-facing map of <em>every</em> function in <code>R/</code>, so future sessions don’t have to re-read the whole codebase. Originally generated from a full read of the pre-refactor code (v0.1.30). <strong>Last audited 2026-07-30 against v0.2.0: 29 files in <code>R/</code>, 132 top-level functions, 90 exports in NAMESPACE</strong> — every defined function appears below. Keep it in sync as the modular reorg lands.</p>
+<p><strong>What this is:</strong> an agent-facing map of <em>every</em> function in <code>R/</code>, so future sessions don’t have to re-read the whole codebase. Originally generated from a full read of the pre-refactor code (v0.1.30). <strong>Last audited 2026-07-30 against v0.4.1: 29 files in <code>R/</code>, 132 top-level functions, 90 exports in NAMESPACE</strong> — every defined function appears below. Keep it in sync as the modular reorg lands.</p>
 <p><strong>Legend:</strong> <code>Exp</code> ✓ = exported (<code>@export</code>), · = internal/documented-internal. <em>Side effects</em> flag file writes, <code>bbr::</code> calls, <code>&lt;&lt;-</code>, <code><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop()</a></code>, hardcoded paths. <em>Nested</em> = a closure defined inside another function (not top-level).</p>
 <p><strong>Housekeeping:</strong> this file is a dev/agent aid, not package content — <code>^FUNCTIONS\.md$</code> is in <code>.Rbuildignore</code> (done), so it doesn’t ship or trip <code>R CMD check</code>.</p>
 <hr><div class="section level2">
@@ -99,7 +99,7 @@
 </tr></tbody></table><hr></div>
 <div class="section level2">
 <h2 id="cross-cutting-hazards--consolidation-candidates-read-before-any-merge">Cross-cutting hazards &amp; consolidation candidates (read before any merge)<a class="anchor" aria-label="anchor" href="#cross-cutting-hazards--consolidation-candidates-read-before-any-merge"></a></h2>
-<p><strong>Duplicate implementations (merge targets — but preserve contracts):</strong> - <strong><code>.ext</code> readers ×3:</strong> <code>read_nonmem_ext</code> (file-io.R → <code>found/ofv/parameters</code>, FINAL <code>-1e9</code> line, flat+subdir), <code>read_ext_file</code> (monitoring-files.R → <code>status/current_ofv/iterations/has_estimation_issues/…</code>, last/current line, subdir-only), <code>read_ext_iterations</code> (plot_nonmem_iterations.R → tidy data.frame, consumed positionally by the sim sampler). <strong>Different OFV semantics + file locations — do not conflate.</strong> - <strong><code>.cov</code>/<code>.cor</code> matrix parsers ×2:</strong> <code>calculate_condition_number</code> (model-output-tables.R, reconstructs lower-triangular) vs <code>.read_nonmem_matrix</code> (forest-plots.R, assumes labelled square). - <strong><code>$THETA</code> name/trans parsers ×3:</strong> <code>extract_params</code>/<code>extract_model_params</code> (model-output-tables.R) vs inline in <code>apply_covariate_model</code> vs inline in <code>create_covariate_table</code>. - <strong>Categorical-level decode ×2+:</strong> <code>decode_cov_level</code> (model-output-tables.R, the only unit-tested fn) vs nested <code>decode_level</code> (forest-plots.R) vs the inline decode in <code>model_add_cov</code>. - <strong>Covariate formula algebra ×2 (highest risk):</strong> <code>model_add_cov</code> <em>writes</em> NONMEM factors; <code>apply_covariate_model</code> <em>reconstructs the same math in R</em>. Must stay in sync. Also, <code>model_add_cov</code>’s formula block is <strong>duplicated verbatim within itself</strong> (~L404-408 and ~L490-494). - <strong>name→tag idiom</strong> <code>names(tags)[tags==name]</code> repeated ~6× in scm-selective-forward.R + full_scm_search.R; overlaps <code>get_covariate_tag_from_name</code>. - <strong>“Get covariates” family (names lie about source):</strong> <code>get_model_covariates_from_db</code> (reads <strong>bbr files</strong>, returns tag <strong>values</strong>), <code>get_model_covariates_from_files</code> (reads bbr files, returns tag <strong>names</strong>), <code>get_covariates_from_models</code> (DB, many models). <strong>Do not collapse blindly.</strong></p>
+<p><strong>Duplicate implementations (merge targets — but preserve contracts):</strong> - <strong><code>.ext</code> readers ×3:</strong> <code>read_nonmem_ext</code> (file-io.R → <code>found/ofv/parameters</code>, FINAL <code>-1e9</code> line, flat+subdir), <code>read_ext_file</code> (monitoring-files.R → <code>status/current_ofv/iterations/has_estimation_issues/…</code>, last/current line, subdir-only), <code>read_ext_iterations</code> (plot_nonmem_iterations.R → tidy data.frame, consumed positionally by the sim sampler). <strong>Different OFV semantics + file locations — do not conflate.</strong> - <strong><code>.cov</code>/<code>.cor</code> matrix parsers ×2:</strong> <code>calculate_condition_number</code> (model-output-tables.R, reconstructs lower-triangular) vs <code>.read_nonmem_matrix</code> (forest-plots.R, assumes labelled square). - <strong><code>$THETA</code> name/trans parsers ×3:</strong> <code>extract_params</code>/<code>extract_model_params</code> (model-output-tables.R) vs inline in <code>apply_covariate_model</code> vs inline in <code>create_covariate_table</code>. - <strong>Categorical-level decode ×2+:</strong> <code>decode_cov_level</code> (model-output-tables.R, the only unit-tested fn) vs nested <code>decode_level</code> (forest-plots.R) vs the inline decode in <code>model_add_cov</code>. - <strong>Covariate formula algebra ×2 (highest risk):</strong> <code>model_add_cov</code> <em>writes</em> NONMEM factors; <code>apply_covariate_model</code> <em>reconstructs the same math in R</em>. Must stay in sync. Also, <code>model_add_cov</code>’s formula block is <strong>duplicated verbatim within itself</strong> (~L404-408 and ~L490-494). - <strong>name→tag idiom</strong> <code>names(tags)[tags==name]</code> repeated ~6× in scm-selective-forward.R + full_scm_search.R; overlaps <code>get_covariate_tag_from_name</code>. - <strong>“Get covariates” family (names lie about source):</strong> <code>get_model_covariates_from_db</code> (reads <strong>bbr files</strong>, returns tag <strong>values</strong>), <code>get_model_covariates_from_files</code> (reads bbr files, returns tag <strong>names</strong>), <code>get_covariates_from_models</code> (DB, many models). <strong>Do not collapse blindly.</strong> - <strong>Run-success test ×2 (added 2026-07-30 — must stay identical):</strong> <code>get_model_status_from_files</code> (file-io.R, returns a status string; used by base-model validation + discovery) and <code>update_model_status_from_files</code>’s nested <code>read_all_model_files</code> (validation.R, writes the DB row) now apply <em>the same</em> rule in the same order: run finished (<code>.lst</code> present, not <code>incomplete</code>) → usable OFV (non-NA, finite, <code>abs &lt;= 1e10</code>, no parameter at <code>abs &gt;= 8.9999e5</code>) → <code>.cov</code> present when <code>require_cov_step</code>. Both resolve output location via <code>read_nonmem_lst()$file</code> and look for the <code>.cov</code> in <code><a href="https://rdrr.io/r/base/basename.html" class="external-link">dirname()</a></code> of it. Neither has a route to <code>"completed"</code> that skips the OFV test: a <code>.lst</code> reporting completion with a missing or unparseable <code>.ext</code> is <code>failed</code> in both. <strong>If they drift, a model’s verdict depends on which reader looked at it.</strong> <code>completed_with_issues</code> was retired from this path and is no longer produced anywhere in the package. The flag itself is threaded <code>initialize_covariate_search(require_cov_step=)</code> → <code>validate_base_model_for_search</code> + <code>initialize_search_config</code> (stored in <code>search_config</code>, <strong>before</strong> <code>discover_existing_models</code> runs) → read back via <code>%||% TRUE</code> by discovery, <code>update_model_status_from_files</code> and <code>run_automated_scm_testing</code> (which only overwrites it when the caller supplied it).</p>
 <p><strong>Schema declared in 5 places (must all stay in sync / all get <code>stage</code>):</strong> canonical <code>initialize_search_database_core</code> (19 cols as of 2026-07-30, <code>created_by_search</code> added) · self-heal <code>required_cols</code> in <code>validation.R</code> (13-col subset) · self-heal in <code>scm-selective-forward.R</code> · <code>model-discovery.R</code> rebuilds the 19-col row by hand · row-builders <code>add_covariate_to_model</code>/<code>remove_covariate_from_model</code> (<code>bind_rows</code>) + <code>create_retry_model</code> (<strong>order-sensitive <code>rbind</code> on a blanked <code>db[1,]</code> template</strong> — hence its <code>.ensure_provenance_column()</code> call). A checkpoint predating a new column is only migrated for <code>created_by_search</code>, via <code>.ensure_provenance_column()</code> in <code>load_search_state</code>/<code>create_retry_model</code>; the other four sites have no migration path.</p>
 <p><strong><code>action</code> / <code>phase</code> vocabulary (display registry must cover all):</strong> - <code>action</code> written: <code>base_model</code>, <code>add_covariate</code>, <code>remove_covariate</code>, <code>add_single_covariate</code>, <code>remove_single_covariate</code>, <code>retry</code>, <code>manual_modification</code>. - <code>phase</code> written: <code>base</code>, <code>forward_selection</code>, <code>covariate_removal</code>, <code>backward_elimination</code>, <code>retry</code>, <code>manual</code>, <code>individual_testing</code>. - Display generators (<code>generate_step_display</code>/<code>_changes_display</code>/<code>_step_description</code>) only recognize <code>{base_model, add_covariate, remove_covariate, retry}</code> → <strong>everything else renders “Unknown: X”</strong>.</p>
 <p><strong>Confirmed bugs (fix during the relevant phase):</strong> - <del><code>run_univariate_step</code> error handler <code>&lt;-</code></del> <strong>FIXED 2026-07-18</strong>: error handler used <code>&lt;-</code> (handler-local) → thrown-error failures dropped from tracking → now <code>&lt;&lt;-</code> (scm-execution.R:153-154), matching the file’s existing <code>&lt;&lt;-</code> callbacks. - <del><code>remove_covariate_from_model</code> action label</del> <strong>FIXED 2026-07-18</strong> (A1): wrote <code>action="remove_single_covariate"</code> → “Unknown” in tables (backward path was only patched by <code>scm-backward.R:155</code>); now writes <code>"remove_covariate"</code> at root so manual removal displays correctly. - <del>Retry misclassification</del> <strong>FIXED 2026-07-18</strong>: <code>grepl("\\d{3}$")</code> flagged <code>run100</code>+ as retries → now <code>grepl("^run\\d+001$")</code> (was 6 sites; the 2 yaml-analysis helpers later removed in the dead-code sweep — remaining: <code>process_estimation_issues</code>, <code>update_model_counter</code>, <code>generate_recovery_report</code>, <code>discover_models</code>). Residual false positives only for normal models ending in <code>001</code> (run1001…). - Excluded-covariate “final testing” block in <code>full_scm_search.R</code> is <strong>dead</strong> (filters <code>phase=="forward"</code> which is never written; also gated by <code>run_forward &amp;&amp; !run_final_backward</code>, false for <code>full_scm</code>). → retire (owner dropped <code>excluded_only</code>). - <del><code>cat.power</code> read-side bug</del> <strong>FIXED 2026-07-19 (registry, Step ③)</strong>: <code>apply_covariate_model</code> previously gated the categorical <code>IF</code>-parse branch on <code>status=="cat"</code> alone, so <code>cat.power</code> (e.g. dose 35/70/125/150) wrongly entered it (no <code>IF(COV.EQ.x)</code> block → mis-reconstructed). Now BOTH <code>model_add_cov</code> (write) and <code>apply_covariate_model</code> (read) dispatch on the registry’s <code>categorical</code> flag (<code>get_covariate_formula(status, formula)$categorical</code>): <code>cat.linear</code> → per-level <code>IF/ELSEIF</code>; everything else incl. <code>cat.power</code> → single factor from the same registry entry (<code>nonmem</code> write / <code>r_eval</code> read), so write &amp; read can’t drift. - <del><code>generate_phase</code></del> <strong>removed 2026-07-18</strong> (dead, unexported).</p>
@@ -152,16 +152,16 @@
 <th>Returns</th>
 <th>Side effects</th>
 <th>Calls / Called-by</th>
-</tr></thead><tbody><tr><td><code>initialize_covariate_search(base_model_path, data_file_path, covariate_search_path, models_folder="models", timecol="TIME", idcol="ID", threads=60, validate_parameters=TRUE, require_base_run=TRUE, lookup_file=NULL, starting_model_number=NULL)</code></td>
+</tr></thead><tbody><tr><td><code>initialize_covariate_search(base_model_path, data_file_path, covariate_search_path, models_folder="models", timecol="TIME", idcol="ID", threads=60, validate_parameters=TRUE, require_base_run=TRUE, require_cov_step=TRUE, lookup_file=NULL, starting_model_number=NULL)</code></td>
 <td>✓</td>
-<td>Full init: load data, verify ID col + <code>$DATA</code> filename match, gen tags, validate base model (skippable via <code>require_base_run=FALSE</code>), validate parameter transformations, build DB/config, discover models, set counter</td>
-<td>two CSV paths, base model name, <code>starting_model_number</code>
+<td>Full init: load data, verify ID col + <code>$DATA</code> filename match, gen tags, validate base model (skippable via <code>require_base_run=FALSE</code>), validate parameter transformations, build DB/config, discover models, set counter. <strong><code>require_cov_step</code> is the search-wide covariance-step rule set here</strong>: passed to <code><a href="reference/validate_base_model_for_search.html">validate_base_model_for_search()</a></code> so the base model is judged by it, and stored in <code>search_config</code> by <code><a href="reference/initialize_search_config.html">initialize_search_config()</a></code> <strong>before</strong> <code><a href="reference/discover_existing_models.html">discover_existing_models()</a></code> runs, which is what makes it reach discovery and every later status read</td>
+<td>two CSV paths, base model name, <code>starting_model_number</code>, <code>require_cov_step</code>
 </td>
-<td>full <code>search_state</code> list (13 slots)</td>
+<td>full <code>search_state</code> list (12 slots: <code>base_model, data_file, covariate_search, models_folder, timecol, idcol, threads, tags, model_counter, search_database, search_config, discovered_models</code>)</td>
 <td>
 <code>cat</code>; <code><a href="https://readr.tidyverse.org/reference/read_delim.html" class="external-link">readr::read_csv</a></code>; <code>readLines</code>; <code>dir.create</code> <code>models/scm_rds/</code>; many <code><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop()</a></code>; hardcoded <code>data/spec/tags.yaml</code>
 </td>
-<td>calls <code>generate_tags_from_covariate_search</code>, <code>validate_base_model_for_search</code>, <code>load_tags</code>, <code>validate_setup</code>, <code>initialize_search_database_core</code>, <code>initialize_search_config</code>, <code>discover_existing_models</code>, <code>update_model_counter</code>, <code>validate_base_model_parameters</code>; called-by <code>load_existing_search</code>
+<td>calls <code>.load_if_path</code>, <code>generate_tags_from_covariate_search</code>, <code>validate_base_model_for_search</code>, <code>load_tags</code>, <code>validate_setup</code>, <code>initialize_search_database_core</code>, <code>initialize_search_config</code>, <code>discover_existing_models</code>, <code>update_model_counter</code>, <code>validate_base_model_parameters</code>; called-by <code>load_existing_search</code>
 </td>
 </tr><tr><td><code>load_tags(search_state)</code></td>
 <td>✓</td>
@@ -194,28 +194,30 @@
 <td>
 <code>cat</code>; <code><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop()</a></code>
 </td>
-<td>calls <code>validate_covariate_search_table</code>, <code>validate_covariate_parameter_mapping</code>; called-by <code>initialize_covariate_search</code>
+<td>calls <code>validate_covariate_search_table</code>, <code>validate_covariate_parameter_mapping</code>, <code>validate_param_transformations</code>; called-by <code>initialize_covariate_search</code>
 </td>
-</tr><tr><td><code>validate_base_model_for_search(base_model_path, models_folder="models")</code></td>
+</tr><tr><td><code>validate_base_model_for_search(base_model_path, models_folder="models", require_cov_step=TRUE)</code></td>
 <td>✓</td>
-<td>Confirm base model exists, finished, has OFV</td>
-<td>model name, folder</td>
+<td>Confirm base model exists (<code>.ctl</code>/<code>.mod</code>), finished, has a readable OFV — held to the <strong>same</strong> completion rule as the search’s own models, since <code>require_cov_step</code> is forwarded to <code><a href="reference/get_model_status_from_files.html">get_model_status_from_files()</a></code>. On any status other than <code>"completed"</code> it re-reads <code>.lst</code>/<code>.ext</code> to build a specific failure reason for the <code><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop()</a></code> message</td>
+<td>model name, folder, <code>require_cov_step</code>
+</td>
 <td>
 <code>TRUE</code> or <code><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop()</a></code>
 </td>
 <td><code><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop()</a></code></td>
-<td>calls <code>get_model_status_from_files</code>, <code>read_nonmem_lst</code>, <code>read_nonmem_ext</code>
+<td>calls <code>get_model_status_from_files</code>, <code>read_nonmem_lst</code>, <code>read_nonmem_ext</code>; called-by <code>initialize_covariate_search</code>
 </td>
-</tr><tr><td><code>initialize_search_config(search_state, lookup_file=NULL)</code></td>
+</tr><tr><td><code>initialize_search_config(search_state, lookup_file=NULL, require_cov_step=TRUE)</code></td>
 <td>✓</td>
-<td>Set default SCM config (p-values, RSE, threads, lookup, phase)</td>
+<td>Set default SCM config (p-values, RSE, threads, lookup, <strong><code>require_cov_step</code></strong>, phase) — 9 elements. Runs immediately before <code><a href="reference/discover_existing_models.html">discover_existing_models()</a></code>, so storing <code>require_cov_step</code> here is how the user’s setting reaches discovery instead of a hard-coded TRUE</td>
 <td>
-<code>search_state</code>, lookup</td>
+<code>search_state</code>, lookup, <code>require_cov_step</code>
+</td>
 <td>updated <code>search_state</code> (<code>$search_config</code>)</td>
 <td>
 <code>cat</code>; hardcoded <code>data/spec/lookup.yaml</code>
 </td>
-<td>called-by <code>initialize_covariate_search</code>
+<td>called-by <code>initialize_covariate_search</code>; <code>$search_config$require_cov_step</code> read by <code>discover_existing_models</code>, <code>update_model_status_from_files</code>, <code>run_automated_scm_testing</code>
 </td>
 </tr><tr><td><code>generate_tags_from_covariate_search(covariate_search, tags_yaml_path="data/spec/tags.yaml", verbose=TRUE)</code></td>
 <td>✓</td>
@@ -280,10 +282,11 @@
 <th>Returns</th>
 <th>Side effects</th>
 <th>Calls / Called-by</th>
-</tr></thead><tbody><tr><td><code>load_existing_search(base_model_path, data_file_path, covariate_search_path, models_folder="models", timecol="TIME", idcol="ID", threads=60, lookup_file=NULL)</code></td>
+</tr></thead><tbody><tr><td><code>load_existing_search(base_model_path, data_file_path, covariate_search_path, models_folder="models", timecol="TIME", idcol="ID", threads=60, require_cov_step=TRUE, lookup_file=NULL)</code></td>
 <td>✓</td>
-<td>Discovery-mode wrapper: re-init from existing models</td>
-<td>CSV/model paths</td>
+<td>Discovery-mode wrapper: re-init from existing models. <code>require_cov_step</code> is passed straight through to <code><a href="reference/initialize_covariate_search.html">initialize_covariate_search()</a></code>, so it governs both the base-model check and how every model found on disk is classified; <code>lookup_file</code> is applied <em>after</em> init by overwriting <code>$search_config$lookup_file</code>. <strong><code>require_cov_step</code> was inserted before <code>lookup_file</code></strong> — positional calls that used to pass the lookup 8th now set the covariance flag instead</td>
+<td>CSV/model paths, <code>require_cov_step</code>
+</td>
 <td>
 <code>search_state</code> or <code><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop()</a></code>
 </td>
@@ -410,8 +413,9 @@
 <th>Calls / Called-by</th>
 </tr></thead><tbody><tr><td><code>discover_existing_models(search_state)</code></td>
 <td>✓</td>
-<td>Catalog <code>run\d+.(ctl|mod)</code>, read bbr per run, build <code>search_database</code>, assign relative step numbers. Every row it builds is stamped <code>created_by_search = FALSE</code> — it was on disk before the search started, so the search will not submit, retry or status-track it</td>
-<td><code>search_state</code></td>
+<td>Catalog <code>run\d+.(ctl|mod)</code>, read bbr per run, build <code>search_database</code>, assign relative step numbers. Every row it builds is stamped <code>created_by_search = FALSE</code> — it was on disk before the search started, so the search will not submit, retry or status-track it. Status per model comes from <code>get_model_status_from_files(model_path, require_cov_step = search_state$search_config$require_cov_step %||% TRUE)</code>, so a search initialized with <code>require_cov_step=FALSE</code> does not mark pre-existing runs <code>failed</code> for lacking a <code>.cov</code> (this works only because <code><a href="reference/initialize_search_config.html">initialize_search_config()</a></code> runs first)</td>
+<td>
+<code>search_state</code> (needs <code>$search_config$require_cov_step</code>)</td>
 <td>updated <code>search_state</code> (+ <code>$discovered_models</code>)</td>
 <td>
 <code>cat</code>; <code>list.files</code>; <code><a href="https://metrumresearchgroup.github.io/bbr/reference/read_model.html" class="external-link">bbr::read_model</a></code>; <code><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop()</a></code> (missing base / circular parent)</td>
@@ -431,13 +435,13 @@
 <th>Calls / Called-by</th>
 </tr></thead><tbody><tr><td><code>update_model_status_from_files(search_state, model_name, force=FALSE)</code></td>
 <td>✓</td>
-<td>Read <code>.lst</code>/<code>.ext</code>/<code>.cov</code>, set status/ofv/rse_max/issue, compute signed ΔOFV vs parent (only when the model is <code>completed</code> with a non-NA OFV and the parent row exists with an OFV). <strong>The sign convention is now <code>.is_removal_model()</code></strong>, not an inline <code>action</code> test: removal ⇒ <code>child − parent</code> (positive = OFV rose = the removal hurt ⇒ keep the covariate), anything else ⇒ <code>parent − child</code> (positive = OFV fell = good addition). Routing it through the helper corrects the sign for a <strong>retry of a removal</strong> model — its own <code>action</code> is <code>"retry"</code>, so it previously fell to the forward branch and reported ΔOFV with the wrong sign in backward elimination</td>
-<td>state, name, force</td>
+<td>Read <code>.lst</code>/<code>.ext</code>/<code>.cov</code>, set status/ofv/rse_max/issue, compute signed ΔOFV vs parent (only when the model is <code>completed</code> with a non-NA OFV and the parent row exists with an OFV). <strong>File resolution is delegated, not hardcoded:</strong> the <code>.lst</code> comes from <code>read_nonmem_lst(model_path)$file</code> (so the run-dir <em>or</em> control-stream location is found), the <code>.ext</code> from a single <code>read_nonmem_ext(model_path)</code> call whose result is reused for OFV/parameters, and the <code>.cov</code> is looked for in <code>dirname(lst_file)</code> — wherever the rest of that run’s output actually is. An absent/empty/unparseable <code>.ext</code> now reports <code><a href="reference/read_nonmem_ext.html">read_nonmem_ext()</a></code>’s own <code>$error</code> message (falling back to <code>"No EXT file found"</code> only when it is empty). <strong>The ΔOFV sign convention is <code>.is_removal_model()</code></strong>, not an inline <code>action</code> test: removal ⇒ <code>child − parent</code> (positive = OFV rose = the removal hurt ⇒ keep the covariate), anything else ⇒ <code>parent − child</code> (positive = OFV fell = good addition). Routing it through the helper corrects the sign for a <strong>retry of a removal</strong> model — its own <code>action</code> is <code>"retry"</code>, so it previously fell to the forward branch and reported ΔOFV with the wrong sign in backward elimination</td>
+<td>state, name, force; <code>$search_config$require_cov_step</code> (<code>%||% TRUE</code>)</td>
 <td>updated <code>search_state</code>
 </td>
 <td>
 <code>cat</code>; <code>readLines</code>; <strong>self-heals missing DB cols</strong> (13-col <code>required_cols</code> — note <code>action</code> is <em>not</em> in it, which <code>.is_removal_model</code> tolerates by returning FALSE)</td>
-<td>calls <code>extract_nonmem_timestamps</code>, <code>read_nonmem_ext</code>, <code>get_param2</code>, <code>.is_removal_model</code>; called-by <code>force_update_models</code>, <code>update_all_model_statuses</code>
+<td>nested <code>read_all_model_files</code>; calls <code>read_nonmem_lst</code>, <code>read_nonmem_ext</code>, <code>extract_nonmem_timestamps</code>, <code>get_param2</code>, <code>.is_removal_model</code>; called-by <code>force_update_models</code>, <code>update_all_model_statuses</code>
 </td>
 </tr><tr><td><code>force_update_models(search_state, model_names)</code></td>
 <td>✓</td>
@@ -504,7 +508,7 @@
 </td>
 <td>calls <code>find_model_file</code>; called-by <code>validate_setup</code>
 </td>
-</tr></tbody></table><p><strong>Notes:</strong> <strong>Self-heal schema #2</strong> — <code>update_model_status_from_files</code> declares a 13-col <code>required_cols</code> subset, adds missing via <code>case_when</code> defaults (<code>NA_real_</code> for numerics, <code>FALSE</code> for <code>excluded_from_step</code>, else <code>NA_character_</code>). <strong>Status values:</strong> <code>completed/failed/in_progress/unknown/stopped/read_error</code>. <strong>ΔOFV sign:</strong> backward (<code>action</code> matches “remove”) uses <code>child - parent</code>; forward uses <code>parent - child</code> (positive=improvement both). Completion needs valid OFV AND (if <code>require_cov_step</code>) a <code>.cov</code>; boundary params (<code>abs &gt;= 8.99990e5</code>) → failed.</p>
+</tr></tbody></table><p><strong>Notes:</strong> <strong>Self-heal schema #2</strong> — <code>update_model_status_from_files</code> declares a 13-col <code>required_cols</code> subset, adds missing via <code>case_when</code> defaults (<code>NA_real_</code> for numerics, <code>FALSE</code> for <code>excluded_from_step</code>, else <code>NA_character_</code>). <strong>Status values it writes:</strong> <code>completed</code>/<code>failed</code>/<code>in_progress</code> only — its <code>results$status &lt;- "unknown"</code> initial value and the internal <code>"stopped"</code>/<code>"read_error"</code> LST classifications never reach the DB (every return path overwrites them). <strong>ΔOFV sign:</strong> removal (per <code>.is_removal_model</code>) uses <code>child - parent</code>; everything else <code>parent - child</code> (positive=improvement both). Completion needs valid OFV AND (if <code>require_cov_step</code>) a <code>.cov</code> <strong>in the directory the <code>.lst</code> was found in</strong>; boundary params (<code>abs &gt;= 8.99990e5</code>) → failed. This is deliberately the same test as <code><a href="reference/get_model_status_from_files.html">get_model_status_from_files()</a></code> — the two readers must agree, or a model changes verdict depending on which one looked.</p>
 <hr></div>
 </div>
 <div class="section level2">
@@ -551,29 +555,32 @@
 </td>
 </tr><tr><td><code>read_nonmem_ext(model_path)</code></td>
 <td>✓</td>
-<td>OFV+params from <code>.ext</code> (last <code>-1e9</code> line)</td>
-<td>dir or <code>.ext</code>
-</td>
+<td>OFV+params from <code>.ext</code> (last <code>-1e9</code> final-estimates line). <strong>Fallback:</strong> with no <code>-1e9</code> line it <code><a href="https://rdrr.io/r/base/warning.html" class="external-link">warning()</a></code>s and parses the <strong>last iteration line instead</strong> — so a still-estimating run returns a usable-looking OFV, which is why status readers must confirm the run finished first</td>
+<td>dir or <code>.ext</code> (3 candidates: <code>&lt;path&gt;/&lt;name&gt;.ext</code>, <code>dirname(&lt;path&gt;)/&lt;name&gt;.ext</code>, <code>&lt;path&gt;.ext</code>)</td>
 <td>
-<code>list(found, file, ofv, parameters, n_parameters)</code> / <code>list(found=FALSE, error, ofv=NA, parameters=NULL)</code>
+<code>list(found, file, ofv, parameters, n_parameters)</code> / <code>list(found=FALSE, error, ofv=NA, parameters=NULL)</code> — distinguishes not-found, “No data lines”, and read error via <code>$error</code>
 </td>
 <td><code><a href="https://rdrr.io/r/base/warning.html" class="external-link">warning()</a></code></td>
 <td>called-by <code>get_model_status_from_files</code>, validation, discovery, scm-algorithm, init</td>
 </tr><tr><td><code>read_nonmem_lst(model_path)</code></td>
 <td>✓</td>
-<td>Classify <code>.lst</code> run status via regex</td>
+<td>Classify <code>.lst</code> run status via regex; also <strong>the resolver for where the output lives</strong> — 3 candidates (<code>&lt;path&gt;/&lt;name&gt;.lst</code>, <code>dirname(&lt;path&gt;)/&lt;name&gt;.lst</code>, <code>&lt;path&gt;.lst</code>), so callers use <code>$file</code>/<code>dirname($file)</code> to find sibling output instead of assuming a layout</td>
 <td>dir or <code>.lst</code>
 </td>
-<td><code>list(found, file, status, error_message, error_excerpt, has_issues)</code></td>
+<td>
+<code>list(found, file, status, error_message, error_excerpt, has_issues)</code>; status ∈ <code>not_run</code>/<code>incomplete</code>/<code>completed</code>/<code>failed</code>/<code>read_error</code>/<code>invalid_input</code>/<code>invalid_path</code>, and every <code>found=FALSE</code> return carries <strong>no <code>$file</code></strong>
+</td>
 <td>—</td>
-<td>called-by <code>get_model_status_from_files</code>, init</td>
-</tr><tr><td><code>get_model_status_from_files(model_path)</code></td>
+<td>called-by <code>get_model_status_from_files</code>, <code>update_model_status_from_files</code>, <code>extract_nonmem_timestamps</code>, <code>validate_base_model_for_search</code>
+</td>
+</tr><tr><td><code>get_model_status_from_files(model_path, require_cov_step=TRUE)</code></td>
 <td>✓</td>
-<td>Combine LST+EXT into one status</td>
-<td>model dir</td>
-<td>char status (<code>completed_with_issues</code> when EXT OFV ok but LST failed)</td>
+<td>Combine LST+EXT into one status — <strong>the file-side definition of “did this run succeed”</strong>, matching <code><a href="reference/update_model_status_from_files.html">update_model_status_from_files()</a></code> so both readers agree. Order matters: <em>finished</em> is established before any OFV is trusted, because <code><a href="reference/read_nonmem_ext.html">read_nonmem_ext()</a></code> falls back to the last iteration line, so a still-estimating model reports a usable-looking OFV. How minimisation <em>ended</em> is deliberately not part of the test — a run that stopped on rounding errors but produced an OFV and a <code>.cov</code> is a success</td>
+<td>model dir (either reader resolves run-dir vs beside-the-<code>.ctl</code>), <code>require_cov_step</code>
+</td>
+<td>char status: <code>"not_run"</code> (neither <code>.lst</code> nor <code>.ext</code> found) · <code>"incomplete"</code> (no <code>.lst</code>, or the <code>.lst</code>’s own status is <code>"incomplete"</code>) · <code>"completed"</code> (OFV non-NA, finite, <code>abs &lt;= 1e10</code>; no parameter at <code>abs &gt;= 8.9999e5</code>; and — when <code>require_cov_step</code> — <code>&lt;basename&gt;.cov</code> exists in <code>dirname(lst_info$file)</code>) · <code>"failed"</code> (that <code>.cov</code> missing, <strong>or</strong> the <code>.lst</code> reports completion while the OFV is unusable — a missing/unparseable <code>.ext</code>, which <code><a href="reference/update_model_status_from_files.html">update_model_status_from_files()</a></code> also reports as failed) · otherwise the <code>.lst</code>’s own status (<code>failed</code>, <code>read_error</code>). <strong>No longer returns <code>completed_with_issues</code></strong> — that value is gone from the package. A <code>"completed"</code> verdict therefore always means both halves of the test were met; the <code>.lst</code> alone can never produce one</td>
 <td>—</td>
-<td>calls <code>read_nonmem_lst</code>, <code>read_nonmem_ext</code>
+<td>calls <code>read_nonmem_lst</code>, <code>read_nonmem_ext</code>; called-by <code>validate_base_model_for_search</code>, <code>discover_existing_models</code>
 </td>
 </tr><tr><td><code>get_model_covariates_from_files(search_state, model_name)</code></td>
 <td>✓</td>
@@ -587,13 +594,24 @@
 </td>
 </tr><tr><td><code>extract_nonmem_timestamps(model_name, models_folder="models")</code></td>
 <td>✓</td>
-<td>Parse start/stop from <code>.lst</code>
-</td>
+<td>Parse start/stop from <code>.lst</code>. Locates the file via <code>read_nonmem_lst(...)$file</code> (run-dir <em>or</em> beside the control stream — no assumed <code>models/&lt;run&gt;/&lt;run&gt;.lst</code>). The stop marker is matched <strong>unanchored</strong> with <code>grep("Stop Time:", fixed = TRUE)</code>, the same way <code><a href="reference/update_model_status_from_files.html">update_model_status_from_files()</a></code> tests it, so a leading space cannot make one function call the run finished and the other not</td>
 <td>name, folder</td>
-<td><code>list(start_time, stop_time, found_start, found_stop)</code></td>
+<td>
+<code>list(start_time, stop_time, found_start, found_stop)</code>; on failure <code>list(start_time=NA, stop_time=NA, error=&lt;"LST file not found"/"Empty LST file"/read error&gt;)</code> (<strong>no <code>found_*</code> fields on the error paths</strong> — callers must not assume them)</td>
 <td>—</td>
-<td>called-by <code>submit_and_wait_for_step</code>, validation</td>
-</tr></tbody></table><p><strong>Notes:</strong> <code>read_nonmem_ext</code> (<code>$parameters</code>/<code>$n_parameters</code> computed but read by <strong>no</strong> caller — dead fields). <code>read_model_file</code>’s <code>file_path</code> attr is a hard contract for <code>write_model_file</code>.</p>
+<td>calls <code>read_nonmem_lst</code>; nested <code>parse_nonmem_time</code>; called-by <code>submit_and_wait_for_step</code>, <code>update_model_status_from_files</code>
+</td>
+</tr><tr><td><code>parse_nonmem_time(line)</code></td>
+<td>· nested</td>
+<td>Parse one NONMEM timestamp line across host locales: builds two candidate strings (zone stripped mid-string <code>" [A-Z]{3,4} "</code>, zone stripped at end <code>"\\s+[A-Z]{3,4}\\s*$"</code>) and tries four formats against each — <code>%a %b %d %H:%M:%S %Y</code>, <code>%a %d %b %Y %I:%M:%S %p</code>, <code>%a %d %b %Y %H:%M:%S</code>, <code>%a %b %d %I:%M:%S %p %Y</code>. Each result is <strong>tested</strong> because <code><a href="https://rdrr.io/r/base/as.POSIXlt.html" class="external-link">as.POSIXct()</a></code> returns NA on a format mismatch instead of signalling, so <code>tryCatch</code> would never fire</td>
+<td>one trimmed line</td>
+<td>
+<code>POSIXct</code> (first format that parses) or <code>NA</code> (also for non-scalar/NA/empty input)</td>
+<td>
+<code>suppressWarnings</code> only</td>
+<td>nested in <code>extract_nonmem_timestamps</code>; used for both the first line (start) and the line after <code>Stop Time:</code>
+</td>
+</tr></tbody></table><p><strong>Notes:</strong> <code>read_nonmem_ext</code>’s <code>$parameters</code> <strong>is</strong> read now — both <code>get_model_status_from_files</code> and <code>update_model_status_from_files</code> scan it for NONMEM’s boundary marker (<code>abs &gt;= 8.9999e5</code>) before calling a run completed; <code>$n_parameters</code> is still read by no caller. <code>read_nonmem_lst</code>’s <code>$file</code> is likewise load-bearing: it is the single resolver for run-dir-vs-beside-the-<code>.ctl</code> output, and <code>get_model_status_from_files</code>, <code>update_model_status_from_files</code> and <code>extract_nonmem_timestamps</code> all anchor sibling files (<code>.cov</code>) and re-reads to <code><a href="https://rdrr.io/r/base/basename.html" class="external-link">dirname()</a></code> of it rather than assuming a layout. Note <code>$file</code> is <strong>absent</strong> from the not-found return, so it must be guarded by <code>$found</code>. <code>read_model_file</code>’s <code>file_path</code> attr is a hard contract for <code>write_model_file</code>.</p>
 </div>
 <div class="section level3">
 <h3 id="rmodel-modificationr">R/model-modification.R<a class="anchor" aria-label="anchor" href="#rmodel-modificationr"></a></h3>
@@ -949,9 +967,10 @@
 <th>Calls / Called-by</th>
 </tr></thead><tbody><tr><td><code>run_automated_scm_testing(search_state, base_model_id=NULL, scm_type=c("standard","selective"), starting_phase=c("forward","backward"), full_scm=TRUE, forward_p_value=NULL, backward_p_value=NULL, rse_threshold=NULL, require_cov_step=TRUE, auto_submit=TRUE, auto_retry=TRUE, save_checkpoints=TRUE, final_testing=TRUE)</code></td>
 <td>✓</td>
-<td>Drive the whole SCM/SCM+ pipeline; dispatch standard vs selective forward + backward</td>
+<td>Drive the whole SCM/SCM+ pipeline; dispatch standard vs selective forward + backward. Writes <code>forward_p_value</code>/<code>backward_p_value</code>/<code>max_rse_threshold</code> into <code>search_config</code> unconditionally (NULL ⇒ keep the configured value), but <strong><code>require_cov_step</code> is only written when the caller actually supplied it</strong> (<code>if (missing(require_cov_step)) require_cov_step &lt;- search_state$search_config$require_cov_step %||% TRUE</code>), so a FALSE chosen at <code><a href="reference/initialize_covariate_search.html">initialize_covariate_search()</a></code> survives this argument’s TRUE default. Validated with <code>if (!is.logical(require_cov_step)) stop(...)</code>
+</td>
 <td>
-<code>scm_type ∈ {standard,selective}</code>, <code>starting_phase ∈ {forward,backward}</code>, <code>full_scm</code>, p-values, <code>rse_threshold</code>
+<code>scm_type ∈ {standard,selective}</code>, <code>starting_phase ∈ {forward,backward}</code>, <code>full_scm</code>, p-values, <code>rse_threshold</code>, optional <code>require_cov_step</code>
 </td>
 <td>big <code>list(search_state, status, ..., final_model, forward_results, initial_backward_results, final_backward_results, final_covariates, excluded_covariates, ..., final_summary)</code>
 </td>
