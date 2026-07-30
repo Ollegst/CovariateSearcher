@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="index.html">CovariateSearcher</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -48,7 +48,7 @@
 
 <div id="covariatesearcher--function-reference" class="section level1">
 
-<p><strong>What this is:</strong> an agent-facing map of <em>every</em> function in <code>R/</code>, so future sessions don’t have to re-read the whole codebase. Originally generated from a full read of the pre-refactor code (v0.1.30). <strong>Last audited 2026-07-28 against v0.1.31: 29 files in <code>R/</code>, 127 top-level functions, 91 exports in NAMESPACE</strong> — every defined function appears below. Keep it in sync as the modular reorg lands.</p>
+<p><strong>What this is:</strong> an agent-facing map of <em>every</em> function in <code>R/</code>, so future sessions don’t have to re-read the whole codebase. Originally generated from a full read of the pre-refactor code (v0.1.30). <strong>Last audited 2026-07-30 against v0.2.0: 29 files in <code>R/</code>, 132 top-level functions, 90 exports in NAMESPACE</strong> — every defined function appears below. Keep it in sync as the modular reorg lands.</p>
 <p><strong>Legend:</strong> <code>Exp</code> ✓ = exported (<code>@export</code>), · = internal/documented-internal. <em>Side effects</em> flag file writes, <code>bbr::</code> calls, <code>&lt;&lt;-</code>, <code><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop()</a></code>, hardcoded paths. <em>Nested</em> = a closure defined inside another function (not top-level).</p>
 <p><strong>Housekeeping:</strong> this file is a dev/agent aid, not package content — <code>^FUNCTIONS\.md$</code> is in <code>.Rbuildignore</code> (done), so it doesn’t ship or trip <code>R CMD check</code>.</p>
 <hr><div class="section level2">
@@ -100,12 +100,12 @@
 <div class="section level2">
 <h2 id="cross-cutting-hazards--consolidation-candidates-read-before-any-merge">Cross-cutting hazards &amp; consolidation candidates (read before any merge)<a class="anchor" aria-label="anchor" href="#cross-cutting-hazards--consolidation-candidates-read-before-any-merge"></a></h2>
 <p><strong>Duplicate implementations (merge targets — but preserve contracts):</strong> - <strong><code>.ext</code> readers ×3:</strong> <code>read_nonmem_ext</code> (file-io.R → <code>found/ofv/parameters</code>, FINAL <code>-1e9</code> line, flat+subdir), <code>read_ext_file</code> (monitoring-files.R → <code>status/current_ofv/iterations/has_estimation_issues/…</code>, last/current line, subdir-only), <code>read_ext_iterations</code> (plot_nonmem_iterations.R → tidy data.frame, consumed positionally by the sim sampler). <strong>Different OFV semantics + file locations — do not conflate.</strong> - <strong><code>.cov</code>/<code>.cor</code> matrix parsers ×2:</strong> <code>calculate_condition_number</code> (model-output-tables.R, reconstructs lower-triangular) vs <code>.read_nonmem_matrix</code> (forest-plots.R, assumes labelled square). - <strong><code>$THETA</code> name/trans parsers ×3:</strong> <code>extract_params</code>/<code>extract_model_params</code> (model-output-tables.R) vs inline in <code>apply_covariate_model</code> vs inline in <code>create_covariate_table</code>. - <strong>Categorical-level decode ×2+:</strong> <code>decode_cov_level</code> (model-output-tables.R, the only unit-tested fn) vs nested <code>decode_level</code> (forest-plots.R) vs the inline decode in <code>model_add_cov</code>. - <strong>Covariate formula algebra ×2 (highest risk):</strong> <code>model_add_cov</code> <em>writes</em> NONMEM factors; <code>apply_covariate_model</code> <em>reconstructs the same math in R</em>. Must stay in sync. Also, <code>model_add_cov</code>’s formula block is <strong>duplicated verbatim within itself</strong> (~L404-408 and ~L490-494). - <strong>name→tag idiom</strong> <code>names(tags)[tags==name]</code> repeated ~6× in scm-selective-forward.R + full_scm_search.R; overlaps <code>get_covariate_tag_from_name</code>. - <strong>“Get covariates” family (names lie about source):</strong> <code>get_model_covariates_from_db</code> (reads <strong>bbr files</strong>, returns tag <strong>values</strong>), <code>get_model_covariates_from_files</code> (reads bbr files, returns tag <strong>names</strong>), <code>get_covariates_from_models</code> (DB, many models). <strong>Do not collapse blindly.</strong></p>
-<p><strong>Schema declared in 5 places (must all stay in sync / all get <code>stage</code>):</strong> canonical <code>initialize_search_database_core</code> (18 cols) · self-heal <code>required_cols</code> in <code>validation.R</code> (13-col subset) · self-heal in <code>scm-selective-forward.R</code> · <code>model-discovery.R</code> rebuilds the 18-col row by hand · row-builders <code>add_covariate_to_model</code>/<code>remove_covariate_from_model</code> (<code>bind_rows</code>) + <code>create_retry_model</code> (<strong>order-sensitive <code>rbind</code> on a blanked <code>db[1,]</code> template</strong>).</p>
+<p><strong>Schema declared in 5 places (must all stay in sync / all get <code>stage</code>):</strong> canonical <code>initialize_search_database_core</code> (19 cols as of 2026-07-30, <code>created_by_search</code> added) · self-heal <code>required_cols</code> in <code>validation.R</code> (13-col subset) · self-heal in <code>scm-selective-forward.R</code> · <code>model-discovery.R</code> rebuilds the 19-col row by hand · row-builders <code>add_covariate_to_model</code>/<code>remove_covariate_from_model</code> (<code>bind_rows</code>) + <code>create_retry_model</code> (<strong>order-sensitive <code>rbind</code> on a blanked <code>db[1,]</code> template</strong> — hence its <code>.ensure_provenance_column()</code> call). A checkpoint predating a new column is only migrated for <code>created_by_search</code>, via <code>.ensure_provenance_column()</code> in <code>load_search_state</code>/<code>create_retry_model</code>; the other four sites have no migration path.</p>
 <p><strong><code>action</code> / <code>phase</code> vocabulary (display registry must cover all):</strong> - <code>action</code> written: <code>base_model</code>, <code>add_covariate</code>, <code>remove_covariate</code>, <code>add_single_covariate</code>, <code>remove_single_covariate</code>, <code>retry</code>, <code>manual_modification</code>. - <code>phase</code> written: <code>base</code>, <code>forward_selection</code>, <code>covariate_removal</code>, <code>backward_elimination</code>, <code>retry</code>, <code>manual</code>, <code>individual_testing</code>. - Display generators (<code>generate_step_display</code>/<code>_changes_display</code>/<code>_step_description</code>) only recognize <code>{base_model, add_covariate, remove_covariate, retry}</code> → <strong>everything else renders “Unknown: X”</strong>.</p>
 <p><strong>Confirmed bugs (fix during the relevant phase):</strong> - <del><code>run_univariate_step</code> error handler <code>&lt;-</code></del> <strong>FIXED 2026-07-18</strong>: error handler used <code>&lt;-</code> (handler-local) → thrown-error failures dropped from tracking → now <code>&lt;&lt;-</code> (scm-execution.R:153-154), matching the file’s existing <code>&lt;&lt;-</code> callbacks. - <del><code>remove_covariate_from_model</code> action label</del> <strong>FIXED 2026-07-18</strong> (A1): wrote <code>action="remove_single_covariate"</code> → “Unknown” in tables (backward path was only patched by <code>scm-backward.R:155</code>); now writes <code>"remove_covariate"</code> at root so manual removal displays correctly. - <del>Retry misclassification</del> <strong>FIXED 2026-07-18</strong>: <code>grepl("\\d{3}$")</code> flagged <code>run100</code>+ as retries → now <code>grepl("^run\\d+001$")</code> (was 6 sites; the 2 yaml-analysis helpers later removed in the dead-code sweep — remaining: <code>process_estimation_issues</code>, <code>update_model_counter</code>, <code>generate_recovery_report</code>, <code>discover_models</code>). Residual false positives only for normal models ending in <code>001</code> (run1001…). - Excluded-covariate “final testing” block in <code>full_scm_search.R</code> is <strong>dead</strong> (filters <code>phase=="forward"</code> which is never written; also gated by <code>run_forward &amp;&amp; !run_final_backward</code>, false for <code>full_scm</code>). → retire (owner dropped <code>excluded_only</code>). - <del><code>cat.power</code> read-side bug</del> <strong>FIXED 2026-07-19 (registry, Step ③)</strong>: <code>apply_covariate_model</code> previously gated the categorical <code>IF</code>-parse branch on <code>status=="cat"</code> alone, so <code>cat.power</code> (e.g. dose 35/70/125/150) wrongly entered it (no <code>IF(COV.EQ.x)</code> block → mis-reconstructed). Now BOTH <code>model_add_cov</code> (write) and <code>apply_covariate_model</code> (read) dispatch on the registry’s <code>categorical</code> flag (<code>get_covariate_formula(status, formula)$categorical</code>): <code>cat.linear</code> → per-level <code>IF/ELSEIF</code>; everything else incl. <code>cat.power</code> → single factor from the same registry entry (<code>nonmem</code> write / <code>r_eval</code> read), so write &amp; read can’t drift. - <del><code>generate_phase</code></del> <strong>removed 2026-07-18</strong> (dead, unexported).</p>
 <p><strong>Dependency/NAMESPACE hygiene — RESOLVED (verified 2026-07-28):</strong> <code>mvtnorm</code>, <code>ggplot2</code>, <code>yspec</code> are in <code>Imports:</code>; <code>mrgsolve</code>, <code>devEMF</code> in <code>Suggests:</code>. The 5 sim <code>@export</code>s that used to be missing (<code>sample_individual_thetas</code>, <code>build_scenario_parameters</code>, <code>simulate_scenario_profiles</code>, <code>plot_exposure_forest</code>+<code>theme_forest</code>, <code>create_covariate_boxplots</code>) are all in NAMESPACE now. Still un-declared: base-priority <code>tools</code>/<code>grid</code>/<code>grDevices</code>.</p>
 <p><strong>Removed on <code>feature/package-rebuild</code>:</strong> <code>analyze_model_covariates_yaml</code>, <code>analyze_model_from_logic</code>, <code>get_model_parent_yaml</code>, <code>get_dropped_covariates</code>, <code>generate_phase</code>, <code>get_model_covariates</code>, <code>read_model_yaml</code> (dead-code sweep 2026-07-18, last two are cascade orphans); <code>resume_selective_forward</code> (2026-07-18); <code>data-operations.R</code> + its 3 exported functions.</p>
-<p><strong><code>&lt;&lt;-</code> scope hazards (break if extracted into functions):</strong> <code>submit_and_wait_for_step</code> error callbacks (scm-execution.R L298, L578; success path uses <code>&lt;-</code>) · error handlers in <code>full_scm_search.R</code> · log accumulators in model-modification/recovery.</p>
+<p><strong><code>&lt;&lt;-</code> scope hazards (break if extracted into functions):</strong> <code>submit_and_wait_for_step</code> error callbacks (scm-execution.R L323-324, L329, L583, L693, L704 as of 2026-07-30 — L583 is the no-output re-submit handler; the last two shifted down 18 lines when the removal-retry filter was inserted; success paths use <code>&lt;-</code>) · error handlers in <code>full_scm_search.R</code> · log accumulators in model-modification/recovery.</p>
 <p><strong>Hardcoded relative paths:</strong> <code>data/spec/tags.yaml</code>, <code>data/spec/lookup.yaml</code>, <code>models/scm_rds/</code>, <code>scenario_table_&lt;model&gt;.rds</code> (cwd), <code>results/figure/simulations/</code>, <code>scm_report.txt</code>.</p>
 <hr></div>
 <div class="section level2">
@@ -304,16 +304,16 @@
 <td>—</td>
 </tr><tr><td><code>load_search_state(filename)</code></td>
 <td>✓</td>
-<td>Load RDS (no migration)</td>
+<td>Load RDS; the only migration is the provenance column (<code>.ensure_provenance_column</code>) so a pre-guard checkpoint gains <code>created_by_search</code> before anything appends to its DB</td>
 <td>filename</td>
 <td><code>search_state</code></td>
 <td>
-<code>readRDS</code>; <code><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop()</a></code>
+<code>readRDS</code>; <code>cat</code>; <code><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop()</a></code> if the file is missing</td>
+<td>calls <code>.ensure_provenance_column</code>
 </td>
-<td>—</td>
 </tr><tr><td><code>initialize_search_database_core(search_state)</code></td>
 <td>✓</td>
-<td>Create empty 18-col search DB (<strong>canonical schema</strong>)</td>
+<td>Create empty 19-col search DB (<strong>canonical schema</strong>) — 19th col is <code>created_by_search</code> (logical provenance flag)</td>
 <td><code>search_state</code></td>
 <td>updated <code>search_state</code>
 </td>
@@ -396,7 +396,7 @@
 <td>—</td>
 <td>called-by <code>create_comprehensive_table</code>
 </td>
-</tr></tbody></table><p><strong>Notes:</strong> <strong>Canonical schema (18 cols):</strong> <code>model_name, step_description, phase, step_number, parent_model, covariate_tested, action, ofv, delta_ofv, rse_max, status, tags (I(list())), submission_time, completion_time (POSIXct), retry_attempt, original_model, estimation_issue, excluded_from_step</code>. Display generators branch on <code>action ∈ {base_model, add_covariate, remove_covariate, retry}</code> → discovered/manual/<code>*_single_*</code> rows fall through to “Unknown”. No <code>action</code>/<code>phase</code> <strong>written</strong> here (display only).</p>
+</tr></tbody></table><p><strong>Notes:</strong> <strong>Canonical schema (19 cols):</strong> <code>model_name, step_description, phase, step_number, parent_model, covariate_tested, action, ofv, delta_ofv, rse_max, status, tags (I(list())), submission_time, completion_time (POSIXct), retry_attempt, original_model, estimation_issue, excluded_from_step, created_by_search (logical)</code>. <code>created_by_search</code> is the provenance flag read by <code>.is_search_model</code>: <code>TRUE</code> for rows the package created (add/remove steps, retries, disk-reconstructed steps), <code>FALSE</code> for everything <code>discover_existing_models</code> found already on disk. Display generators branch on <code>action ∈ {base_model, add_covariate, remove_covariate, retry}</code> → discovered/manual/<code>*_single_*</code> rows fall through to “Unknown”. No <code>action</code>/<code>phase</code> <strong>written</strong> here (display only).</p>
 </div>
 <div class="section level3">
 <h3 id="rmodel-discoveryr">R/model-discovery.R<a class="anchor" aria-label="anchor" href="#rmodel-discoveryr"></a></h3>
@@ -410,14 +410,14 @@
 <th>Calls / Called-by</th>
 </tr></thead><tbody><tr><td><code>discover_existing_models(search_state)</code></td>
 <td>✓</td>
-<td>Catalog <code>run\d+.(ctl|mod)</code>, read bbr per run, build <code>search_database</code>, assign relative step numbers</td>
+<td>Catalog <code>run\d+.(ctl|mod)</code>, read bbr per run, build <code>search_database</code>, assign relative step numbers. Every row it builds is stamped <code>created_by_search = FALSE</code> — it was on disk before the search started, so the search will not submit, retry or status-track it</td>
 <td><code>search_state</code></td>
 <td>updated <code>search_state</code> (+ <code>$discovered_models</code>)</td>
 <td>
 <code>cat</code>; <code>list.files</code>; <code><a href="https://metrumresearchgroup.github.io/bbr/reference/read_model.html" class="external-link">bbr::read_model</a></code>; <code><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop()</a></code> (missing base / circular parent)</td>
 <td>calls <code>initialize_search_database_core</code>, <code>get_model_status_from_files</code>, <code>read_nonmem_ext</code>, <code>get_model_covariates_from_files</code>, <code><a href="https://dplyr.tidyverse.org/reference/bind_rows.html" class="external-link">dplyr::bind_rows</a></code>; nested <code>get_step_number</code>, <code>is_descendant_of</code>; called-by <code>initialize_covariate_search</code>
 </td>
-</tr></tbody></table><p><strong>Notes:</strong> <strong>4th row-builder</strong> — hand-builds the 18-col row (must stay in sync w/ canonical schema). Writes <code>action ∈ {manual_modification(default), retry, add_single_covariate, remove_single_covariate}</code>, <code>phase ∈ {manual(default), retry, individual_testing}</code> — but then <strong>overwrites</strong> most: <code>phase &lt;- ifelse(retry, phase, "manual")</code>, <code>action &lt;- ifelse(retry, action, "manual_modification")</code>, so only <code>retry</code> survives; base row forced to <code>action="base_model"/phase="base"/step_number=0L</code>. Net: the note-parsing into <code>*_single_covariate</code> is discarded for non-retry models.</p>
+</tr></tbody></table><p><strong>Notes:</strong> <strong>4th row-builder</strong> — hand-builds the 19-col row (must stay in sync w/ canonical schema), including <code>created_by_search = FALSE</code>. Writes <code>action ∈ {manual_modification(default), retry, add_single_covariate, remove_single_covariate}</code>, <code>phase ∈ {manual(default), retry, individual_testing}</code> — but then <strong>overwrites</strong> most: <code>phase &lt;- ifelse(retry, phase, "manual")</code>, <code>action &lt;- ifelse(retry, action, "manual_modification")</code>, so only <code>retry</code> survives; base row forced to <code>action="base_model"/phase="base"/step_number=0L</code>. Net: the note-parsing into <code>*_single_covariate</code> is discarded for non-retry models.</p>
 </div>
 <div class="section level3">
 <h3 id="rvalidationr">R/validation.R<a class="anchor" aria-label="anchor" href="#rvalidationr"></a></h3>
@@ -431,14 +431,13 @@
 <th>Calls / Called-by</th>
 </tr></thead><tbody><tr><td><code>update_model_status_from_files(search_state, model_name, force=FALSE)</code></td>
 <td>✓</td>
-<td>Read <code>.lst</code>/<code>.ext</code>/<code>.cov</code>, set status/ofv/rse_max/issue, compute signed ΔOFV vs parent</td>
+<td>Read <code>.lst</code>/<code>.ext</code>/<code>.cov</code>, set status/ofv/rse_max/issue, compute signed ΔOFV vs parent (only when the model is <code>completed</code> with a non-NA OFV and the parent row exists with an OFV). <strong>The sign convention is now <code>.is_removal_model()</code></strong>, not an inline <code>action</code> test: removal ⇒ <code>child − parent</code> (positive = OFV rose = the removal hurt ⇒ keep the covariate), anything else ⇒ <code>parent − child</code> (positive = OFV fell = good addition). Routing it through the helper corrects the sign for a <strong>retry of a removal</strong> model — its own <code>action</code> is <code>"retry"</code>, so it previously fell to the forward branch and reported ΔOFV with the wrong sign in backward elimination</td>
 <td>state, name, force</td>
 <td>updated <code>search_state</code>
 </td>
 <td>
-<code>cat</code>; <code>readLines</code>; <strong>self-heals missing DB cols</strong>
-</td>
-<td>calls <code>extract_nonmem_timestamps</code>, <code>read_nonmem_ext</code>, <code>get_param2</code>; called-by <code>force_update_models</code>, <code>update_all_model_statuses</code>
+<code>cat</code>; <code>readLines</code>; <strong>self-heals missing DB cols</strong> (13-col <code>required_cols</code> — note <code>action</code> is <em>not</em> in it, which <code>.is_removal_model</code> tolerates by returning FALSE)</td>
+<td>calls <code>extract_nonmem_timestamps</code>, <code>read_nonmem_ext</code>, <code>get_param2</code>, <code>.is_removal_model</code>; called-by <code>force_update_models</code>, <code>update_all_model_statuses</code>
 </td>
 </tr><tr><td><code>force_update_models(search_state, model_names)</code></td>
 <td>✓</td>
@@ -451,12 +450,12 @@
 </td>
 </tr><tr><td><code>update_all_model_statuses(search_state, show_progress=TRUE)</code></td>
 <td>✓</td>
-<td>Update all non-terminal models; report newly-significant via per-df thresholds</td>
+<td>Update all non-terminal models; report newly-significant via per-df thresholds. Three skip filters: terminal status (<code>completed</code>/<code>failed</code>/<code>estimation_error</code>), the bbr tag <code>do_not_run</code>, and — when the DB has the column — <code>created_by_search = FALSE</code>, <strong>unless</strong> some row names that model as its <code>parent_model</code> (step evaluation needs the parent’s OFV for ΔOFV; the base model is the usual case). Rereading a foreign model each cycle would otherwise relabel a long-finished run as <code>failed</code> (no output dir reads as a failed launch)</td>
 <td><code>search_state</code></td>
 <td>updated <code>search_state</code>
 </td>
 <td><code>cat</code></td>
-<td>calls <code>update_model_status_from_files</code>, <code>extract_covariate_name_from_tag</code>, <code>calculate_covariate_df</code>, <code>pvalue_to_threshold</code>; called-by <code>submit_and_wait_for_step</code>, <code>select_best_model</code>
+<td>calls <code>update_model_status_from_files</code>, <code>.is_search_model</code>, <code>extract_covariate_name_from_tag</code>, <code>calculate_covariate_df</code>, <code>pvalue_to_threshold</code>; called-by <code>submit_and_wait_for_step</code>, <code>select_best_model</code>
 </td>
 </tr><tr><td><code>get_model_max_rse(search_state, model_name)</code></td>
 <td>✓</td>
@@ -669,7 +668,7 @@
 </td>
 <td>calls <code>read_model_file</code>, <code>fix_theta_renumbering</code>, <code>write_model_file</code>; called-by <code>run_backward_elimination</code>
 </td>
-</tr></tbody></table><p><strong>Notes — row-builders &amp; FLAG logic (the reconciliation core):</strong> - <strong><code>add_covariate_to_model</code></strong> (<code>bind_rows</code>): <code>action="add_covariate"</code>, <code>phase</code> from the argument (default <code>"forward_selection"</code>), <code>step_number</code> <strong>required</strong> (<code><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop()</a></code> if NULL), <code>parent_model=base_model_id</code>, <code>covariate_tested=cov_to_test</code> (<code>beta_*</code>), <code>status="created"</code>, <code>tags=I(list(actual .yaml tags))</code>, rest NA/0L/FALSE. Increments <code>model_counter</code>→<code>run&lt;N&gt;</code>; rolls back on error. - <strong><code>remove_covariate_from_model</code></strong> (<code>bind_rows</code>, only if <code>save_as_new_model</code>): <code>action="remove_covariate"</code> (fixed 2026-07-18 at the root), <code>phase="covariate_removal"</code>, <code>parent_model=model_name</code>, <code>tags=I(list(character(0)))</code> (<strong>discards</strong> computed <code>remaining_tags</code>). - <strong><code>model_add_cov</code> rendering — the FLAG <code>case_when</code> is GONE (verified 2026-07-28: no <code>FLAG</code> in this file).</strong> Dispatch is now the registry in <code>covariate-formula.R</code>: <code>get_covariate_formula(status, formula)</code> returns the entry, <code>$categorical</code> decides per-level <code>IF/ELSEIF</code> (cat.linear) vs a single factor, and <code>nonmem()</code> / <code>nonmem_log()</code> render multiplicative vs additive per the target’s transform. <code>power1</code>/<code>power0.75</code> were removed — use <code>power</code> + <code>INIT</code> <code>"1 FIX"</code>/<code>"0.75 FIX"</code>. Init comes from the table’s <code>INIT</code> column (per-theta named spec for multi-theta forms via <code>parse_named_init</code>), falling back to the entry’s default. THETA lines: <code>beta_&lt;COV&gt;_&lt;PARAM&gt;</code> (1 theta), <code>beta_&lt;COV&gt;_&lt;PARAM&gt;_&lt;THETANAME&gt;</code> (multi-theta), <code>beta_&lt;COV&gt;_&lt;PARAM&gt;_&lt;LABEL&gt;</code> (categorical, decoded label — <strong>not</strong> the numeric level). Rewrites <code>$TABLE FILE=</code> to match run number. Removal goes through <code>strip_covariate_factors</code> + <code>fix_theta_renumbering</code>, so it no longer mirrors per-shape regexes.</p>
+</tr></tbody></table><p><strong>Notes — row-builders &amp; FLAG logic (the reconciliation core):</strong> - <strong><code>add_covariate_to_model</code></strong> (<code>bind_rows</code>): <code>action="add_covariate"</code>, <code>phase</code> from the argument (default <code>"forward_selection"</code>), <code>step_number</code> <strong>required</strong> (<code><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop()</a></code> if NULL), <code>parent_model=base_model_id</code>, <code>covariate_tested=cov_to_test</code> (<code>beta_*</code>), <code>status="created"</code>, <code>tags=I(list(actual .yaml tags))</code>, <code>created_by_search=TRUE</code>, rest NA/0L/FALSE. Increments <code>model_counter</code>→<code>run&lt;N&gt;</code>; rolls back on error. - <strong><code>remove_covariate_from_model</code></strong> (<code>bind_rows</code>, only if <code>save_as_new_model</code>): <code>action="remove_covariate"</code> (fixed 2026-07-18 at the root), <code>phase="covariate_removal"</code>, <code>parent_model=model_name</code>, <code>tags=I(list(character(0)))</code> (<strong>discards</strong> computed <code>remaining_tags</code>), <code>created_by_search=TRUE</code>. - <strong><code>model_add_cov</code> rendering — the FLAG <code>case_when</code> is GONE (verified 2026-07-28: no <code>FLAG</code> in this file).</strong> Dispatch is now the registry in <code>covariate-formula.R</code>: <code>get_covariate_formula(status, formula)</code> returns the entry, <code>$categorical</code> decides per-level <code>IF/ELSEIF</code> (cat.linear) vs a single factor, and <code>nonmem()</code> / <code>nonmem_log()</code> render multiplicative vs additive per the target’s transform. <code>power1</code>/<code>power0.75</code> were removed — use <code>power</code> + <code>INIT</code> <code>"1 FIX"</code>/<code>"0.75 FIX"</code>. Init comes from the table’s <code>INIT</code> column (per-theta named spec for multi-theta forms via <code>parse_named_init</code>), falling back to the entry’s default. THETA lines: <code>beta_&lt;COV&gt;_&lt;PARAM&gt;</code> (1 theta), <code>beta_&lt;COV&gt;_&lt;PARAM&gt;_&lt;THETANAME&gt;</code> (multi-theta), <code>beta_&lt;COV&gt;_&lt;PARAM&gt;_&lt;LABEL&gt;</code> (categorical, decoded label — <strong>not</strong> the numeric level). Rewrites <code>$TABLE FILE=</code> to match run number. Removal goes through <code>strip_covariate_factors</code> + <code>fix_theta_renumbering</code>, so it no longer mirrors per-shape regexes.</p>
 </div>
 <div class="section level3">
 <h3 id="rcovariate-formular">R/covariate-formula.R<a class="anchor" aria-label="anchor" href="#rcovariate-formular"></a></h3>
@@ -856,14 +855,13 @@
 <th>Calls / Called-by</th>
 </tr></thead><tbody><tr><td><code>create_retry_model(search_state, original_model_name, issue_type="estimation_error")</code></td>
 <td>✓</td>
-<td>Copy failed model → <code>run&lt;num&gt;001</code>, perturb THETA init, append DB row. <strong>Pre-checks with <code>dry_run=TRUE</code> on the ORIGINAL before copying: all-FIX ⇒ returns <code>status="skipped"</code>, no files/DB row</strong>
-</td>
+<td>Copy failed model → <code>run&lt;num&gt;001</code>, perturb THETA init, append DB row. <strong>Pre-checks with <code>dry_run=TRUE</code> on the ORIGINAL before copying: all-FIX ⇒ returns <code>status="skipped"</code>, no files/DB row.</strong> Calls <code>.ensure_provenance_column</code> first so its <code>rbind</code> template already carries every column, then sets <code>created_by_search=TRUE</code> explicitly (the blanked template is copied from <code>db[1,]</code>, usually a discovered row)</td>
 <td>original name</td>
 <td><code>list(status = "created"/"skipped"/"failed", ...)</code></td>
 <td>
 <code>bbr::copy_model_from/read_model/replace_all_notes</code>; sets <code>based_on</code>; <code>writeLines</code>; <code>log_entries &lt;&lt;-</code>; <code><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop()</a></code>
 </td>
-<td>calls <code>adjust_theta_for_covariate</code>; called-by <code>process_estimation_issues</code>
+<td>calls <code>.ensure_provenance_column</code>, <code>adjust_theta_for_covariate</code>; called-by <code>process_estimation_issues</code>
 </td>
 </tr><tr><td><code>adjust_theta_for_covariate(search_state, model_name, covariate_tag, dry_run=FALSE)</code></td>
 <td>✓</td>
@@ -917,7 +915,7 @@
 </td>
 <td>called-by <code>process_estimation_issues</code>
 </td>
-</tr></tbody></table><p><strong>Notes:</strong> <strong>3rd row-builder</strong> — <code>create_retry_model</code> uses <strong>template <code>db[1,]</code> + blank + <code>rbind</code></strong> (order-sensitive, not <code>bind_rows</code>): <code>action="retry"</code>, <code>phase="retry"</code>, <code>retry_attempt=1L</code>, <code>original_model=original</code>, <code>estimation_issue=issue_type</code>. Sets bbr <code>based_on</code> to the original <strong>parent</strong> (skip failed).</p>
+</tr></tbody></table><p><strong>Notes:</strong> <strong>3rd row-builder</strong> — <code>create_retry_model</code> uses <strong>template <code>db[1,]</code> + blank + <code>rbind</code></strong> (order-sensitive, not <code>bind_rows</code>): <code>action="retry"</code>, <code>phase="retry"</code>, <code>retry_attempt=1L</code>, <code>original_model=original</code>, <code>estimation_issue=issue_type</code>, <code>created_by_search=TRUE</code>. Because the <code>rbind</code> is width-sensitive it calls <code>.ensure_provenance_column(search_state)</code> before taking the template. Sets bbr <code>based_on</code> to the original <strong>parent</strong> (skip failed).</p>
 <p><strong>THETA perturbation rules (2026-07-28)</strong> — the init comes verbatim from the covariate table’s <code>INIT</code> column, so it can be bounded or FIX. Parsed from the text <strong>before the first <code>;</code></strong> (so a <code>FIX</code> in a comment can’t trigger it):</p>
 <table class="table"><colgroup><col width="33%"><col width="33%"><col width="33%"></colgroup><thead><tr><th>init form</th>
 <th>new init</th>
@@ -1034,14 +1032,14 @@
 <td>calls <code>get_remaining_covariates</code>, <code>get_excluded_covariates</code>, <code>add_covariate_to_model</code>; called-by forward drivers + orchestrator</td>
 </tr><tr><td><code>submit_and_wait_for_step(search_state, model_names, step_name, max_wait_minutes=NULL, threads=NULL, auto_submit=TRUE, auto_retry=TRUE)</code></td>
 <td>✓</td>
-<td>Submit via bbr, poll 60s, auto-retry failures until done</td>
+<td>Submit via bbr, poll 60s, auto-retry failures until done. <strong>Provenance-gated:</strong> names failing <code>.is_search_model</code> are printed and dropped before submission (nothing left ⇒ returns <code>status="no_models"</code>), and a retry model is re-checked before <em>its</em> submission. Completion/failure decisions are scoped to <code>active_monitoring_list</code> (this step’s models + its retries) even though the printed summary still covers the whole DB. A newly-failed model whose output dir does not exist is <strong>re-submitted once</strong> (tracked in <code>resubmitted_never_started</code>) instead of going down the retry path — its inits are not what stopped it; a second no-output result falls through to the normal failure path. <strong>A failed <em>removal</em> model gets no retry at all:</strong> <code>.is_removal_model</code> picks those out of <code>newly_failed</code> immediately before the auto-retry block, so backward elimination never creates a <code>&lt;name&gt;001</code> model. Status is locked to <code>"failed"</code> and the name is added to <code>definitively_failed</code> <em>before</em> that filter, so they stay reported and are not re-picked next cycle — a removal that will not estimate just means the covariate stays, which is what <code><a href="reference/evaluate_removal_impacts.html">evaluate_removal_impacts()</a></code> concludes from it not completing. A removal model that <em>never launched</em> is a different case and is caught by the no-output re-submit above instead</td>
 <td><code>model_names</code></td>
-<td><code>list(search_state, completed_models, failed_models, still_running, ..., retry_models_created, status)</code></td>
+<td><code>list(search_state, completed_models, failed_models, still_running, total_time_minutes, timed_out, updates_performed, retry_models_created, status)</code></td>
 <td>
-<strong><code>bbr::read_model/submit_model</code></strong>; <code><a href="reference/save_search_state.html">save_search_state()</a></code>→<code>monitoring_update_&lt;N&gt;.rds</code> every 5th; <code>Sys.sleep(60)</code>; <strong><code>&lt;&lt;-</code> in error handlers</strong>; <code>cat</code>
+<strong><code>bbr::read_model/submit_model</code></strong> (initial, re-submit, retry); <code><a href="reference/save_search_state.html">save_search_state()</a></code>→<code>scm_rds/NN_&lt;phase&gt;_running.rds</code> every 5th cycle; <code>Sys.sleep(60)</code>; <code>dir.exists</code>; <strong><code>&lt;&lt;-</code> in error handlers</strong> (L323-324, L329, L583, L693, L704); <code>cat</code>
 </td>
-<td>calls <code>bbr::*</code>, <code>find_model_file</code>, <code>update_all_model_statuses</code>, <code>extract_nonmem_timestamps</code>, <code>process_estimation_issues</code>, <code>save_search_state</code>; called-by all drivers</td>
-</tr></tbody></table><p><strong>Notes:</strong> <strong>BUG</strong> — <code>run_univariate_step</code>’s tryCatch error handler records failures with <code>&lt;-</code> in the handler frame → thrown-error failures dropped from tracking. <code>submit_and_wait_for_step</code> = the long-running monitor (<code>while(TRUE)</code> until <code>models_still_running==0</code>/timeout); tracks completed/failed/already-retried to fire <code>&lt;failed&gt;001</code> retries once. <strong><code>&lt;&lt;-</code> at L298/L578 mutate the enclosing <code>search_state</code> from inside <code>tryCatch</code> error callbacks — must return state if extracted.</strong></p>
+<td>calls <code>.is_search_model</code>, <code>.is_removal_model</code>, <code>bbr::*</code>, <code>find_model_file</code>, <code>update_all_model_statuses</code>, <code>extract_nonmem_timestamps</code>, <code>process_estimation_issues</code>, <code>save_search_state</code>, <code>.scm_checkpoint_name</code>; called-by all drivers</td>
+</tr></tbody></table><p><strong>Notes:</strong> <code>run_univariate_step</code>’s tryCatch error handler records failures with <code>&lt;&lt;-</code> (L153-154) — the handler-frame <code>&lt;-</code> bug was fixed 2026-07-18. <code>submit_and_wait_for_step</code> = the long-running monitor (<code>while(TRUE)</code> until <code>models_still_running==0</code>/timeout); tracks completed/failed/already-retried to fire <code>&lt;failed&gt;001</code> retries once, and separately tracks <code>resubmitted_never_started</code> so a no-output model is re-submitted at most once. Removal failures are dropped from <code>newly_failed</code> before the retry block (<code>.is_removal_model</code>) and so are deliberately <em>not</em> added to <code>already_processed_for_retry</code> — <code>definitively_failed</code> is what keeps them from being re-picked. <strong><code>&lt;&lt;-</code> at L323-324, L329, L583, L693, L704 mutate enclosing locals (<code>failed_submissions</code>, <code>submission_results</code>, <code>already_processed_for_retry</code>) and <code>search_state$search_database$status</code> from inside <code>tryCatch</code> error callbacks — must return state if extracted.</strong></p>
 </div>
 <div class="section level3">
 <h3 id="rscm-evaluationr">R/scm-evaluation.R<a class="anchor" aria-label="anchor" href="#rscm-evaluationr"></a></h3>
@@ -1164,7 +1162,7 @@
 <th>Calls / Called-by</th>
 </tr></thead><tbody><tr><td><code>reconstruct_step_from_disk(search_state=NULL, step_number=NULL, base_model=NULL, direction=NULL, checkpoint=NULL, models_folder=NULL)</code></td>
 <td>✓</td>
-<td>Register on-disk <code>run&lt;N&gt;</code> models missing from the DB (excl. <code>run&lt;N&gt;001</code> retries). <strong>Auto-detects</strong> base (candidates’ common <code>based_on</code>), direction (they <em>add</em>→forward / <em>remove</em>→backward a covariate), step (<code>max+1</code>) — each overridable. Inserts schema-safe rows (<code>phase</code>/<code>action</code>/beta-tag as a live run), resets counter, reads results from files. <strong>Errors</strong> (not guesses) if candidates disagree (&gt;1 parent, or mixed add/remove).</td>
+<td>Register on-disk <code>run&lt;N&gt;</code> models missing from the DB (excl. <code>run&lt;N&gt;001</code> retries). <strong>Auto-detects</strong> base (candidates’ common <code>based_on</code>), direction (they <em>add</em>→forward / <em>remove</em>→backward a covariate), step (<code>max+1</code>) — each overridable. Inserts schema-safe rows (<code>phase</code>/<code>action</code>/beta-tag as a live run) with <code>created_by_search=TRUE</code> set explicitly — an earlier session of <em>this</em> search created them, so the search may still resubmit them, and the row is copied from the base model, which is <code>FALSE</code>. Resets counter, reads results from files. <strong>Errors</strong> (not guesses) if candidates disagree (&gt;1 parent, or mixed add/remove).</td>
 <td>in-memory state <strong>or</strong> <code>checkpoint</code> path; optional <code>step_number</code>/<code>base_model</code>/<code>direction</code> overrides</td>
 <td>updated <code>search_state</code>; prints what it registered + any non-<code>completed</code>/skipped</td>
 <td>
@@ -1305,6 +1303,32 @@
 <td>
 <code><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop()</a></code> if the path doesn’t exist / extension unsupported</td>
 <td>called by the forest + scenario entry points</td>
+</tr><tr><td><code>.is_search_model(search_state, model_name)</code></td>
+<td>·</td>
+<td>Provenance test behind the rule “the search only runs models it created”: looks each name up in the DB and reads <code>created_by_search</code>. Run number is deliberately <strong>not</strong> the test — the model a phase builds on moves as the search runs, so “newer than the base” is not stable. A name with no DB row ⇒ <code>FALSE</code>; the column missing entirely ⇒ <code>TRUE</code> for every name (pre-guard behaviour); an <code>NA</code> in the column ⇒ <code>FALSE</code>
+</td>
+<td>state, character vector of model names</td>
+<td>logical vector, one element per <code>model_name</code> (<code>logical(0)</code> for empty input)</td>
+<td>none</td>
+<td>called-by <code>submit_and_wait_for_step</code> (submission guard + retry submission), <code>update_all_model_statuses</code>
+</td>
+</tr><tr><td><code>.ensure_provenance_column(search_state)</code></td>
+<td>·</td>
+<td>Migrate a checkpoint written before <code>created_by_search</code> existed: adds the column with every existing row marked <code>TRUE</code> (how the search treated them pre-guard). Needed because the first appended row that <em>has</em> the column makes <code><a href="https://dplyr.tidyverse.org/reference/bind_rows.html" class="external-link">dplyr::bind_rows</a></code> back-fill <code>NA</code> into all older rows (reads as “not search-created” → freezes the prior history out of the search) and makes <code>rbind</code> fail on the width mismatch</td>
+<td><code>search_state</code></td>
+<td>
+<code>search_state</code> with <code>created_by_search</code> on its DB; returned unchanged if there is no data.frame DB or the column is already there</td>
+<td>
+<code>cat</code> (only when the DB has ≥1 row)</td>
+<td>called-by <code>load_search_state</code>, <code>create_retry_model</code>
+</td>
+</tr><tr><td><code>.is_removal_model(search_state, model_name)</code></td>
+<td>·</td>
+<td>Direction test — is this model a covariate <strong>removal</strong> rather than an addition? Looks each name up in the DB and reads <code>action</code>, then resolves retry rows: <code>create_retry_model</code> writes <code>action="retry"</code>/<code>phase="retry"</code>, so a retry carries no direction of its own and only the <code>original_model</code> it points at does. TRUE when the <strong>resolved</strong> action matches <code>/remove/i</code>, which catches both written spellings (<code>remove_covariate</code> and <code>remove_single_covariate</code> from <code>model-discovery.R</code>); <code>add_covariate</code>/<code>add_single_covariate</code>, <code>manual_modification</code>, <code>base_model</code> and an unresolved retry are all FALSE. Exists because two places need the direction and neither can trust <code>action</code> alone: the ΔOFV sign convention and retry eligibility</td>
+<td>state, character vector of model names</td>
+<td>logical vector, one element per <code>model_name</code> (<code>logical(0)</code> for empty input). FALSE for a name with no DB row, an <code>NA</code> action, an action naming no direction, a dangling retry (its <code>original_model</code> has no row), a DB with no <code>original_model</code> column (retry left unresolved), and a DB with no <code>action</code> column at all</td>
+<td>none</td>
+<td>called-by <code>update_model_status_from_files</code> (ΔOFV sign), <code>submit_and_wait_for_step</code> (suppress retry for failed removals)</td>
 </tr><tr><td><code>decode_dataset(data, yaml_file, column_names)</code></td>
 <td>✓</td>
 <td>Replace numeric category codes with their decoded labels for the named columns, using a spec/lookup’s <code>values</code>→<code>decode</code> mapping</td>
@@ -1642,15 +1666,25 @@
 </td>
 <td>self-contained; called-by <code>build_scenario_parameters</code>
 </td>
-</tr><tr><td><code>get_block/first_theta_index/param_theta_index/cat_level_theta</code></td>
+</tr><tr><td><code>get_block/first_theta_index</code></td>
 <td>· nested</td>
+<td>Control-stream parsing: <code>get_block(tag)</code> returns the lines of every <code>$&lt;tag&gt;</code> record (header + body up to the next <code>$</code>), <code>first_theta_index(txt)</code> returns the <strong>first</strong> <code>THETA(n)</code> index in an expression — that is how a <code>$PK</code> definition line is pinned to the structural THETA position it defines</td>
 <td>
-<code>$THETA</code>/<code>$PK</code> parsing + categorical level→theta from <code>IF/ELSEIF</code>
+<code>lines</code> (closed over), block tag / expression text</td>
+<td>
+<code>character</code> block lines / <code>integer</code> (<code>NA_integer_</code> when none)</td>
+<td>—</td>
+<td>nested in <code>apply_covariate_model</code>; <code>forest-plots.R</code>’s <code>.structural_param_names</code> carries a duplicate pair</td>
+</tr><tr><td><code>nm_to_r/eval_r/is_active/do_assign</code></td>
+<td>· nested</td>
+<td>The <code>$PK</code> interpreter: translate NONMEM operators (<code>**</code>→<code>^</code>, <code>.EQ.</code>, <code>.GE.</code>, <code>.AND.</code>, <code>.NOT.</code>, …) to R, evaluate a fragment in the THETA/ETA/covariate environment, test whether the innermost <code>IF</code>/<code>ELSEIF</code>/<code>ELSE</code> branch is active, and assign <code>LHS = RHS</code> into that environment. This is what makes categorical <code>IF(COV.EQ.x)</code> blocks work with no level→theta table</td>
+<td>expression text / one <code>$PK</code> line</td>
+<td>translated string / evaluated value / <code>logical</code> / <code><a href="https://rdrr.io/r/base/invisible.html" class="external-link">invisible()</a></code>
 </td>
-<td>—</td>
-<td>block lines / int / named int</td>
-<td>—</td>
-<td>nested</td>
+<td>writes into the eval env <code>e</code>; <strong><code>skipped &lt;&lt;-</code></strong> accumulates un-evaluable lines for the closing <code><a href="https://rdrr.io/r/base/warning.html" class="external-link">warning()</a></code>
+</td>
+<td>nested in <code>apply_covariate_model</code>
+</td>
 </tr></tbody></table><p><strong>Notes:</strong> No longer a reconciliation target — since the read path was rewritten (2026-07-20) it evaluates the model’s own <code>$PK</code> instead of re-deriving the covariate algebra, so the hardcoded factor list (<code>power</code>/<code>linear</code>/<code>exponential</code>, categorical <code>1 + beta</code>) and the registry <code>r_eval</code> fields are <strong>gone</strong>. It still parses <code>$THETA</code> order/names and the <code>$PK</code> <code>IF(COV.EQ.x)</code> blocks (level→theta relies on that numeric-level parse — the <code>$THETA</code> name carries the decoded label, not the level). Contract: the downstream mrgsolve model must use the returned THETA columns as <strong>natural-scale structural params</strong> (no <code>EXP()</code>, no covariate terms) or the effect is double-counted. <code>man/apply_covariate_model.Rd</code> exists.</p>
 </div>
 <div class="section level3">
@@ -1786,15 +1820,16 @@
 <th>Returns</th>
 <th>Side effects</th>
 <th>Calls / Called-by</th>
-</tr></thead><tbody><tr><td><code>create_covariate_boxplots(data, spec, con=NULL, cat=NULL, type=c("AUC","Cmax","Cmin"), drug, param_info, stratification=NULL, total_panel=TRUE, output_folder="results/figure/simulations", width=NULL, height=NULL, base_size=10, verbose=TRUE, combined_pdf=TRUE, prefix=NULL, output_format=c("emf","png"), show_median=TRUE, show_n=TRUE, percent_change=FALSE, label_size=NULL)</code></td>
+</tr></thead><tbody><tr><td><code>create_covariate_boxplots(data, spec, con=NULL, cat=NULL, type=c("AUC","Cmax","Cmin"), drug, param_info, stratification=NULL, total_panel=TRUE, output_folder="results/figure/simulations", width=NULL, height=NULL, base_size=10, verbose=TRUE, combined_pdf=TRUE, prefix=NULL, output_format=c("emf","png"), show_median=TRUE, show_n=TRUE, percent_change=FALSE, label_size=NULL, ss=TRUE)</code></td>
 <td>✓</td>
-<td>Boxplots per metric×covariate (continuous→quartile bins, categorical→decoded), + REF box, per-cov <code>.emf</code> + combined PDF</td>
-<td>data, <code>spec</code> (yspec), con/cat, type</td>
+<td>Boxplots per metric×covariate (continuous→quartile bins <code>Qk:[lo,hi]</code>, categorical→decoded), optional right-hand <code>Total</code> panel pooling every subject into one “All subjects” box, per-cov <code>.emf</code>/<code>.png</code> + one combined multi-page PDF. <strong><code>ss=TRUE</code> (default) appends “ss” to the metric label on the y axis (<code>&lt;drug&gt; AUCss, &lt;unit&gt;</code>) and <code>_ss</code> to every saved stem</strong> (<code>&lt;drug&gt;-&lt;cov&gt;-AUC_ss.emf</code>; PDF <code>&lt;drug&gt;-AUC-Cmax-Cmin_ss-&lt;HHMM&gt;.pdf</code>), skipped where the text already ends in “ss” — same contract as <code>plot_exposure_forest(ss=)</code>, so steady-state and single-dose runs don’t overwrite each other</td>
+<td>data (object or path), <code>spec</code> (yspec object or path), con/cat, type, <code>param_info</code>
+</td>
 <td>nested list <code>results[[type]][[cov]]</code> = ggplot (invisible)</td>
 <td>
-<strong>file write</strong> <code>.emf</code> via <code>devEMF</code>, <code><a href="https://rdrr.io/r/grDevices/cairo.html" class="external-link">grDevices::cairo_pdf</a></code>; <code>dir.create</code>; <code>yspec::ys_load/ys_get_short_unit</code>; <code><a href="https://rdrr.io/r/grid/unit.html" class="external-link">grid::unit</a></code>; <code>stop</code>
+<strong>file write</strong> <code>.emf</code> via <code>devEMF</code>, <code>.png</code> via <code>ggsave</code>, <code><a href="https://rdrr.io/r/grDevices/cairo.html" class="external-link">grDevices::cairo_pdf</a></code>; <code>dir.create</code>; <code>yspec::ys_load/ys_get_short_unit</code>; <code><a href="https://rdrr.io/r/grid/unit.html" class="external-link">grid::unit</a></code>; <code><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat()</a></code> progress when <code>verbose</code>; <code>stop</code>
 </td>
-<td>standalone (not in the forest data flow)</td>
+<td>calls <code>.load_if_path</code>, <code>.resolve_quantity_info</code>; otherwise standalone (not in the forest data flow)</td>
 </tr></tbody></table><p><strong>Notes:</strong> <code>devEMF</code> in <code>Suggests:</code>; <code>grid</code>/<code>grDevices</code> un-declared; <code>yspec</code> declared. Exported and in NAMESPACE. Hardcoded <code>results/figure/simulations</code>. <code>param_info</code> accepts a spec; the <code>Total</code> panel is optional and <code>type</code> is not locked to AUC/Cmax/Cmin. Defers categorical decode to <code>yspec::decode_dataset</code> (fails fast on raw numeric codes) — conceptually overlaps <code>create_covariate_table</code>’s decode but doesn’t re-implement it.</p>
 </div>
 </div>
