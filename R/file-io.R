@@ -445,7 +445,16 @@ get_model_status_from_files <- function(model_path, require_cov_step = TRUE) {
     return("completed")
   }
 
-  # No usable OFV: fall back to what the LST itself reported.
+  # Without a usable OFV there is no result for the search to act on, however the
+  # listing describes the end of estimation - a missing or unreadable .ext is the
+  # case update_model_status_from_files() also reports as failed. Returning the
+  # listing's own "completed" here would hand back a success that never met either
+  # half of the test above.
+  if (identical(lst_info$status, "completed")) {
+    return("failed")
+  }
+
+  # Anything else the listing reported (failed, read_error) stands.
   return(lst_info$status)
 }
 
