@@ -487,9 +487,11 @@ get_model_covariates_from_files <- function(search_state, model_name) {
 #' @export
 extract_nonmem_timestamps <- function(model_name, models_folder = "models") {
 
-  lst_file_path <- file.path(models_folder, model_name, paste0(model_name, ".lst"))
+  # read_nonmem_lst() is the one resolver for where a model's output can be:
+  # inside the run directory, or beside the control stream.
+  lst_file_path <- read_nonmem_lst(file.path(models_folder, model_name))$file
 
-  if (!file.exists(lst_file_path)) {
+  if (is.null(lst_file_path) || !file.exists(lst_file_path)) {
     return(list(
       start_time = NA,
       stop_time = NA,
@@ -508,43 +510,48 @@ extract_nonmem_timestamps <- function(model_name, models_folder = "models") {
       ))
     }
 
-    # Extract start time (first line)
-    start_time <- NA
-    if (length(lst_lines) >= 1) {
-      first_line <- trimws(lst_lines[1])
-      # Parse timestamp format: "Mon Aug 11 07:19:54 EDT 2025"
-      start_time <- tryCatch({
-        # Remove timezone abbreviation and parse without it
-        cleaned_line <- gsub(" [A-Z]{3,4} ", " ", first_line)  # Remove EDT/EST etc
-        as.POSIXct(cleaned_line, format = "%a %b %d %H:%M:%S %Y")
-      }, error = function(e) {
-        # Fallback: try different format
-        tryCatch({
-          as.POSIXct(first_line, format = "%a %b %d %H:%M:%S %Z %Y", tz = "")
-        }, error = function(e2) NA)
-      })
+    # NONMEM stamps its start and stop lines in the host's locale, so the layout
+    # varies between machines: "Wed Jul 29 14:30:08 EDT 2026" (month first,
+    # 24-hour, zone before the year) and "Wed 29 Jul 2026 02:30:08 PM EDT" (day
+    # first, 12-hour, trailing zone) are both produced. Try the known layouts and
+    # take the first that yields a time. as.POSIXct() returns NA on a format
+    # mismatch rather than signalling, so each candidate has to be tested.
+    parse_nonmem_time <- function(line) {
+      if (length(line) != 1L || is.na(line) || !nzchar(line)) return(NA)
+
+      candidates <- c(
+        trimws(gsub(" [A-Z]{3,4} ", " ", line)),      # zone sits mid-string
+        trimws(sub("\\s+[A-Z]{3,4}\\s*$", "", line))  # zone sits at the end
+      )
+      formats <- c(
+        "%a %b %d %H:%M:%S %Y",     # Wed Jul 29 14:30:08 2026
+        "%a %d %b %Y %I:%M:%S %p",  # Wed 29 Jul 2026 02:30:08 PM
+        "%a %d %b %Y %H:%M:%S",     # Wed 29 Jul 2026 14:30:08
+        "%a %b %d %I:%M:%S %p %Y"   # Wed Jul 29 02:30:08 PM 2026
+      )
+
+      for (candidate in unique(candidates)) {
+        for (fmt in formats) {
+          parsed <- suppressWarnings(as.POSIXct(candidate, format = fmt))
+          if (!is.na(parsed)) return(parsed)
+        }
+      }
+      NA
     }
 
-    # Extract stop time (line after "Stop Time:")
+    # Start time is the first line of the listing
+    start_time <- parse_nonmem_time(trimws(lst_lines[1]))
+
+    # Stop time is the line after the "Stop Time:" marker. Matched unanchored, the
+    # same way update_model_status_from_files() tests for it, so a leading space
+    # cannot make one function call the run finished and the other not.
     stop_time <- NA
-    stop_time_idx <- grep("^Stop Time:", lst_lines)
+    stop_time_idx <- grep("Stop Time:", lst_lines, fixed = TRUE)
 
     if (length(stop_time_idx) > 0) {
-      # Get the line after "Stop Time:"
       stop_line_idx <- stop_time_idx[1] + 1
       if (stop_line_idx <= length(lst_lines)) {
-        stop_line <- trimws(lst_lines[stop_line_idx])
-        # Parse timestamp format: "Mon Aug 11 07:23:07 EDT 2025"
-        stop_time <- tryCatch({
-          # Remove timezone abbreviation and parse without it
-          cleaned_line <- gsub(" [A-Z]{3,4} ", " ", stop_line)  # Remove EDT/EST etc
-          as.POSIXct(cleaned_line, format = "%a %b %d %H:%M:%S %Y")
-        }, error = function(e) {
-          # Fallback: try different format
-          tryCatch({
-            as.POSIXct(stop_line, format = "%a %b %d %H:%M:%S %Z %Y", tz = "")
-          }, error = function(e2) NA)
-        })
+        stop_time <- parse_nonmem_time(trimws(lst_lines[stop_line_idx]))
       }
     }
 
