@@ -3,7 +3,7 @@ apply-covariate-model.R	apply_covariate_model	apply_covariate_model(model_name, 
 build-scenario-parameters.R	build_scenario_parameters	build_scenario_parameters(model, covariate_search, thetas, data, percentiles=c(0.05, 0.95), models_folder="models", lookup=NULL, spec=NULL, id_col="ID", wrap_width=30, scenario_table_path=paste0("scenario_table_", model, ".rds"))	yes	545dd07aa633bc451c3a481753ceeeda
 continue-search.R	.scm_continue_backward	.scm_continue_backward(search_state, last_step, backward_p_value, rse_threshold, auto_submit, auto_retry)	no	36c9cd6de53984bc55ca2890507f74be
 continue-search.R	.scm_phase_is_backward	.scm_phase_is_backward(phase)	no	a8de68bb31eb84fbfed2b7257daa2270
-continue-search.R	continue_search	continue_search(search_state=NULL, checkpoint=NULL, scm_type=NULL, full_scm=TRUE, forward_p_value=NULL, backward_p_value=NULL, rse_threshold=NULL, auto_submit=TRUE, auto_retry=TRUE)	yes	173125b8aae4cb77605ab7bb5236f551
+continue-search.R	continue_search	continue_search(search_state=NULL, checkpoint=NULL, scm_type=NULL, full_scm=TRUE, forward_p_value=NULL, backward_p_value=NULL, rse_threshold=NULL, auto_submit=TRUE, auto_retry=TRUE)	yes	d8c9d98531a8019e2eb6c9f7e36849af
 covariate-boxplots.R	create_covariate_boxplots	create_covariate_boxplots(data, spec, con=NULL, cat=NULL, type=c("AUC", "Cmax", "Cmin"), drug, param_info, stratification=NULL, total_panel=TRUE, output_folder="results/figure/simulations", width=NULL, height=NULL, base_size=10, verbose=TRUE, combined_pdf=TRUE, prefix=NULL, output_format=c("emf", "png"), show_median=TRUE, show_n=TRUE, percent_change=FALSE, label_size=NULL, ss=TRUE)	yes	807896fc11d936e194e699157a17f841
 covariate-formula.R	.cov_pow_logadd	.cov_pow_logadd(cova, ref, n)	no	21ba25f1821ce329913359dfc9c0e41c
 covariate-formula.R	.cov_pow_nonmem	.cov_pow_nonmem(cova, ref, n)	no	4774175d39cfbc909b3ec1185502812b
@@ -28,13 +28,14 @@ database-management.R	load_search_state	load_search_state(filename)	yes	9f18f0e4
 database-management.R	save_search_state	save_search_state(search_state, filename)	yes	e20903dfad05f5ee280883c5591aac75
 database-management.R	update_model_counter	update_model_counter(search_state)	yes	efd91c391af45276a543a7f7af43427f
 database-management.R	view_comprehensive_table	view_comprehensive_table(search_state, use_separate_columns=TRUE)	yes	17d0c47028230b4f0ddf63b6aba7280a
-file-io.R	extract_nonmem_timestamps	extract_nonmem_timestamps(model_name, models_folder="models")	yes	d89eac49546af9b9ae21cf69cf200ae3
+file-io.R	.read_listing_lines	.read_listing_lines(path)	no	dd20774c7d05c429723e13242d661e63
+file-io.R	extract_nonmem_timestamps	extract_nonmem_timestamps(model_name, models_folder="models")	yes	a5e2fb8e03170d7f425868216f22a3c1
 file-io.R	find_model_file	find_model_file(base_path, extensions=c(".ctl", ".mod"))	yes	b895cc9ead090b64d46cf3347e71ce8a
 file-io.R	get_model_covariates_from_files	get_model_covariates_from_files(search_state, model_name)	yes	6993360e63869b122655dcfb0fd43d2f
-file-io.R	get_model_status_from_files	get_model_status_from_files(model_path, require_cov_step=TRUE)	yes	a9cfe7ac869fa5a15c01714881018d4e
+file-io.R	get_model_status_from_files	get_model_status_from_files(model_path, require_cov_step=TRUE)	yes	fa87a46fec6360dd04741b5f2c803234
 file-io.R	read_model_file	read_model_file(search_state, run_name, extensions=c(".ctl", ".mod"))	yes	28840b4c23127724e6b1a9ca0651deb3
 file-io.R	read_nonmem_ext	read_nonmem_ext(model_path)	yes	9b0724d8ebd505c8fd0a9e768a0a3897
-file-io.R	read_nonmem_lst	read_nonmem_lst(model_path)	yes	dcd33282e83c1d9dba45d574c90d021b
+file-io.R	read_nonmem_lst	read_nonmem_lst(model_path)	yes	0355a766d584e2f90c89e2fa2dd2a1ae
 file-io.R	write_model_file	write_model_file(search_state, lines)	yes	13db69e030675ad3c521a80e3cacb576
 forest-plots.R	.find_model_component	.find_model_component(model, models_folder, exts)	no	b252e047e14179c053c10d19a60fdbc1
 forest-plots.R	.make_psd	.make_psd(s, tol=1e-08)	no	6bb1571388dfe790dbc02b5025ef19e4
@@ -81,7 +82,8 @@ model-output-tables.R	get_param2	get_param2(model_number, count_model, shrinkage
 model-output-tables.R	model_report	model_report(model_names, shrinkage="etasd", models_folder="models", spec_pk=NULL, lookup=NULL)	yes	129f410d80f152a96dc27afe2a5298f5
 model-output-tables.R	theme_pps_table	theme_pps_table(x)	yes	aad765a60d5ecfc2d330db5cf36dd44a
 monitoring-files.R	read_ext_file	read_ext_file(search_state, model_name)	yes	2059e1830f198c5e6b20580073682712
-plot_nonmem_iterations.R	plot_nonmem_iterations	plot_nonmem_iterations(model_name, models_dir="models", transform=TRUE, skip_iterations=0, obj_var="OBJ", max_iterations=100)	yes	6b3f1baeb71b878d5f0ffae2bfaf28d0
+plot_nonmem_iterations.R	.transform_iteration_columns	.transform_iteration_columns(ext_data, value_cols, model_name, models_dir, n_theta_ext)	no	d2486332a8bd6cc545c6474ecf36b56c
+plot_nonmem_iterations.R	plot_nonmem_iterations	plot_nonmem_iterations(model_name, models_dir="models", transform=TRUE, skip_iterations=0, obj_var="OBJ", max_iterations=100)	yes	5c63141a367df2e75bdc2232d41e97f6
 plot_nonmem_iterations.R	read_ext_iterations	read_ext_iterations(ext_file)	yes	0db3ec07f832e8078230b12a20316b6a
 recovery-actions.R	.format_theta_init_value	.format_theta_init_value(value, template)	no	da7201b7d4911a0b8e65d2beaa55f90c
 recovery-actions.R	.perturb_theta_init	.perturb_theta_init(spec)	no	bc8e6901462b7953537dde6a8af278f7
@@ -112,10 +114,12 @@ scm-results.R	print_scm_results_table	print_scm_results_table(search_state, show
 scm-selective-forward.R	get_covariates_from_models	get_covariates_from_models(search_state, model_names)	yes	34450aa25d0201cf1b47e5ff2bace653
 scm-selective-forward.R	get_significant_models_from_step	get_significant_models_from_step(search_state, step_number, p_value, rse_threshold=NULL)	yes	2aa4c25b6fa97c0cb0a2dc88d723be6a
 scm-selective-forward.R	get_step_models	get_step_models(search_state, step_number, p_value=NULL, rse_threshold=NULL)	yes	8723b83f66eae4471db858ed637898ee
-scm-selective-forward.R	run_scm_selective_forward	run_scm_selective_forward(search_state, base_model_id=NULL, forward_p_value=NULL, rse_threshold=NULL, auto_submit=TRUE, auto_retry=TRUE, resume=FALSE)	yes	1e08daaa6b82fdb854ffc7afd3f3e5e2
+scm-selective-forward.R	run_scm_selective_forward	run_scm_selective_forward(search_state, base_model_id=NULL, forward_p_value=NULL, rse_threshold=NULL, auto_submit=TRUE, auto_retry=TRUE, resume=FALSE)	yes	e458347a9036cfef62d1d6e5805eef38
 utilities.R	.ensure_provenance_column	.ensure_provenance_column(search_state)	no	c8b683a1892302aecd63a48f3657caf3
+utilities.R	.is_pending_status	.is_pending_status(status)	no	fcb1eb0b2b2626f97869bf23c4b9ff22
 utilities.R	.is_removal_model	.is_removal_model(search_state, model_name)	no	660a194aa0a571f2fdacfe594300da99
 utilities.R	.is_search_model	.is_search_model(search_state, model_name)	no	3b0f33b071ae7cf3c3b62f9f0cfaafbb
+utilities.R	.is_terminal_status	.is_terminal_status(status)	no	e9909f5e99d1aceaafddb58c286712d2
 utilities.R	.load_if_path	.load_if_path(x, what="input")	no	10e4143daf1bb20466e324e58df347ec
 utilities.R	.scm_checkpoint_name	.scm_checkpoint_name(step, phase, event)	no	39fb7488e18db29d49e519d6bde96bf4
 utilities.R	calculate_covariate_df	calculate_covariate_df(covariate_name, covariate_search)	yes	7e718df7d2e8f5e50ba6fbe3d93e2f52
@@ -126,8 +130,8 @@ utilities.R	pvalue_to_threshold	pvalue_to_threshold(p_value, df=1)	yes	ef9ac2095
 validation.R	force_update_models	force_update_models(search_state, model_names)	yes	0ddc26f31d5132575be286ac6b60a10f
 validation.R	get_model_max_rse	get_model_max_rse(search_state, model_name)	yes	797b0f9eb4c48e60f907e5f4b20eec9d
 validation.R	print_parameter_validation	print_parameter_validation(validation_result, verbose=TRUE)	yes	1ce1be70c8f66ca8c3dec8ae0794ecf8
-validation.R	update_all_model_statuses	update_all_model_statuses(search_state, show_progress=TRUE)	yes	b777ba53f207e7137aa4c23ab042f26b
-validation.R	update_model_status_from_files	update_model_status_from_files(search_state, model_name, force=FALSE)	yes	8187f98143fd967df1bcc0c8f6dc3304
+validation.R	update_all_model_statuses	update_all_model_statuses(search_state, show_progress=TRUE)	yes	244dc4390e6e595e20130ca799a4ae11
+validation.R	update_model_status_from_files	update_model_status_from_files(search_state, model_name, force=FALSE)	yes	5ebe54a3d39e6eb87d1fbfcf6b2c33af
 validation.R	validate_base_model_parameters	validate_base_model_parameters(base_model_path, models_folder=NULL, strict=TRUE, check_omega_structure=TRUE, check_comments=TRUE)	yes	e5fedb4d9884227d46afc1504764ba41
 validation.R	validate_covariate_parameter_mapping	validate_covariate_parameter_mapping(covariate_search, model_name, models_folder="models", covariate_tags=NULL, strict=TRUE, verbose=TRUE)	no	31f59b9514597395881a459e982fb9c7
 validation.R	validate_parameter_blocks	validate_parameter_blocks(model_file, check_omega_structure=TRUE, check_comments=TRUE, allow_empty_units=TRUE)	yes	397916ba1154c90f96eaae1766f46d9b

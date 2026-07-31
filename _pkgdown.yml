@@ -27,8 +27,8 @@ navbar:
         href: articles/covariate-boxplots.html
       - text: YAML Specification Files
         href: articles/yaml-specification-files.html
-      - text: Parameter Tables with model_report()
-        href: articles/model-report-usage.html
+      - text: Model Reports and Diagnostics
+        href: articles/model-reports-and-diagnostics.html
       - text: Troubleshooting Guide
         href: articles/troubleshooting.html
       - text: Recovery and Resuming a Search
@@ -48,7 +48,7 @@ articles:
   - articles/forest-plots
   - articles/covariate-boxplots
   - articles/yaml-specification-files
-  - articles/model-report-usage
+  - articles/model-reports-and-diagnostics
   - articles/troubleshooting
   - articles/recovery-system
 

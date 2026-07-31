@@ -13,8 +13,9 @@
 #                   block (cat.linear), which keep their bespoke per-level logic
 #                   in model_add_cov; the registry just flags them.
 #
-# The built-ins below mirror the exact legacy output byte-for-byte. Users can
-# add continuous forms (e.g. logit) at load time with register_covariate_formula().
+# The built-ins below mirror the exact legacy output byte-for-byte. The registry
+# is internal and closed: a FORMULA that is not one of these names is parsed as a
+# user expression instead (see get_covariate_formula).
 #
 # Consumed by the WRITE side model_add_cov (via get_covariate_formula() /
 # detect_param_transform() / nonmem_log() / parse_named_init()) and by
@@ -35,8 +36,8 @@
 #'   covariate into the control stream) and \code{calculate_covariate_df} (for
 #'   the LRT degrees of freedom).
 #' @param status Character. Covariate status, \code{"con"} or \code{"cat"}.
-#' @param formula Character. Formula name, e.g. \code{"power"}, \code{"linear"},
-#'   \code{"exponential"}, or a user name such as \code{"logit"}.
+#' @param formula Character. Formula name: \code{"power"}, \code{"linear"},
+#'   \code{"exponential"}.
 #' @param nonmem Function \code{(cova, ref, n)} returning the NONMEM factor
 #'   string appended MULTIPLICATIVELY to a normal-scale typical value (e.g.
 #'   \code{" * (WT/70)**THETA(5)"}). \code{cova} is the covariate column name,
@@ -49,9 +50,9 @@
 #' @param nonmem_log Function \code{(cova, ref, n)} returning the ADDITIVE term
 #'   appended to a LOG-scale typical value (e.g. \code{" + THETA(5)*LOG(WT/70)"}),
 #'   used when a time-constant covariate lands on a log-parameterized parameter
-#'   (\code{PARAM = EXP(TV + ETA)}). \code{NULL} (the default, and for user
-#'   expressions) means no additive form is available, so the covariate is written
-#'   multiplicatively regardless of scale.
+#'   (\code{PARAM = EXP(TV + ETA)}). \code{NULL} (the default) means no additive
+#'   form is available, so the covariate is written multiplicatively regardless
+#'   of scale.
 #' @return Invisibly, the registry key.
 #' @keywords internal
 #' @noRd
