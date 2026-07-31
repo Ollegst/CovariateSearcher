@@ -17,8 +17,8 @@
   Boxplots](https://ollegst.github.io/CovariateSearcher/articles/covariate-boxplots.md):
 - [YAML Specification
   Files](https://ollegst.github.io/CovariateSearcher/articles/yaml-specification-files.md):
-- [Generating Parameter Tables with
-  model_report()](https://ollegst.github.io/CovariateSearcher/articles/model-report-usage.md):
+- [Model Reports and
+  Diagnostics](https://ollegst.github.io/CovariateSearcher/articles/model-reports-and-diagnostics.md):
 - [Troubleshooting
   Guide](https://ollegst.github.io/CovariateSearcher/articles/troubleshooting.md):
 - [Recovery and Resuming a

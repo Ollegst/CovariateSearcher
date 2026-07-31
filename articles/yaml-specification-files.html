@@ -44,7 +44,7 @@
     <li><a class="dropdown-item" href="../articles/forest-plots.html">Forest Plots and Simulations</a></li>
     <li><a class="dropdown-item" href="../articles/covariate-boxplots.html">Covariate Boxplots</a></li>
     <li><a class="dropdown-item" href="../articles/yaml-specification-files.html">YAML Specification Files</a></li>
-    <li><a class="dropdown-item" href="../articles/model-report-usage.html">Parameter Tables with model_report()</a></li>
+    <li><a class="dropdown-item" href="../articles/model-reports-and-diagnostics.html">Model Reports and Diagnostics</a></li>
     <li><a class="dropdown-item" href="../articles/troubleshooting.html">Troubleshooting Guide</a></li>
     <li><a class="dropdown-item" href="../articles/recovery-system.html">Recovery and Resuming a Search</a></li>
   </ul>
@@ -78,366 +78,336 @@
     
     
 <div class="section level2">
-<h2 id="yaml-specification-files-for-covariatesearcher">YAML Specification Files for CovariateSearcher<a class="anchor" aria-label="anchor" href="#yaml-specification-files-for-covariatesearcher"></a>
+<h2 id="yaml-specification-files">YAML Specification Files<a class="anchor" aria-label="anchor" href="#yaml-specification-files"></a>
 </h2>
-<p>CovariateSearcher uses YAML specification files inspired by the <a href="https://metrumresearchgroup.github.io/yspec/" class="external-link">yspec</a> structure
-(developed by Metrum Research Group) to enhance documentation and create
-formatted output tables.</p>
+<p>CovariateSearcher reads variable and parameter metadata from YAML
+files shaped like <a href="https://metrumresearchgroup.github.io/yspec/" class="external-link">yspec</a>
+specifications. They are what turns a bare <code>CL</code> into
+<code>CL/F (L/h)</code> with a description and a section, and
+<code>SEXN level 2</code> into <code>SEXN Female</code>.</p>
+<p>Three files are involved, and only two of them are yours to
+write:</p>
+<table class="table">
+<colgroup>
+<col width="33%">
+<col width="33%">
+<col width="33%">
+</colgroup>
+<thead><tr class="header">
+<th>file</th>
+<th>written by</th>
+<th>read by</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td><code>lookup.yaml</code></td>
+<td>you</td>
+<td>
+<code><a href="../reference/build_covariate_reference_table.html">build_covariate_reference_table()</a></code>,
+<code><a href="../reference/model_add_cov.html">model_add_cov()</a></code>, <code>model_report(lookup =)</code>,
+forest plots, boxplots</td>
+</tr>
+<tr class="even">
+<td><code>pk-extend.yml</code></td>
+<td>you</td>
+<td>
+<code>model_report(spec_pk =)</code>, forest and exposure summary
+tables</td>
+</tr>
+<tr class="odd">
+<td><code>tags.yaml</code></td>
+<td>the package</td>
+<td>the search itself, to track which model carries which covariate</td>
+</tr>
+</tbody>
+</table>
+<p>Nothing here is required to <em>run</em> a search. A search with no
+specs works; its output tables just carry raw NONMEM names.</p>
+<hr>
 <div class="section level3">
-<h3 id="overview">📋 Overview<a class="anchor" aria-label="anchor" href="#overview"></a>
+<h3 id="lookup-yaml-variables">lookup.yaml — variables<a class="anchor" aria-label="anchor" href="#lookup-yaml-variables"></a>
 </h3>
-<p>The YAML specification system provides:</p>
+<p>One entry per variable in your dataset. The package reads two fields
+from it:</p>
+<table class="table">
+<colgroup>
+<col width="50%">
+<col width="50%">
+</colgroup>
+<thead><tr class="header">
+<th>field</th>
+<th>used for</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td><code>values</code></td>
+<td>the levels a categorical covariate may take</td>
+</tr>
+<tr class="even">
+<td><code>decode</code></td>
+<td>the human-readable name of each level, positionally matched to
+<code>values</code>
+</td>
+</tr>
+</tbody>
+</table>
+<p><code>short</code>, <code>label</code> and <code>unit</code> are read
+too, by the forest and boxplot paths, for axis and column labels.</p>
+<p>Other yspec fields are safe to keep but are not read by this package.
+In particular it looks for <code>unit</code> only — the
+<code>unit.text</code> and <code>unit.tex</code> variants are yspec’s
+own rendering fields and are ignored here, so a variable that carries
+only those will come out unitless.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">SETUP__</span><span class="kw">:</span></span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="at">  </span><span class="fu">description</span><span class="kw">:</span><span class="at"> Formoterol Population PK Analysis</span></span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a><span class="at">  </span><span class="fu">sponsor</span><span class="kw">:</span><span class="at"> AstraZeneca</span></span>
+<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a><span class="at">  </span><span class="fu">projectnumber</span><span class="kw">:</span><span class="at"> PT010</span></span>
+<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a><span class="fu">AGE</span><span class="kw">:</span></span>
+<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a><span class="at">  </span><span class="fu">short</span><span class="kw">:</span><span class="at"> Age</span></span>
+<span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a><span class="at">  </span><span class="fu">type</span><span class="kw">:</span><span class="at"> numeric</span></span>
+<span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a><span class="at">  </span><span class="fu">unit</span><span class="kw">:</span><span class="at"> years</span></span>
+<span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a><span class="fu">WT</span><span class="kw">:</span></span>
+<span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a><span class="at">  </span><span class="fu">short</span><span class="kw">:</span><span class="at"> Body weight</span></span>
+<span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a><span class="at">  </span><span class="fu">type</span><span class="kw">:</span><span class="at"> numeric</span></span>
+<span id="cb1-12"><a href="#cb1-12" tabindex="-1"></a><span class="at">  </span><span class="fu">unit</span><span class="kw">:</span><span class="at"> kg</span></span>
+<span id="cb1-13"><a href="#cb1-13" tabindex="-1"></a><span class="fu">RACE</span><span class="kw">:</span></span>
+<span id="cb1-14"><a href="#cb1-14" tabindex="-1"></a><span class="at">  </span><span class="fu">short</span><span class="kw">:</span><span class="at"> Race</span></span>
+<span id="cb1-15"><a href="#cb1-15" tabindex="-1"></a><span class="at">  </span><span class="fu">values</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="dv">1</span><span class="kw">,</span><span class="at"> </span><span class="dv">2</span><span class="kw">,</span><span class="at"> </span><span class="dv">3</span><span class="kw">,</span><span class="at"> </span><span class="dv">9</span><span class="kw">]</span></span>
+<span id="cb1-16"><a href="#cb1-16" tabindex="-1"></a><span class="at">  </span><span class="fu">decode</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="st">"White"</span><span class="kw">,</span><span class="at"> </span><span class="st">"Black or African American"</span><span class="kw">,</span><span class="at"> </span><span class="st">"Asian"</span><span class="kw">,</span><span class="at"> </span><span class="st">"Other"</span><span class="kw">]</span></span>
+<span id="cb1-17"><a href="#cb1-17" tabindex="-1"></a><span class="fu">SEXN</span><span class="kw">:</span></span>
+<span id="cb1-18"><a href="#cb1-18" tabindex="-1"></a><span class="at">  </span><span class="fu">short</span><span class="kw">:</span><span class="at"> Sex</span></span>
+<span id="cb1-19"><a href="#cb1-19" tabindex="-1"></a><span class="at">  </span><span class="fu">values</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="dv">1</span><span class="kw">,</span><span class="at"> </span><span class="dv">2</span><span class="kw">]</span></span>
+<span id="cb1-20"><a href="#cb1-20" tabindex="-1"></a><span class="at">  </span><span class="fu">decode</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="st">"Male"</span><span class="kw">,</span><span class="at"> </span><span class="st">"Female"</span><span class="kw">]</span></span></code></pre></div>
+<div class="section level4">
+<h4 id="categorical-levels-are-validated-against-your-data">Categorical levels are validated against your data<a class="anchor" aria-label="anchor" href="#categorical-levels-are-validated-against-your-data"></a>
+</h4>
+<p><code>build_covariate_reference_table(..., yaml_data = spec)</code>
+checks every categorical covariate against this file, and the checks are
+not advisory:</p>
 <ul>
-<li>✅ <strong>Standardized variable definitions</strong> with units and
-descriptions</li>
-<li>✅ <strong>Formatted output tables</strong> for parameters and
-results</li>
-<li>✅ <strong>Categorical variable decoding</strong> (e.g., 1 =
-“White”, 2 = “Black”)</li>
-<li>✅ <strong>Automatic documentation</strong> generation</li>
+<li>a covariate with <code>Category = "cat"</code> that has <strong>no
+entry at all</strong> stops the build;</li>
+<li>a level present in your baseline data but <strong>missing from
+<code>values</code></strong> stops the build, naming the level;</li>
+<li>a level declared in <code>values</code> but <strong>never
+observed</strong> in the data is a warning, not an error — it is usually
+a spec written for a larger population.</li>
 </ul>
-<hr>
+<p>So a categorical covariate cannot enter a search until its levels are
+declared here. That is deliberate: the level list decides how many
+THETAs the effect needs and what each one is called.</p>
 </div>
-<div class="section level3">
-<h3 id="required-files">🗂️ Required Files<a class="anchor" aria-label="anchor" href="#required-files"></a>
-</h3>
-<p>For CovariateSearcher, use this two-file setup in
-<code>data/spec/</code>:</p>
-<pre><code>data/spec/
-├── lookup.yaml       # Variable definitions + SETUP__ metadata + covariate flags
-└── pk-extend.yml     # Parameter formatting for output tables (optional but recommended)</code></pre>
-<p>In addition, CovariateSearcher automatically creates
-<code>data/spec/tags.yaml</code> during initialization from your
-covariate search table.</p>
-</div>
-<div class="section level3">
-<h3 id="auto-generated-file-tags-yaml">🏷️ Auto-Generated File: tags.yaml<a class="anchor" aria-label="anchor" href="#auto-generated-file-tags-yaml"></a>
-</h3>
-<p><code>tags.yaml</code> is generated automatically when you run
-initialization. It maps internal beta tags to covariate-parameter
-combinations used in model generation and tracking.</p>
-<p>You do not need to create this file manually.</p>
 <div class="section level4">
-<h4 id="example-tags-yaml">Example tags.yaml<a class="anchor" aria-label="anchor" href="#example-tags-yaml"></a>
+<h4 id="setup__-is-not-read-by-the-package">
+<code>SETUP__</code> is not read by the package<a class="anchor" aria-label="anchor" href="#setup__-is-not-read-by-the-package"></a>
 </h4>
-<div class="sourceCode" id="cb2"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="co"># Tags configuration file</span></span>
-<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a><span class="co"># Auto-generated from covariate search table</span></span>
-<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a><span class="co"># Generated: 2026-04-20</span></span>
-<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a></span>
-<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a><span class="co">## Covariates</span></span>
-<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a><span class="fu">beta_WT_CL</span><span class="kw">:</span><span class="at"> </span><span class="st">"WT_CL"</span><span class="co">                     # Continuous, power, time-independent</span></span>
-<span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a><span class="fu">beta_ALB_CL</span><span class="kw">:</span><span class="at"> </span><span class="st">"ALB_CL"</span><span class="co">                   # Continuous, power, time-independent</span></span>
-<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a><span class="fu">beta_LDH_CL</span><span class="kw">:</span><span class="at"> </span><span class="st">"LDH_CL"</span><span class="co">                   # Continuous, power, time-independent</span></span>
-<span id="cb2-9"><a href="#cb2-9" tabindex="-1"></a><span class="fu">beta_SEXN_CL</span><span class="kw">:</span><span class="at"> </span><span class="st">"SEXN_CL"</span><span class="co">                 # Categorical 2-level, linear, time-independent</span></span>
-<span id="cb2-10"><a href="#cb2-10" tabindex="-1"></a><span class="fu">beta_WT_V1</span><span class="kw">:</span><span class="at"> </span><span class="st">"WT_V1"</span><span class="co">                     # Continuous, power, time-independent</span></span>
-<span id="cb2-11"><a href="#cb2-11" tabindex="-1"></a><span class="fu">beta_SEXN_V1</span><span class="kw">:</span><span class="at"> </span><span class="st">"SEXN_V1"</span><span class="co">                 # Categorical 2-level, linear, time-independent</span></span>
-<span id="cb2-12"><a href="#cb2-12" tabindex="-1"></a><span class="fu">beta_AST_V2</span><span class="kw">:</span><span class="at"> </span><span class="st">"AST_V2"</span><span class="co">                   # Continuous, power, time-independent</span></span>
-<span id="cb2-13"><a href="#cb2-13" tabindex="-1"></a><span class="fu">beta_NLR_V2</span><span class="kw">:</span><span class="at"> </span><span class="st">"NLR_V2"</span><span class="co">                   # Continuous, power, time-independent</span></span>
-<span id="cb2-14"><a href="#cb2-14" tabindex="-1"></a><span class="fu">beta_SMOKH2_V2</span><span class="kw">:</span><span class="at"> </span><span class="st">"SMOKH2_V2"</span><span class="co">             # Categorical 2-level, linear, time-independent</span></span>
-<span id="cb2-15"><a href="#cb2-15" tabindex="-1"></a><span class="fu">beta_COMB_V2</span><span class="kw">:</span><span class="at"> </span><span class="st">"COMB_V2"</span><span class="co">                 # Categorical 2-level, linear, time-independent</span></span>
-<span id="cb2-16"><a href="#cb2-16" tabindex="-1"></a><span class="fu">beta_TUMTYP2_TMAX</span><span class="kw">:</span><span class="at"> </span><span class="st">"TUMTYP2_TMAX"</span><span class="co">       # Categorical 2-level, linear, time-independent</span></span></code></pre></div>
+<p>The <code>SETUP__</code> block, including <code>flags:</code> with
+<code>contcov</code>/<code>catcov</code>, is yspec project metadata.
+CovariateSearcher never reads it, and it does <strong>not</strong>
+decide which covariates get tested — that comes solely from the
+covariate table you build with
+<code><a href="../reference/build_covariate_reference_table.html">build_covariate_reference_table()</a></code>.</p>
+<p>It is still worth keeping, because your own code can use it. The
+boxplot examples pull flags through yspec to decode a dataset in one
+call:</p>
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">spec</span>  <span class="op">&lt;-</span> <span class="fu">yspec</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/yspec/man/ys_load.html" class="external-link">ys_load</a></span><span class="op">(</span><span class="st">"data/spec/lookup.yaml"</span><span class="op">)</span></span>
+<span><span class="va">flags</span> <span class="op">&lt;-</span> <span class="fu">yspec</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/yspec/man/pull_meta.html" class="external-link">pull_meta</a></span><span class="op">(</span><span class="va">spec</span>, <span class="st">"flags"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">dat</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/decode_dataset.html">decode_dataset</a></span><span class="op">(</span><span class="va">dat</span>, <span class="va">spec</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">flags</span><span class="op">$</span><span class="va">catcov</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <hr>
 </div>
 </div>
 <div class="section level3">
-<h3 id="file-1-lookup-yaml">📄 File 1: lookup.yaml<a class="anchor" aria-label="anchor" href="#file-1-lookup-yaml"></a>
+<h3 id="pk-extend-yml-parameters">pk-extend.yml — parameters<a class="anchor" aria-label="anchor" href="#pk-extend-yml-parameters"></a>
 </h3>
-<p>Defines variables, their types, units, categorical value decoding,
-and project-level <code>SETUP__</code> metadata.</p>
-<div class="section level4">
-<h4 id="example-structure">Example Structure<a class="anchor" aria-label="anchor" href="#example-structure"></a>
-</h4>
-<div class="sourceCode" id="cb3"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="fu">SETUP__</span><span class="kw">:</span></span>
-<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a><span class="at">  </span><span class="fu">description</span><span class="kw">:</span><span class="at"> Formoterol Population PK Analysis</span></span>
-<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a><span class="at">  </span><span class="fu">sponsor</span><span class="kw">:</span><span class="at"> AstraZeneca</span></span>
-<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a><span class="at">  </span><span class="fu">projectnumber</span><span class="kw">:</span><span class="at"> PT010</span></span>
-<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a><span class="at">  </span><span class="fu">extend_file</span><span class="kw">:</span><span class="at"> pk-extend.yml</span></span>
-<span id="cb3-6"><a href="#cb3-6" tabindex="-1"></a><span class="at">  </span><span class="fu">flags</span><span class="kw">:</span></span>
-<span id="cb3-7"><a href="#cb3-7" tabindex="-1"></a><span class="at">    </span><span class="fu">contcov</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at">AGE</span><span class="kw">,</span><span class="at"> SCR</span><span class="kw">,</span><span class="at"> CRCL</span><span class="kw">,</span><span class="at"> EGFR</span><span class="kw">,</span><span class="at"> BEGFR</span><span class="kw">,</span><span class="at"> BSCR</span><span class="kw">,</span><span class="at"> BCRCL</span><span class="kw">,</span><span class="at"> BWT</span><span class="kw">,</span><span class="at"> BBMI</span><span class="kw">,</span><span class="at"> BBSA</span><span class="kw">]</span></span>
-<span id="cb3-8"><a href="#cb3-8" tabindex="-1"></a><span class="at">    </span><span class="fu">catcov</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at">SEXM</span><span class="kw">,</span><span class="at"> RACE</span><span class="kw">,</span><span class="at"> ETHNIC</span><span class="kw">,</span><span class="at"> SMOKING</span><span class="kw">,</span><span class="at"> DOSE</span><span class="kw">,</span><span class="at"> FORM</span><span class="kw">,</span><span class="at"> TRTID</span><span class="kw">,</span><span class="at"> ICS</span><span class="kw">,</span><span class="at"> ASTHMA</span><span class="kw">]</span></span>
-<span id="cb3-9"><a href="#cb3-9" tabindex="-1"></a><span class="at">    </span><span class="fu">diagContCov</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at">AGE</span><span class="kw">,</span><span class="at"> BEGFR</span><span class="kw">,</span><span class="at"> BSCR</span><span class="kw">,</span><span class="at"> BCRCL</span><span class="kw">,</span><span class="at"> BWT</span><span class="kw">,</span><span class="at"> BBMI</span><span class="kw">,</span><span class="at"> BBSA</span><span class="kw">]</span></span>
-<span id="cb3-10"><a href="#cb3-10" tabindex="-1"></a><span class="at">    </span><span class="fu">diagCatCov</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at">SEXM</span><span class="kw">,</span><span class="at"> RACE</span><span class="kw">,</span><span class="at"> ETHNIC</span><span class="kw">,</span><span class="at"> SMOKING</span><span class="kw">,</span><span class="at"> DOSE</span><span class="kw">,</span><span class="at"> FORM</span><span class="kw">,</span><span class="at"> TRTID</span><span class="kw">,</span><span class="at"> ICS</span><span class="kw">,</span><span class="at"> ASTHMA</span><span class="kw">]</span></span>
-<span id="cb3-11"><a href="#cb3-11" tabindex="-1"></a><span class="fu">NUM</span><span class="kw">:</span></span>
-<span id="cb3-12"><a href="#cb3-12" tabindex="-1"></a><span class="at">  </span><span class="fu">short</span><span class="kw">:</span><span class="at"> Row number</span></span>
-<span id="cb3-13"><a href="#cb3-13" tabindex="-1"></a><span class="at">  </span><span class="fu">type</span><span class="kw">:</span><span class="at"> numeric</span></span>
-<span id="cb3-14"><a href="#cb3-14" tabindex="-1"></a><span class="fu">OPROJID</span><span class="kw">:</span></span>
-<span id="cb3-15"><a href="#cb3-15" tabindex="-1"></a><span class="at">  </span><span class="fu">short</span><span class="kw">:</span><span class="at"> Project name</span></span>
-<span id="cb3-16"><a href="#cb3-16" tabindex="-1"></a><span class="at">  </span><span class="fu">type</span><span class="kw">:</span><span class="at"> character</span></span>
-<span id="cb3-17"><a href="#cb3-17" tabindex="-1"></a><span class="fu">RACE</span><span class="kw">:</span></span>
-<span id="cb3-18"><a href="#cb3-18" tabindex="-1"></a><span class="at">  </span><span class="fu">short</span><span class="kw">:</span><span class="at"> Race</span></span>
-<span id="cb3-19"><a href="#cb3-19" tabindex="-1"></a><span class="at">  </span><span class="fu">values</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="dv">1</span><span class="kw">,</span><span class="at"> </span><span class="dv">2</span><span class="kw">,</span><span class="at"> </span><span class="dv">3</span><span class="kw">,</span><span class="at"> </span><span class="dv">9</span><span class="kw">]</span></span>
-<span id="cb3-20"><a href="#cb3-20" tabindex="-1"></a><span class="at">  </span><span class="fu">decode</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="st">"White"</span><span class="kw">,</span><span class="at"> </span><span class="st">"Black or African American"</span><span class="kw">,</span><span class="at"> </span><span class="st">"Asian"</span><span class="kw">,</span><span class="at"> </span><span class="st">"Other"</span><span class="kw">]</span></span>
-<span id="cb3-21"><a href="#cb3-21" tabindex="-1"></a><span class="fu">EGFR</span><span class="kw">:</span></span>
-<span id="cb3-22"><a href="#cb3-22" tabindex="-1"></a><span class="at">  </span><span class="fu">short</span><span class="kw">:</span><span class="at"> Estimated GFR</span></span>
-<span id="cb3-23"><a href="#cb3-23" tabindex="-1"></a><span class="at">  </span><span class="fu">type</span><span class="kw">:</span><span class="at"> numeric</span></span>
-<span id="cb3-24"><a href="#cb3-24" tabindex="-1"></a><span class="at">  </span><span class="fu">unit.text</span><span class="kw">:</span><span class="at"> </span><span class="st">"mL/min/1.73m^2"</span></span>
-<span id="cb3-25"><a href="#cb3-25" tabindex="-1"></a><span class="fu">BBSA</span><span class="kw">:</span></span>
-<span id="cb3-26"><a href="#cb3-26" tabindex="-1"></a><span class="at">  </span><span class="fu">short</span><span class="kw">:</span><span class="at"> Body surface area</span></span>
-<span id="cb3-27"><a href="#cb3-27" tabindex="-1"></a><span class="at">  </span><span class="fu">unit</span><span class="kw">:</span><span class="at"> m2</span></span>
-<span id="cb3-28"><a href="#cb3-28" tabindex="-1"></a><span class="at">  </span><span class="fu">unit.tex</span><span class="kw">:</span><span class="at"> </span><span class="st">"m^2"</span></span></code></pre></div>
-</div>
-<div class="section level4">
-<h4 id="common-variables-to-include">Common Variables to Include<a class="anchor" aria-label="anchor" href="#common-variables-to-include"></a>
-</h4>
-<p><strong>Demographics:</strong></p>
-<div class="sourceCode" id="cb4"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="fu">AGE</span><span class="kw">:</span></span>
-<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a><span class="at">  </span><span class="fu">short</span><span class="kw">:</span><span class="at"> Age</span></span>
-<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a><span class="at">  </span><span class="fu">type</span><span class="kw">:</span><span class="at"> numeric</span></span>
-<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a><span class="at">  </span><span class="fu">unit</span><span class="kw">:</span><span class="at"> years</span></span>
-<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a><span class="fu">WT</span><span class="kw">:</span></span>
-<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a><span class="at">  </span><span class="fu">short</span><span class="kw">:</span><span class="at"> Body weight</span></span>
-<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a><span class="at">  </span><span class="fu">type</span><span class="kw">:</span><span class="at"> numeric</span></span>
-<span id="cb4-8"><a href="#cb4-8" tabindex="-1"></a><span class="at">  </span><span class="fu">unit</span><span class="kw">:</span><span class="at"> kg</span></span>
-<span id="cb4-9"><a href="#cb4-9" tabindex="-1"></a><span class="fu">SEX</span><span class="kw">:</span></span>
-<span id="cb4-10"><a href="#cb4-10" tabindex="-1"></a><span class="at">  </span><span class="fu">short</span><span class="kw">:</span><span class="at"> Sex</span></span>
-<span id="cb4-11"><a href="#cb4-11" tabindex="-1"></a><span class="at">  </span><span class="fu">values</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="dv">0</span><span class="kw">,</span><span class="at"> </span><span class="dv">1</span><span class="kw">]</span></span>
-<span id="cb4-12"><a href="#cb4-12" tabindex="-1"></a><span class="at">  </span><span class="fu">decode</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="st">"Female"</span><span class="kw">,</span><span class="at"> </span><span class="st">"Male"</span><span class="kw">]</span></span></code></pre></div>
-<p><strong>Clinical Covariates:</strong></p>
-<div class="sourceCode" id="cb5"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="fu">CRCL</span><span class="kw">:</span></span>
-<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a><span class="at">  </span><span class="fu">short</span><span class="kw">:</span><span class="at"> Creatinine clearance</span></span>
-<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a><span class="at">  </span><span class="fu">type</span><span class="kw">:</span><span class="at"> numeric</span></span>
-<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a><span class="at">  </span><span class="fu">unit</span><span class="kw">:</span><span class="at"> mL/min</span></span>
-<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a><span class="fu">BMI</span><span class="kw">:</span></span>
-<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a><span class="at">  </span><span class="fu">short</span><span class="kw">:</span><span class="at"> Body mass index</span></span>
-<span id="cb5-7"><a href="#cb5-7" tabindex="-1"></a><span class="at">  </span><span class="fu">type</span><span class="kw">:</span><span class="at"> numeric</span></span>
-<span id="cb5-8"><a href="#cb5-8" tabindex="-1"></a><span class="at">  </span><span class="fu">unit.text</span><span class="kw">:</span><span class="at"> </span><span class="st">"kg/m^2"</span></span></code></pre></div>
-<hr>
-</div>
-</div>
-<div class="section level3">
-<h3 id="file-2-pk-extend-yml">📄 File 2: pk-extend.yml<a class="anchor" aria-label="anchor" href="#file-2-pk-extend-yml"></a>
-</h3>
-<p>Defines parameter formatting for output tables. This creates nicely
-formatted parameter names with units and descriptions.</p>
-<div class="section level4">
-<h4 id="example-structure-1">Example Structure<a class="anchor" aria-label="anchor" href="#example-structure-1"></a>
-</h4>
-<div class="sourceCode" id="cb6"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a><span class="fu">SETUP__</span><span class="kw">:</span></span>
-<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a><span class="at">  </span><span class="fu">max_nchar_label</span><span class="kw">:</span><span class="at"> </span><span class="dv">10000</span></span>
-<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a><span class="fu">DVNORM</span><span class="kw">:</span></span>
-<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a><span class="at">  </span><span class="fu">short</span><span class="kw">:</span><span class="at"> Dose-normalized concentration</span></span>
-<span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a><span class="at">  </span><span class="fu">unit</span><span class="kw">:</span><span class="at"> ng/mL/mg</span></span>
-<span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a><span class="fu">AUCss</span><span class="kw">:</span></span>
-<span id="cb6-7"><a href="#cb6-7" tabindex="-1"></a><span class="at">  </span><span class="fu">short</span><span class="kw">:</span><span class="at"> AUC,ss</span></span>
-<span id="cb6-8"><a href="#cb6-8" tabindex="-1"></a><span class="at">  </span><span class="fu">label</span><span class="kw">:</span><span class="at"> steady-state area under the concentration-time curve</span></span>
-<span id="cb6-9"><a href="#cb6-9" tabindex="-1"></a><span class="at">  </span><span class="fu">unit</span><span class="kw">:</span><span class="at"> mg*hr/L</span></span>
-<span id="cb6-10"><a href="#cb6-10" tabindex="-1"></a><span class="fu">CMAXss</span><span class="kw">:</span></span>
-<span id="cb6-11"><a href="#cb6-11" tabindex="-1"></a><span class="at">  </span><span class="fu">short</span><span class="kw">:</span><span class="at"> Cmax,ss</span></span>
-<span id="cb6-12"><a href="#cb6-12" tabindex="-1"></a><span class="at">  </span><span class="fu">label</span><span class="kw">:</span><span class="at"> steady-state maximum concentration</span></span>
-<span id="cb6-13"><a href="#cb6-13" tabindex="-1"></a><span class="at">  </span><span class="fu">unit</span><span class="kw">:</span><span class="at"> ng/mL</span></span>
-<span id="cb6-14"><a href="#cb6-14" tabindex="-1"></a><span class="fu">CMINss</span><span class="kw">:</span></span>
-<span id="cb6-15"><a href="#cb6-15" tabindex="-1"></a><span class="at">  </span><span class="fu">short</span><span class="kw">:</span><span class="at"> Cmin,ss</span></span>
-<span id="cb6-16"><a href="#cb6-16" tabindex="-1"></a><span class="at">  </span><span class="fu">label</span><span class="kw">:</span><span class="at"> steady-state minimum concentration</span></span>
-<span id="cb6-17"><a href="#cb6-17" tabindex="-1"></a><span class="at">  </span><span class="fu">unit</span><span class="kw">:</span><span class="at"> ng/mL</span></span>
-<span id="cb6-18"><a href="#cb6-18" tabindex="-1"></a><span class="fu">KA</span><span class="kw">:</span></span>
-<span id="cb6-19"><a href="#cb6-19" tabindex="-1"></a><span class="at">  </span><span class="fu">short</span><span class="kw">:</span><span class="at"> Ka</span></span>
-<span id="cb6-20"><a href="#cb6-20" tabindex="-1"></a><span class="at">  </span><span class="fu">label</span><span class="kw">:</span><span class="at"> Absorption rate constant</span></span>
-<span id="cb6-21"><a href="#cb6-21" tabindex="-1"></a><span class="at">  </span><span class="fu">unit</span><span class="kw">:</span><span class="at"> 1/hr</span></span>
-<span id="cb6-22"><a href="#cb6-22" tabindex="-1"></a><span class="at">  </span><span class="fu">comment</span><span class="kw">:</span><span class="at"> Typical parameters</span></span>
-<span id="cb6-23"><a href="#cb6-23" tabindex="-1"></a><span class="fu">Frel</span><span class="kw">:</span></span>
-<span id="cb6-24"><a href="#cb6-24" tabindex="-1"></a><span class="at">  </span><span class="fu">short</span><span class="kw">:</span><span class="at"> Frel</span></span>
-<span id="cb6-25"><a href="#cb6-25" tabindex="-1"></a><span class="at">  </span><span class="fu">label</span><span class="kw">:</span><span class="at"> Relative bioavailability</span></span>
-<span id="cb6-26"><a href="#cb6-26" tabindex="-1"></a><span class="at">  </span><span class="fu">unit</span><span class="kw">:</span><span class="at"> percent</span></span>
-<span id="cb6-27"><a href="#cb6-27" tabindex="-1"></a><span class="at">  </span><span class="fu">comment</span><span class="kw">:</span><span class="at"> Typical parameters</span></span>
-<span id="cb6-28"><a href="#cb6-28" tabindex="-1"></a><span class="fu">CL</span><span class="kw">:</span></span>
-<span id="cb6-29"><a href="#cb6-29" tabindex="-1"></a><span class="at">  </span><span class="fu">short</span><span class="kw">:</span><span class="at"> CL/F</span></span>
-<span id="cb6-30"><a href="#cb6-30" tabindex="-1"></a><span class="at">  </span><span class="fu">label</span><span class="kw">:</span><span class="at"> Apparent clearance</span></span>
-<span id="cb6-31"><a href="#cb6-31" tabindex="-1"></a><span class="at">  </span><span class="fu">unit</span><span class="kw">:</span><span class="at"> L/h</span></span>
-<span id="cb6-32"><a href="#cb6-32" tabindex="-1"></a><span class="at">  </span><span class="fu">comment</span><span class="kw">:</span><span class="at"> Typical parameters</span></span>
-<span id="cb6-33"><a href="#cb6-33" tabindex="-1"></a><span class="fu">V1</span><span class="kw">:</span></span>
-<span id="cb6-34"><a href="#cb6-34" tabindex="-1"></a><span class="at">  </span><span class="fu">short</span><span class="kw">:</span><span class="at"> Vc/F</span></span>
-<span id="cb6-35"><a href="#cb6-35" tabindex="-1"></a><span class="at">  </span><span class="fu">label</span><span class="kw">:</span><span class="at"> Apparent central volume</span></span>
-<span id="cb6-36"><a href="#cb6-36" tabindex="-1"></a><span class="at">  </span><span class="fu">unit</span><span class="kw">:</span><span class="at"> L</span></span>
-<span id="cb6-37"><a href="#cb6-37" tabindex="-1"></a><span class="at">  </span><span class="fu">comment</span><span class="kw">:</span><span class="at"> Typical parameters</span></span>
-<span id="cb6-38"><a href="#cb6-38" tabindex="-1"></a><span class="fu">V2</span><span class="kw">:</span></span>
-<span id="cb6-39"><a href="#cb6-39" tabindex="-1"></a><span class="at">  </span><span class="fu">short</span><span class="kw">:</span><span class="at"> Vp1/F</span></span>
-<span id="cb6-40"><a href="#cb6-40" tabindex="-1"></a><span class="at">  </span><span class="fu">label</span><span class="kw">:</span><span class="at"> Apparent peripheral volume</span></span>
-<span id="cb6-41"><a href="#cb6-41" tabindex="-1"></a><span class="at">  </span><span class="fu">unit</span><span class="kw">:</span><span class="at"> L</span></span>
-<span id="cb6-42"><a href="#cb6-42" tabindex="-1"></a><span class="at">  </span><span class="fu">comment</span><span class="kw">:</span><span class="at"> Typical parameters</span></span></code></pre></div>
-</div>
-<div class="section level4">
-<h4 id="key-fields-for-parameters">Key Fields for Parameters<a class="anchor" aria-label="anchor" href="#key-fields-for-parameters"></a>
-</h4>
+<p>One entry per model parameter, controlling how
+<code><a href="../reference/model_report.html">model_report()</a></code> renders it.</p>
 <table class="table">
 <thead><tr class="header">
-<th>Field</th>
-<th>Description</th>
-<th>Example</th>
+<th>field</th>
+<th>effect on the table</th>
 </tr></thead>
 <tbody>
 <tr class="odd">
 <td><code>short</code></td>
-<td>Abbreviated name</td>
-<td>“CL/F”</td>
+<td>the displayed name; combined with <code>unit</code> as
+<code>short (unit)</code>
+</td>
 </tr>
 <tr class="even">
 <td><code>label</code></td>
-<td>Full description</td>
-<td>“Apparent clearance”</td>
+<td>the description column</td>
 </tr>
 <tr class="odd">
 <td><code>unit</code></td>
-<td>Unit of measurement</td>
-<td>“L/h”</td>
+<td>appended to <code>short</code> in parentheses</td>
 </tr>
 <tr class="even">
 <td><code>comment</code></td>
-<td>Category or note</td>
-<td>“Typical parameters”</td>
+<td>which section the parameter is grouped under</td>
 </tr>
 </tbody>
 </table>
-<p>comments should be selected from this list: Typical parameters”
-Inter-individual variability Correlation of random effects
-Parameter-Covariate relationships Residual variability</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="fu">SETUP__</span><span class="kw">:</span></span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a><span class="at">  </span><span class="fu">max_nchar_label</span><span class="kw">:</span><span class="at"> </span><span class="dv">10000</span></span>
+<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a><span class="fu">KA</span><span class="kw">:</span></span>
+<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a><span class="at">  </span><span class="fu">short</span><span class="kw">:</span><span class="at"> Ka</span></span>
+<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a><span class="at">  </span><span class="fu">label</span><span class="kw">:</span><span class="at"> Absorption rate constant</span></span>
+<span id="cb3-6"><a href="#cb3-6" tabindex="-1"></a><span class="at">  </span><span class="fu">unit</span><span class="kw">:</span><span class="at"> 1/hr</span></span>
+<span id="cb3-7"><a href="#cb3-7" tabindex="-1"></a><span class="at">  </span><span class="fu">comment</span><span class="kw">:</span><span class="at"> Typical parameters</span></span>
+<span id="cb3-8"><a href="#cb3-8" tabindex="-1"></a><span class="fu">CL</span><span class="kw">:</span></span>
+<span id="cb3-9"><a href="#cb3-9" tabindex="-1"></a><span class="at">  </span><span class="fu">short</span><span class="kw">:</span><span class="at"> CL/F</span></span>
+<span id="cb3-10"><a href="#cb3-10" tabindex="-1"></a><span class="at">  </span><span class="fu">label</span><span class="kw">:</span><span class="at"> Apparent clearance</span></span>
+<span id="cb3-11"><a href="#cb3-11" tabindex="-1"></a><span class="at">  </span><span class="fu">unit</span><span class="kw">:</span><span class="at"> L/h</span></span>
+<span id="cb3-12"><a href="#cb3-12" tabindex="-1"></a><span class="at">  </span><span class="fu">comment</span><span class="kw">:</span><span class="at"> Typical parameters</span></span>
+<span id="cb3-13"><a href="#cb3-13" tabindex="-1"></a><span class="fu">V1</span><span class="kw">:</span></span>
+<span id="cb3-14"><a href="#cb3-14" tabindex="-1"></a><span class="at">  </span><span class="fu">short</span><span class="kw">:</span><span class="at"> Vc/F</span></span>
+<span id="cb3-15"><a href="#cb3-15" tabindex="-1"></a><span class="at">  </span><span class="fu">label</span><span class="kw">:</span><span class="at"> Apparent central volume</span></span>
+<span id="cb3-16"><a href="#cb3-16" tabindex="-1"></a><span class="at">  </span><span class="fu">unit</span><span class="kw">:</span><span class="at"> L</span></span>
+<span id="cb3-17"><a href="#cb3-17" tabindex="-1"></a><span class="at">  </span><span class="fu">comment</span><span class="kw">:</span><span class="at"> Typical parameters</span></span>
+<span id="cb3-18"><a href="#cb3-18" tabindex="-1"></a><span class="fu">IIV_CL</span><span class="kw">:</span></span>
+<span id="cb3-19"><a href="#cb3-19" tabindex="-1"></a><span class="at">  </span><span class="fu">short</span><span class="kw">:</span><span class="at"> CL/F CV%</span></span>
+<span id="cb3-20"><a href="#cb3-20" tabindex="-1"></a><span class="at">  </span><span class="fu">label</span><span class="kw">:</span><span class="at"> Inter-individual variability on clearance</span></span>
+<span id="cb3-21"><a href="#cb3-21" tabindex="-1"></a><span class="at">  </span><span class="fu">comment</span><span class="kw">:</span><span class="at"> Inter-individual variability</span></span>
+<span id="cb3-22"><a href="#cb3-22" tabindex="-1"></a><span class="fu">RUV_PROP</span><span class="kw">:</span></span>
+<span id="cb3-23"><a href="#cb3-23" tabindex="-1"></a><span class="at">  </span><span class="fu">short</span><span class="kw">:</span><span class="at"> prop error</span></span>
+<span id="cb3-24"><a href="#cb3-24" tabindex="-1"></a><span class="at">  </span><span class="fu">label</span><span class="kw">:</span><span class="at"> Proportional residual error</span></span>
+<span id="cb3-25"><a href="#cb3-25" tabindex="-1"></a><span class="at">  </span><span class="fu">comment</span><span class="kw">:</span><span class="at"> Residual variability</span></span></code></pre></div>
+<div class="section level4">
+<h4 id="exposure-metrics-live-here-too">Exposure metrics live here too<a class="anchor" aria-label="anchor" href="#exposure-metrics-live-here-too"></a>
+</h4>
+<p>The forest and exposure summary tables take quantity labels from a
+spec of the same shape, so derived quantities belong in this file
+alongside the model parameters. They need no <code>comment:</code> —
+they are never sectioned into a parameter table:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="fu">AUCss</span><span class="kw">:</span></span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a><span class="at">  </span><span class="fu">short</span><span class="kw">:</span><span class="at"> AUC,ss</span></span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a><span class="at">  </span><span class="fu">label</span><span class="kw">:</span><span class="at"> steady-state area under the concentration-time curve</span></span>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a><span class="at">  </span><span class="fu">unit</span><span class="kw">:</span><span class="at"> mg*hr/L</span></span>
+<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a><span class="fu">CMAXss</span><span class="kw">:</span></span>
+<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a><span class="at">  </span><span class="fu">short</span><span class="kw">:</span><span class="at"> Cmax,ss</span></span>
+<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a><span class="at">  </span><span class="fu">label</span><span class="kw">:</span><span class="at"> steady-state maximum concentration</span></span>
+<span id="cb4-8"><a href="#cb4-8" tabindex="-1"></a><span class="at">  </span><span class="fu">unit</span><span class="kw">:</span><span class="at"> ng/mL</span></span>
+<span id="cb4-9"><a href="#cb4-9" tabindex="-1"></a><span class="fu">CMINss</span><span class="kw">:</span></span>
+<span id="cb4-10"><a href="#cb4-10" tabindex="-1"></a><span class="at">  </span><span class="fu">short</span><span class="kw">:</span><span class="at"> Cmin,ss</span></span>
+<span id="cb4-11"><a href="#cb4-11" tabindex="-1"></a><span class="at">  </span><span class="fu">label</span><span class="kw">:</span><span class="at"> steady-state minimum concentration</span></span>
+<span id="cb4-12"><a href="#cb4-12" tabindex="-1"></a><span class="at">  </span><span class="fu">unit</span><span class="kw">:</span><span class="at"> ng/mL</span></span></code></pre></div>
+<p>The key must match the column name carrying that metric. See <a href="forest-plots.html">Forest Plots and Simulations</a>.</p>
 </div>
 <div class="section level4">
-<h4 id="common-parameters-to-include">Common Parameters to Include<a class="anchor" aria-label="anchor" href="#common-parameters-to-include"></a>
+<h4 id="the-keys-must-match-your-control-stream">The keys must match your control stream<a class="anchor" aria-label="anchor" href="#the-keys-must-match-your-control-stream"></a>
 </h4>
-<div class="sourceCode" id="cb7"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a><span class="fu">CL</span><span class="kw">:</span></span>
-<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a><span class="at">  </span><span class="fu">short</span><span class="kw">:</span><span class="at"> CL/F</span></span>
-<span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a><span class="at">  </span><span class="fu">label</span><span class="kw">:</span><span class="at"> Apparent clearance</span></span>
-<span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a><span class="at">  </span><span class="fu">unit</span><span class="kw">:</span><span class="at"> L/h</span></span>
-<span id="cb7-5"><a href="#cb7-5" tabindex="-1"></a><span class="at">  </span><span class="fu">comment</span><span class="kw">:</span><span class="at"> Typical parameters</span></span>
-<span id="cb7-6"><a href="#cb7-6" tabindex="-1"></a><span class="fu">V</span><span class="kw">:</span></span>
-<span id="cb7-7"><a href="#cb7-7" tabindex="-1"></a><span class="at">  </span><span class="fu">short</span><span class="kw">:</span><span class="at"> V/F</span></span>
-<span id="cb7-8"><a href="#cb7-8" tabindex="-1"></a><span class="at">  </span><span class="fu">label</span><span class="kw">:</span><span class="at"> Apparent volume of distribution</span></span>
-<span id="cb7-9"><a href="#cb7-9" tabindex="-1"></a><span class="at">  </span><span class="fu">unit</span><span class="kw">:</span><span class="at"> L</span></span>
-<span id="cb7-10"><a href="#cb7-10" tabindex="-1"></a><span class="at">  </span><span class="fu">comment</span><span class="kw">:</span><span class="at"> Typical parameters</span></span>
-<span id="cb7-11"><a href="#cb7-11" tabindex="-1"></a><span class="fu">KA</span><span class="kw">:</span></span>
-<span id="cb7-12"><a href="#cb7-12" tabindex="-1"></a><span class="at">  </span><span class="fu">short</span><span class="kw">:</span><span class="at"> Ka</span></span>
-<span id="cb7-13"><a href="#cb7-13" tabindex="-1"></a><span class="at">  </span><span class="fu">label</span><span class="kw">:</span><span class="at"> Absorption rate constant</span></span>
-<span id="cb7-14"><a href="#cb7-14" tabindex="-1"></a><span class="at">  </span><span class="fu">unit</span><span class="kw">:</span><span class="at"> 1/hr</span></span>
-<span id="cb7-15"><a href="#cb7-15" tabindex="-1"></a><span class="at">  </span><span class="fu">comment</span><span class="kw">:</span><span class="at"> Typical parameters</span></span>
-<span id="cb7-16"><a href="#cb7-16" tabindex="-1"></a><span class="fu">IIV_CL</span><span class="kw">:</span></span>
-<span id="cb7-17"><a href="#cb7-17" tabindex="-1"></a><span class="at">  short:CL/F CV%</span></span>
-<span id="cb7-18"><a href="#cb7-18" tabindex="-1"></a><span class="at">  </span><span class="fu">label</span><span class="kw">:</span><span class="at"> Inter-individual variability on clearance</span></span>
-<span id="cb7-19"><a href="#cb7-19" tabindex="-1"></a><span class="at">  </span><span class="fu">comment</span><span class="kw">:</span><span class="at"> Random effects</span></span>
-<span id="cb7-20"><a href="#cb7-20" tabindex="-1"></a><span class="fu">IIV_V</span><span class="kw">:</span></span>
-<span id="cb7-21"><a href="#cb7-21" tabindex="-1"></a><span class="at">  </span><span class="fu">short</span><span class="kw">:</span><span class="at"> V/F CV%</span></span>
-<span id="cb7-22"><a href="#cb7-22" tabindex="-1"></a><span class="at">  </span><span class="fu">label</span><span class="kw">:</span><span class="at"> Inter-individual variability on volume</span></span>
-<span id="cb7-23"><a href="#cb7-23" tabindex="-1"></a><span class="at">  </span><span class="fu">comment</span><span class="kw">:</span><span class="at"> Random effects</span></span>
-<span id="cb7-24"><a href="#cb7-24" tabindex="-1"></a><span class="fu">RUV_PROP</span><span class="kw">:</span></span>
-<span id="cb7-25"><a href="#cb7-25" tabindex="-1"></a><span class="at">  </span><span class="fu">short</span><span class="kw">:</span><span class="at"> Prop error</span></span>
-<span id="cb7-26"><a href="#cb7-26" tabindex="-1"></a><span class="at">  </span><span class="fu">label</span><span class="kw">:</span><span class="at"> Proportional residual error</span></span>
-<span id="cb7-27"><a href="#cb7-27" tabindex="-1"></a><span class="at">  </span><span class="fu">comment</span><span class="kw">:</span><span class="at"> Residual error</span></span></code></pre></div>
+<p>This is the one thing that silently produces a bad table.
+<code><a href="../reference/model_report.html">model_report()</a></code> does not read parameter names from the
+<code>.ext</code> file — it reads them from the annotations in your
+control stream, taking the <strong>second semicolon-separated
+field</strong> of each <code>$THETA</code>, <code>$OMEGA</code> and
+<code>$SIGMA</code> line:</p>
+<pre><code>$THETA
+0.5  ; CL ; L/h ; LOG
+2.0  ; V1 ; L   ; RATIO</code></pre>
+<p>Those names — <code>CL</code>, <code>V1</code> — are the keys
+<code>pk-extend.yml</code> must use. A key that matches nothing in the
+control stream is ignored, and a parameter with no matching key is
+reported back to you as “Parameters not found in spec_pk” and falls
+through to its raw name.</p>
+<p>The fourth field (<code>LOG</code>, <code>RATIO</code>) is separate:
+it drives back-transformation in both <code><a href="../reference/model_report.html">model_report()</a></code> and
+<code>plot_nonmem_iterations(transform = TRUE)</code>. See <a href="model-reports-and-diagnostics.html">Model Reports and
+Diagnostics</a>.</p>
+</div>
+<div class="section level4">
+<h4 id="comment-must-be-one-of-five-exact-strings">
+<code>comment</code> must be one of five exact strings<a class="anchor" aria-label="anchor" href="#comment-must-be-one-of-five-exact-strings"></a>
+</h4>
+<pre><code>Typical parameters
+Inter-individual variability
+Correlation of random effects
+Parameter-Covariate relationships
+Residual variability</code></pre>
+<p>These are the section headers, and they appear in that order.
+Anything else — “Random effects”, “Residual error” — leaves the
+parameter without a section. Covariate effects (<code>beta_*</code>) are
+assigned to “Parameter-Covariate relationships” automatically and need
+no entry of their own; what they <em>do</em> need is an entry for the
+<strong>parameter</strong> they act on, since the covariate row is
+labelled from that parameter’s <code>short</code> and
+<code>label</code>.</p>
+<p>Omitting <code>comment</code> does <strong>not</strong> fall back to
+something sensible. A parameter that appears in <code>spec_pk</code>
+without a <code>comment:</code> is left unsectioned and sinks to the
+bottom of the table next to <code>OFV</code>. The name-based fallback —
+<code>THETA</code> to typical parameters, <code>OMEGA</code> to IIV,
+<code>SIGMA</code> to residual variability — applies only when no
+<code>spec_pk</code> is supplied at all. Once you pass a spec, every
+parameter in it needs its <code>comment:</code>.</p>
 <hr>
 </div>
 </div>
 <div class="section level3">
-<h3 id="how-covariatesearcher-uses-yaml-files">🎯 How CovariateSearcher Uses YAML Files<a class="anchor" aria-label="anchor" href="#how-covariatesearcher-uses-yaml-files"></a>
+<h3 id="tags-yaml-generated-not-written">tags.yaml — generated, not written<a class="anchor" aria-label="anchor" href="#tags-yaml-generated-not-written"></a>
 </h3>
-<div class="section level4">
-<h4 id="variable-decoding">1. Variable Decoding<a class="anchor" aria-label="anchor" href="#variable-decoding"></a>
-</h4>
-<p>Categorical covariate levels are decoded in
-<code><a href="../reference/model_report.html">model_report()</a></code> output tables when you pass the lookup spec
-as the <code>lookup</code> argument
-(<code>model_report(..., lookup = lookup)</code>):</p>
-<pre><code>Instead of: Effect of SEXN level 2 on Apparent central volume
-Shows:      Effect of Female (SEXN) on Apparent central volume</code></pre>
-<p>Decoding uses each covariate’s
-<code>values</code>/<code>decode</code> entries (e.g. <code>RACE</code>
-→ White, Black or African American, Asian). Without a
-<code>lookup</code>, the generic “level N” label is shown.</p>
-</div>
-<div class="section level4">
-<h4 id="parameter-formatting">2. Parameter Formatting<a class="anchor" aria-label="anchor" href="#parameter-formatting"></a>
-</h4>
-<p>Output tables show formatted parameter names:</p>
-<pre><code>Instead of: CL = 5.2 (units unclear)
-Shows:      CL/F [L/h] = 5.2 (Apparent clearance)</code></pre>
-</div>
-<div class="section level4">
-<h4 id="covariate-categorization">3. Covariate Categorization<a class="anchor" aria-label="anchor" href="#covariate-categorization"></a>
-</h4>
-<p>Automatically identifies which covariates to test:</p>
-<div class="sourceCode" id="cb10"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a><span class="fu">flags</span><span class="kw">:</span></span>
-<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a><span class="at">  </span><span class="fu">contcov</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at">AGE</span><span class="kw">,</span><span class="at"> WT</span><span class="kw">,</span><span class="at"> BMI</span><span class="kw">]</span><span class="co">  # Test these continuous covariates</span></span>
-<span id="cb10-3"><a href="#cb10-3" tabindex="-1"></a><span class="at">  </span><span class="fu">catcov</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at">SEX</span><span class="kw">,</span><span class="at"> RACE</span><span class="kw">]</span><span class="co">      # Test these categorical covariates</span></span></code></pre></div>
+<p><code><a href="../reference/initialize_covariate_search.html">initialize_covariate_search()</a></code> and
+<code><a href="../reference/add_covariates_to_search.html">add_covariates_to_search()</a></code> regenerate
+<code>data/spec/tags.yaml</code> from the covariate search table via
+<code><a href="../reference/generate_tags_from_covariate_search.html">generate_tags_from_covariate_search()</a></code>. It maps each
+<code>beta_</code> tag to its covariate-parameter pair and is how the
+search knows which covariates a given model carries.</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a><span class="co"># Tags configuration file</span></span>
+<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a><span class="co"># Auto-generated from covariate search table</span></span>
+<span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a></span>
+<span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a><span class="co">## Covariates</span></span>
+<span id="cb7-5"><a href="#cb7-5" tabindex="-1"></a><span class="fu">beta_WT_CL</span><span class="kw">:</span><span class="at"> </span><span class="st">"WT_CL"</span><span class="co">                # Continuous, power, time-independent</span></span>
+<span id="cb7-6"><a href="#cb7-6" tabindex="-1"></a><span class="fu">beta_SEXN_CL</span><span class="kw">:</span><span class="at"> </span><span class="st">"SEXN_CL"</span><span class="co">            # Categorical 2-level, linear, time-independent</span></span>
+<span id="cb7-7"><a href="#cb7-7" tabindex="-1"></a><span class="fu">beta_WT_V1</span><span class="kw">:</span><span class="at"> </span><span class="st">"WT_V1"</span><span class="co">                # Continuous, power, time-independent</span></span></code></pre></div>
+<p>Do not hand-edit it. Change the covariate table and let it be
+rewritten — editing the file directly desynchronises it from the table
+that drives the search.</p>
 <hr>
 </div>
-</div>
 <div class="section level3">
-<h3 id="best-practices">✅ Best Practices<a class="anchor" aria-label="anchor" href="#best-practices"></a>
+<h3 id="checking-your-files">Checking your files<a class="anchor" aria-label="anchor" href="#checking-your-files"></a>
 </h3>
-<div class="section level4">
-<h4 id="match-parameter-names">1. Match Parameter Names<a class="anchor" aria-label="anchor" href="#match-parameter-names"></a>
-</h4>
-<p>Ensure names in <code>pk-extend.yml</code> match your NONMEM
-model:</p>
-<div class="sourceCode" id="cb11"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a><span class="co"># If your model has:</span></span>
-<span id="cb11-2"><a href="#cb11-2" tabindex="-1"></a><span class="at">$THETA</span></span>
-<span id="cb11-3"><a href="#cb11-3" tabindex="-1"></a><span class="at">0.5 ; CL ; L/h ; LOG</span></span>
-<span id="cb11-4"><a href="#cb11-4" tabindex="-1"></a></span>
-<span id="cb11-5"><a href="#cb11-5" tabindex="-1"></a><span class="co"># Your pk-extend.yml should have:</span></span>
-<span id="cb11-6"><a href="#cb11-6" tabindex="-1"></a><span class="fu">CL</span><span class="kw">:</span></span>
-<span id="cb11-7"><a href="#cb11-7" tabindex="-1"></a><span class="at">  </span><span class="fu">short</span><span class="kw">:</span><span class="at"> CL/F</span></span>
-<span id="cb11-8"><a href="#cb11-8" tabindex="-1"></a><span class="at">  </span><span class="fu">label</span><span class="kw">:</span><span class="at"> Apparent clearance</span></span>
-<span id="cb11-9"><a href="#cb11-9" tabindex="-1"></a><span class="at">  </span><span class="fu">unit</span><span class="kw">:</span><span class="at"> L/h</span></span></code></pre></div>
-</div>
-<div class="section level4">
-<h4 id="include-all-covariates">2. Include All Covariates<a class="anchor" aria-label="anchor" href="#include-all-covariates"></a>
-</h4>
-<p>List all potential covariates in <code>lookup.yaml</code>:</p>
-<div class="sourceCode" id="cb12"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a><span class="co"># In lookup.yaml - define them</span></span>
-<span id="cb12-2"><a href="#cb12-2" tabindex="-1"></a><span class="fu">AGE</span><span class="kw">:</span></span>
-<span id="cb12-3"><a href="#cb12-3" tabindex="-1"></a><span class="at">  </span><span class="fu">short</span><span class="kw">:</span><span class="at"> Age</span></span>
-<span id="cb12-4"><a href="#cb12-4" tabindex="-1"></a><span class="at">  </span><span class="fu">type</span><span class="kw">:</span><span class="at"> numeric</span></span>
-<span id="cb12-5"><a href="#cb12-5" tabindex="-1"></a><span class="at">  </span><span class="fu">unit</span><span class="kw">:</span><span class="at"> years</span></span></code></pre></div>
-</div>
-<div class="section level4">
-<h4 id="use-consistent-units">3. Use Consistent Units<a class="anchor" aria-label="anchor" href="#use-consistent-units"></a>
-</h4>
-<p>Match units across files:</p>
-<div class="sourceCode" id="cb13"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb13-1"><a href="#cb13-1" tabindex="-1"></a><span class="co"># lookup.yaml</span></span>
-<span id="cb13-2"><a href="#cb13-2" tabindex="-1"></a><span class="fu">WT</span><span class="kw">:</span></span>
-<span id="cb13-3"><a href="#cb13-3" tabindex="-1"></a><span class="at">  </span><span class="fu">unit</span><span class="kw">:</span><span class="at"> kg</span></span>
-<span id="cb13-4"><a href="#cb13-4" tabindex="-1"></a></span>
-<span id="cb13-5"><a href="#cb13-5" tabindex="-1"></a><span class="co"># pk-extend.yml</span></span>
-<span id="cb13-6"><a href="#cb13-6" tabindex="-1"></a><span class="fu">CL</span><span class="kw">:</span></span>
-<span id="cb13-7"><a href="#cb13-7" tabindex="-1"></a><span class="at">  </span><span class="fu">unit</span><span class="kw">:</span><span class="at"> L/h</span><span class="co">  # Not L/hr or L/hour</span></span></code></pre></div>
-</div>
-<div class="section level4">
-<h4 id="decode-all-categorical-variables">4. Decode All Categorical Variables<a class="anchor" aria-label="anchor" href="#decode-all-categorical-variables"></a>
-</h4>
-<p>Provide meaningful labels:</p>
-<div class="sourceCode" id="cb14"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb14-1"><a href="#cb14-1" tabindex="-1"></a><span class="fu">RACE</span><span class="kw">:</span></span>
-<span id="cb14-2"><a href="#cb14-2" tabindex="-1"></a><span class="at">  </span><span class="fu">values</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="dv">1</span><span class="kw">,</span><span class="at"> </span><span class="dv">2</span><span class="kw">,</span><span class="at"> </span><span class="dv">3</span><span class="kw">,</span><span class="at"> </span><span class="dv">9</span><span class="kw">]</span></span>
-<span id="cb14-3"><a href="#cb14-3" tabindex="-1"></a><span class="at">  </span><span class="fu">decode</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="st">"White"</span><span class="kw">,</span><span class="at"> </span><span class="st">"Black or African American"</span><span class="kw">,</span><span class="at"> </span><span class="st">"Asian"</span><span class="kw">,</span><span class="at"> </span><span class="st">"Other"</span><span class="kw">]</span></span>
-<span id="cb14-4"><a href="#cb14-4" tabindex="-1"></a><span class="co">  # NOT: ["1", "2", "3", "9"]</span></span></code></pre></div>
-<hr>
-</div>
-</div>
-<div class="section level3">
-<h3 id="validation">🔍 Validation<a class="anchor" aria-label="anchor" href="#validation"></a>
-</h3>
-<p>Check your YAML files are valid:</p>
-<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://yaml.r-lib.org" class="external-link">yaml</a></span><span class="op">)</span></span>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">lookup</span>  <span class="op">&lt;-</span> <span class="fu">yaml</span><span class="fu">::</span><span class="fu"><a href="https://yaml.r-lib.org/reference/read_yaml.html" class="external-link">read_yaml</a></span><span class="op">(</span><span class="st">"data/spec/lookup.yaml"</span><span class="op">)</span></span>
+<span><span class="va">spec_pk</span> <span class="op">&lt;-</span> <span class="fu">yaml</span><span class="fu">::</span><span class="fu"><a href="https://yaml.r-lib.org/reference/read_yaml.html" class="external-link">read_yaml</a></span><span class="op">(</span><span class="st">"data/spec/pk-extend.yml"</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Core validation for CovariateSearcher</span></span>
-<span><span class="va">lookup</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://yaml.r-lib.org/reference/read_yaml.html" class="external-link">read_yaml</a></span><span class="op">(</span><span class="st">"data/spec/lookup.yaml"</span><span class="op">)</span></span>
-<span><span class="va">pk_extended</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://yaml.r-lib.org/reference/read_yaml.html" class="external-link">read_yaml</a></span><span class="op">(</span><span class="st">"data/spec/pk-extend.yml"</span><span class="op">)</span></span>
+<span><span class="co"># Do the parameter keys match the control stream annotations?</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">spec_pk</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Quick checks</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">lookup</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">pk_extended</span><span class="op">)</span></span></code></pre></div>
+<span><span class="co"># Are all five section names spelled exactly?</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/unique.html" class="external-link">unique</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/unlist.html" class="external-link">unlist</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">spec_pk</span>, <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="va">x</span><span class="op">$</span><span class="va">comment</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<p>Both files are passed as <strong>objects</strong>, never as
+paths:</p>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">pk_res</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/model_report.html">model_report</a></span><span class="op">(</span></span>
+<span>  model_names <span class="op">=</span> <span class="st">"run28"</span>,</span>
+<span>  spec_pk     <span class="op">=</span> <span class="va">spec_pk</span>,</span>
+<span>  lookup      <span class="op">=</span> <span class="va">lookup</span></span>
+<span><span class="op">)</span></span></code></pre></div>
 <hr>
 </div>
 <div class="section level3">
-<h3 id="additional-resources">📚 Additional Resources<a class="anchor" aria-label="anchor" href="#additional-resources"></a>
+<h3 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a>
 </h3>
 <ul>
 <li>
-<strong>yspec Documentation</strong>: <a href="https://metrumresearchgroup.github.io/yspec/" class="external-link uri">https://metrumresearchgroup.github.io/yspec/</a>
+<a href="model-reports-and-diagnostics.html">Model Reports and
+Diagnostics</a> — what <code>spec_pk</code> and <code>lookup</code> do
+to the output</li>
+<li>
+<a href="complete-workflow.html">Complete Workflow</a> — where the
+specs enter a search</li>
+<li>
+<a href="forest-plots.html">Forest Plots and Simulations</a> — the
+other consumer of <code>pk-extend.yml</code>
 </li>
 <li>
-<strong>yspec Book</strong>: <a href="https://metrumresearchgroup.github.io/ysp-book/" class="external-link uri">https://metrumresearchgroup.github.io/ysp-book/</a>
+<a href="https://metrumresearchgroup.github.io/yspec/" class="external-link">yspec
+documentation</a> and the <a href="https://metrumresearchgroup.github.io/ysp-book/" class="external-link">yspec
+book</a>
 </li>
-<li>
-<strong>Examples</strong>: See the yspec package for more
-examples</li>
 </ul>
 </div>
 </div>

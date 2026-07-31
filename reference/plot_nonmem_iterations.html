@@ -31,7 +31,7 @@ problems, convergence issues, and parameter stability."></head><body>
     <li><a class="dropdown-item" href="../articles/forest-plots.html">Forest Plots and Simulations</a></li>
     <li><a class="dropdown-item" href="../articles/covariate-boxplots.html">Covariate Boxplots</a></li>
     <li><a class="dropdown-item" href="../articles/yaml-specification-files.html">YAML Specification Files</a></li>
-    <li><a class="dropdown-item" href="../articles/model-report-usage.html">Parameter Tables with model_report()</a></li>
+    <li><a class="dropdown-item" href="../articles/model-reports-and-diagnostics.html">Model Reports and Diagnostics</a></li>
     <li><a class="dropdown-item" href="../articles/troubleshooting.html">Troubleshooting Guide</a></li>
     <li><a class="dropdown-item" href="../articles/recovery-system.html">Recovery and Resuming a Search</a></li>
   </ul></li>
@@ -82,7 +82,12 @@ problems, convergence issues, and parameter stability.</p>
 
 
 <dt id="arg-transform">transform<a class="anchor" aria-label="anchor" href="#arg-transform"></a></dt>
-<dd><p>Logical. Apply transformations to parameters (default: TRUE)</p></dd>
+<dd><p>Logical. Show parameters on their reported scale rather than as
+written in the .ext file (default: TRUE). A THETA annotated <code>;LOG</code> in the
+control stream is exponentiated, and a diagonal OMEGA/SIGMA is converted to
+CV% - the same rules <code><a href="model_report.html">model_report()</a></code> applies - so the trajectories and the
+parameter table agree. Off-diagonal elements and unannotated THETAs are unchanged.
+<code>FALSE</code> plots the raw .ext values.</p></dd>
 
 
 <dt id="arg-skip-iterations">skip_iterations<a class="anchor" aria-label="anchor" href="#arg-skip-iterations"></a></dt>
@@ -90,11 +95,14 @@ problems, convergence issues, and parameter stability.</p>
 
 
 <dt id="arg-obj-var">obj_var<a class="anchor" aria-label="anchor" href="#arg-obj-var"></a></dt>
-<dd><p>Character. Variable to plot (default: "OBJ" for objective function)</p></dd>
+<dd><p>Character. Column plotted in the leading panel (default: "OBJ").
+Must name a column of the .ext file; <code><a href="read_ext_iterations.html">read_ext_iterations()</a></code> standardises
+any objective column to <code>"OBJ"</code>, so the default fits every estimation method.</p></dd>
 
 
 <dt id="arg-max-iterations">max_iterations<a class="anchor" aria-label="anchor" href="#arg-max-iterations"></a></dt>
-<dd><p>Integer. Maximum number of iterations to display (default: 100)</p></dd>
+<dd><p>Integer. Upper bound on the iteration NUMBER displayed
+(keeps <code>ITERATION &lt; max_iterations</code>), not a count of points (default: 100)</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -105,10 +113,20 @@ problems, convergence issues, and parameter stability.</p>
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>The function:</p><ul><li><p>Reads the .ext file for the specified model</p></li>
 <li><p>Filters to iteration data (ITER and BURN types)</p></li>
+<li><p>Keeps a single estimation step - the highest-numbered <code>$EST</code>
+that is not an evaluation step</p></li>
 <li><p>Removes fixed parameters (those that don't change)</p></li>
 <li><p>Adjusts BURN iteration numbers for continuous display</p></li>
-<li><p>Creates faceted plots for each parameter and OBJ</p></li>
-</ul></div>
+<li><p>Rescales parameters when <code>transform = TRUE</code></p></li>
+<li><p>Creates faceted plots for each parameter and <code>obj_var</code></p></li>
+</ul><p><code>transform = TRUE</code> reads the <code>$THETA</code> annotations from the control
+stream and aligns them to the .ext THETA columns by position, the same
+assumption <code><a href="model_report.html">model_report()</a></code> makes. Every <code>$THETA</code> line therefore
+needs its <code>; NAME ; UNIT ; TRANS</code> comment: an unannotated line is not
+parsed, which would shift the alignment. When the two counts disagree the
+function warns and leaves THETAs as estimated rather than rescaling the
+wrong one.</p>
+    </div>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>

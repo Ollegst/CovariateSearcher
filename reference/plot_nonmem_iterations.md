@@ -29,7 +29,14 @@ plot_nonmem_iterations(
 
 - transform:
 
-  Logical. Apply transformations to parameters (default: TRUE)
+  Logical. Show parameters on their reported scale rather than as
+  written in the .ext file (default: TRUE). A THETA annotated `;LOG` in
+  the control stream is exponentiated, and a diagonal OMEGA/SIGMA is
+  converted to CV% - the same rules
+  [`model_report()`](https://ollegst.github.io/CovariateSearcher/reference/model_report.md)
+  applies - so the trajectories and the parameter table agree.
+  Off-diagonal elements and unannotated THETAs are unchanged. `FALSE`
+  plots the raw .ext values.
 
 - skip_iterations:
 
@@ -37,11 +44,16 @@ plot_nonmem_iterations(
 
 - obj_var:
 
-  Character. Variable to plot (default: "OBJ" for objective function)
+  Character. Column plotted in the leading panel (default: "OBJ"). Must
+  name a column of the .ext file;
+  [`read_ext_iterations()`](https://ollegst.github.io/CovariateSearcher/reference/read_ext_iterations.md)
+  standardises any objective column to `"OBJ"`, so the default fits
+  every estimation method.
 
 - max_iterations:
 
-  Integer. Maximum number of iterations to display (default: 100)
+  Integer. Upper bound on the iteration NUMBER displayed (keeps
+  `ITERATION < max_iterations`), not a count of points (default: 100)
 
 ## Value
 
@@ -55,11 +67,25 @@ The function:
 
 - Filters to iteration data (ITER and BURN types)
 
+- Keeps a single estimation step - the highest-numbered `$EST` that is
+  not an evaluation step
+
 - Removes fixed parameters (those that don't change)
 
 - Adjusts BURN iteration numbers for continuous display
 
-- Creates faceted plots for each parameter and OBJ
+- Rescales parameters when `transform = TRUE`
+
+- Creates faceted plots for each parameter and `obj_var`
+
+`transform = TRUE` reads the `$THETA` annotations from the control
+stream and aligns them to the .ext THETA columns by position, the same
+assumption
+[`model_report()`](https://ollegst.github.io/CovariateSearcher/reference/model_report.md)
+makes. Every `$THETA` line therefore needs its `; NAME ; UNIT ; TRANS`
+comment: an unannotated line is not parsed, which would shift the
+alignment. When the two counts disagree the function warns and leaves
+THETAs as estimated rather than rescaling the wrong one.
 
 ## Examples
 

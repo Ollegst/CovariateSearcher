@@ -46,6 +46,14 @@ A model with no output directory at all is a separate case, recorded as
 `NONMEM never started - no output directory`: the run never reached
 NONMEM.
 
+**A listing that exists but cannot be read** is recorded as failed, not
+as a run still in flight. Listings are read tolerantly — a run that
+wrote `PRDERR` output can carry bytes that are not valid text, and those
+are decoded rather than refused — so this is rare. When it does happen
+the model is given a terminal status on purpose: the monitoring loop
+waits for every model to finish, and a file that will never become
+readable would otherwise hold it open indefinitely.
+
 #### Automatic Retry
 
 When a failure is detected, the search marks the model `failed` and
@@ -178,10 +186,23 @@ absent from the database.
 is called automatically to add them, detecting base model, direction and
 step number from the files.
 
-**It refuses to continue from a half-finished step.** If any model in
-the last step is still `created`, `in_progress` or `submitted`, the call
-returns `status = "incomplete_step"` and names what is pending rather
-than evaluating a step on partial results.
+**It refuses to continue from a half-finished step.** A model counts as
+finished only when it has reached a final answer — `completed`, `failed`
+or `estimation_error`. Anything else, whatever it is called, means the
+search does not yet know how the run ended, so the call returns
+`status = "incomplete_step"` and names what is pending rather than
+evaluating a step on partial results.
+
+The test is deliberately written that way round. Asking “has it
+finished?” cannot miss an unfinished state, whereas listing the
+unfinished ones can and did: the same state is recorded as `in_progress`
+by one reader and `incomplete` by another, and a guard that listed only
+the first let a step be declared complete while a model was still
+estimating.
+
+Only models the search created itself can block. One it did not create
+is never re-read, so its status can never change, and waiting on it
+would never end.
 
 #### Scenario: checkpoint from the start of a step, failures rerun by hand
 

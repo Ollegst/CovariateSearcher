@@ -44,7 +44,7 @@
     <li><a class="dropdown-item" href="../articles/forest-plots.html">Forest Plots and Simulations</a></li>
     <li><a class="dropdown-item" href="../articles/covariate-boxplots.html">Covariate Boxplots</a></li>
     <li><a class="dropdown-item" href="../articles/yaml-specification-files.html">YAML Specification Files</a></li>
-    <li><a class="dropdown-item" href="../articles/model-report-usage.html">Parameter Tables with model_report()</a></li>
+    <li><a class="dropdown-item" href="../articles/model-reports-and-diagnostics.html">Model Reports and Diagnostics</a></li>
     <li><a class="dropdown-item" href="../articles/troubleshooting.html">Troubleshooting Guide</a></li>
     <li><a class="dropdown-item" href="../articles/recovery-system.html">Recovery and Resuming a Search</a></li>
   </ul>
@@ -220,9 +220,11 @@ instead of full search</p>
 <code class="sourceCode R"><span><span class="co"># Re-read every model that is not already in a terminal state</span></span>
 <span><span class="va">search_state</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/update_all_model_statuses.html">update_all_model_statuses</a></span><span class="op">(</span><span class="va">search_state</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># A model whose status is already terminal (completed, failed, estimation_error)</span></span>
-<span><span class="co"># is skipped by the call above. To pick up output that appeared afterwards -- a</span></span>
-<span><span class="co"># model you resubmitted by hand, say -- refresh it with force = TRUE.</span></span>
+<span><span class="co"># The call above skips a model whose status is already terminal (completed,</span></span>
+<span><span class="co"># failed, estimation_error), one tagged do_not_run, and any model this search did</span></span>
+<span><span class="co"># not create unless another row names it as its parent. To pick up output that</span></span>
+<span><span class="co"># appeared afterwards -- a model you resubmitted by hand, say -- refresh it with</span></span>
+<span><span class="co"># force = TRUE, which applies none of those filters.</span></span>
 <span><span class="co"># Note the assignment: the function returns a modified state and changes nothing</span></span>
 <span><span class="co"># in place.</span></span>
 <span><span class="kw">for</span> <span class="op">(</span><span class="va">m</span> <span class="kw">in</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"run24"</span>, <span class="st">"run27"</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>

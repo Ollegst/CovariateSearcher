@@ -1,109 +1,48 @@
 # YAML Specification Files
 
-## YAML Specification Files for CovariateSearcher
+## YAML Specification Files
 
-CovariateSearcher uses YAML specification files inspired by the
-[yspec](https://metrumresearchgroup.github.io/yspec/) structure
-(developed by Metrum Research Group) to enhance documentation and create
-formatted output tables.
+CovariateSearcher reads variable and parameter metadata from YAML files
+shaped like [yspec](https://metrumresearchgroup.github.io/yspec/)
+specifications. They are what turns a bare `CL` into `CL/F (L/h)` with a
+description and a section, and `SEXN level 2` into `SEXN Female`.
 
-### 📋 Overview
+Three files are involved, and only two of them are yours to write:
 
-The YAML specification system provides:
+| file | written by | read by |
+|----|----|----|
+| `lookup.yaml` | you | [`build_covariate_reference_table()`](https://ollegst.github.io/CovariateSearcher/reference/build_covariate_reference_table.md), [`model_add_cov()`](https://ollegst.github.io/CovariateSearcher/reference/model_add_cov.md), `model_report(lookup =)`, forest plots, boxplots |
+| `pk-extend.yml` | you | `model_report(spec_pk =)`, forest and exposure summary tables |
+| `tags.yaml` | the package | the search itself, to track which model carries which covariate |
 
-- ✅ **Standardized variable definitions** with units and descriptions
-- ✅ **Formatted output tables** for parameters and results
-- ✅ **Categorical variable decoding** (e.g., 1 = “White”, 2 = “Black”)
-- ✅ **Automatic documentation** generation
-
-------------------------------------------------------------------------
-
-### 🗂️ Required Files
-
-For CovariateSearcher, use this two-file setup in `data/spec/`:
-
-    data/spec/
-    ├── lookup.yaml       # Variable definitions + SETUP__ metadata + covariate flags
-    └── pk-extend.yml     # Parameter formatting for output tables (optional but recommended)
-
-In addition, CovariateSearcher automatically creates
-`data/spec/tags.yaml` during initialization from your covariate search
-table.
-
-### 🏷️ Auto-Generated File: tags.yaml
-
-`tags.yaml` is generated automatically when you run initialization. It
-maps internal beta tags to covariate-parameter combinations used in
-model generation and tracking.
-
-You do not need to create this file manually.
-
-#### Example tags.yaml
-
-``` yaml
-# Tags configuration file
-# Auto-generated from covariate search table
-# Generated: 2026-04-20
-
-## Covariates
-beta_WT_CL: "WT_CL"                     # Continuous, power, time-independent
-beta_ALB_CL: "ALB_CL"                   # Continuous, power, time-independent
-beta_LDH_CL: "LDH_CL"                   # Continuous, power, time-independent
-beta_SEXN_CL: "SEXN_CL"                 # Categorical 2-level, linear, time-independent
-beta_WT_V1: "WT_V1"                     # Continuous, power, time-independent
-beta_SEXN_V1: "SEXN_V1"                 # Categorical 2-level, linear, time-independent
-beta_AST_V2: "AST_V2"                   # Continuous, power, time-independent
-beta_NLR_V2: "NLR_V2"                   # Continuous, power, time-independent
-beta_SMOKH2_V2: "SMOKH2_V2"             # Categorical 2-level, linear, time-independent
-beta_COMB_V2: "COMB_V2"                 # Categorical 2-level, linear, time-independent
-beta_TUMTYP2_TMAX: "TUMTYP2_TMAX"       # Categorical 2-level, linear, time-independent
-```
+Nothing here is required to *run* a search. A search with no specs
+works; its output tables just carry raw NONMEM names.
 
 ------------------------------------------------------------------------
 
-### 📄 File 1: lookup.yaml
+### lookup.yaml — variables
 
-Defines variables, their types, units, categorical value decoding, and
-project-level `SETUP__` metadata.
+One entry per variable in your dataset. The package reads two fields
+from it:
 
-#### Example Structure
+| field | used for |
+|----|----|
+| `values` | the levels a categorical covariate may take |
+| `decode` | the human-readable name of each level, positionally matched to `values` |
+
+`short`, `label` and `unit` are read too, by the forest and boxplot
+paths, for axis and column labels.
+
+Other yspec fields are safe to keep but are not read by this package. In
+particular it looks for `unit` only — the `unit.text` and `unit.tex`
+variants are yspec’s own rendering fields and are ignored here, so a
+variable that carries only those will come out unitless.
 
 ``` yaml
 SETUP__:
   description: Formoterol Population PK Analysis
   sponsor: AstraZeneca
   projectnumber: PT010
-  extend_file: pk-extend.yml
-  flags:
-    contcov: [AGE, SCR, CRCL, EGFR, BEGFR, BSCR, BCRCL, BWT, BBMI, BBSA]
-    catcov: [SEXM, RACE, ETHNIC, SMOKING, DOSE, FORM, TRTID, ICS, ASTHMA]
-    diagContCov: [AGE, BEGFR, BSCR, BCRCL, BWT, BBMI, BBSA]
-    diagCatCov: [SEXM, RACE, ETHNIC, SMOKING, DOSE, FORM, TRTID, ICS, ASTHMA]
-NUM:
-  short: Row number
-  type: numeric
-OPROJID:
-  short: Project name
-  type: character
-RACE:
-  short: Race
-  values: [1, 2, 3, 9]
-  decode: ["White", "Black or African American", "Asian", "Other"]
-EGFR:
-  short: Estimated GFR
-  type: numeric
-  unit.text: "mL/min/1.73m^2"
-BBSA:
-  short: Body surface area
-  unit: m2
-  unit.tex: "m^2"
-```
-
-#### Common Variables to Include
-
-**Demographics:**
-
-``` yaml
 AGE:
   short: Age
   type: numeric
@@ -112,40 +51,104 @@ WT:
   short: Body weight
   type: numeric
   unit: kg
-SEX:
+RACE:
+  short: Race
+  values: [1, 2, 3, 9]
+  decode: ["White", "Black or African American", "Asian", "Other"]
+SEXN:
   short: Sex
-  values: [0, 1]
-  decode: ["Female", "Male"]
+  values: [1, 2]
+  decode: ["Male", "Female"]
 ```
 
-**Clinical Covariates:**
+#### Categorical levels are validated against your data
 
-``` yaml
-CRCL:
-  short: Creatinine clearance
-  type: numeric
-  unit: mL/min
-BMI:
-  short: Body mass index
-  type: numeric
-  unit.text: "kg/m^2"
+`build_covariate_reference_table(..., yaml_data = spec)` checks every
+categorical covariate against this file, and the checks are not
+advisory:
+
+- a covariate with `Category = "cat"` that has **no entry at all** stops
+  the build;
+- a level present in your baseline data but **missing from `values`**
+  stops the build, naming the level;
+- a level declared in `values` but **never observed** in the data is a
+  warning, not an error — it is usually a spec written for a larger
+  population.
+
+So a categorical covariate cannot enter a search until its levels are
+declared here. That is deliberate: the level list decides how many
+THETAs the effect needs and what each one is called.
+
+#### `SETUP__` is not read by the package
+
+The `SETUP__` block, including `flags:` with `contcov`/`catcov`, is
+yspec project metadata. CovariateSearcher never reads it, and it does
+**not** decide which covariates get tested — that comes solely from the
+covariate table you build with
+[`build_covariate_reference_table()`](https://ollegst.github.io/CovariateSearcher/reference/build_covariate_reference_table.md).
+
+It is still worth keeping, because your own code can use it. The boxplot
+examples pull flags through yspec to decode a dataset in one call:
+
+``` r
+
+spec  <- yspec::ys_load("data/spec/lookup.yaml")
+flags <- yspec::pull_meta(spec, "flags")
+
+dat <- decode_dataset(dat, spec, c(flags$catcov))
 ```
 
 ------------------------------------------------------------------------
 
-### 📄 File 2: pk-extend.yml
+### pk-extend.yml — parameters
 
-Defines parameter formatting for output tables. This creates nicely
-formatted parameter names with units and descriptions.
+One entry per model parameter, controlling how
+[`model_report()`](https://ollegst.github.io/CovariateSearcher/reference/model_report.md)
+renders it.
 
-#### Example Structure
+| field     | effect on the table                                        |
+|-----------|------------------------------------------------------------|
+| `short`   | the displayed name; combined with `unit` as `short (unit)` |
+| `label`   | the description column                                     |
+| `unit`    | appended to `short` in parentheses                         |
+| `comment` | which section the parameter is grouped under               |
 
 ``` yaml
 SETUP__:
   max_nchar_label: 10000
-DVNORM:
-  short: Dose-normalized concentration
-  unit: ng/mL/mg
+KA:
+  short: Ka
+  label: Absorption rate constant
+  unit: 1/hr
+  comment: Typical parameters
+CL:
+  short: CL/F
+  label: Apparent clearance
+  unit: L/h
+  comment: Typical parameters
+V1:
+  short: Vc/F
+  label: Apparent central volume
+  unit: L
+  comment: Typical parameters
+IIV_CL:
+  short: CL/F CV%
+  label: Inter-individual variability on clearance
+  comment: Inter-individual variability
+RUV_PROP:
+  short: prop error
+  label: Proportional residual error
+  comment: Residual variability
+```
+
+#### Exposure metrics live here too
+
+The forest and exposure summary tables take quantity labels from a spec
+of the same shape, so derived quantities belong in this file alongside
+the model parameters. They need no `comment:` — they are never sectioned
+into a parameter table:
+
+``` yaml
 AUCss:
   short: AUC,ss
   label: steady-state area under the concentration-time curve
@@ -158,194 +161,125 @@ CMINss:
   short: Cmin,ss
   label: steady-state minimum concentration
   unit: ng/mL
-KA:
-  short: Ka
-  label: Absorption rate constant
-  unit: 1/hr
-  comment: Typical parameters
-Frel:
-  short: Frel
-  label: Relative bioavailability
-  unit: percent
-  comment: Typical parameters
-CL:
-  short: CL/F
-  label: Apparent clearance
-  unit: L/h
-  comment: Typical parameters
-V1:
-  short: Vc/F
-  label: Apparent central volume
-  unit: L
-  comment: Typical parameters
-V2:
-  short: Vp1/F
-  label: Apparent peripheral volume
-  unit: L
-  comment: Typical parameters
 ```
 
-#### Key Fields for Parameters
+The key must match the column name carrying that metric. See [Forest
+Plots and
+Simulations](https://ollegst.github.io/CovariateSearcher/articles/forest-plots.md).
 
-| Field     | Description         | Example              |
-|-----------|---------------------|----------------------|
-| `short`   | Abbreviated name    | “CL/F”               |
-| `label`   | Full description    | “Apparent clearance” |
-| `unit`    | Unit of measurement | “L/h”                |
-| `comment` | Category or note    | “Typical parameters” |
+#### The keys must match your control stream
 
-comments should be selected from this list: Typical parameters”
-Inter-individual variability Correlation of random effects
-Parameter-Covariate relationships Residual variability
-
-#### Common Parameters to Include
-
-``` yaml
-CL:
-  short: CL/F
-  label: Apparent clearance
-  unit: L/h
-  comment: Typical parameters
-V:
-  short: V/F
-  label: Apparent volume of distribution
-  unit: L
-  comment: Typical parameters
-KA:
-  short: Ka
-  label: Absorption rate constant
-  unit: 1/hr
-  comment: Typical parameters
-IIV_CL:
-  short:CL/F CV%
-  label: Inter-individual variability on clearance
-  comment: Random effects
-IIV_V:
-  short: V/F CV%
-  label: Inter-individual variability on volume
-  comment: Random effects
-RUV_PROP:
-  short: Prop error
-  label: Proportional residual error
-  comment: Residual error
-```
-
-------------------------------------------------------------------------
-
-### 🎯 How CovariateSearcher Uses YAML Files
-
-#### 1. Variable Decoding
-
-Categorical covariate levels are decoded in
+This is the one thing that silently produces a bad table.
 [`model_report()`](https://ollegst.github.io/CovariateSearcher/reference/model_report.md)
-output tables when you pass the lookup spec as the `lookup` argument
-(`model_report(..., lookup = lookup)`):
+does not read parameter names from the `.ext` file — it reads them from
+the annotations in your control stream, taking the **second
+semicolon-separated field** of each `$THETA`, `$OMEGA` and `$SIGMA`
+line:
 
-    Instead of: Effect of SEXN level 2 on Apparent central volume
-    Shows:      Effect of Female (SEXN) on Apparent central volume
+    $THETA
+    0.5  ; CL ; L/h ; LOG
+    2.0  ; V1 ; L   ; RATIO
 
-Decoding uses each covariate’s `values`/`decode` entries (e.g. `RACE` →
-White, Black or African American, Asian). Without a `lookup`, the
-generic “level N” label is shown.
+Those names — `CL`, `V1` — are the keys `pk-extend.yml` must use. A key
+that matches nothing in the control stream is ignored, and a parameter
+with no matching key is reported back to you as “Parameters not found in
+spec_pk” and falls through to its raw name.
 
-#### 2. Parameter Formatting
+The fourth field (`LOG`, `RATIO`) is separate: it drives
+back-transformation in both
+[`model_report()`](https://ollegst.github.io/CovariateSearcher/reference/model_report.md)
+and `plot_nonmem_iterations(transform = TRUE)`. See [Model Reports and
+Diagnostics](https://ollegst.github.io/CovariateSearcher/articles/model-reports-and-diagnostics.md).
 
-Output tables show formatted parameter names:
+#### `comment` must be one of five exact strings
 
-    Instead of: CL = 5.2 (units unclear)
-    Shows:      CL/F [L/h] = 5.2 (Apparent clearance)
+    Typical parameters
+    Inter-individual variability
+    Correlation of random effects
+    Parameter-Covariate relationships
+    Residual variability
 
-#### 3. Covariate Categorization
+These are the section headers, and they appear in that order. Anything
+else — “Random effects”, “Residual error” — leaves the parameter without
+a section. Covariate effects (`beta_*`) are assigned to
+“Parameter-Covariate relationships” automatically and need no entry of
+their own; what they *do* need is an entry for the **parameter** they
+act on, since the covariate row is labelled from that parameter’s
+`short` and `label`.
 
-Automatically identifies which covariates to test:
-
-``` yaml
-flags:
-  contcov: [AGE, WT, BMI]  # Test these continuous covariates
-  catcov: [SEX, RACE]      # Test these categorical covariates
-```
-
-------------------------------------------------------------------------
-
-### ✅ Best Practices
-
-#### 1. Match Parameter Names
-
-Ensure names in `pk-extend.yml` match your NONMEM model:
-
-``` yaml
-# If your model has:
-$THETA
-0.5 ; CL ; L/h ; LOG
-
-# Your pk-extend.yml should have:
-CL:
-  short: CL/F
-  label: Apparent clearance
-  unit: L/h
-```
-
-#### 2. Include All Covariates
-
-List all potential covariates in `lookup.yaml`:
-
-``` yaml
-# In lookup.yaml - define them
-AGE:
-  short: Age
-  type: numeric
-  unit: years
-```
-
-#### 3. Use Consistent Units
-
-Match units across files:
-
-``` yaml
-# lookup.yaml
-WT:
-  unit: kg
-
-# pk-extend.yml
-CL:
-  unit: L/h  # Not L/hr or L/hour
-```
-
-#### 4. Decode All Categorical Variables
-
-Provide meaningful labels:
-
-``` yaml
-RACE:
-  values: [1, 2, 3, 9]
-  decode: ["White", "Black or African American", "Asian", "Other"]
-  # NOT: ["1", "2", "3", "9"]
-```
+Omitting `comment` does **not** fall back to something sensible. A
+parameter that appears in `spec_pk` without a `comment:` is left
+unsectioned and sinks to the bottom of the table next to `OFV`. The
+name-based fallback — `THETA` to typical parameters, `OMEGA` to IIV,
+`SIGMA` to residual variability — applies only when no `spec_pk` is
+supplied at all. Once you pass a spec, every parameter in it needs its
+`comment:`.
 
 ------------------------------------------------------------------------
 
-### 🔍 Validation
+### tags.yaml — generated, not written
 
-Check your YAML files are valid:
+[`initialize_covariate_search()`](https://ollegst.github.io/CovariateSearcher/reference/initialize_covariate_search.md)
+and
+[`add_covariates_to_search()`](https://ollegst.github.io/CovariateSearcher/reference/add_covariates_to_search.md)
+regenerate `data/spec/tags.yaml` from the covariate search table via
+[`generate_tags_from_covariate_search()`](https://ollegst.github.io/CovariateSearcher/reference/generate_tags_from_covariate_search.md).
+It maps each `beta_` tag to its covariate-parameter pair and is how the
+search knows which covariates a given model carries.
+
+``` yaml
+# Tags configuration file
+# Auto-generated from covariate search table
+
+## Covariates
+beta_WT_CL: "WT_CL"                # Continuous, power, time-independent
+beta_SEXN_CL: "SEXN_CL"            # Categorical 2-level, linear, time-independent
+beta_WT_V1: "WT_V1"                # Continuous, power, time-independent
+```
+
+Do not hand-edit it. Change the covariate table and let it be rewritten
+— editing the file directly desynchronises it from the table that drives
+the search.
+
+------------------------------------------------------------------------
+
+### Checking your files
 
 ``` r
 
-library(yaml)
+lookup  <- yaml::read_yaml("data/spec/lookup.yaml")
+spec_pk <- yaml::read_yaml("data/spec/pk-extend.yml")
 
-# Core validation for CovariateSearcher
-lookup <- read_yaml("data/spec/lookup.yaml")
-pk_extended <- read_yaml("data/spec/pk-extend.yml")
+# Do the parameter keys match the control stream annotations?
+names(spec_pk)
 
-# Quick checks
-names(lookup)
-names(pk_extended)
+# Are all five section names spelled exactly?
+unique(unlist(lapply(spec_pk, function(x) x$comment)))
+```
+
+Both files are passed as **objects**, never as paths:
+
+``` r
+
+pk_res <- model_report(
+  model_names = "run28",
+  spec_pk     = spec_pk,
+  lookup      = lookup
+)
 ```
 
 ------------------------------------------------------------------------
 
-### 📚 Additional Resources
+### See also
 
-- **yspec Documentation**:
-  <https://metrumresearchgroup.github.io/yspec/>
-- **yspec Book**: <https://metrumresearchgroup.github.io/ysp-book/>
-- **Examples**: See the yspec package for more examples
+- [Model Reports and
+  Diagnostics](https://ollegst.github.io/CovariateSearcher/articles/model-reports-and-diagnostics.md)
+  — what `spec_pk` and `lookup` do to the output
+- [Complete
+  Workflow](https://ollegst.github.io/CovariateSearcher/articles/complete-workflow.md)
+  — where the specs enter a search
+- [Forest Plots and
+  Simulations](https://ollegst.github.io/CovariateSearcher/articles/forest-plots.md)
+  — the other consumer of `pk-extend.yml`
+- [yspec documentation](https://metrumresearchgroup.github.io/yspec/)
+  and the [yspec book](https://metrumresearchgroup.github.io/ysp-book/)

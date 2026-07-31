@@ -44,7 +44,7 @@
     <li><a class="dropdown-item" href="../articles/forest-plots.html">Forest Plots and Simulations</a></li>
     <li><a class="dropdown-item" href="../articles/covariate-boxplots.html">Covariate Boxplots</a></li>
     <li><a class="dropdown-item" href="../articles/yaml-specification-files.html">YAML Specification Files</a></li>
-    <li><a class="dropdown-item" href="../articles/model-report-usage.html">Parameter Tables with model_report()</a></li>
+    <li><a class="dropdown-item" href="../articles/model-reports-and-diagnostics.html">Model Reports and Diagnostics</a></li>
     <li><a class="dropdown-item" href="../articles/troubleshooting.html">Troubleshooting Guide</a></li>
     <li><a class="dropdown-item" href="../articles/recovery-system.html">Recovery and Resuming a Search</a></li>
   </ul>
@@ -157,6 +157,13 @@ that file only when the covariance step succeeds. Set it to
 <p>A model with no output directory at all is a separate case, recorded
 as <code>NONMEM never started - no output directory</code>: the run
 never reached NONMEM.</p>
+<p><strong>A listing that exists but cannot be read</strong> is recorded
+as failed, not as a run still in flight. Listings are read tolerantly —
+a run that wrote <code>PRDERR</code> output can carry bytes that are not
+valid text, and those are decoded rather than refused — so this is rare.
+When it does happen the model is given a terminal status on purpose: the
+monitoring loop waits for every model to finish, and a file that will
+never become readable would otherwise hold it open indefinitely.</p>
 </div>
 <div class="section level4">
 <h4 id="automatic-retry">Automatic Retry<a class="anchor" aria-label="anchor" href="#automatic-retry"></a>
@@ -328,11 +335,22 @@ are on disk but absent from the database.
 <code><a href="../reference/reconstruct_step_from_disk.html">reconstruct_step_from_disk()</a></code> is called automatically to add
 them, detecting base model, direction and step number from the
 files.</p>
-<p><strong>It refuses to continue from a half-finished step.</strong> If
-any model in the last step is still <code>created</code>,
-<code>in_progress</code> or <code>submitted</code>, the call returns
-<code>status = "incomplete_step"</code> and names what is pending rather
-than evaluating a step on partial results.</p>
+<p><strong>It refuses to continue from a half-finished step.</strong> A
+model counts as finished only when it has reached a final answer —
+<code>completed</code>, <code>failed</code> or
+<code>estimation_error</code>. Anything else, whatever it is called,
+means the search does not yet know how the run ended, so the call
+returns <code>status = "incomplete_step"</code> and names what is
+pending rather than evaluating a step on partial results.</p>
+<p>The test is deliberately written that way round. Asking “has it
+finished?” cannot miss an unfinished state, whereas listing the
+unfinished ones can and did: the same state is recorded as
+<code>in_progress</code> by one reader and <code>incomplete</code> by
+another, and a guard that listed only the first let a step be declared
+complete while a model was still estimating.</p>
+<p>Only models the search created itself can block. One it did not
+create is never re-read, so its status can never change, and waiting on
+it would never end.</p>
 <div class="section level4">
 <h4 id="scenario-checkpoint-from-the-start-of-a-step-failures-rerun-by-hand">Scenario: checkpoint from the start of a step, failures rerun by
 hand<a class="anchor" aria-label="anchor" href="#scenario-checkpoint-from-the-start-of-a-step-failures-rerun-by-hand"></a>
