@@ -129,6 +129,48 @@ extract_covariate_name_from_tag <- function(tag) {
 }
 
 
+#' Has a model reached a final answer?
+#'
+#' @description The three statuses that settle a model: it produced a usable
+#'   result, it failed, or its estimation errored. Everything else - however it is
+#'   spelled - means the search does not yet know how the run ended.
+#' @param status Character vector of database statuses.
+#' @return Logical vector. \code{NA} is not terminal: an unrecorded status is not
+#'   evidence that a model finished.
+#' @keywords internal
+#' @noRd
+.is_terminal_status <- function(status) {
+  !is.na(status) & status %in% c("completed", "failed", "estimation_error")
+}
+
+
+#' Has a model not finished yet?
+#'
+#' @description The complement of \code{.is_terminal_status()}: a model is pending
+#'   unless it has reached a final answer. Defined by inversion on purpose.
+#'
+#'   The unfinished states are spelled inconsistently and cannot be unified:
+#'   \code{update_model_status_from_files()} writes \code{"in_progress"} where
+#'   \code{get_model_status_from_files()} - the reader
+#'   \code{discover_existing_models()} seeds a row with - writes
+#'   \code{"incomplete"}; rows carry \code{"created"} or \code{"submitted"} before
+#'   either reader runs; and checkpoints already on disk hold all of them, so
+#'   renaming any is not open to us.
+#'
+#'   Enumerating that set is what went wrong before: two guards listed the
+#'   unfinished statuses inline, both omitted \code{"incomplete"}, and a step could
+#'   be declared complete while a model was still estimating. Asking the question
+#'   the other way round - is this model finished? - cannot miss a state, because a
+#'   status nobody anticipated is treated as unfinished rather than ignored.
+#' @param status Character vector of database statuses.
+#' @return Logical vector; \code{NA} reads \code{TRUE} (not known to have finished).
+#' @keywords internal
+#' @noRd
+.is_pending_status <- function(status) {
+  !.is_terminal_status(status)
+}
+
+
 #' Was a model created by this covariate search?
 #'
 #' @description Provenance check behind the rule that the search submits only

@@ -326,9 +326,11 @@ run_scm_selective_forward <- function(search_state,
           prev_rows <- prev_rows[is.na(prev_rows$phase) |
                                    prev_rows$phase != "base", , drop = FALSE]
         }
+        # Only models this search created can still change: update_all_model_statuses()
+        # deliberately skips the rest, so waiting on one would never end.
         pending <- prev_rows$model_name[
-          !is.na(prev_rows$status) &
-            prev_rows$status %in% c("created", "submitted", "in_progress", "unknown")]
+          .is_pending_status(prev_rows$status) &
+            .is_search_model(search_state, prev_rows$model_name)]
         if (length(pending) == 0) break
         cat(sprintf(paste0("⏳ Step %d still has %d unfinished model(s); ",
                            "waiting before advancing: %s\n"),

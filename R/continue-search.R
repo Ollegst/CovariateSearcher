@@ -217,7 +217,11 @@ continue_search <- function(search_state = NULL,
     !is.na(search_state$search_database$step_number) &
       search_state$search_database$step_number == last_step, , drop = FALSE]
 
-  blocking <- ls_rows$model_name[ls_rows$status %in% c("created", "in_progress", "submitted")]
+  # Same rule as the forward phase's wait: a model the search did not create is
+  # never re-read, so it cannot leave a pending status and must not block resume.
+  blocking <- ls_rows$model_name[
+    .is_pending_status(ls_rows$status) &
+      .is_search_model(search_state, ls_rows$model_name)]
   if (length(blocking) > 0) {
     cat(sprintf("\n⛔ Step %d is not complete — %d model(s) still pending:\n",
                 last_step, length(blocking)))

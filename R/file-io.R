@@ -48,6 +48,29 @@ find_model_file <- function(base_path, extensions = c(".ctl", ".mod")) {
 }
 
 
+# Read a NONMEM listing as text. Listings are not guaranteed to be valid UTF-8 -
+# a run that wrote PRDERR output can carry stray control bytes, and readLines()
+# then throws "invalid multibyte string" under a UTF-8 locale.
+#
+# Try the session's own encoding first, so a listing that is valid UTF-8 keeps
+# its characters in the diagnostic text callers quote verbatim (error_excerpt,
+# the #TERM block). Only when that fails fall back to latin1, which maps every
+# byte to something and so cannot throw: the status markers are all ASCII and
+# stay greppable whatever else the run emitted. A path that cannot be opened at
+# all fails in both attempts and signals, which is what marks a run as failed.
+#' @keywords internal
+#' @noRd
+.read_listing_lines <- function(path) {
+  read_with <- function(...) {
+    con <- file(path, open = "r", ...)
+    on.exit(close(con), add = TRUE)
+    readLines(con, warn = FALSE, skipNul = TRUE)
+  }
+
+  tryCatch(read_with(), error = function(e) read_with(encoding = "latin1"))
+}
+
+
 #' Write Model File
 #'
 #' @title Write modified NONMEM control file back to disk
@@ -252,7 +275,7 @@ read_nonmem_lst <- function(model_path) {
 
   # Read and analyze .lst file with comprehensive error handling
   tryCatch({
-    lst_content <- readLines(lst_file, warn = FALSE)
+    lst_content <- .read_listing_lines(lst_file)
 
     # Empty LST file
     if (is.null(lst_content) || length(lst_content) == 0) {
@@ -377,8 +400,12 @@ read_nonmem_lst <- function(model_path) {
     return(result)
 
   }, error = function(e) {
+    # Report the file that was resolved. Dropping it made a listing that exists
+    # but cannot be read indistinguishable from one NONMEM has not written yet,
+    # and callers that ask only for $file read that as "still running".
     return(list(
-      found = FALSE,
+      found = TRUE,
+      file = lst_file,
       status = "read_error",
       error_message = paste("Error reading LST file:", as.character(e$message)),
       error_excerpt = "",
@@ -400,6 +427,14 @@ read_nonmem_lst <- function(model_path) {
 #' @export
 get_model_status_from_files <- function(model_path, require_cov_step = TRUE) {
 
+  # read_nonmem_lst() accepts the listing itself, but read_nonmem_ext() would
+  # then look for "<model>.lst.ext" and find nothing, making a finished run read
+  # as failed. Drop the extension so both readers search the same candidates,
+  # which keeps the run-directory and flat layouts working alike.
+  if (grepl("\\.lst$", model_path)) {
+    model_path <- sub("\\.lst$", "", model_path)
+  }
+
   lst_info <- read_nonmem_lst(model_path)
   ext_info <- read_nonmem_ext(model_path)
 
@@ -413,6 +448,13 @@ get_model_status_from_files <- function(model_path, require_cov_step = TRUE) {
   # is also the order update_model_status_from_files() works in.
   if (!isTRUE(lst_info$found) || identical(lst_info$status, "incomplete")) {
     return("incomplete")
+  }
+
+  # A listing that exists but cannot be read is a failure - not a run in flight,
+  # and not a success. Nothing in it can be trusted to describe the estimation,
+  # so it must not fall through to the OFV test below and be called completed.
+  if (identical(lst_info$status, "read_error")) {
+    return("failed")
   }
 
   # Success is a usable OFV plus a covariance matrix - the same test
@@ -434,10 +476,14 @@ get_model_status_from_files <- function(model_path, require_cov_step = TRUE) {
 
   if (ofv_ok) {
     if (isTRUE(require_cov_step)) {
-      # Look for the .cov beside the rest of the run's output, which is wherever
-      # the .lst turned out to be, not an assumed directory.
-      out_dir <- if (isTRUE(lst_info$found)) dirname(lst_info$file) else model_path
-      cov_file <- file.path(out_dir, paste0(basename(model_path), ".cov"))
+      # Anchor both the directory and the run's own name to the listing that was
+      # actually found. model_path may be the run directory or the .lst itself
+      # (read_nonmem_lst accepts either), and basename() of the latter would send
+      # this looking for "<model>.lst.cov".
+      cov_file <- file.path(
+        dirname(lst_info$file),
+        paste0(sub("\\.lst$", "", basename(lst_info$file)), ".cov")
+      )
       if (!file.exists(cov_file)) {
         return("failed")
       }
@@ -454,7 +500,8 @@ get_model_status_from_files <- function(model_path, require_cov_step = TRUE) {
     return("failed")
   }
 
-  # Anything else the listing reported (failed, read_error) stands.
+  # Anything else the listing reported stands. "read_error" cannot reach here -
+  # it returned above.
   return(lst_info$status)
 }
 
@@ -509,7 +556,7 @@ extract_nonmem_timestamps <- function(model_name, models_folder = "models") {
   }
 
   tryCatch({
-    lst_lines <- readLines(lst_file_path, warn = FALSE)
+    lst_lines <- .read_listing_lines(lst_file_path)
 
     if (length(lst_lines) == 0) {
       return(list(
@@ -518,6 +565,14 @@ extract_nonmem_timestamps <- function(model_name, models_folder = "models") {
         error = "Empty LST file"
       ))
     }
+
+    # The %a and %b below are read in this session's LC_TIME, not the locale
+    # NONMEM wrote in. Under a non-English LC_TIME none of the layouts match and
+    # both timestamps come back NA with nothing signalled. Parse under C, where
+    # the English abbreviations NONMEM writes always resolve, and restore after.
+    old_lc_time <- Sys.getlocale("LC_TIME")
+    on.exit(suppressWarnings(Sys.setlocale("LC_TIME", old_lc_time)), add = TRUE)
+    suppressWarnings(Sys.setlocale("LC_TIME", "C"))
 
     # NONMEM stamps its start and stop lines in the host's locale, so the layout
     # varies between machines: "Wed Jul 29 14:30:08 EDT 2026" (month first,

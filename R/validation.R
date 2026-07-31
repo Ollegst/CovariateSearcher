@@ -38,13 +38,19 @@ update_model_status_from_files <- function(search_state, model_name, force = FAL
 
   missing_cols <- setdiff(required_cols, names(search_state$search_database))
   if (length(missing_cols) > 0) {
-    # Add missing columns with appropriate defaults using case_when logic
+    # Add missing columns with a default of the column's own type. `col` is a
+    # single name, so this is a scalar choice: case_when() cannot express it,
+    # because it requires every branch to share one type and these are numeric,
+    # logical and character.
     for (col in missing_cols) {
-      search_state$search_database[[col]] <- dplyr::case_when(
-        col %in% c("ofv", "delta_ofv", "rse_max", "step_number") ~ NA_real_,
-        col == "excluded_from_step" ~ FALSE,
-        TRUE ~ NA_character_
-      )
+      search_state$search_database[[col]] <-
+        if (col %in% c("ofv", "delta_ofv", "rse_max", "step_number")) {
+          NA_real_
+        } else if (col == "excluded_from_step") {
+          FALSE
+        } else {
+          NA_character_
+        }
     }
   }
 
@@ -83,7 +89,8 @@ update_model_status_from_files <- function(search_state, model_name, force = FAL
 
     # read_nonmem_lst() is the one resolver for where a model's output can be:
     # inside the run directory, or beside the control stream.
-    lst_file <- read_nonmem_lst(model_path)$file
+    lst_probe <- read_nonmem_lst(model_path)
+    lst_file <- lst_probe$file
 
     if (is.null(lst_file) || !file.exists(lst_file)) {
       # No LST file - check if bbi even started NONMEM
@@ -116,9 +123,18 @@ update_model_status_from_files <- function(search_state, model_name, force = FAL
       return(results)
     }
 
+    # A listing that resolved but could not be read is a failure, never "still
+    # running": the monitoring loop waits on this status, so reporting a run in
+    # flight for a file that will never become readable never terminates.
+    if (identical(lst_probe$status, "read_error")) {
+      results$status <- "failed"
+      results$error_message <- lst_probe$error_message %||% "Cannot read LST file"
+      return(results)
+    }
+
     # Read LST file - only check Stop Time
     lst_info <- tryCatch({
-      lst_content <- readLines(lst_file, warn = FALSE)
+      lst_content <- .read_listing_lines(lst_file)
 
       # ONLY check if run has finished (Stop Time is standard NONMEM output)
       has_stop_time <- any(grepl("Stop Time:", lst_content))
@@ -438,9 +454,10 @@ update_all_model_statuses <- function(search_state, show_progress = TRUE) {
       all_models <- search_state$search_database$model_name
       all_statuses <- search_state$search_database$status
 
-      # Filter OUT models with terminal statuses
-      terminal_statuses <- c("completed", "failed", "estimation_error")
-      needs_update <- !(all_statuses %in% terminal_statuses)
+      # Filter OUT models that have reached a final answer. Same predicate the
+      # "is this step still running?" guards use, so a status can never count as
+      # finished in one place and unfinished in the other.
+      needs_update <- .is_pending_status(all_statuses)
 
       # Also skip models the user tagged "do_not_run": set-up models such as the
       # base-model-prep run, which are NOT part of the covariate search. The bbr
