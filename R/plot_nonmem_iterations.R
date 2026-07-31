@@ -112,71 +112,86 @@ read_ext_iterations <- function(ext_file) {
 }
 
 
-# Put iteration columns on the scale the parameter table reports: a THETA
-# annotated ';LOG' in the control stream becomes exp(theta), and a diagonal
-# OMEGA/SIGMA becomes CV% = 100*sqrt(exp(v)-1). Off-diagonal elements and
-# THETAs without a LOG annotation are left as estimated. Returns the data plus
-# facet labels marking which columns were rescaled.
+# Work out, from the control stream's own annotations, what each .ext column
+# should be called and which ones are on the log scale. Both are best-effort: a
+# model that annotates nothing keeps the .ext's names and values.
+#
+# Annotations are matched to columns BY POSITION, which is only sound when the
+# counts agree - extract_params() drops a record line carrying no ';' comment,
+# and one dropped line shifts every name after it onto the wrong parameter. Each
+# record is therefore checked on its own and skipped whole on a mismatch, so a
+# fully annotated $THETA still gets names when a BLOCK() $OMEGA cannot.
+#
+# Only THETAs are rescaled. A ';LOG' theta is stored as log(value) and is
+# meaningless plotted raw; OMEGA and SIGMA are variances and are shown as
+# NONMEM wrote them.
 #' @keywords internal
 #' @noRd
-.transform_iteration_columns <- function(ext_data, value_cols, model_name,
-                                         models_dir, n_theta_ext) {
+.listing_column_meta <- function(ext_cols, model_name, models_dir) {
 
-  labels <- stats::setNames(value_cols, value_cols)
+  labels   <- stats::setNames(ext_cols, ext_cols)
+  log_cols <- character(0)
 
   # suppressWarnings: extract_params() warns from an internal min() whenever the
   # control stream's last record is $THETA/$OMEGA/$SIGMA. Upstream noise, not
   # something the caller of a plot can act on.
-  theta_trans <- tryCatch(
-    suppressWarnings(
-      extract_model_params(model_name, models_folder = models_dir)$THETAS$trans
-    ),
+  params <- tryCatch(
+    suppressWarnings(extract_model_params(model_name, models_folder = models_dir)),
     error = function(e) NULL
   )
-  if (is.null(theta_trans)) {
+  if (is.null(params)) {
     warning(sprintf(
-      paste("Control stream for '%s' could not be read; LOG-scale THETAs are",
-            "shown as estimated. Variances are still shown as CV%%."),
-      model_name
-    ), call. = FALSE)
-    theta_trans <- character(0)
+      paste("Control stream for '%s' could not be read; panels keep the .ext's",
+            "own names and values."), model_name), call. = FALSE)
+    return(list(labels = labels, log_cols = log_cols))
   }
 
-  # THETA annotations align to the .ext THETA columns by position, so a $THETA
-  # line without its '; NAME ; UNIT ; TRANS' comment is not parsed and shifts
-  # everything after it. Refuse to guess rather than rescale the wrong column.
-  if (length(theta_trans) > 0 && length(theta_trans) != n_theta_ext) {
-    warning(sprintf(
-      paste("'%s' declares %d annotated $THETA line(s) but the .ext holds %d",
-            "THETA column(s); THETAs are shown as estimated. Annotate every",
-            "$THETA line as '; NAME ; UNIT ; TRANS' to enable back-transformation."),
-      model_name, length(theta_trans), n_theta_ext
-    ), call. = FALSE)
-    theta_trans <- character(0)
+  # NONMEM's own column order, not alphabetical: THETA10 follows THETA9.
+  theta_pat  <- "^THETA0*(\\d+)$"
+  theta_cols <- grep(theta_pat, ext_cols, value = TRUE)
+  theta_cols <- theta_cols[order(as.integer(sub(theta_pat, "\\1", theta_cols)))]
+
+  # read.table sanitises the .ext header, so OMEGA(1,1) arrives as OMEGA.1.1.
+  # Only the diagonal has a $OMEGA/$SIGMA line to be named from.
+  diagonal_of <- function(block) {
+    pat <- sprintf("^%s[.(](\\d+)[,.](\\d+)[.)]$", block)
+    hit <- grep(pat, ext_cols, value = TRUE)
+    if (length(hit) == 0L) return(character(0))
+    hit <- hit[sub(pat, "\\1", hit) == sub(pat, "\\2", hit)]
+    hit[order(as.integer(sub(pat, "\\1", hit)))]
   }
 
-  for (nm in value_cols) {
-    is_theta  <- grepl("^THETA\\d+$", nm)
-    theta_idx <- if (is_theta) as.integer(sub("^THETA0*(\\d+)$", "\\1", nm)) else NA_integer_
+  records <- list(
+    list(cols = theta_cols,           tbl = params$THETAS, tag = "$THETA"),
+    list(cols = diagonal_of("OMEGA"), tbl = params$OMEGAS, tag = "$OMEGA"),
+    list(cols = diagonal_of("SIGMA"), tbl = params$SIGMA,  tag = "$SIGMA")
+  )
 
-    # read.table sanitises the .ext header, so OMEGA(1,1) arrives as OMEGA.1.1.
-    diag_parts <- regmatches(
-      nm, regexec("^(OMEGA|SIGMA)[.(](\\d+)[,.](\\d+)[.)]$", nm)
-    )[[1]]
+  for (rec in records) {
+    n_annotated <- if (is.null(rec$tbl)) 0L else nrow(rec$tbl)
+    if (length(rec$cols) == 0L || n_annotated == 0L) next
 
-    if (is_theta && length(theta_trans) >= theta_idx &&
-        identical(theta_trans[theta_idx], "LOG")) {
-      ext_data[[nm]] <- exp(ext_data[[nm]])
-      labels[[nm]]   <- paste0(nm, " [natural]")
+    if (n_annotated != length(rec$cols)) {
+      warning(sprintf(
+        paste("'%s' has %d annotated %s line(s) for %d .ext column(s), so those",
+              "panels keep their .ext names and values. Annotate every line as",
+              "'; NAME ; UNIT ; TRANS' to name them."),
+        model_name, n_annotated, rec$tag, length(rec$cols)), call. = FALSE)
+      next
+    }
 
-    } else if (length(diag_parts) == 4L && diag_parts[3] == diag_parts[4]) {
-      v <- ext_data[[nm]]
-      ext_data[[nm]] <- 100 * sqrt(ifelse(exp(v) - 1 >= 0, exp(v) - 1, NA))
-      labels[[nm]]   <- paste0(nm, " [CV%]")
+    labels[rec$cols] <- rec$tbl$param
+    if (identical(rec$tag, "$THETA")) {
+      log_cols <- c(log_cols, rec$cols[!is.na(rec$tbl$trans) & rec$tbl$trans == "LOG"])
     }
   }
 
-  list(data = ext_data, labels = labels)
+  # Two panels sharing a label would be collapsed into one by the facet, so any
+  # name used more than once falls back to the .ext column it came from.
+  repeated <- labels %in% labels[duplicated(labels)]
+  labels[repeated] <- ext_cols[repeated]
+
+  list(labels = labels, log_cols = log_cols)
 }
 
 
@@ -187,12 +202,15 @@ read_ext_iterations <- function(ext_file) {
 #'   problems, convergence issues, and parameter stability.
 #' @param model_name Character. Name of the model (e.g., "run123")
 #' @param models_dir Character. Directory containing model files (default: "models")
-#' @param transform Logical. Show parameters on their reported scale rather than as
-#'   written in the .ext file (default: TRUE). A THETA annotated \code{;LOG} in the
-#'   control stream is exponentiated, and a diagonal OMEGA/SIGMA is converted to
-#'   CV% - the same rules \code{model_report()} applies - so the trajectories and the
-#'   parameter table agree. Off-diagonal elements and unannotated THETAs are unchanged.
-#'   \code{FALSE} plots the raw .ext values.
+#' @param transform Logical. Use whatever the control stream declares about its
+#'   own parameters (default: TRUE). Each panel is titled with the parameter's
+#'   name from its \code{$THETA}/\code{$OMEGA}/\code{$SIGMA} comment, and a THETA
+#'   annotated \code{;LOG} is exponentiated so it is plotted on the scale it is
+#'   reported on. \code{;RATIO} and unannotated THETAs are plotted as estimated,
+#'   and OMEGA/SIGMA are always shown as NONMEM wrote them. Anything the model
+#'   does not declare falls back to the .ext, so an unannotated record keeps
+#'   names like \code{THETA1} and \code{OMEGA.1.1.}. \code{FALSE} plots the .ext
+#'   exactly as written - raw values and raw column names.
 #' @param skip_iterations Integer. Number of initial iterations to skip (default: 0)
 #' @param obj_var Character. Column plotted in the leading panel (default: "OBJ").
 #'   Must name a column of the .ext file; \code{read_ext_iterations()} standardises
@@ -209,17 +227,17 @@ read_ext_iterations <- function(ext_file) {
 #'     that is not an evaluation step
 #'   \item Removes fixed parameters (those that don't change)
 #'   \item Adjusts BURN iteration numbers for continuous display
-#'   \item Rescales parameters when \code{transform = TRUE}
+#'   \item Names and rescales parameters when \code{transform = TRUE}
 #'   \item Creates faceted plots for each parameter and \code{obj_var}
 #' }
 #'
-#' \code{transform = TRUE} reads the \code{$THETA} annotations from the control
-#' stream and aligns them to the .ext THETA columns by position, the same
-#' assumption \code{model_report()} makes. Every \code{$THETA} line therefore
-#' needs its \code{; NAME ; UNIT ; TRANS} comment: an unannotated line is not
-#' parsed, which would shift the alignment. When the two counts disagree the
-#' function warns and leaves THETAs as estimated rather than rescaling the
-#' wrong one.
+#' \code{transform = TRUE} matches the control stream's annotations to the .ext
+#' columns by position, the same assumption \code{model_report()} makes. Every
+#' line of a record therefore needs its \code{; NAME ; UNIT ; TRANS} comment: a
+#' line without one is not parsed at all, and would shift every name after it
+#' onto the wrong parameter. Each record is checked on its own and skipped whole
+#' when the counts disagree, so a fully annotated \code{$THETA} is still named
+#' when a \code{BLOCK()} \code{$OMEGA} cannot be.
 #' @examples
 #' \dontrun{
 #' # Plot iteration data for run123
@@ -306,10 +324,10 @@ plot_nonmem_iterations <- function(model_name,
   param_names <- names(ext_data)[2:(match("OBJ", names(ext_data)) - 1)]
   param_names <- setdiff(param_names, obj_var)
 
-  # Counted from the whole .ext, before constant columns are dropped and
-  # regardless of obj_var, so it matches the number of $THETA records the
-  # control stream should declare.
-  n_theta_ext <- sum(grepl("^THETA\\d+$", names(ext_data)))
+  # Captured from the whole .ext, before constant columns are dropped and
+  # regardless of obj_var, so the per-record counts match what the control
+  # stream declares rather than what survived to be plotted.
+  ext_cols <- names(ext_data)
 
   # Remove fixed parameters (those that don't change)
   for (param in param_names) {
@@ -348,13 +366,14 @@ plot_nonmem_iterations <- function(model_name,
 
   var_labels <- stats::setNames(plot_vars, plot_vars)
   if (transform) {
-    # Every plotted column, obj_var included: a THETA or variance promoted to the
-    # leading panel is rescaled like any other, and "OBJ" matches neither rule.
-    transformed <- .transform_iteration_columns(
-      ext_data, plot_vars, model_name, models_dir, n_theta_ext
-    )
-    ext_data <- transformed$data
-    var_labels[names(transformed$labels)] <- transformed$labels
+    meta <- .listing_column_meta(ext_cols, model_name, models_dir)
+
+    # Only columns that survived to be plotted; a THETA promoted to the leading
+    # panel by obj_var is rescaled and named like any other.
+    for (nm in intersect(meta$log_cols, plot_vars)) {
+      ext_data[[nm]] <- exp(ext_data[[nm]])
+    }
+    var_labels[plot_vars] <- meta$labels[plot_vars]
   }
 
   # Reshape data for plotting

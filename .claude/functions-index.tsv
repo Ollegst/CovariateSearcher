@@ -82,8 +82,8 @@ model-output-tables.R	get_param2	get_param2(model_number, count_model, shrinkage
 model-output-tables.R	model_report	model_report(model_names, shrinkage="etasd", models_folder="models", spec_pk=NULL, lookup=NULL)	yes	129f410d80f152a96dc27afe2a5298f5
 model-output-tables.R	theme_pps_table	theme_pps_table(x)	yes	aad765a60d5ecfc2d330db5cf36dd44a
 monitoring-files.R	read_ext_file	read_ext_file(search_state, model_name)	yes	2059e1830f198c5e6b20580073682712
-plot_nonmem_iterations.R	.transform_iteration_columns	.transform_iteration_columns(ext_data, value_cols, model_name, models_dir, n_theta_ext)	no	d2486332a8bd6cc545c6474ecf36b56c
-plot_nonmem_iterations.R	plot_nonmem_iterations	plot_nonmem_iterations(model_name, models_dir="models", transform=TRUE, skip_iterations=0, obj_var="OBJ", max_iterations=100)	yes	5c63141a367df2e75bdc2232d41e97f6
+plot_nonmem_iterations.R	.listing_column_meta	.listing_column_meta(ext_cols, model_name, models_dir)	no	bb3b254c05728ce32a32e7fd042d29b3
+plot_nonmem_iterations.R	plot_nonmem_iterations	plot_nonmem_iterations(model_name, models_dir="models", transform=TRUE, skip_iterations=0, obj_var="OBJ", max_iterations=100)	yes	cb98fcbfa2b162189d0c8238672af97b
 plot_nonmem_iterations.R	read_ext_iterations	read_ext_iterations(ext_file)	yes	0db3ec07f832e8078230b12a20316b6a
 recovery-actions.R	.format_theta_init_value	.format_theta_init_value(value, template)	no	da7201b7d4911a0b8e65d2beaa55f90c
 recovery-actions.R	.perturb_theta_init	.perturb_theta_init(spec)	no	bc8e6901462b7953537dde6a8af278f7
