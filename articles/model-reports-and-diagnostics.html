@@ -501,8 +501,10 @@ scale</td>
 <div class="section level4">
 <h4 id="what-transform-does">What <code>transform</code> does<a class="anchor" aria-label="anchor" href="#what-transform-does"></a>
 </h4>
-<p><code>transform = TRUE</code> puts each trajectory on the same scale
-<code><a href="../reference/model_report.html">model_report()</a></code> uses, so the plot and the table agree:</p>
+<p><code>transform = TRUE</code> uses what your control stream already
+declares about its own parameters. Nothing is inferred: if the model
+says a THETA is on the log scale, it is plotted on the natural one; if
+it names a parameter, the panel carries that name.</p>
 <table class="table">
 <colgroup>
 <col width="33%">
@@ -512,51 +514,48 @@ scale</td>
 <thead><tr class="header">
 <th>column</th>
 <th>shown as</th>
-<th>facet label</th>
+<th>panel</th>
 </tr></thead>
 <tbody>
 <tr class="odd">
-<td>THETA annotated <code>;LOG</code> in the control stream</td>
+<td>THETA annotated <code>;LOG</code>
+</td>
 <td>
-<code>exp(θ)</code>, natural scale</td>
-<td><code>THETA1 [natural]</code></td>
+<code>exp(θ)</code> — the scale you report</td>
+<td><code>CL</code></td>
 </tr>
 <tr class="even">
-<td>THETA annotated <code>;RATIO</code>, or unannotated</td>
+<td>THETA annotated <code>;RATIO</code>, or with no transform field</td>
 <td>as estimated</td>
-<td><code>THETA2</code></td>
+<td><code>V1</code></td>
 </tr>
 <tr class="odd">
-<td>diagonal OMEGA / SIGMA</td>
-<td>CV%, <code>100·sqrt(exp(ω²)−1)</code>
-</td>
-<td><code>OMEGA.1.1. [CV%]</code></td>
-</tr>
-<tr class="even">
-<td>off-diagonal OMEGA</td>
-<td>as estimated</td>
-<td><code>OMEGA.2.1.</code></td>
+<td>OMEGA / SIGMA</td>
+<td><strong>always as NONMEM wrote them</strong></td>
+<td><code>IIV_CL</code></td>
 </tr>
 </tbody>
 </table>
-<p>The dotted names are not a typo. <code>OMEGA(1,1)</code> is not a
-syntactic column name in R, so reading the <code>.ext</code> table
-converts it to <code>OMEGA.1.1.</code>, and that is what the facet
-strips show.</p>
-<p>The annotations come from the fourth semicolon-separated field of
-each <code>$THETA</code> line — <code>0.5 ; CL ; L/h ; LOG</code>. They
-are matched to the <code>.ext</code> columns by position, so
-<strong>every</strong> <code>$THETA</code> line needs its
-<code>; NAME ; UNIT ; TRANS</code> comment: an unannotated line is not
-parsed and would shift every annotation after it onto the wrong
-parameter.</p>
-<p>The function refuses to guess. If the control stream cannot be read,
-or if the number of annotated <code>$THETA</code> lines does not match
-the number of THETA columns in the <code>.ext</code>, it warns and
-leaves all THETAs as estimated. The CV% conversion is structural and
-still applies in both cases.</p>
-<p><code>transform = FALSE</code> plots the <code>.ext</code> values
-untouched.</p>
+<p>Variances are never converted. A CV% in the parameter table is a
+rendering choice for a final estimate; a trajectory is for watching a
+number settle, and that is easier against the value the estimator is
+actually moving.</p>
+<p>Both the names and the log flag come from the record’s own comment —
+<code>0.5 ; CL ; L/h ; LOG</code> gives the name <code>CL</code> and the
+transform <code>LOG</code>. Anything the model does not declare falls
+back to the <code>.ext</code> itself, so an unannotated
+<code>$OMEGA</code> keeps panels called <code>OMEGA.1.1.</code> (not a
+typo: <code>OMEGA(1,1)</code> is not a valid column name in R, so
+reading the table converts it).</p>
+<p>Annotations are matched to columns <strong>by position</strong>,
+which is only sound when the counts agree — a line with no
+<code>;</code> comment is not parsed at all, and would shift every name
+after it onto the wrong parameter. Each record is therefore checked on
+its own and skipped whole on a mismatch, with a warning naming it. A
+fully annotated <code>$THETA</code> still gets its names when a
+<code>BLOCK()</code> <code>$OMEGA</code> cannot.</p>
+<p><code>transform = FALSE</code> plots the <code>.ext</code> exactly as
+written — raw values, and raw column names.</p>
 </div>
 <div class="section level4">
 <h4 id="four-things-the-plot-does-not-show">Four things the plot does not show<a class="anchor" aria-label="anchor" href="#four-things-the-plot-does-not-show"></a>
@@ -603,8 +602,11 @@ listing the columns that are.</p>
 <p>Naming a <em>parameter</em> column promotes it to the leading panel
 in place of the objective function, which is a way to put one
 parameter’s trajectory first when that is what you are chasing. It is
-still rescaled by <code>transform</code> like any other panel, and it is
-not repeated further down.</p>
+named and rescaled by <code>transform</code> like any other panel, and
+it is not repeated further down. Note that <code>obj_var</code> takes
+the <code>.ext</code> column name — <code>THETA1</code>, not
+<code>CL</code> — since it selects the column before the annotations are
+read.</p>
 <p>The returned object is an ordinary <code>ggplot</code>, so it takes
 the usual additions:</p>
 <div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
@@ -621,10 +623,17 @@ the usual additions:</p>
 <span></span>
 <span><span class="fu"><a href="../reference/model_report.html">model_report</a></span><span class="op">(</span>model_names <span class="op">=</span> <span class="st">"run28"</span>, spec_pk <span class="op">=</span> <span class="va">spec_pk</span><span class="op">)</span></span>
 <span><span class="fu"><a href="../reference/plot_nonmem_iterations.html">plot_nonmem_iterations</a></span><span class="op">(</span><span class="st">"run28"</span><span class="op">)</span></span></code></pre></div>
-<p>With <code>transform = TRUE</code> the panels are on the table’s
-scale, so an IIV reported as 52.2 CV% in the table is the panel labelled
-<code>OMEGA.1.1. [CV%]</code> ending near 52. When the two disagree, the
-run did not converge where the report implies.</p>
+<p>Both read the same <code>$THETA</code>, <code>$OMEGA</code> and
+<code>$SIGMA</code> comments, so the panels carry the names you already
+recognise from the table — <code>CL</code> next to
+<code>CL/F (L/h)</code>, not <code>THETA1</code>. The structural
+parameters line up directly: a clearance reported as 121.85 is the
+<code>CL</code> panel settling near 121.85, because both apply the same
+<code>;LOG</code> back-transform.</p>
+<p>The variance rows are where they differ, deliberately. The table
+reports IIV as CV%; the panel shows the OMEGA the estimator was moving.
+A CV% of 52.2 is an OMEGA near 0.25 — related, but do not expect the two
+numbers to match on sight.</p>
 <hr>
 </div>
 <div class="section level3">

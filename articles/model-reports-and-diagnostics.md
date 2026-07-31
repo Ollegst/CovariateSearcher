@@ -244,34 +244,38 @@ estimate alone.
 
 #### What `transform` does
 
-`transform = TRUE` puts each trajectory on the same scale
-[`model_report()`](https://ollegst.github.io/CovariateSearcher/reference/model_report.md)
-uses, so the plot and the table agree:
+`transform = TRUE` uses what your control stream already declares about
+its own parameters. Nothing is inferred: if the model says a THETA is on
+the log scale, it is plotted on the natural one; if it names a
+parameter, the panel carries that name.
 
-| column | shown as | facet label |
+| column | shown as | panel |
 |----|----|----|
-| THETA annotated `;LOG` in the control stream | `exp(θ)`, natural scale | `THETA1 [natural]` |
-| THETA annotated `;RATIO`, or unannotated | as estimated | `THETA2` |
-| diagonal OMEGA / SIGMA | CV%, `100·sqrt(exp(ω²)−1)` | `OMEGA.1.1. [CV%]` |
-| off-diagonal OMEGA | as estimated | `OMEGA.2.1.` |
+| THETA annotated `;LOG` | `exp(θ)` — the scale you report | `CL` |
+| THETA annotated `;RATIO`, or with no transform field | as estimated | `V1` |
+| OMEGA / SIGMA | **always as NONMEM wrote them** | `IIV_CL` |
 
-The dotted names are not a typo. `OMEGA(1,1)` is not a syntactic column
-name in R, so reading the `.ext` table converts it to `OMEGA.1.1.`, and
-that is what the facet strips show.
+Variances are never converted. A CV% in the parameter table is a
+rendering choice for a final estimate; a trajectory is for watching a
+number settle, and that is easier against the value the estimator is
+actually moving.
 
-The annotations come from the fourth semicolon-separated field of each
-`$THETA` line — `0.5 ; CL ; L/h ; LOG`. They are matched to the `.ext`
-columns by position, so **every** `$THETA` line needs its
-`; NAME ; UNIT ; TRANS` comment: an unannotated line is not parsed and
-would shift every annotation after it onto the wrong parameter.
+Both the names and the log flag come from the record’s own comment —
+`0.5 ; CL ; L/h ; LOG` gives the name `CL` and the transform `LOG`.
+Anything the model does not declare falls back to the `.ext` itself, so
+an unannotated `$OMEGA` keeps panels called `OMEGA.1.1.` (not a typo:
+`OMEGA(1,1)` is not a valid column name in R, so reading the table
+converts it).
 
-The function refuses to guess. If the control stream cannot be read, or
-if the number of annotated `$THETA` lines does not match the number of
-THETA columns in the `.ext`, it warns and leaves all THETAs as
-estimated. The CV% conversion is structural and still applies in both
-cases.
+Annotations are matched to columns **by position**, which is only sound
+when the counts agree — a line with no `;` comment is not parsed at all,
+and would shift every name after it onto the wrong parameter. Each
+record is therefore checked on its own and skipped whole on a mismatch,
+with a warning naming it. A fully annotated `$THETA` still gets its
+names when a `BLOCK()` `$OMEGA` cannot.
 
-`transform = FALSE` plots the `.ext` values untouched.
+`transform = FALSE` plots the `.ext` exactly as written — raw values,
+and raw column names.
 
 #### Four things the plot does not show
 
@@ -307,8 +311,10 @@ error listing the columns that are.
 
 Naming a *parameter* column promotes it to the leading panel in place of
 the objective function, which is a way to put one parameter’s trajectory
-first when that is what you are chasing. It is still rescaled by
+first when that is what you are chasing. It is named and rescaled by
 `transform` like any other panel, and it is not repeated further down.
+Note that `obj_var` takes the `.ext` column name — `THETA1`, not `CL` —
+since it selects the column before the annotations are read.
 
 The returned object is an ordinary `ggplot`, so it takes the usual
 additions:
@@ -331,10 +337,16 @@ model_report(model_names = "run28", spec_pk = spec_pk)
 plot_nonmem_iterations("run28")
 ```
 
-With `transform = TRUE` the panels are on the table’s scale, so an IIV
-reported as 52.2 CV% in the table is the panel labelled
-`OMEGA.1.1. [CV%]` ending near 52. When the two disagree, the run did
-not converge where the report implies.
+Both read the same `$THETA`, `$OMEGA` and `$SIGMA` comments, so the
+panels carry the names you already recognise from the table — `CL` next
+to `CL/F (L/h)`, not `THETA1`. The structural parameters line up
+directly: a clearance reported as 121.85 is the `CL` panel settling near
+121.85, because both apply the same `;LOG` back-transform.
+
+The variance rows are where they differ, deliberately. The table reports
+IIV as CV%; the panel shows the OMEGA the estimator was moving. A CV% of
+52.2 is an OMEGA near 0.25 — related, but do not expect the two numbers
+to match on sight.
 
 ------------------------------------------------------------------------
 

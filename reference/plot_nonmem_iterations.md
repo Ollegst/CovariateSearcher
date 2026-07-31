@@ -29,14 +29,15 @@ plot_nonmem_iterations(
 
 - transform:
 
-  Logical. Show parameters on their reported scale rather than as
-  written in the .ext file (default: TRUE). A THETA annotated `;LOG` in
-  the control stream is exponentiated, and a diagonal OMEGA/SIGMA is
-  converted to CV% - the same rules
-  [`model_report()`](https://ollegst.github.io/CovariateSearcher/reference/model_report.md)
-  applies - so the trajectories and the parameter table agree.
-  Off-diagonal elements and unannotated THETAs are unchanged. `FALSE`
-  plots the raw .ext values.
+  Logical. Use whatever the control stream declares about its own
+  parameters (default: TRUE). Each panel is titled with the parameter's
+  name from its `$THETA`/`$OMEGA`/`$SIGMA` comment, and a THETA
+  annotated `;LOG` is exponentiated so it is plotted on the scale it is
+  reported on. `;RATIO` and unannotated THETAs are plotted as estimated,
+  and OMEGA/SIGMA are always shown as NONMEM wrote them. Anything the
+  model does not declare falls back to the .ext, so an unannotated
+  record keeps names like `THETA1` and `OMEGA.1.1.`. `FALSE` plots the
+  .ext exactly as written - raw values and raw column names.
 
 - skip_iterations:
 
@@ -74,18 +75,19 @@ The function:
 
 - Adjusts BURN iteration numbers for continuous display
 
-- Rescales parameters when `transform = TRUE`
+- Names and rescales parameters when `transform = TRUE`
 
 - Creates faceted plots for each parameter and `obj_var`
 
-`transform = TRUE` reads the `$THETA` annotations from the control
-stream and aligns them to the .ext THETA columns by position, the same
-assumption
+`transform = TRUE` matches the control stream's annotations to the .ext
+columns by position, the same assumption
 [`model_report()`](https://ollegst.github.io/CovariateSearcher/reference/model_report.md)
-makes. Every `$THETA` line therefore needs its `; NAME ; UNIT ; TRANS`
-comment: an unannotated line is not parsed, which would shift the
-alignment. When the two counts disagree the function warns and leaves
-THETAs as estimated rather than rescaling the wrong one.
+makes. Every line of a record therefore needs its
+`; NAME ; UNIT ; TRANS` comment: a line without one is not parsed at
+all, and would shift every name after it onto the wrong parameter. Each
+record is checked on its own and skipped whole when the counts disagree,
+so a fully annotated `$THETA` is still named when a `BLOCK()` `$OMEGA`
+cannot be.
 
 ## Examples
 
