@@ -112,6 +112,74 @@ read_ext_iterations <- function(ext_file) {
 }
 
 
+# Put iteration columns on the scale the parameter table reports: a THETA
+# annotated ';LOG' in the control stream becomes exp(theta), and a diagonal
+# OMEGA/SIGMA becomes CV% = 100*sqrt(exp(v)-1). Off-diagonal elements and
+# THETAs without a LOG annotation are left as estimated. Returns the data plus
+# facet labels marking which columns were rescaled.
+#' @keywords internal
+#' @noRd
+.transform_iteration_columns <- function(ext_data, value_cols, model_name,
+                                         models_dir, n_theta_ext) {
+
+  labels <- stats::setNames(value_cols, value_cols)
+
+  # suppressWarnings: extract_params() warns from an internal min() whenever the
+  # control stream's last record is $THETA/$OMEGA/$SIGMA. Upstream noise, not
+  # something the caller of a plot can act on.
+  theta_trans <- tryCatch(
+    suppressWarnings(
+      extract_model_params(model_name, models_folder = models_dir)$THETAS$trans
+    ),
+    error = function(e) NULL
+  )
+  if (is.null(theta_trans)) {
+    warning(sprintf(
+      paste("Control stream for '%s' could not be read; LOG-scale THETAs are",
+            "shown as estimated. Variances are still shown as CV%%."),
+      model_name
+    ), call. = FALSE)
+    theta_trans <- character(0)
+  }
+
+  # THETA annotations align to the .ext THETA columns by position, so a $THETA
+  # line without its '; NAME ; UNIT ; TRANS' comment is not parsed and shifts
+  # everything after it. Refuse to guess rather than rescale the wrong column.
+  if (length(theta_trans) > 0 && length(theta_trans) != n_theta_ext) {
+    warning(sprintf(
+      paste("'%s' declares %d annotated $THETA line(s) but the .ext holds %d",
+            "THETA column(s); THETAs are shown as estimated. Annotate every",
+            "$THETA line as '; NAME ; UNIT ; TRANS' to enable back-transformation."),
+      model_name, length(theta_trans), n_theta_ext
+    ), call. = FALSE)
+    theta_trans <- character(0)
+  }
+
+  for (nm in value_cols) {
+    is_theta  <- grepl("^THETA\\d+$", nm)
+    theta_idx <- if (is_theta) as.integer(sub("^THETA0*(\\d+)$", "\\1", nm)) else NA_integer_
+
+    # read.table sanitises the .ext header, so OMEGA(1,1) arrives as OMEGA.1.1.
+    diag_parts <- regmatches(
+      nm, regexec("^(OMEGA|SIGMA)[.(](\\d+)[,.](\\d+)[.)]$", nm)
+    )[[1]]
+
+    if (is_theta && length(theta_trans) >= theta_idx &&
+        identical(theta_trans[theta_idx], "LOG")) {
+      ext_data[[nm]] <- exp(ext_data[[nm]])
+      labels[[nm]]   <- paste0(nm, " [natural]")
+
+    } else if (length(diag_parts) == 4L && diag_parts[3] == diag_parts[4]) {
+      v <- ext_data[[nm]]
+      ext_data[[nm]] <- 100 * sqrt(ifelse(exp(v) - 1 >= 0, exp(v) - 1, NA))
+      labels[[nm]]   <- paste0(nm, " [CV%]")
+    }
+  }
+
+  list(data = ext_data, labels = labels)
+}
+
+
 #' Plot NONMEM Iteration Data
 #'
 #' @description Creates a multi-panel plot showing the trajectory of objective function
@@ -119,20 +187,39 @@ read_ext_iterations <- function(ext_file) {
 #'   problems, convergence issues, and parameter stability.
 #' @param model_name Character. Name of the model (e.g., "run123")
 #' @param models_dir Character. Directory containing model files (default: "models")
-#' @param transform Logical. Apply transformations to parameters (default: TRUE)
+#' @param transform Logical. Show parameters on their reported scale rather than as
+#'   written in the .ext file (default: TRUE). A THETA annotated \code{;LOG} in the
+#'   control stream is exponentiated, and a diagonal OMEGA/SIGMA is converted to
+#'   CV% - the same rules \code{model_report()} applies - so the trajectories and the
+#'   parameter table agree. Off-diagonal elements and unannotated THETAs are unchanged.
+#'   \code{FALSE} plots the raw .ext values.
 #' @param skip_iterations Integer. Number of initial iterations to skip (default: 0)
-#' @param obj_var Character. Variable to plot (default: "OBJ" for objective function)
-#' @param max_iterations Integer. Maximum number of iterations to display (default: 100)
+#' @param obj_var Character. Column plotted in the leading panel (default: "OBJ").
+#'   Must name a column of the .ext file; \code{read_ext_iterations()} standardises
+#'   any objective column to \code{"OBJ"}, so the default fits every estimation method.
+#' @param max_iterations Integer. Upper bound on the iteration NUMBER displayed
+#'   (keeps \code{ITERATION < max_iterations}), not a count of points (default: 100)
 #' @return ggplot2 object with faceted plots showing parameter trajectories
 #' @details
 #' The function:
 #' \itemize{
 #'   \item Reads the .ext file for the specified model
 #'   \item Filters to iteration data (ITER and BURN types)
+#'   \item Keeps a single estimation step - the highest-numbered \code{$EST}
+#'     that is not an evaluation step
 #'   \item Removes fixed parameters (those that don't change)
 #'   \item Adjusts BURN iteration numbers for continuous display
-#'   \item Creates faceted plots for each parameter and OBJ
+#'   \item Rescales parameters when \code{transform = TRUE}
+#'   \item Creates faceted plots for each parameter and \code{obj_var}
 #' }
+#'
+#' \code{transform = TRUE} reads the \code{$THETA} annotations from the control
+#' stream and aligns them to the .ext THETA columns by position, the same
+#' assumption \code{model_report()} makes. Every \code{$THETA} line therefore
+#' needs its \code{; NAME ; UNIT ; TRANS} comment: an unannotated line is not
+#' parsed, which would shift the alignment. When the two counts disagree the
+#' function warns and leaves THETAs as estimated rather than rescaling the
+#' wrong one.
 #' @examples
 #' \dontrun{
 #' # Plot iteration data for run123
@@ -176,6 +263,19 @@ plot_nonmem_iterations <- function(model_name,
     stop("No data found in ext file or file is incomplete")
   }
 
+  if (!is.character(obj_var) || length(obj_var) != 1 || !obj_var %in% names(ext_data)) {
+    stop(sprintf(
+      "obj_var '%s' is not a column of %s. Available columns: %s",
+      paste(obj_var, collapse = ", "),
+      basename(ext_file_path),
+      paste(names(ext_data), collapse = ", ")
+    ))
+  }
+
+  if (!is.logical(transform) || length(transform) != 1 || is.na(transform)) {
+    stop("transform must be TRUE or FALSE")
+  }
+
   # Filter to iteration data only
   TYPE <- NULL  # To avoid R CMD check notes
   ext_data <- ext_data[ext_data$TYPE %in% c("ITER", "BURN"), ]
@@ -201,8 +301,15 @@ plot_nonmem_iterations <- function(model_name,
   # Filter to selected estimation step
   ext_data <- ext_data[ext_data$EST.NO %in% est_no, ]
 
-  # Identify parameter columns
+  # Identify parameter columns. OBJ marks the boundary between the parameter
+  # columns and the metadata the reader appends, whichever column obj_var plots.
   param_names <- names(ext_data)[2:(match("OBJ", names(ext_data)) - 1)]
+  param_names <- setdiff(param_names, obj_var)
+
+  # Counted from the whole .ext, before constant columns are dropped and
+  # regardless of obj_var, so it matches the number of $THETA records the
+  # control stream should declare.
+  n_theta_ext <- sum(grepl("^THETA\\d+$", names(ext_data)))
 
   # Remove fixed parameters (those that don't change)
   for (param in param_names) {
@@ -237,7 +344,18 @@ plot_nonmem_iterations <- function(model_name,
 
   # Update parameter names list after removing fixed parameters
   param_names <- names(ext_data)[names(ext_data) %in% param_names]
-  plot_vars <- c("OBJ", param_names)
+  plot_vars <- c(obj_var, param_names)
+
+  var_labels <- stats::setNames(plot_vars, plot_vars)
+  if (transform) {
+    # Every plotted column, obj_var included: a THETA or variance promoted to the
+    # leading panel is rescaled like any other, and "OBJ" matches neither rule.
+    transformed <- .transform_iteration_columns(
+      ext_data, plot_vars, model_name, models_dir, n_theta_ext
+    )
+    ext_data <- transformed$data
+    var_labels[names(transformed$labels)] <- transformed$labels
+  }
 
   # Reshape data for plotting
   plot_data <- tidyr::pivot_longer(
@@ -247,8 +365,12 @@ plot_nonmem_iterations <- function(model_name,
     values_to = "value"
   )
 
-  # Set factor levels to control plot order
-  plot_data$variable <- factor(plot_data$variable, levels = plot_vars)
+  # Set factor levels to control plot order; labels carry the applied scale
+  plot_data$variable <- factor(
+    plot_data$variable,
+    levels = plot_vars,
+    labels = unname(var_labels[plot_vars])
+  )
 
   # Create plot
   # Declare variables to avoid R CMD check notes

@@ -18,13 +18,21 @@ plot_nonmem_iterations(
 
 \item{models_dir}{Character. Directory containing model files (default: "models")}
 
-\item{transform}{Logical. Apply transformations to parameters (default: TRUE)}
+\item{transform}{Logical. Show parameters on their reported scale rather than as
+written in the .ext file (default: TRUE). A THETA annotated \code{;LOG} in the
+control stream is exponentiated, and a diagonal OMEGA/SIGMA is converted to
+CV\% - the same rules \code{model_report()} applies - so the trajectories and the
+parameter table agree. Off-diagonal elements and unannotated THETAs are unchanged.
+\code{FALSE} plots the raw .ext values.}
 
 \item{skip_iterations}{Integer. Number of initial iterations to skip (default: 0)}
 
-\item{obj_var}{Character. Variable to plot (default: "OBJ" for objective function)}
+\item{obj_var}{Character. Column plotted in the leading panel (default: "OBJ").
+Must name a column of the .ext file; \code{read_ext_iterations()} standardises
+any objective column to \code{"OBJ"}, so the default fits every estimation method.}
 
-\item{max_iterations}{Integer. Maximum number of iterations to display (default: 100)}
+\item{max_iterations}{Integer. Upper bound on the iteration NUMBER displayed
+(keeps \code{ITERATION < max_iterations}), not a count of points (default: 100)}
 }
 \value{
 ggplot2 object with faceted plots showing parameter trajectories
@@ -39,10 +47,21 @@ The function:
 \itemize{
 \item Reads the .ext file for the specified model
 \item Filters to iteration data (ITER and BURN types)
+\item Keeps a single estimation step - the highest-numbered \code{$EST}
+that is not an evaluation step
 \item Removes fixed parameters (those that don't change)
 \item Adjusts BURN iteration numbers for continuous display
-\item Creates faceted plots for each parameter and OBJ
+\item Rescales parameters when \code{transform = TRUE}
+\item Creates faceted plots for each parameter and \code{obj_var}
 }
+
+\code{transform = TRUE} reads the \code{$THETA} annotations from the control
+stream and aligns them to the .ext THETA columns by position, the same
+assumption \code{model_report()} makes. Every \code{$THETA} line therefore
+needs its \code{; NAME ; UNIT ; TRANS} comment: an unannotated line is not
+parsed, which would shift the alignment. When the two counts disagree the
+function warns and leaves THETAs as estimated rather than rescaling the
+wrong one.
 }
 \examples{
 \dontrun{
