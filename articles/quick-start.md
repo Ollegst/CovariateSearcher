@@ -276,7 +276,7 @@ carries on:
 ``` r
 
 results <- continue_search(
-  checkpoint = "models/scm_rds/07_forward_selection_complete.rds",
+  checkpoint = "models/scm_rds/05_forward_done.rds",
   scm_type   = "selective",
   full_scm   = TRUE
 )
@@ -287,10 +287,19 @@ results <- continue_search(
 ### Testing an extra covariate afterwards
 
 To try a covariate that was never in the original table, add it to the
-live search state - then the search’s history, step numbers and ΔOFV are
-all kept:
+search state - then the search’s history, step numbers and ΔOFV are all
+kept. This is usually a new session, so load the state back from the
+latest checkpoint.
+
+`base_model_id` is the model the search finished on. It is printed when
+the search ends (`🎯 Final model: run42`) and by
+`print_scm_results_table(ss)`; the state itself has no field for it, so
+name it explicitly:
 
 ``` r
+
+spec <- yspec::ys_load("data/spec/lookup.yml")   # from the setup above
+data <- read.csv("data/derived/analysis.csv")
 
 cov_smk <- build_covariate_reference_table(
   data = data, id = "ID", time = "TIME",
@@ -298,17 +307,21 @@ cov_smk <- build_covariate_reference_table(
   yaml_data = spec
 )
 
-ss <- add_covariates_to_search(results$search_state, cov_smk)
+ss <- load_search_state("models/scm_rds/06_final_complete.rds")
+ss <- add_covariates_to_search(ss, cov_smk)
 
-res <- add_covariate_to_model(
+add <- add_covariate_to_model(
   ss,
-  base_model_id = results$final_model,
+  base_model_id = "run42",               # the model the search finished on
   covariate_tag = "beta_SMK_V",
   step_number   = max(ss$search_database$step_number, na.rm = TRUE) + 1,
   phase         = "individual_testing"   # not part of the search itself
 )
 
-bbr::submit_model(bbr::read_model(file.path(ss$models_folder, res$model_name)),
+ss <- add$search_state                   # the state lives inside the result
+stopifnot(add$status == "success")
+
+bbr::submit_model(bbr::read_model(file.path(ss$models_folder, add$model_name)),
                   .bbi_args = list(threads = 12))
 ```
 

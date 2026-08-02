@@ -423,8 +423,42 @@ initialization or per call here.</p>
 <div class="section level3">
 <h3 id="test-extra-covariates-on-the-final-model">7. Test extra covariates on the final model<a class="anchor" aria-label="anchor" href="#test-extra-covariates-on-the-final-model"></a>
 </h3>
-<p>Same two calls, pointed at the final model:</p>
+<p>This is usually a new session, so load the state back first.
+Checkpoints are written to <code>&lt;models_folder&gt;/scm_rds/</code>
+as <code>NN_phase_event.rds</code>: <code>NN</code> is the step,
+<code>phase</code> is <code>forward</code>, <code>backward</code>,
+<code>redemption</code> or <code>final</code>, and <code>event</code> is
+<code>created</code>, <code>done</code>, <code>complete</code>,
+<code>running</code> or <code>error</code>. The step number leads and is
+zero-padded, so the folder sorts chronologically and the last name is
+the most recent:</p>
 <div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/list.files.html" class="external-link">list.files</a></span><span class="op">(</span><span class="st">"models/scm_rds"</span><span class="op">)</span></span>
+<span><span class="co">#&gt; "01_forward_created.rds"   "01_forward_done.rds"</span></span>
+<span><span class="co">#&gt; "02_forward_created.rds"   "02_forward_done.rds"</span></span>
+<span><span class="co">#&gt; "05_forward_complete.rds"  "06_backward_created.rds"</span></span>
+<span><span class="co">#&gt; "06_backward_done.rds"     "06_backward_complete.rds"</span></span>
+<span><span class="co">#&gt; "06_final_complete.rds"</span></span>
+<span></span>
+<span><span class="va">ss</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/load_search_state.html">load_search_state</a></span><span class="op">(</span><span class="st">"models/scm_rds/06_final_complete.rds"</span><span class="op">)</span></span>
+<span><span class="va">ss</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/update_all_model_statuses.html">update_all_model_statuses</a></span><span class="op">(</span><span class="va">ss</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">data</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/utils/read.table.html" class="external-link">read.csv</a></span><span class="op">(</span><span class="st">"data/derived/analysis.csv"</span><span class="op">)</span>    <span class="co"># section 1; needed below</span></span>
+<span><span class="va">spec</span> <span class="op">&lt;-</span> <span class="fu">yspec</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/yspec/man/ys_load.html" class="external-link">ys_load</a></span><span class="op">(</span><span class="st">"data/spec/lookup.yml"</span><span class="op">)</span></span></code></pre></div>
+<p><code><a href="../reference/load_search_state.html">load_search_state()</a></code> needs the full path;
+<code><a href="../reference/save_search_state.html">save_search_state()</a></code> accepts a bare file name and writes it
+to <code>&lt;models_folder&gt;/scm_rds/</code>.</p>
+<p>A checkpoint holds the search state and nothing else, so the list
+<code><a href="../reference/run_automated_scm_testing.html">run_automated_scm_testing()</a></code> returned is gone -
+<code>final_model</code> with it. Take the name from the search’s own
+output:</p>
+<pre><code>🎯 Final model: run42</code></pre>
+<p>or reprint it from the database with
+<code>print_scm_results_table(ss)</code>. There is no
+<code>ss$final_model</code>: the state carries the database, not the
+search’s verdict.</p>
+<p>Then the same two calls, pointed at that model:</p>
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">cov_smk</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/build_covariate_reference_table.html">build_covariate_reference_table</a></span><span class="op">(</span></span>
 <span>  data <span class="op">=</span> <span class="va">data</span>, id <span class="op">=</span> <span class="st">"ID"</span>, time <span class="op">=</span> <span class="st">"TIME"</span>,</span>
 <span>  Parameter <span class="op">=</span> <span class="st">"V1"</span>, Covariate <span class="op">=</span> <span class="st">"SMK"</span>, Category <span class="op">=</span> <span class="st">"cat"</span>, Formula <span class="op">=</span> <span class="st">"linear"</span>,</span>
@@ -433,20 +467,27 @@ initialization or per call here.</p>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/write.table.html" class="external-link">write.csv</a></span><span class="op">(</span><span class="va">cov_smk</span>, <span class="st">"data/derived/covariate_search_smk.csv"</span>, row.names <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">ss</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/add_covariates_to_search.html">add_covariates_to_search</a></span><span class="op">(</span><span class="va">res</span><span class="op">$</span><span class="va">search_state</span>,</span>
-<span>                               <span class="st">"data/derived/covariate_search_smk.csv"</span><span class="op">)</span></span>
+<span><span class="va">ss</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/add_covariates_to_search.html">add_covariates_to_search</a></span><span class="op">(</span><span class="va">ss</span>, <span class="st">"data/derived/covariate_search_smk.csv"</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">add</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/add_covariate_to_model.html">add_covariate_to_model</a></span><span class="op">(</span></span>
 <span>  <span class="va">ss</span>,</span>
-<span>  base_model_id <span class="op">=</span> <span class="va">res</span><span class="op">$</span><span class="va">final_model</span>,</span>
+<span>  base_model_id <span class="op">=</span> <span class="st">"run42"</span>,          <span class="co"># the model the search finished on</span></span>
 <span>  covariate_tag <span class="op">=</span> <span class="st">"beta_SMK_V1"</span>,</span>
 <span>  step_number   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="va">ss</span><span class="op">$</span><span class="va">search_database</span><span class="op">$</span><span class="va">step_number</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span> <span class="op">+</span> <span class="fl">1</span>,</span>
 <span>  phase         <span class="op">=</span> <span class="st">"individual_testing"</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">ss</span> <span class="op">&lt;-</span> <span class="va">add</span><span class="op">$</span><span class="va">search_state</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/stopifnot.html" class="external-link">stopifnot</a></span><span class="op">(</span><span class="va">add</span><span class="op">$</span><span class="va">status</span> <span class="op">==</span> <span class="st">"success"</span><span class="op">)</span></span>
+<span></span>
 <span><span class="fu">bbr</span><span class="fu">::</span><span class="fu"><a href="https://metrumresearchgroup.github.io/bbr/reference/submit_model.html" class="external-link">submit_model</a></span><span class="op">(</span><span class="fu">bbr</span><span class="fu">::</span><span class="fu"><a href="https://metrumresearchgroup.github.io/bbr/reference/read_model.html" class="external-link">read_model</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="va">ss</span><span class="op">$</span><span class="va">models_folder</span>, <span class="va">add</span><span class="op">$</span><span class="va">model_name</span><span class="op">)</span><span class="op">)</span>,</span>
 <span>                  .bbi_args <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>threads <span class="op">=</span> <span class="fl">12</span><span class="op">)</span>, .overwrite <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
+<p><code><a href="../reference/add_covariate_to_model.html">add_covariate_to_model()</a></code> returns the call’s result, not
+a state - the state is one element inside it, at
+<code>add$search_state</code>, which is why the assignment is a separate
+line. On a failure it returns <code>status = "error"</code> and leaves
+the state untouched, so without the check the submit line fails on a
+<code>NULL</code> model name rather than on the real reason.</p>
 <div class="section level4">
 <h4 id="step-numbers">Step numbers<a class="anchor" aria-label="anchor" href="#step-numbers"></a>
 </h4>
@@ -455,7 +496,7 @@ search assigns one per step, so all models tested against the same
 parent share it. A manual add takes whatever you pass -
 <code>max(...) + 1</code> above puts the extra tests in a step of their
 own, after the search.</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/table.html" class="external-link">table</a></span><span class="op">(</span><span class="va">ss</span><span class="op">$</span><span class="va">search_database</span><span class="op">$</span><span class="va">step_number</span>, <span class="va">ss</span><span class="op">$</span><span class="va">search_database</span><span class="op">$</span><span class="va">phase</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co">## models belonging to one step</span></span>
@@ -467,31 +508,17 @@ own, after the search.</p>
 </h4>
 <p>Statuses and OFVs come from the NONMEM output files, so refresh them
 once the runs finish:</p>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">ss</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/update_all_model_statuses.html">update_all_model_statuses</a></span><span class="op">(</span><span class="va">ss</span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu"><a href="../reference/view_comprehensive_table.html">view_comprehensive_table</a></span><span class="op">(</span><span class="va">ss</span><span class="op">)</span>                 <span class="co"># printed table</span></span>
 <span><span class="va">tab</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/create_comprehensive_table.html">create_comprehensive_table</a></span><span class="op">(</span><span class="va">ss</span><span class="op">)</span>        <span class="co"># same thing as a data frame</span></span></code></pre></div>
-<p>In a new session <code>ss</code> is gone - load it back from a
-checkpoint first. They are written to
-<code>&lt;models_folder&gt;/scm_rds/</code> as
-<code>NN_phase_event.rds</code>, zero-padded by step, so the last one
-alphabetically is the most recent:</p>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/list.files.html" class="external-link">list.files</a></span><span class="op">(</span><span class="st">"models/scm_rds"</span><span class="op">)</span></span>
-<span><span class="co">#&gt; "00_base_complete.rds" "01_forward_step_complete.rds" ...</span></span>
-<span></span>
-<span><span class="va">ss</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/load_search_state.html">load_search_state</a></span><span class="op">(</span><span class="st">"models/scm_rds/07_forward_selection_complete.rds"</span><span class="op">)</span></span>
-<span><span class="va">ss</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/update_all_model_statuses.html">update_all_model_statuses</a></span><span class="op">(</span><span class="va">ss</span><span class="op">)</span></span></code></pre></div>
-<p><code><a href="../reference/load_search_state.html">load_search_state()</a></code> needs the full path;
-<code><a href="../reference/save_search_state.html">save_search_state()</a></code> accepts a bare file name and writes it
-to <code>&lt;models_folder&gt;/scm_rds/</code>.</p>
 <p>The table has one row per model: <code>model_name</code>, parent,
 <code>step</code> (<code>Base</code>, <code>Step 3</code>,
 <code>Step 3 (Retry)</code>), <code>changes</code> (the covariate added
 or removed), <code>status</code>, OFV, ΔOFV and the parameter count.</p>
 <p>For the ΔOFV-versus-threshold view of a search:</p>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/print_scm_results_table.html">print_scm_results_table</a></span><span class="op">(</span><span class="va">ss</span><span class="op">)</span></span></code></pre></div>
 <p><code>phase = "individual_testing"</code> marks the row as a one-off
 test rather than a step of the search.</p>

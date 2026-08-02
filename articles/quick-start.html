@@ -467,7 +467,7 @@ at the latest checkpoint. It works out where the search stopped and
 carries on:</p>
 <div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/continue_search.html">continue_search</a></span><span class="op">(</span></span>
-<span>  checkpoint <span class="op">=</span> <span class="st">"models/scm_rds/07_forward_selection_complete.rds"</span>,</span>
+<span>  checkpoint <span class="op">=</span> <span class="st">"models/scm_rds/05_forward_done.rds"</span>,</span>
 <span>  scm_type   <span class="op">=</span> <span class="st">"selective"</span>,</span>
 <span>  full_scm   <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -477,26 +477,38 @@ carries on:</p>
 <h3 id="testing-an-extra-covariate-afterwards">Testing an extra covariate afterwards<a class="anchor" aria-label="anchor" href="#testing-an-extra-covariate-afterwards"></a>
 </h3>
 <p>To try a covariate that was never in the original table, add it to
-the live search state - then the search’s history, step numbers and ΔOFV
-are all kept:</p>
+the search state - then the search’s history, step numbers and ΔOFV are
+all kept. This is usually a new session, so load the state back from the
+latest checkpoint.</p>
+<p><code>base_model_id</code> is the model the search finished on. It is
+printed when the search ends (<code>🎯 Final model: run42</code>) and by
+<code>print_scm_results_table(ss)</code>; the state itself has no field
+for it, so name it explicitly:</p>
 <div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">cov_smk</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/build_covariate_reference_table.html">build_covariate_reference_table</a></span><span class="op">(</span></span>
+<code class="sourceCode R"><span><span class="va">spec</span> <span class="op">&lt;-</span> <span class="fu">yspec</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/yspec/man/ys_load.html" class="external-link">ys_load</a></span><span class="op">(</span><span class="st">"data/spec/lookup.yml"</span><span class="op">)</span>   <span class="co"># from the setup above</span></span>
+<span><span class="va">data</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/utils/read.table.html" class="external-link">read.csv</a></span><span class="op">(</span><span class="st">"data/derived/analysis.csv"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">cov_smk</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/build_covariate_reference_table.html">build_covariate_reference_table</a></span><span class="op">(</span></span>
 <span>  data <span class="op">=</span> <span class="va">data</span>, id <span class="op">=</span> <span class="st">"ID"</span>, time <span class="op">=</span> <span class="st">"TIME"</span>,</span>
 <span>  Parameter <span class="op">=</span> <span class="st">"V"</span>, Covariate <span class="op">=</span> <span class="st">"SMK"</span>, Category <span class="op">=</span> <span class="st">"cat"</span>, Formula <span class="op">=</span> <span class="st">"linear"</span>,</span>
 <span>  yaml_data <span class="op">=</span> <span class="va">spec</span></span>
 <span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">ss</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/add_covariates_to_search.html">add_covariates_to_search</a></span><span class="op">(</span><span class="va">results</span><span class="op">$</span><span class="va">search_state</span>, <span class="va">cov_smk</span><span class="op">)</span></span>
+<span><span class="va">ss</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/load_search_state.html">load_search_state</a></span><span class="op">(</span><span class="st">"models/scm_rds/06_final_complete.rds"</span><span class="op">)</span></span>
+<span><span class="va">ss</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/add_covariates_to_search.html">add_covariates_to_search</a></span><span class="op">(</span><span class="va">ss</span>, <span class="va">cov_smk</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">res</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/add_covariate_to_model.html">add_covariate_to_model</a></span><span class="op">(</span></span>
+<span><span class="va">add</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/add_covariate_to_model.html">add_covariate_to_model</a></span><span class="op">(</span></span>
 <span>  <span class="va">ss</span>,</span>
-<span>  base_model_id <span class="op">=</span> <span class="va">results</span><span class="op">$</span><span class="va">final_model</span>,</span>
+<span>  base_model_id <span class="op">=</span> <span class="st">"run42"</span>,               <span class="co"># the model the search finished on</span></span>
 <span>  covariate_tag <span class="op">=</span> <span class="st">"beta_SMK_V"</span>,</span>
 <span>  step_number   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="va">ss</span><span class="op">$</span><span class="va">search_database</span><span class="op">$</span><span class="va">step_number</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span> <span class="op">+</span> <span class="fl">1</span>,</span>
 <span>  phase         <span class="op">=</span> <span class="st">"individual_testing"</span>   <span class="co"># not part of the search itself</span></span>
 <span><span class="op">)</span></span>
 <span></span>
-<span><span class="fu">bbr</span><span class="fu">::</span><span class="fu"><a href="https://metrumresearchgroup.github.io/bbr/reference/submit_model.html" class="external-link">submit_model</a></span><span class="op">(</span><span class="fu">bbr</span><span class="fu">::</span><span class="fu"><a href="https://metrumresearchgroup.github.io/bbr/reference/read_model.html" class="external-link">read_model</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="va">ss</span><span class="op">$</span><span class="va">models_folder</span>, <span class="va">res</span><span class="op">$</span><span class="va">model_name</span><span class="op">)</span><span class="op">)</span>,</span>
+<span><span class="va">ss</span> <span class="op">&lt;-</span> <span class="va">add</span><span class="op">$</span><span class="va">search_state</span>                   <span class="co"># the state lives inside the result</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/stopifnot.html" class="external-link">stopifnot</a></span><span class="op">(</span><span class="va">add</span><span class="op">$</span><span class="va">status</span> <span class="op">==</span> <span class="st">"success"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu">bbr</span><span class="fu">::</span><span class="fu"><a href="https://metrumresearchgroup.github.io/bbr/reference/submit_model.html" class="external-link">submit_model</a></span><span class="op">(</span><span class="fu">bbr</span><span class="fu">::</span><span class="fu"><a href="https://metrumresearchgroup.github.io/bbr/reference/read_model.html" class="external-link">read_model</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="va">ss</span><span class="op">$</span><span class="va">models_folder</span>, <span class="va">add</span><span class="op">$</span><span class="va">model_name</span><span class="op">)</span><span class="op">)</span>,</span>
 <span>                  .bbi_args <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>threads <span class="op">=</span> <span class="fl">12</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <hr>
 </div>
