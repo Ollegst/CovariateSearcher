@@ -230,7 +230,41 @@ them once at initialization or per call here.
 
 ## 7. Test extra covariates on the final model
 
-Same two calls, pointed at the final model:
+This is usually a new session, so load the state back first. Checkpoints are
+written to `<models_folder>/scm_rds/` as `NN_phase_event.rds`: `NN` is the step,
+`phase` is `forward`, `backward`, `redemption` or `final`, and `event` is
+`created`, `done`, `complete`, `running` or `error`. The step number leads and
+is zero-padded, so the folder sorts chronologically and the last name is the
+most recent:
+
+```{r reload}
+list.files("models/scm_rds")
+#> "01_forward_created.rds"   "01_forward_done.rds"
+#> "02_forward_created.rds"   "02_forward_done.rds"
+#> "05_forward_complete.rds"  "06_backward_created.rds"
+#> "06_backward_done.rds"     "06_backward_complete.rds"
+#> "06_final_complete.rds"
+
+ss <- load_search_state("models/scm_rds/06_final_complete.rds")
+ss <- update_all_model_statuses(ss)
+
+data <- read.csv("data/derived/analysis.csv")    # section 1; needed below
+spec <- yspec::ys_load("data/spec/lookup.yml")
+```
+
+`load_search_state()` needs the full path; `save_search_state()` accepts a bare
+file name and writes it to `<models_folder>/scm_rds/`.
+
+A checkpoint holds the search state and nothing else, so the list
+`run_automated_scm_testing()` returned is gone - `final_model` with it. Take the
+name from the search's own output:
+
+    🎯 Final model: run42
+
+or reprint it from the database with `print_scm_results_table(ss)`. There is no
+`ss$final_model`: the state carries the database, not the search's verdict.
+
+Then the same two calls, pointed at that model:
 
 ```{r extras}
 cov_smk <- build_covariate_reference_table(
@@ -241,21 +275,28 @@ cov_smk <- build_covariate_reference_table(
 
 write.csv(cov_smk, "data/derived/covariate_search_smk.csv", row.names = FALSE)
 
-ss <- add_covariates_to_search(res$search_state,
-                               "data/derived/covariate_search_smk.csv")
+ss <- add_covariates_to_search(ss, "data/derived/covariate_search_smk.csv")
 
 add <- add_covariate_to_model(
   ss,
-  base_model_id = res$final_model,
+  base_model_id = "run42",          # the model the search finished on
   covariate_tag = "beta_SMK_V1",
   step_number   = max(ss$search_database$step_number, na.rm = TRUE) + 1,
   phase         = "individual_testing"
 )
 
 ss <- add$search_state
+stopifnot(add$status == "success")
+
 bbr::submit_model(bbr::read_model(file.path(ss$models_folder, add$model_name)),
                   .bbi_args = list(threads = 12), .overwrite = TRUE)
 ```
+
+`add_covariate_to_model()` returns the call's result, not a state - the state is
+one element inside it, at `add$search_state`, which is why the assignment is a
+separate line. On a failure it returns `status = "error"` and leaves the state
+untouched, so without the check the submit line fails on a `NULL` model name
+rather than on the real reason.
 
 ### Step numbers
 
@@ -283,21 +324,6 @@ ss <- update_all_model_statuses(ss)
 view_comprehensive_table(ss)                 # printed table
 tab <- create_comprehensive_table(ss)        # same thing as a data frame
 ```
-
-In a new session `ss` is gone - load it back from a checkpoint first. They are
-written to `<models_folder>/scm_rds/` as `NN_phase_event.rds`, zero-padded by
-step, so the last one alphabetically is the most recent:
-
-```{r reload}
-list.files("models/scm_rds")
-#> "00_base_complete.rds" "01_forward_step_complete.rds" ...
-
-ss <- load_search_state("models/scm_rds/07_forward_selection_complete.rds")
-ss <- update_all_model_statuses(ss)
-```
-
-`load_search_state()` needs the full path; `save_search_state()` accepts a bare
-file name and writes it to `<models_folder>/scm_rds/`.
 
 The table has one row per model: `model_name`, parent, `step` (`Base`,
 `Step 3`, `Step 3 (Retry)`), `changes` (the covariate added or removed),
