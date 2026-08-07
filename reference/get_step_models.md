@@ -17,7 +17,8 @@ get_step_models(
   search_state,
   step_number,
   p_value = NULL,
-  rse_threshold = NULL
+  rse_threshold = NULL,
+  phase = c("forward", "backward")
 )
 ```
 
@@ -33,18 +34,27 @@ get_step_models(
 
 - p_value:
 
-  Numeric. P-value for significance (uses forward config if NULL)
+  Numeric. P-value for significance (uses the phase's config if NULL)
 
 - rse_threshold:
 
   Numeric. RSE threshold (uses config if NULL)
 
+- phase:
+
+  Character. Which acceptance rule applies to this step, `"forward"`
+  (default) or `"backward"`. A backward step evaluated with the forward
+  rule reports the wrong models as significant, because the two phases
+  compare `delta_ofv` in opposite directions.
+
 ## Value
 
 List with: `exists` (logical), `step_number`, `base_model` (common
 parent), `models` (all tested), `completed_models`,
-`significant_models`, and `best_model` (highest-ΔOFV significant model,
-or NULL).
+`significant_models`, and `best_model` - the step winner among the
+significant models, or NULL. Which end of the ΔOFV ordering wins depends
+on `phase`: forward takes the largest (the biggest gain in fit),
+backward the smallest (the removal that costs least).
 
 ## Details
 

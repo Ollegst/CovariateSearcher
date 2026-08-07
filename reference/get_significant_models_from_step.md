@@ -10,7 +10,8 @@ get_significant_models_from_step(
   search_state,
   step_number,
   p_value,
-  rse_threshold = NULL
+  rse_threshold = NULL,
+  phase = c("forward", "backward")
 )
 ```
 
@@ -32,6 +33,12 @@ get_significant_models_from_step(
 - rse_threshold:
 
   Numeric. RSE threshold for significance
+
+- phase:
+
+  Character. Which acceptance rule to apply, `"forward"` (default) or
+  `"backward"`. The two are not interchangeable: they store `delta_ofv`
+  with opposite signs and compare it in opposite directions.
 
 ## Value
 
