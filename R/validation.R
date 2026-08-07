@@ -132,6 +132,7 @@ update_model_status_from_files <- function(search_state, model_name, force = FAL
       return(results)
     }
 
+
     # Read LST file - only check Stop Time
     lst_info <- tryCatch({
       lst_content <- .read_listing_lines(lst_file)
@@ -326,22 +327,15 @@ update_model_status_from_files <- function(search_state, model_name, force = FAL
         parent_ofv <- search_state$search_database$ofv[parent_idx[1]]
 
         if (!is.na(parent_ofv)) {
-          # Calculate delta OFV with correct sign convention:
-          # - For FORWARD (add_covariate): delta = parent - child
-          #   Positive delta = child OFV is lower (improvement)
-          # - For BACKWARD (remove_covariate): delta = child - parent
-          #   Positive delta = child OFV is higher (removal worsened model = keep covariate)
-          # .is_removal_model() resolves retry rows to the model they retry, whose
-          # action is the one that names a direction.
-          if (.is_removal_model(search_state, model_name)) {
-            # BACKWARD: child - parent (positive = OFV increased = bad removal)
-            delta_ofv <- file_results$ofv - parent_ofv
-          } else {
-            # FORWARD: parent - child (positive = OFV decreased = good addition)
-            delta_ofv <- parent_ofv - file_results$ofv
-          }
+          # Sign convention is chosen in one place, from the model's own action:
+          # an addition stores parent - child (positive = improvement), a removal
+          # stores child - parent (positive = the removal worsened the fit).
+          delta_ofv <- .signed_delta_ofv(search_state, model_name,
+                                         file_results$ofv, parent_ofv)
 
-          search_state$search_database$delta_ofv[db_idx] <- delta_ofv
+          if (!is.na(delta_ofv)) {
+            search_state$search_database$delta_ofv[db_idx] <- delta_ofv
+          }
         }
       }
     }
@@ -381,9 +375,12 @@ update_model_status_from_files <- function(search_state, model_name, force = FAL
                   step_display, status_icon, model_name, cov_display,
                   parent_ofv, file_results$ofv, delta_ofv))
 
-      # Add RSE warning if high
-      if (!is.na(file_results$rse_max) && file_results$rse_max > 50) {
-        cat(sprintf("    ⚠️  High RSE detected: %.1f%%\n", file_results$rse_max))
+      # Warn against the limit the search will actually judge this model by, so
+      # the monitoring output and the selection decision cannot disagree.
+      rse_limit <- .resolve_rse_threshold(search_state)
+      if (!is.na(file_results$rse_max) && file_results$rse_max > rse_limit) {
+        cat(sprintf("    ⚠️  High RSE detected: %.1f%% (limit %g%%)\n",
+                    file_results$rse_max, rse_limit))
       }
     } else {
       cat(sprintf("%s %s Model %s%s completed: OFV = %.2f\n",

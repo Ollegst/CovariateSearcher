@@ -13,6 +13,51 @@
 }
 
 
+#' Which rows of a search database carry a backward-signed delta_ofv?
+#'
+#' @description Forward selection uses this to keep backward rows out of its
+#'   candidate pools. The two phases store \code{delta_ofv} with opposite sign
+#'   conventions, so a removal that badly worsened the fit reads to the forward
+#'   test as a large improvement. A search that begins with backward elimination
+#'   puts exactly such rows in the database.
+#'
+#'   A row counts as backward if EITHER its \code{phase} says so or its
+#'   \code{action} does, because neither alone is sufficient:
+#'   \itemize{
+#'     \item \code{phase} is overwritten by two paths.
+#'       \code{create_retry_model()} writes \code{"retry"} for a retry of a
+#'       failed removal, and \code{discover_existing_models()} rewrites every
+#'       row it rebuilds from disk to \code{"manual"}.
+#'     \item \code{action} is what \code{\link{.is_removal_model}} reads, and it
+#'       resolves a retry to the model it retries - the same resolution
+#'       \code{update_model_status_from_files()} uses to choose the sign of
+#'       \code{delta_ofv} in the first place. Matching on it is therefore exactly
+#'       as retry-aware as the code that created the sign.
+#'   }
+#'   The retry case is not hypothetical: a retry row keeps the original's
+#'   \code{step_number}, and its \code{delta_ofv} starts \code{NA} but is
+#'   overwritten with the backward sign as soon as the model completes.
+#'
+#'   The base model is not matched by either test (\code{phase = "base"},
+#'   \code{action = "base_model"}), so it stays in scope - which the
+#'   redemption-base fallback depends on.
+#' @param search_state List containing the search state.
+#' @return Logical vector, one element per database row.
+#' @keywords internal
+#' @noRd
+.scm_backward_rows <- function(search_state) {
+  db <- search_state$search_database
+  if (is.null(db) || !is.data.frame(db)) return(logical(0))
+
+  by_phase <- if ("phase" %in% names(db)) {
+    .scm_phase_is_backward(db$phase)
+  } else {
+    rep(FALSE, nrow(db))
+  }
+  by_phase | .is_removal_model(search_state, db$model_name)
+}
+
+
 #' Resume the backward-elimination phase from the last full step
 #'
 #' @description Re-evaluates the removal models already created in the last
@@ -25,7 +70,8 @@
                                    backward_p_value, rse_threshold,
                                    auto_submit, auto_retry) {
   step <- get_step_models(search_state, last_step,
-                          p_value = backward_p_value, rse_threshold = rse_threshold)
+                          p_value = backward_p_value, rse_threshold = rse_threshold,
+                          phase = "backward")
 
   if (!isTRUE(step$exists) || is.na(step$base_model)) {
     cat("⚠️  Could not reconstruct the last backward step — nothing to continue.\n")
@@ -173,7 +219,7 @@ continue_search <- function(search_state = NULL,
   # ---- 2. Resolve thresholds (default to the state's search_config) --------
   forward_p_value  <- forward_p_value  %||% search_state$search_config$forward_p_value  %||% 0.05
   backward_p_value <- backward_p_value %||% search_state$search_config$backward_p_value %||% 0.001
-  rse_threshold    <- rse_threshold    %||% search_state$search_config$max_rse_threshold %||% 50
+  rse_threshold    <- .resolve_rse_threshold(search_state, rse_threshold)
 
   # Keep config coherent for the downstream methods
   search_state$search_config$forward_p_value   <- forward_p_value

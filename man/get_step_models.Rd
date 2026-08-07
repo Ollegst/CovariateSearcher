@@ -8,7 +8,8 @@ get_step_models(
   search_state,
   step_number,
   p_value = NULL,
-  rse_threshold = NULL
+  rse_threshold = NULL,
+  phase = c("forward", "backward")
 )
 }
 \arguments{
@@ -16,15 +17,23 @@ get_step_models(
 
 \item{step_number}{Integer. Step number to reconstruct}
 
-\item{p_value}{Numeric. P-value for significance (uses forward config if NULL)}
+\item{p_value}{Numeric. P-value for significance (uses the phase's config if NULL)}
 
 \item{rse_threshold}{Numeric. RSE threshold (uses config if NULL)}
+
+\item{phase}{Character. Which acceptance rule applies to this step,
+\code{"forward"} (default) or \code{"backward"}. A backward step evaluated
+with the forward rule reports the wrong models as significant, because the
+two phases compare \code{delta_ofv} in opposite directions.}
 }
 \value{
 List with: \code{exists} (logical), \code{step_number},
 \code{base_model} (common parent), \code{models} (all tested),
-\code{completed_models}, \code{significant_models}, and \code{best_model}
-(highest-ΔOFV significant model, or NULL).
+\code{completed_models}, \code{significant_models}, and \code{best_model} -
+the step winner among the significant models, or NULL. Which end of the
+ΔOFV ordering wins depends on \code{phase}: forward takes the largest
+(the biggest gain in fit), backward the smallest (the removal that costs
+least).
 }
 \description{
 Supportive lookup used by both selective forward selection and

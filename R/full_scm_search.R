@@ -110,9 +110,7 @@ run_automated_scm_testing <- function(search_state,
   if (is.null(backward_p_value)) {
     backward_p_value <- search_state$search_config$backward_p_value %||% 0.001
   }
-  if (is.null(rse_threshold)) {
-    rse_threshold <- search_state$search_config$max_rse_threshold %||% 50
-  }
+  rse_threshold <- .resolve_rse_threshold(search_state, rse_threshold)
 
   # Update search_config so downstream functions see the correct values
   search_state$search_config$forward_p_value <- forward_p_value
@@ -145,7 +143,7 @@ run_automated_scm_testing <- function(search_state,
   cat(sprintf("Base model: %s\n", base_model_id))
   cat(sprintf("Forward ΔOFV threshold: %.2f\n", forward_ofv_threshold_display))
   cat(sprintf("Backward ΔOFV threshold: %.2f\n", backward_ofv_threshold_display))
-  cat(sprintf("RSE threshold: %d%%\n", rse_threshold))
+  cat(sprintf("RSE threshold: %g%%\n", rse_threshold))
   cat(sprintf("Require covariance step: %s\n", require_cov_step))
   cat(sprintf("Auto-retry enabled: %s\n", auto_retry))
   cat(sprintf("Checkpoints enabled: %s\n", save_checkpoints))

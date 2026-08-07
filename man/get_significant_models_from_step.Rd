@@ -8,7 +8,8 @@ get_significant_models_from_step(
   search_state,
   step_number,
   p_value,
-  rse_threshold = NULL
+  rse_threshold = NULL,
+  phase = c("forward", "backward")
 )
 }
 \arguments{
@@ -19,6 +20,10 @@ get_significant_models_from_step(
 \item{p_value}{Numeric. P-value for significance testing (e.g., 0.05 for forward, 0.01 for backward)}
 
 \item{rse_threshold}{Numeric. RSE threshold for significance}
+
+\item{phase}{Character. Which acceptance rule to apply, \code{"forward"}
+(default) or \code{"backward"}. The two are not interchangeable: they store
+\code{delta_ofv} with opposite signs and compare it in opposite directions.}
 }
 \value{
 Character vector of significant model names

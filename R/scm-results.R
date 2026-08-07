@@ -21,9 +21,9 @@ create_scm_results_table <- function(search_state) {
   backward_p_value <- search_state$search_config$backward_p_value %||% 0.001
   forward_threshold <- pvalue_to_threshold(forward_p_value, df = 1)
   backward_threshold <- pvalue_to_threshold(backward_p_value, df = 1)
-  rse_threshold <- search_state$search_config$max_rse_threshold %||% 50
+  rse_threshold <- .resolve_rse_threshold(search_state)
 
-  cat(sprintf("Using thresholds - Forward: %.2f, Backward: %.2f, RSE: %d%%\n",
+  cat(sprintf("Using thresholds - Forward: %.2f, Backward: %.2f, RSE: %g%%\n",
               forward_threshold, backward_threshold, rse_threshold))
 
   # Initialize results data frame
@@ -97,39 +97,49 @@ create_scm_results_table <- function(search_state) {
       return(list(selected = "NO", comment = paste("Model", row$status)))
     }
 
-    # For backward elimination
-    if (grepl("backward|remove", phase, ignore.case = TRUE)) {
-      if (is.na(delta_ofv)) {
-        return(list(selected = "NO", comment = "Delta OFV not available"))
-      }
-      # Use covariate-specific df (categorical covariates with >2 levels use df>1)
-      cov_tag <- row$covariate_tested
-      cov_df <- 1L
-      if (!is.na(cov_tag) && nchar(cov_tag) > 0) {
-        cov_name <- tryCatch(extract_covariate_name_from_tag(cov_tag), error = function(e) NA)
-        if (!is.na(cov_name)) {
-          cov_df <- tryCatch(
-            calculate_covariate_df(cov_name, search_state$covariate_search),
-            error = function(e) 1L
-          )
-        }
-      }
-      actual_threshold <- pvalue_to_threshold(backward_p_value, df = cov_df)
-      rse_good <- is.na(rse_max) || rse_max < threshold_rse
-      if (abs(delta_ofv) > actual_threshold && !rse_good) {
+    # The verdict comes from the same evaluator the search itself used, so this
+    # table reports the decision that was taken rather than a second opinion on
+    # it. Only the label vocabulary (KEPT / REMOVED / BEST / YES / NO) is local.
+    is_backward <- grepl("backward|remove", phase, ignore.case = TRUE)
+    ev <- .evaluate_model_criteria(
+      search_state  = search_state,
+      model_names   = row$model_name,
+      phase         = if (is_backward) "backward" else "forward",
+      p_value       = if (is_backward) backward_p_value else forward_p_value,
+      rse_threshold = threshold_rse
+    )
+    if (nrow(ev) == 0) {
+      return(list(selected = "NO", comment = "Not found in search database"))
+    }
+
+    delta_ofv        <- ev$delta_ofv[1]
+    rse_max          <- ev$rse_max[1]
+    cov_df           <- ev$covariate_df[1]
+    actual_threshold <- ev$ofv_threshold[1]
+    ofv_good         <- ev$meets_ofv[1]
+    rse_good         <- ev$meets_rse[1]
+    rse_display      <- if (is.na(rse_max)) "NA" else sprintf("%.1f%%", rse_max)
+
+    if (is.na(delta_ofv)) {
+      return(list(selected = "NO", comment = "Delta OFV not available"))
+    }
+
+    # For backward elimination. `ofv_good` reads as "the removal costs little
+    # enough to accept"; failing it keeps the covariate.
+    if (is_backward) {
+      if (!ofv_good && !rse_good) {
         return(list(selected = "KEPT",
-                    comment = sprintf("Removal blocked: OFV %.2f > %.2f (df=%d) and high RSE (%.1f%% > %d%%)",
+                    comment = sprintf("Removal blocked: OFV %.2f > %.2f (df=%d) and high RSE (%.1f%% > %g%%)",
                                       abs(delta_ofv), actual_threshold, cov_df, rse_max, threshold_rse)))
-      } else if (abs(delta_ofv) > actual_threshold) {
+      } else if (!ofv_good) {
         return(list(selected = "KEPT",
                     comment = sprintf("Removal would worsen OFV by %.2f (threshold %.2f, df=%d)",
                                       abs(delta_ofv), actual_threshold, cov_df)))
       } else if (!rse_good) {
         return(list(selected = "KEPT",
-                    comment = sprintf("Removal blocked by high RSE (%.1f%% > %d%%)",
+                    comment = sprintf("Removal blocked by high RSE (%.1f%% > %g%%)",
                                       rse_max, threshold_rse)))
       } else {
-        rse_display <- if (is.na(rse_max)) "NA" else sprintf("%.1f%%", rse_max)
         return(list(selected = "REMOVED",
                     comment = sprintf("Removal acceptable (ΔOFV=%.2f < %.2f, df=%d, RSE=%s)",
                                       abs(delta_ofv), actual_threshold, cov_df, rse_display)))
@@ -137,58 +147,39 @@ create_scm_results_table <- function(search_state) {
     }
 
     # For forward selection - evaluate based on both OFV and RSE
-    if (is.na(delta_ofv)) {
-      return(list(selected = "NO", comment = "Delta OFV not available"))
-    }
-
-    # Use covariate-specific df (categorical covariates with >2 levels use df>1)
-    cov_tag <- row$covariate_tested
-    cov_df <- 1L
-    if (!is.na(cov_tag) && nchar(cov_tag) > 0) {
-      cov_name <- tryCatch(extract_covariate_name_from_tag(cov_tag), error = function(e) NA)
-      if (!is.na(cov_name)) {
-        cov_df <- tryCatch(
-          calculate_covariate_df(cov_name, search_state$covariate_search),
-          error = function(e) 1L
-        )
-      }
-    }
-    actual_forward_threshold <- pvalue_to_threshold(forward_p_value, df = cov_df)
-
-    # Check OFV improvement
-    ofv_good <- delta_ofv > actual_forward_threshold
-
-    # Check RSE
-    rse_good <- is.na(rse_max) || rse_max < threshold_rse
-
-    # Generate appropriate comment
     if (!ofv_good && !rse_good) {
-      comment <- sprintf("OFV (%.2f ≤ %.2f, df=%d) and high RSE (%.1f%% > %d%%)",
-                         delta_ofv, actual_forward_threshold, cov_df, rse_max, threshold_rse)
+      comment <- sprintf("OFV (%.2f ≤ %.2f, df=%d) and high RSE (%.1f%% > %g%%)",
+                         delta_ofv, actual_threshold, cov_df, rse_max, threshold_rse)
       return(list(selected = "NO", comment = comment))
     } else if (!ofv_good) {
       comment <- sprintf("Insufficient OFV improvement (%.2f ≤ %.2f, df=%d)",
-                         delta_ofv, actual_forward_threshold, cov_df)
+                         delta_ofv, actual_threshold, cov_df)
       return(list(selected = "NO", comment = comment))
     } else if (!rse_good) {
-      comment <- sprintf("RSE too high (%.1f%% > %d%%)",
+      comment <- sprintf("RSE too high (%.1f%% > %g%%)",
                          rse_max, threshold_rse)
       return(list(selected = "NO", comment = comment))
     } else {
       # Both criteria met - check if this is the best in the step
-      step_best <- step_models[step_models$delta_ofv > actual_forward_threshold &
-                                 (is.na(step_models$rse_max) | step_models$rse_max < threshold_rse), ]
+      step_ev <- .evaluate_model_criteria(
+        search_state  = search_state,
+        model_names   = step_models$model_name,
+        phase         = "forward",
+        p_value       = forward_p_value,
+        rse_threshold = threshold_rse
+      )
+      step_best <- step_ev[step_ev$meets_threshold, , drop = FALSE]
 
       if (nrow(step_best) > 0) {
         best_ofv <- max(step_best$delta_ofv, na.rm = TRUE)
         if (abs(delta_ofv - best_ofv) < 0.01) {
           return(list(selected = "BEST",
-                      comment = sprintf("Best model (ΔOFV=%.2f, df=%d, RSE=%.1f%%)",
-                                        delta_ofv, cov_df, rse_max)))
+                      comment = sprintf("Best model (ΔOFV=%.2f, df=%d, RSE=%s)",
+                                        delta_ofv, cov_df, rse_display)))
         } else {
           return(list(selected = "YES",
-                      comment = sprintf("Meets criteria (ΔOFV=%.2f, df=%d, RSE=%.1f%%)",
-                                        delta_ofv, cov_df, rse_max)))
+                      comment = sprintf("Meets criteria (ΔOFV=%.2f, df=%d, RSE=%s)",
+                                        delta_ofv, cov_df, rse_display)))
         }
       }
     }
@@ -291,10 +282,13 @@ create_scm_results_table <- function(search_state) {
 
   # Sort by Phase_Step first, then by model number
   if (nrow(results) > 0) {
-    # Extract model numbers for sorting
-    model_numbers <- as.numeric(gsub("^run", "", results$Model))
+    # Both coercions are expected to yield NA - a model name that is not
+    # run<N>, and the "Base" row, which the next line maps to 0. The NA is the
+    # intended result, so its warning is noise; left unsuppressed it turns into
+    # an error for anyone running with options(warn = 2).
+    model_numbers <- suppressWarnings(as.numeric(gsub("^run", "", results$Model)))
 
-    step_numbers <- as.numeric(gsub(".*Step", "", results$Phase_Step))
+    step_numbers <- suppressWarnings(as.numeric(gsub(".*Step", "", results$Phase_Step)))
     step_numbers[is.na(step_numbers)] <- 0  # For Base
 
     # Sort by: step_numbers, then model_numbers (phase-agnostic)

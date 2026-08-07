@@ -12,9 +12,16 @@
 #' @param step_number Integer. Step number to check
 #' @param p_value Numeric. P-value for significance testing (e.g., 0.05 for forward, 0.01 for backward)
 #' @param rse_threshold Numeric. RSE threshold for significance
+#' @param phase Character. Which acceptance rule to apply, \code{"forward"}
+#'   (default) or \code{"backward"}. The two are not interchangeable: they store
+#'   \code{delta_ofv} with opposite signs and compare it in opposite directions.
 #' @return Character vector of significant model names
 #' @export
-get_significant_models_from_step <- function(search_state, step_number, p_value, rse_threshold = NULL) {
+get_significant_models_from_step <- function(search_state, step_number, p_value,
+                                             rse_threshold = NULL,
+                                             phase = c("forward", "backward")) {
+  phase <- match.arg(phase)
+
   # Validate inputs
   if (is.null(search_state$search_database) || nrow(search_state$search_database) == 0) {
     return(character(0))
@@ -27,11 +34,6 @@ get_significant_models_from_step <- function(search_state, step_number, p_value,
     return(character(0))
   }
 
-  # Use config default if RSE threshold not specified
-  if (is.null(rse_threshold)) {
-    rse_threshold <- search_state$search_config$max_rse_threshold %||% 50
-  }
-
   # Get models from specified step
   step_models <- search_state$search_database[
     search_state$search_database$step_number == step_number &
@@ -42,41 +44,15 @@ get_significant_models_from_step <- function(search_state, step_number, p_value,
     return(character(0))
   }
 
-  # Calculate threshold per model based on covariate df
-  significant_model_names <- character(0)
+  ev <- .evaluate_model_criteria(
+    search_state  = search_state,
+    model_names   = step_models$model_name,
+    phase         = phase,
+    p_value       = p_value,
+    rse_threshold = rse_threshold
+  )
 
-  for (i in 1:nrow(step_models)) {
-    # Extract covariate name from tag
-    cov_tag <- step_models$covariate_tested[i]
-
-    # Calculate df for this covariate
-    if (!is.na(cov_tag) && nchar(cov_tag) > 0) {
-      cov_name <- extract_covariate_name_from_tag(cov_tag)
-      if (!is.na(cov_name)) {
-        df <- calculate_covariate_df(cov_name, search_state$covariate_search)
-      } else {
-        df <- 1L
-      }
-    } else {
-      df <- 1L
-    }
-
-    # Calculate threshold for this specific covariate
-    ofv_threshold <- pvalue_to_threshold(p_value, df)
-
-    # Check if model meets both criteria
-    delta_ofv <- step_models$delta_ofv[i]
-    rse_max <- step_models$rse_max[i]
-
-    meets_ofv <- !is.na(delta_ofv) && delta_ofv > ofv_threshold
-    meets_rse <- is.na(rse_max) || rse_max < rse_threshold
-
-    if (meets_ofv && meets_rse) {
-      significant_model_names <- c(significant_model_names, step_models$model_name[i])
-    }
-  }
-
-  return(significant_model_names)
+  ev$model_name[ev$meets_threshold]
 }
 
 
@@ -93,14 +69,24 @@ get_significant_models_from_step <- function(search_state, step_number, p_value,
 #'   database rather than a local variable.
 #' @param search_state List containing covariate search state and configuration
 #' @param step_number Integer. Step number to reconstruct
-#' @param p_value Numeric. P-value for significance (uses forward config if NULL)
+#' @param p_value Numeric. P-value for significance (uses the phase's config if NULL)
 #' @param rse_threshold Numeric. RSE threshold (uses config if NULL)
+#' @param phase Character. Which acceptance rule applies to this step,
+#'   \code{"forward"} (default) or \code{"backward"}. A backward step evaluated
+#'   with the forward rule reports the wrong models as significant, because the
+#'   two phases compare \code{delta_ofv} in opposite directions.
 #' @return List with: \code{exists} (logical), \code{step_number},
 #'   \code{base_model} (common parent), \code{models} (all tested),
-#'   \code{completed_models}, \code{significant_models}, and \code{best_model}
-#'   (highest-ΔOFV significant model, or NULL).
+#'   \code{completed_models}, \code{significant_models}, and \code{best_model} -
+#'   the step winner among the significant models, or NULL. Which end of the
+#'   ΔOFV ordering wins depends on \code{phase}: forward takes the largest
+#'   (the biggest gain in fit), backward the smallest (the removal that costs
+#'   least).
 #' @export
-get_step_models <- function(search_state, step_number, p_value = NULL, rse_threshold = NULL) {
+get_step_models <- function(search_state, step_number, p_value = NULL,
+                            rse_threshold = NULL,
+                            phase = c("forward", "backward")) {
+  phase <- match.arg(phase)
   db <- search_state$search_database
   empty <- list(
     exists = FALSE, step_number = step_number, base_model = NA_character_,
@@ -119,7 +105,11 @@ get_step_models <- function(search_state, step_number, p_value = NULL, rse_thres
   if (nrow(rows) == 0) return(empty)
 
   if (is.null(p_value)) {
-    p_value <- search_state$search_config$forward_p_value %||% 0.05
+    p_value <- if (phase == "forward") {
+      search_state$search_config$forward_p_value %||% 0.05
+    } else {
+      search_state$search_config$backward_p_value %||% 0.001
+    }
   }
 
   # Base model = the common parent of this step's models
@@ -133,14 +123,20 @@ get_step_models <- function(search_state, step_number, p_value = NULL, rse_thres
   completed_models <- rows$model_name[!is.na(rows$status) & rows$status == "completed"]
 
   significant_models <- get_significant_models_from_step(
-    search_state, step_number, p_value, rse_threshold
+    search_state, step_number, p_value, rse_threshold, phase = phase
   )
 
   best_model <- NULL
   if (length(significant_models) > 0) {
     sig_rows <- db[db$model_name %in% significant_models, , drop = FALSE]
     if (nrow(sig_rows) > 0 && any(!is.na(sig_rows$delta_ofv))) {
-      best_model <- sig_rows$model_name[which.max(sig_rows$delta_ofv)]
+      # Forward wants the biggest OFV gain; backward removes the covariate that
+      # costs least, so the winner sits at the other end of the same ordering.
+      best_model <- if (phase == "forward") {
+        sig_rows$model_name[which.max(sig_rows$delta_ofv)]
+      } else {
+        sig_rows$model_name[which.min(sig_rows$delta_ofv)]
+      }
     }
   }
 
@@ -249,16 +245,14 @@ run_scm_selective_forward <- function(search_state,
   if (is.null(forward_p_value)) {
     forward_p_value <- search_state$search_config$forward_p_value %||% 0.05
   }
-  if (is.null(rse_threshold)) {
-    rse_threshold <- search_state$search_config$max_rse_threshold
-  }
+  rse_threshold <- .resolve_rse_threshold(search_state, rse_threshold)
 
   cat("🚀 STARTING SCM SELECTIVE FORWARD SELECTION WORKFLOW\n")
   cat(paste(rep("=", 60), collapse=""), "\n")
   cat(sprintf("Base model: %s\n", base_model_id))
   ofv_threshold_display <- pvalue_to_threshold(forward_p_value, df = 1)
   cat(sprintf("📊 Forward OFV threshold: %.2f\n", ofv_threshold_display))
-  cat(sprintf("RSE threshold: %d%%\n", rse_threshold))
+  cat(sprintf("RSE threshold: %g%%\n", rse_threshold))
   cat(sprintf("Strategy: Test only covariates from significant models\n"))
 
   # Initialize workflow variables
@@ -358,11 +352,17 @@ run_scm_selective_forward <- function(search_state,
       current_best_model <- prev_step$best_model
 
       if (is.null(current_best_model) || is.na(current_best_model)) {
-        # Fallback: overall best (highest ΔOFV) among completed previous models
+        # Fallback: best ACCEPTABLE model among completed previous ones. Picking
+        # on fit alone here would let a model that failed the search's own
+        # criteria become the base every later step builds on. Backward rows are
+        # excluded for the reason given at the overall pick below: their
+        # delta_ofv carries the opposite sign convention, and "previous steps"
+        # includes the initial backward phase when the search began with one.
         all_previous_models <- search_state$search_database[
           !is.na(search_state$search_database$step_number) &
             search_state$search_database$step_number < current_step &
             search_state$search_database$status == "completed" &
+            !.scm_backward_rows(search_state) &
             !is.na(search_state$search_database$delta_ofv), ]
 
         if (nrow(all_previous_models) == 0) {
@@ -371,10 +371,29 @@ run_scm_selective_forward <- function(search_state,
           break
         }
 
-        overall_best_idx <- which.max(all_previous_models$delta_ofv)
-        current_best_model <- all_previous_models$model_name[overall_best_idx]
-        cat(sprintf("📍 Using overall best model as base: %s (from Step %d)\n",
-                    current_best_model, all_previous_models$step_number[overall_best_idx]))
+        pick <- .best_acceptable_model(search_state, all_previous_models$model_name,
+                                       p_value = forward_p_value,
+                                       rse_threshold = rse_threshold)
+        .report_rse_rejections(pick$rejected, "fallback base selection")
+
+        if (is.null(pick$model)) {
+          # Nothing among the earlier steps qualifies. Carry on from the step's
+          # own parent - the search always has a base, and the "no significant
+          # models" check below is what decides whether to keep going.
+          current_best_model <- if (!is.na(prev_step$base_model)) {
+            prev_step$base_model
+          } else {
+            base_model_id
+          }
+          cat(sprintf("📍 No earlier model meets the criteria - using %s as base\n",
+                      current_best_model))
+        } else {
+          current_best_model <- pick$model
+          cat(sprintf("📍 Using best acceptable model as base: %s (from Step %d)\n",
+                      current_best_model,
+                      all_previous_models$step_number[
+                        match(current_best_model, all_previous_models$model_name)]))
+        }
       } else {
         cat(sprintf("📍 Using Step %d winner as base: %s\n", current_step - 1, current_best_model))
       }
@@ -551,7 +570,8 @@ run_scm_selective_forward <- function(search_state,
     step_significant_models <- get_significant_models_from_step(
       search_state = search_state,
       step_number = current_step,
-      p_value = forward_p_value
+      p_value = forward_p_value,
+      rse_threshold = rse_threshold
     )
 
     if (length(step_significant_models) == 0) {
@@ -594,10 +614,13 @@ run_scm_selective_forward <- function(search_state,
   # ===================================================================
 
   # Find the final best model from main selective forward steps (including base model)
-  # Scope: base model + all main-loop steps, but exclude redemption/future steps
+  # Scope: base model + all main-loop FORWARD steps, but exclude redemption/future
+  # steps. Backward rows are excluded for the reason given at the overall pick
+  # below; the base model itself carries phase "base" and so stays in scope.
   all_main_models <- search_state$search_database[
     search_state$search_database$status == "completed" &
       !is.na(search_state$search_database$ofv) &
+      !.scm_backward_rows(search_state) &
       (is.na(search_state$search_database$step_number) |  # Base model has NA step
        search_state$search_database$step_number <= last_main_step), ]  # or main-loop step
 
@@ -612,12 +635,28 @@ run_scm_selective_forward <- function(search_state,
       cat("This may occur if the model failed, is still running, or has an invalid OFV\n")
       cat("Attempting fallback: Finding best model from available completed rows...\n")
       
-      # Fallback: Find model with best (lowest) OFV from all available main models
+      # Fallback: best-fitting model that also MEETS THE CRITERIA. Ranking on OFV
+      # alone would hand redemption a base the search had already rejected.
       if (nrow(all_main_models) > 0) {
-        best_ofv_idx <- which.min(all_main_models$ofv)
-        final_best_model <- all_main_models$model_name[best_ofv_idx]
-        final_best_idx <- best_ofv_idx
-        cat(sprintf("✅ Fallback model selected: %s\n", final_best_model))
+        pick <- .best_acceptable_model(search_state, all_main_models$model_name,
+                                       p_value = forward_p_value,
+                                       rse_threshold = rse_threshold)
+        .report_rse_rejections(pick$rejected, "the redemption base fallback")
+
+        if (is.null(pick$model)) {
+          # Fall back to the model the search started from rather than abandoning
+          # redemption. The base model is the incumbent, not a covariate
+          # candidate, so it is never returned by the criteria pick.
+          final_best_model <- base_model_id
+          cat(sprintf("No completed model meets the criteria - falling back to the base model %s\n",
+                      final_best_model))
+        } else {
+          final_best_model <- pick$model
+          cat(sprintf("✅ Fallback model selected: %s\n", final_best_model))
+        }
+        # Still empty if even the base model is absent from the table, which
+        # GUARD 2 below turns into "skip redemption".
+        final_best_idx <- which(all_main_models$model_name == final_best_model)
       } else {
         cat("❌ No valid completed models available for redemption - skipping redemption phase\n")
         final_best_idx <- integer(0)
@@ -728,16 +767,35 @@ run_scm_selective_forward <- function(search_state,
         } else {
           # Update best model BEFORE determining covariates
           # Find current best model across ALL steps
+          # Backward rows excluded for the same reason as the overall pick
+          # below: their delta_ofv carries the opposite sign convention and the
+          # forward test would misread it.
           all_models_so_far <- search_state$search_database[
             search_state$search_database$status == "completed" &
+              !.scm_backward_rows(search_state) &
               !is.na(search_state$search_database$ofv), ]  # Check ofv not delta_ofv
 
           if (nrow(all_models_so_far) > 0) {
-            best_idx <- which.min(all_models_so_far$ofv)  # Use MIN OFV (best fit)
-            current_redemption_base <- all_models_so_far$model_name[best_idx]
-            best_ofv <- all_models_so_far$ofv[best_idx]
-            cat(sprintf("Current best model updated to: %s (OFV=%.2f)\n",
-                        current_redemption_base, best_ofv))
+            # Best fit AMONG MODELS THAT MEET THE CRITERIA. Ranking on OFV alone
+            # would let each redemption step re-base onto a model the search had
+            # already rejected, carrying that model into everything after it.
+            pick <- .best_acceptable_model(search_state, all_models_so_far$model_name,
+                                           p_value = forward_p_value,
+                                           rse_threshold = rse_threshold)
+            .report_rse_rejections(pick$rejected, "the redemption base")
+
+            if (!is.null(pick$model)) {
+              current_redemption_base <- pick$model
+              best_ofv <- all_models_so_far$ofv[
+                match(current_redemption_base, all_models_so_far$model_name)]
+              cat(sprintf("Current best model updated to: %s (OFV=%.2f)\n",
+                          current_redemption_base, best_ofv))
+            } else {
+              # No acceptable improvement is a reason not to move the base, not
+              # a reason to stop: keep redeeming from the one already in hand.
+              cat(sprintf("No model meets the criteria - keeping the current redemption base: %s\n",
+                          current_redemption_base))
+            }
           }
 
           # Get significant models from previous redemption step
@@ -745,7 +803,8 @@ run_scm_selective_forward <- function(search_state,
           prev_step_significant <- get_significant_models_from_step(
             search_state = search_state,
             step_number = current_step_number - 1,
-            p_value = forward_p_value
+            p_value = forward_p_value,
+            rse_threshold = rse_threshold
           )
 
           if (length(prev_step_significant) == 0) {
@@ -890,36 +949,46 @@ run_scm_selective_forward <- function(search_state,
     }
   }
 
-  # After redemption, update current_best_model to the model with lowest absolute OFV
-  # that also passed the forward selection OFV criteria (using per-covariate df)
+  # After redemption, settle on the best-fitting model that MEETS THE SEARCH
+  # CRITERIA - both of them. This is the value returned as final_best_model and
+  # handed to backward elimination as its starting model, so an omission here
+  # propagates into every model backward goes on to build: testing ΔOFV alone
+  # would let a model failing the RSE limit win purely on fit.
+  #
+  # Backward rows are excluded: they store delta_ofv as model - base (positive
+  # means the removal made the fit WORSE), the opposite of forward's convention,
+  # so the forward test would read a costly removal as a large improvement. A
+  # search that began with backward elimination has such rows in the database.
   all_completed_candidates <- search_state$search_database[
     search_state$search_database$status == "completed" &
       !is.na(search_state$search_database$ofv) &
       !is.na(search_state$search_database$delta_ofv) &
+      !.scm_backward_rows(search_state) &
       search_state$search_database$step_number > 0, ]
+
   if (nrow(all_completed_candidates) > 0) {
-    passed <- vapply(seq_len(nrow(all_completed_candidates)), function(i) {
-      row <- all_completed_candidates[i, ]
-      cov_name <- tryCatch(
-        extract_covariate_name_from_tag(row$covariate_tested),
-        error = function(e) NA_character_
-      )
-      cov_df <- tryCatch(
-        calculate_covariate_df(cov_name, search_state$covariate_search),
-        error = function(e) 1L
-      )
-      threshold <- pvalue_to_threshold(forward_p_value, df = cov_df)
-      isTRUE(row$delta_ofv >= threshold)
-    }, logical(1))
-    all_completed <- all_completed_candidates[passed, ]
-  } else {
-    all_completed <- all_completed_candidates
-  }
-  if (nrow(all_completed) > 0) {
-    current_best_model <- all_completed$model_name[which.min(all_completed$ofv)]
-    cat(sprintf("🏆 Overall best model after forward+redemption: %s (OFV=%.2f)\n",
-                current_best_model,
-                all_completed$ofv[which.min(all_completed$ofv)]))
+    step_winner <- current_best_model
+    pick <- .best_acceptable_model(search_state, all_completed_candidates$model_name,
+                                   p_value = forward_p_value,
+                                   rse_threshold = rse_threshold)
+    .report_rse_rejections(pick$rejected, "the overall best-model choice")
+
+    if (!is.null(pick$model)) {
+      current_best_model <- pick$model
+      cat(sprintf("🏆 Overall best model after forward+redemption: %s (OFV=%.2f)\n",
+                  current_best_model,
+                  all_completed_candidates$ofv[
+                    match(current_best_model, all_completed_candidates$model_name)]))
+      # Moving off the step winner is a real decision, not bookkeeping - say so,
+      # so it is visible in the log rather than only in a later report.
+      if (!identical(step_winner, current_best_model)) {
+        cat(sprintf("   ↪ overrides the step winner %s (better fit, criteria met)\n",
+                    step_winner))
+      }
+    } else {
+      cat(sprintf("⚠️  No model meets both criteria - keeping the step winner: %s\n",
+                  current_best_model))
+    }
   }
 
   # ===================================================================

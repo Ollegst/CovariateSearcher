@@ -1074,7 +1074,7 @@ initialize_search_config <- function(search_state, lookup_file = NULL,
   search_state$search_config <- list(
     forward_p_value = 0.05,        # p-value for forward selection
     backward_p_value = 0.001,      # default p-value for backward elimination (stricter; overridden by a user-supplied value)
-    max_rse_threshold = 50,
+    max_rse_threshold = .DEFAULT_RSE_THRESHOLD,
     timeout_minutes = 3600,
     threads = search_state$threads,
     lookup_file = resolved_lookup_file,
@@ -1085,7 +1085,7 @@ initialize_search_config <- function(search_state, lookup_file = NULL,
   cat("Search configuration initialized with p-values:\n")
   cat(sprintf("  Forward p-value: %.3f\n", search_state$search_config$forward_p_value))
   cat(sprintf("  Backward p-value: %.3f\n", search_state$search_config$backward_p_value))
-  cat(sprintf("  RSE threshold: %d%%\n", search_state$search_config$max_rse_threshold))
+  cat(sprintf("  RSE threshold: %g%%\n", search_state$search_config$max_rse_threshold))
   return(search_state)
 }
 

@@ -225,22 +225,35 @@ extract_covariate_name_from_tag <- function(tag) {
 #'   things depend on getting this right: the sign convention for \code{delta_ofv}
 #'   (removals are child minus parent, additions are parent minus child), and
 #'   whether a failed model is eligible for a retry at all.
+#'   \code{action} is authoritative; \code{phase} answers only for the rows it
+#'   leaves \code{NA}. \code{action} is not in
+#'   \code{update_model_status_from_files()}'s self-heal list, so a database can
+#'   carry no such column at all - and then a removal step would read as an
+#'   addition here while \code{.scm_backward_rows()} still read it as backward
+#'   from its phase, giving a row the forward sign and the backward test. A row
+#'   that does record an action keeps that answer even when its phase
+#'   contradicts it, because a contradiction is a data fault to report rather
+#'   than to reinterpret - the callers that write a sign warn about exactly it.
 #' @param search_state List containing the search state.
 #' @param model_name Character vector of model names.
 #' @return Logical vector, one element per \code{model_name}. \code{FALSE} for a
-#'   name with no row, an \code{NA} action, or an action that names no direction.
+#'   name with no row, or when neither action nor phase names a direction.
 #' @keywords internal
 #' @noRd
 .is_removal_model <- function(search_state, model_name) {
   if (length(model_name) == 0) return(logical(0))
 
   db <- search_state$search_database
-  if (is.null(db) || !"action" %in% names(db)) {
+  if (is.null(db) || !"model_name" %in% names(db)) {
     return(rep(FALSE, length(model_name)))
   }
 
   idx <- match(model_name, db$model_name)
-  action <- db$action[idx]
+  action <- if ("action" %in% names(db)) {
+    db$action[idx]
+  } else {
+    rep(NA_character_, length(idx))
+  }
 
   is_retry <- !is.na(action) & action == "retry"
   if (any(is_retry) && "original_model" %in% names(db)) {
@@ -248,9 +261,74 @@ extract_covariate_name_from_tag <- function(tag) {
     action[is_retry] <- db$action[origin_idx]
   }
 
+  # Fall back to the phase only where the action could not answer, so the sign a
+  # row is written with and the rule later applied to it cannot disagree.
+  unresolved <- is.na(action)
+  if (any(unresolved) && "phase" %in% names(db)) {
+    action[unresolved] <- ifelse(
+      .scm_phase_is_backward(db$phase[idx][unresolved]),
+      "remove_covariate", action[unresolved]
+    )
+  }
+
   # "remove_covariate" and "remove_single_covariate" both match; an addition,
   # a manual modification and an unresolved retry all do not.
   !is.na(action) & grepl("remove", action, ignore.case = TRUE)
+}
+
+
+#' ΔOFV for a model against its reference, in that model's own sign convention
+#'
+#' @description The one place the sign is chosen. A covariate ADDITION stores
+#'   \code{reference - model} (positive = the covariate improved the fit); a
+#'   REMOVAL stores \code{model - reference} (positive = dropping the covariate
+#'   made the fit worse). Which applies is a property of the model, not of the
+#'   caller, and is read from its \code{action} through
+#'   \code{\link{.is_removal_model}} - the same predicate the acceptance tests and
+#'   the backward-row filter use. Writing the sign through here is what keeps a
+#'   row's stored delta and the rule that later reads it from disagreeing.
+#'
+#'   The rule for \code{direction} is about what the caller ALSO does:
+#'   \itemize{
+#'     \item A caller that writes the sign AND fixes the acceptance test's
+#'       direction must state \code{direction} to match, or the two disagree
+#'       whenever the lookup cannot answer. \code{action} is not in
+#'       \code{update_model_status_from_files()}'s self-heal list, so a database
+#'       can lack it entirely and every row then reads as an addition. Both
+#'       \code{evaluate_removal_impacts()} (\code{"backward"}) and
+#'       \code{select_best_model()} (\code{"forward"}) are in this case, and both
+#'       warn when handed a model of the other kind - which is the only way the
+#'       caller can still be wrong once the sign and the test agree.
+#'     \item A caller that only WRITES, never testing, leaves \code{direction}
+#'       NULL and lets the action decide.
+#'       \code{update_model_status_from_files()} is the one such caller.
+#'   }
+#' @param search_state List containing the search state.
+#' @param model_name Character. The model whose ΔOFV is being computed.
+#' @param model_ofv Numeric. That model's OFV.
+#' @param reference_ofv Numeric. Its parent's (forward) or the step base's
+#'   (backward) OFV.
+#' @param direction Character or NULL. \code{"forward"} / \code{"backward"} to
+#'   state the convention outright; NULL (default) derives it from the model.
+#' @return Numeric ΔOFV, or \code{NA_real_} if either OFV is missing.
+#' @keywords internal
+#' @noRd
+.signed_delta_ofv <- function(search_state, model_name, model_ofv, reference_ofv,
+                              direction = NULL) {
+  if (length(model_ofv) == 0 || length(reference_ofv) == 0) return(NA_real_)
+  if (is.na(model_ofv[1]) || is.na(reference_ofv[1])) return(NA_real_)
+
+  is_removal <- if (is.null(direction)) {
+    .is_removal_model(search_state, model_name)
+  } else {
+    identical(match.arg(direction, c("forward", "backward")), "backward")
+  }
+
+  if (is_removal) {
+    model_ofv[1] - reference_ofv[1]
+  } else {
+    reference_ofv[1] - model_ofv[1]
+  }
 }
 
 
@@ -282,6 +360,42 @@ extract_covariate_name_from_tag <- function(tag) {
                 nrow(db)))
   }
   search_state
+}
+
+
+#' Default maximum parameter RSE, as a percentage
+#'
+#' @description The one place this number lives. \code{initialize_search_config()}
+#'   writes it into a new search's config, and \code{.resolve_rse_threshold()}
+#'   falls back to it for a state that carries no setting - so the value a search
+#'   is created with and the value an older state is read with cannot drift apart.
+#' @keywords internal
+#' @noRd
+.DEFAULT_RSE_THRESHOLD <- 50
+
+
+#' Resolve the maximum-RSE threshold for a search
+#'
+#' @description Resolves the RSE threshold from the one place each caller should
+#'   look: an explicit argument, else \code{search_config$max_rse_threshold}, else
+#'   \code{.DEFAULT_RSE_THRESHOLD}. Everything that compares an RSE against a
+#'   limit - the acceptance tests, the results table, and the monitoring warnings
+#'   - reads it through here, so a search cannot apply one limit in one place and
+#'   a different one somewhere else.
+#' @param search_state List containing the search state.
+#' @param rse_threshold Numeric or NULL. An explicitly supplied threshold wins.
+#' @return Numeric. The threshold as a percentage.
+#' @keywords internal
+#' @noRd
+.resolve_rse_threshold <- function(search_state, rse_threshold = NULL) {
+  # NA is rejected as firmly as NULL. Every comparison against an NA threshold
+  # is NA, and an NA verdict indexes out as an NA model name rather than
+  # dropping - so an unusable value must never leave this function.
+  usable <- function(x) is.numeric(x) && length(x) == 1L && !is.na(x)
+
+  if (usable(rse_threshold)) return(rse_threshold)
+  configured <- search_state$search_config$max_rse_threshold
+  if (usable(configured)) configured else .DEFAULT_RSE_THRESHOLD
 }
 
 
