@@ -3,7 +3,7 @@
 **What this is:** an agent-facing map of *every* function in `R/`, so
 future sessions don’t have to re-read the whole codebase. Originally
 generated from a full read of the pre-refactor code (v0.1.30). **Last
-audited 2026-08-11 against v0.4.4: 29 files in `R/`, 142 top-level
+audited 2026-08-12 against v0.4.5: 29 files in `R/`, 145 top-level
 functions, 90 exports in NAMESPACE** — every defined function appears
 below. Keep it in sync as the modular reorg lands.
 
@@ -203,7 +203,67 @@ gated the categorical `IF`-parse branch on `status=="cat"` alone, so
 per-level `IF/ELSEIF`; everything else incl. `cat.power` → single factor
 from the same registry entry (`nonmem` write / `r_eval` read), so write
 & read can’t drift. - ~~`generate_phase`~~ **removed 2026-07-18** (dead,
-unexported).
+unexported). - ~~Parenthesized RHS hides earlier covariates from
+removal~~ **FIXED 2026-08-11** (found the same day while indexing
+`.wrap_rhs_in_parens`; write side vs remove side). The wrap is now
+*conditional*: `model_add_cov` calls `.wrap_rhs_in_parens` only when
+`.rhs_needs_paren_wrap()` finds a `+`/`-` at paren depth 0, so a summed
+`TV_` line is wrapped exactly once and a flat multiplicative chain is
+left flat. Two adds on one parameter now give
+`TV_CL = THETA(1) * (1 + (AGE-40) * THETA(5)) * ((WT/70)**THETA(6))`
+instead of the nested `((THETA(1))*(…))*(…)`, and
+`strip_covariate_factors`’ depth-0 split still sees every factor.
+**Re-verified by execution 2026-08-11** (both functions loaded from
+source and driven through the real `model_add_cov` append block):
+removing the earlier, the latest, or a middle covariate all rewrite the
+line and drop the `THETA(n)` reference, on a plain `TV_` line, a
+commented line, a genuinely summed base RHS, and the additive/log
+placement. The former residual — `remove_covariate_from_model` only
+*logging* `lines_modified` — is now closed too; see the next entry. -
+~~Silent `$THETA` deletion when no `$PK` line matched~~ **FIXED
+2026-08-12**: `remove_covariate_from_model` used to log `lines_modified`
+and carry on, so any covariate shape that escaped
+`strip_covariate_factors`’ depth-0 scan (or the categorical `* beta_…`
+gsub) still had its `$THETA` line deleted and the survivors renumbered —
+leaving a live `THETA(n)` in `$PK` bound to a *different* parameter,
+with no error and a model that still runs. There is now a
+[`stop()`](https://rdrr.io/r/base/stop.html) immediately after the
+Step-5 strip loop (model-modification.R:1283) whenever
+`lines_modified == 0` while `theta_numbers_to_remove` is non-empty,
+i.e. the name matched a `$THETA` line but nothing in the equations
+changed. **Verified by execution** (diff-auditor drove the real
+function, not a re-implementation). Three known consequences of the
+guard are recorded under “Known limitations of the `lines_modified`
+guard” below — none of them reopen the silent-corruption path.
+
+**Known limitations of the `lines_modified` guard (audited 2026-08-12,
+all three accepted as non-blocking):** - **Orphan-`$THETA` cleanup now
+errors instead of succeeding.** A model carrying a `beta_<COV>_<PARAM>`
+`$THETA` line whose `$PK` reference is already gone used to be tidied up
+by `remove_covariate_from_model` (delete the line, renumber, done). It
+now hits the guard, since no equation changes. That shape is not
+produced by the search itself; if it turns up, the `$THETA` line has to
+be removed by hand. - **The [`stop()`](https://rdrr.io/r/base/stop.html)
+can fire after the child model file exists.** Step 2 runs
+[`bbr::copy_model_from`](https://metrumresearchgroup.github.io/bbr/reference/copy_model_from.html)
+*before* the control stream is edited in Steps 3-12, so when the guard
+trips the `run<N>` files are already on disk while the DB row (Step 11)
+is never appended and the incremented `model_counter` never reaches the
+caller (the error propagates; the modified `search_state` is discarded).
+A backward-elimination step that keeps going past the error is therefore
+working around an orphan `run<N>` on disk that no database row
+references — clean it up before resuming, rather than assuming the
+number is free. - **`model_add_cov` called directly can still mis-write
+a conditional-TV model.** The `has_tv_line` check lives in
+`detect_param_transform`, and the
+[`stop()`](https://rdrr.io/r/base/stop.html) that turns a missing
+line-start `TV_<param>` into an error lives in
+`validate_param_transformations`. The public path
+(`initialize_covariate_search` → `validate_setup`) always runs the
+latter first, so a search cannot reach the bad write. A direct call to
+the exported `model_add_cov` skips it and can still append the covariate
+to the `PARAM = EXP(MU+ETA)` line. Validate first, or accept that
+responsibility.
 
 **Rejected designs (considered, implemented, reverted — do not
 re-propose):** - **Gating model success on NONMEM’s termination
@@ -468,11 +528,13 @@ rows.*
 | Function | Exp | Purpose | Key inputs | Returns | Side effects | Calls / Called-by |
 |----|----|----|----|----|----|----|
 | `add_covariate_to_model(search_state, base_model_id, covariate_tag, step_number=NULL, lookup_file=NULL, phase="forward_selection")` | ✓ | Copy parent, add one covariate, append DB row. Needs only two things from `search_state`: the tag in `$tags` and a matching `cov_to_test` row in `$covariate_search`. **`step_number` is REQUIRED** (stops if NULL — it is not auto-derived). `phase="individual_testing"` marks a deliberate one-off add outside the search | tag, base model | `list(status, model_name, covariate_added, step_number, search_state, technical_log, log_file)` / error list | `bbr::read_model/copy_model_from/add_tags/replace_all_notes`; `writeLines` logs; `log_filename <<-`; [`stop()`](https://rdrr.io/r/base/stop.html); rolls back `model_counter` | calls `validate_covariate_parameter_mapping`, `model_add_cov`; called-by `run_univariate_step` |
-| `model_add_cov(search_state, ref_model, cov_on_param, id_var="ID", data_file, covariate_search, capture_log=FALSE, lookup_file=NULL)` | ✓ | **Core control-stream editor:** picks placement (TIME_DEPENDENT → individual/population) and transform (`detect_param_transform`), renders the effect from the registry (`nonmem` mult / `nonmem_log` additive), inserts N `$THETA` lines from `INIT` | `cov_on_param`, `data_file` | `list(search_state, log_entries)` or `search_state` | `write_model_file`; [`stop()`](https://rdrr.io/r/base/stop.html); hardcoded `data/spec/lookup.yaml`; `captured_log <<-` | calls `get_covariate_formula`, `detect_param_transform`, `parse_named_init`, `read_model_file`, `write_model_file`; called-by `add_covariate_to_model`, `prepare_search_base_model` |
+| `.rhs_needs_paren_wrap(rhs)` | · | **The guard that decides whether wrapping is needed at all.** TRUE iff the RHS string contains a `+` or `-` at paren depth 0 — i.e. an appended `* factor` would bind only to the last term. FALSE for an already-flat multiplicative chain (`THETA(1) * (1 + (AGE-40)*THETA(5))`), so a second covariate add does **not** nest another paren layer around the first one and `strip_covariate_factors`’ depth-0 scan can still see every factor. Character-by-character scan, no regex; a unary minus or an exponent (`1E-5`) at depth 0 returns TRUE, which only costs one harmless redundant paren pair | pre-comment RHS text (the caller strips `NAME =` and `; …` itself) | `TRUE`/`FALSE` | none — pure string function | called-by `model_add_cov` (gates the `.wrap_rhs_in_parens` call) |
+| `.wrap_rhs_in_parens(line)` | · | Parenthesize the RHS of a `NAME = RHS [; comment]` control-stream line so a `* factor` appended after it binds to the **whole** expression, not just the last term of an existing sum (NONMEM/Fortran precedence: `A + B * f` ≠ `(A + B) * f`). Splits on the **first** `=` and the **first** `;`; keeps leading indentation, [`trimws()`](https://rdrr.io/r/base/trimws.html)es the RHS, re-attaches the comment with four spaces. **Unconditional — it re-wraps whatever it is handed, so call it only behind `.rhs_needs_paren_wrap()`**; wrapping an already-multiplicative RHS pushes earlier covariate factors to paren depth \> 0 where removal can no longer find them. A line with no `=` has its whole pre-comment text wrapped instead (`TV_CL ; c` → `(TV_CL) ; c`) | one `$PK`/`$PRED` assignment line | the same line with `(...)` around its RHS | none — pure string function | called-by `model_add_cov` (multiplicative append whose RHS has a top-level `+`/`-`) |
+| `model_add_cov(search_state, ref_model, cov_on_param, id_var="ID", data_file, covariate_search, capture_log=FALSE, lookup_file=NULL)` | ✓ | **Core control-stream editor:** picks placement (time-varying → individual/multiplicative, else population + `detect_param_transform` → mult/additive) and renders the effect from the registry (`nonmem` mult / `nonmem_log` additive), inserts N `$THETA` lines from `INIT`. **Placement is recomputed from `data_file`** (max unique levels of the covariate per `id_var`), **not** read from the table’s `TIME_DEPENDENT` column. A multiplicative append rewrites the target line through `.wrap_rhs_in_parens` **only when `.rhs_needs_paren_wrap()` says the RHS has a top-level `+`/`-`**, so it cannot mis-bind to the last term of an existing sum yet also never nests parens on a flat multiplicative chain (which would hide earlier factors from removal); additive appends are never wrapped | `cov_on_param`, `data_file` | `list(search_state, log_entries)` or `search_state` | `write_model_file`; [`stop()`](https://rdrr.io/r/base/stop.html); hardcoded `data/spec/lookup.yaml`; `captured_log <<-` | calls `get_covariate_formula`, `list_covariate_formulas` (error text), `detect_param_transform`, `.rhs_needs_paren_wrap`, `.wrap_rhs_in_parens`, `parse_named_init`, `read_model_file`, `write_model_file`; called-by `add_covariate_to_model`, `prepare_search_base_model` |
 | `strip_covariate_factors(line, theta_nums)` | · | Remove every top-level `* <factor>` / `+ <term>` on a `$PK` line whose factor references one of `theta_nums` (balanced-paren aware), leaving the structural term and other covariates intact — one place for built-ins, user expressions and multi-theta forms | `$PK` line, THETA numbers | the line without those factors | — | called-by `remove_covariate_from_model` |
 | `fix_theta_renumbering(modelcode, theta_numbers_to_remove, log_function)` | ✓ | Renumber `THETA(n)` after removals (temp placeholders) | modelcode, removed nums | char modelcode | — | called-by `remove_covariate_from_model` |
 | `prepare_search_base_model(base_model_path, covariate_tags, new_model_number, data_file_path, covariate_search_path, models_folder="models", idcol="ID", overwrite=TRUE, lookup_file=NULL)` | ✓ | Build one child w/ many covariates + combined log (no DB row) | tags, paths | `list(status, model_name, model_path, parent_model, covariate_tags, covariates_added, log_file)` | [`readr::read_csv`](https://readr.tidyverse.org/reference/read_delim.html); `bbr::*`; `writeLines`; [`stop()`](https://rdrr.io/r/base/stop.html); hardcoded lookup | calls `validate_covariate_parameter_mapping`, `model_add_cov` |
-| `remove_covariate_from_model(search_state, model_name, covariate_tag, save_as_new_model=TRUE, step_number=NULL)` | ✓ | Strip covariate formula+THETA, renumber, append DB row | tag, model | `list(status, model_name, covariate_removed, search_state)` | `bbr::copy_model_from/read_model/remove_tags/add_notes`; `write_model_file`; `writeLines`; `log_messages <<-`; [`stop()`](https://rdrr.io/r/base/stop.html) | calls `read_model_file`, `fix_theta_renumbering`, `write_model_file`; called-by `run_backward_elimination` |
+| `remove_covariate_from_model(search_state, model_name, covariate_tag, save_as_new_model=TRUE, step_number=NULL)` | ✓ | Strip covariate formula+THETA, renumber, append DB row. `step_number` is **required** ([`stop()`](https://rdrr.io/r/base/stop.html) if NULL). **Refuses to remove blind (2026-08-12):** after the Step-5 strip loop, `lines_modified == 0` while `theta_numbers_to_remove` is non-empty ⇒ [`stop()`](https://rdrr.io/r/base/stop.html) before Step 6, because deleting the `$THETA` line and renumbering when no `$PK` equation actually changed would silently rebind a surviving `THETA(n)` to the wrong parameter | tag, model | `list(status, model_name, covariate_removed, search_state)` | `bbr::copy_model_from/read_model/remove_tags/add_notes`; `write_model_file`; `writeLines` (`<model>_remove_<cov>_log.txt`, and `…_error_log.txt` from the `withCallingHandlers` error branch); `log_messages <<-`; `cat`; **[`stop()`](https://rdrr.io/r/base/stop.html) ×7** — NULL `step_number`, unknown tag, no matching `cov_to_test`, [`bbr::copy_model_from`](https://metrumresearchgroup.github.io/bbr/reference/copy_model_from.html) failure, no `$THETA` section, no THETA matched the covariate, and the new `lines_modified == 0` guard | calls `read_model_file`, `strip_covariate_factors`, `fix_theta_renumbering`, `write_model_file`; called-by `run_backward_elimination` |
 
 **Notes — row-builders & FLAG logic (the reconciliation core):** -
 **`add_covariate_to_model`** (`bind_rows`): `action="add_covariate"`,
@@ -501,6 +563,15 @@ use `power` + `INIT` `"1 FIX"`/`"0.75 FIX"`. Init comes from the table’s
 — **not** the numeric level). Rewrites `$TABLE FILE=` to match run
 number. Removal goes through `strip_covariate_factors` +
 `fix_theta_renumbering`, so it no longer mirrors per-shape regexes.
+**Append safety:** a multiplicative add parenthesizes the existing RHS
+first, but **conditionally** — `.rhs_needs_paren_wrap()` gates
+`.wrap_rhs_in_parens()`, so a summed RHS is wrapped once and a flat
+multiplicative chain is left alone. The pairing is load-bearing in both
+directions: without the wrap the new factor mis-binds to the last term
+of a sum; with an *unconditional* wrap every earlier factor sinks below
+paren depth 0 and `strip_covariate_factors` can no longer remove it (see
+the struck-through “Parenthesized RHS hides earlier covariates from
+removal” entry under Confirmed bugs).
 
 ### R/covariate-formula.R
 
@@ -516,8 +587,9 @@ detection, and user expression parsing. Consumed by the WRITE side
 | `register_covariate_formula(status, formula, nonmem=NULL, init="0.1", categorical=FALSE, nonmem_log=NULL)` | · | Store a form keyed `"status.formula"`. `nonmem(cova, ref, n)` renders the MULTIPLICATIVE factor for a normal-scale TV; `nonmem_log(cova, ref, n)` the ADDITIVE term for a log-scale TV; `categorical=TRUE` flags per-level `IF/ELSEIF` handling. **Internal since 2026-07-28** (`@keywords internal`/`@noRd`) — its only caller is this file, 5× at load time to declare the built-ins | status, formula, renderer fns | `invisible(key)` | `assign` into the load-time registry env | called at load time for the built-ins |
 | `get_covariate_formula(status, formula)` | · | Look up an entry; **falls through to `parse_covariate_expression(formula)`** when the name isn’t registered, so a raw expression works like a built-in | status, formula | entry `list` or `NULL` | — | called-by `model_add_cov`, `calculate_covariate_df` |
 | `list_covariate_formulas()` | · | The registered `"status.formula"` keys. **Internal since 2026-07-28** | — | sorted `character` | — | called-by `model_add_cov` (the “unknown formula” error message) |
-| `detect_param_transform(modelcode, param)` | · | Classify a parameter: `"normal"` (`P = TV*EXP(ETA)`), `"log"` (`P = EXP(TV+ETA)`), `"unknown"` (ETA not inside an `EXP` → exotic, callers reject). No IIV on the parameter ⇒ `"normal"`. Robust to models that already carry covariates | model lines, param name | `character(1)` | — | calls `.exp_inner_containing_eta`; called-by `model_add_cov`, `validate_param_transformations` |
+| `detect_param_transform(modelcode, param)` | · | Classify a parameter: `"normal"` (`P = TV*EXP(ETA)`), `"log"` (`P = EXP(TV+ETA)`), `"unknown"` (ETA not inside an `EXP` → exotic, callers reject). No IIV on the parameter ⇒ `"normal"`. Robust to models that already carry covariates. **MU-referencing is disambiguated by the `$THETA` tag (2026-08-11):** the tag is consulted only when **two** conditions both hold — (1) the leftover typical-value symbol riding inside the `EXP` alongside `ETA` has its own line `<sym> = LOG(TV_<param>)` (case-insensitive, and `TV_<param>` specifically), and (2) `has_tv_line`: a line actually *starts* with that TV symbol, `^\s*TV_<param>\b` (case-sensitive; the `=` is not part of the pattern). That second pattern is byte-identical to the one `model_add_cov` uses to locate its write target (model-modification.R:556-557) and to `validate_param_transformations`’ no-`TV_` check (initialization.R:932), which is the point: the tag may only override when there is a TV line the writer can actually reach. When both hold the form is algebraically `TV*EXP(ETA)`, so the parameter’s `; <PARAM> ; units ; RATIO\|LOG` tag decides: `RATIO` ⇒ `"normal"`, `LOG` ⇒ `"log"`. **No tag ⇒ the old `"log"` default**, so an untagged MU model (i.e. one never run through `validate_parameter_blocks`) still classifies as before. Everything failing either condition stays `"log"`: a MU reference to something *other* than `TV_<param>` (e.g. `MU_1 = LOG(THETA(1))`, no `TV_` line at all), and — the case condition (2) closes — a **conditionally assigned** TV that only ever appears mid-line (`IF(SEX.EQ.1) TV_CL = …`, never at line start). Both then still trip `validate_param_transformations`’ no-`TV_` [`stop()`](https://rdrr.io/r/base/stop.html) instead of being reclassified `"normal"`, which would have sent `model_add_cov` down its fallback and written the covariate onto the `PARAM = EXP(MU+ETA)` line, destroying the MU form | **whole control stream** (the tag lookup needs the `$THETA` block, not just the `$PK` line), param name | `character(1)` ∈ `normal`/`log`/`unknown` | — | calls `.exp_inner_containing_eta`, `.theta_tag_for`; called-by `model_add_cov`, `validate_param_transformations` |
 | `.exp_inner_containing_eta(rhs)` | · | Body of the first paren-balanced `EXP(...)` whose content holds an `ETA(` (`\b` guard so `THETA(` doesn’t match); `NA` if the ETA isn’t wrapped in an `EXP` | RHS of the parameter line | `character(1)` or `NA` | — | called-by `detect_param_transform` |
+| `.theta_tag_for(modelcode, param)` | · | Exact-name lookup of the `value ; NAME ; units ; RATIO\|LOG` comment tag that `validate_parameter_blocks` requires on every `$THETA`/`$OMEGA`/`$SIGMA` line — the tie-breaker for MU-referenced parameters. Scans **every line containing a `;`**, not only `$THETA` lines: strips the text before the first `;`, splits the rest on `;`, drops empty fields, and requires ≥2 fields whose **first** is exactly `param` (case-sensitive `identical`); the **last** field, uppercased, is the tag. First line yielding `RATIO`/`LOG` wins; a matching line with any other trailing field is skipped and the scan continues | model lines, exact parameter name | `"RATIO"`, `"LOG"`, or `NA_character_` when no such line exists | — | called-by `detect_param_transform` |
 | `parse_covariate_expression(formula)` | · | Treat a non-built-in FORMULA as a single-factor expression in reserved `cov` (and optional `ref`); **every other symbol is an estimated THETA**, in order of appearance. Rejects anything using a function outside `.COV_EXPR_ALLOWED` (`+ - * / ^ exp log log10 sqrt`) — notably `if`/`ifelse`, which keeps expressions single-factor | formula string | entry `list(expr, theta_names, nonmem, nonmem_log, ...)` or `NULL`. **`nonmem_log` is the same rendering joined with `+` instead of `*`** — the expression is never transformed | — | `all.vars`/`all.names`; called-by `get_covariate_formula` |
 | `.translate_expr_to_nonmem(expr, cova, ref, thetas, n)` | · | AST walk rendering the R expression as NONMEM: `cov`→covariate column, `ref`→its value, parameter symbols→`THETA(n)`, `THETA(n+1)`…, math fns uppercased, `^`→`**` | parsed expr | `character(1)` | — | called-by the expression entry’s `nonmem()` |
 | `parse_named_init(init_str, theta_names)` | · | Split a `;`-delimited **named** INIT spec (`"EMAX=0.1; EC50=(0,10,1000)"`) into one `$THETA` init string per theta, aligned to `theta_names`, defaulting to `"0.1"`; order-independent, unknown names ignored | INIT cell, theta names | `character(length(theta_names))` | — | called-by `model_add_cov` (multi-theta path) |
@@ -544,6 +616,31 @@ responsibility, flagged by a WARNING. The package deliberately does NOT
 wrap it in `LOG()` for you. The registry’s old read-side `r_eval` fields
 are gone — `apply_covariate_model` evaluates the `$PK` equations
 instead, so write and read cannot drift.
+
+**Transform detection depends on the parameter-block tags
+(2026-08-11).** A MU-referenced model (`MU_1 = LOG(TV_CL)`;
+`CL = EXP(MU_1 + ETA(1))`) is structurally indistinguishable from a
+genuine log parameterization — a typical-value term riding inside the
+`EXP` next to `ETA` — but is algebraically `TV*EXP(ETA)`, i.e. *normal*
+space, so writing the covariate additively there would be wrong.
+`detect_param_transform` therefore falls back to the
+`; <PARAM> ; units ; RATIO|LOG` tag (`.theta_tag_for`) for that one
+shape. Two consequences: (1) the classification of a MU model now
+depends on a **comment**, so a mis-tagged `$THETA` line silently changes
+where `model_add_cov` writes the covariate — `validate_parameter_blocks`
+(run when `initialize_covariate_search(validate_parameters = TRUE)`) is
+what makes the tag trustworthy, and an untagged MU model still
+classifies as `"log"` exactly as before; (2) the rule is safe only
+because `validate_param_transformations` already
+[`stop()`](https://rdrr.io/r/base/stop.html)s on the disguised-log form
+`TV_<param> = EXP(THETA(n))`, so a `RATIO`-tagged TV cannot itself be on
+the log scale. Those two functions must stay paired. **Narrowed
+2026-08-12:** the tag override additionally requires the TV line to
+exist as a line-start `^\s*TV_<param>\b` assignment (`has_tv_line`) —
+the same pattern the writer and the no-`TV_` check use — so a TV
+assigned only inside an `IF` block is no longer eligible for
+reclassification and reaches the existing
+[`stop()`](https://rdrr.io/r/base/stop.html) instead.
 
 ### R/monitoring-files.R
 
