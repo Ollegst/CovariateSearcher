@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="index.html">CovariateSearcher</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.5</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -48,7 +48,7 @@
 
 <div id="covariatesearcher--function-reference" class="section level1">
 
-<p><strong>What this is:</strong> an agent-facing map of <em>every</em> function in <code>R/</code>, so future sessions don’t have to re-read the whole codebase. Originally generated from a full read of the pre-refactor code (v0.1.30). <strong>Last audited 2026-08-07 against v0.4.4: 29 files in <code>R/</code>, 142 top-level functions, 90 exports in NAMESPACE</strong> — every defined function appears below. Keep it in sync as the modular reorg lands.</p>
+<p><strong>What this is:</strong> an agent-facing map of <em>every</em> function in <code>R/</code>, so future sessions don’t have to re-read the whole codebase. Originally generated from a full read of the pre-refactor code (v0.1.30). <strong>Last audited 2026-08-11 against v0.4.4: 29 files in <code>R/</code>, 142 top-level functions, 90 exports in NAMESPACE</strong> — every defined function appears below. Keep it in sync as the modular reorg lands.</p>
 <p><strong>Legend:</strong> <code>Exp</code> ✓ = exported (<code>@export</code>), · = internal/documented-internal. <em>Side effects</em> flag file writes, <code>bbr::</code> calls, <code>&lt;&lt;-</code>, <code><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop()</a></code>, hardcoded paths. <em>Nested</em> = a closure defined inside another function (not top-level).</p>
 <p><strong>Housekeeping:</strong> this file is a dev/agent aid, not package content — <code>^FUNCTIONS\.md$</code> is in <code>.Rbuildignore</code> (done), so it doesn’t ship or trip <code>R CMD check</code>.</p>
 <hr><div class="section level2">
@@ -251,13 +251,13 @@
 <td>calls <code>.load_if_path</code>, <code>validate_covariate_search_table</code>, <code>generate_tags_from_covariate_search</code>, <code>load_tags</code>; enables <code>add_covariate_to_model</code> on a covariate outside the original table</td>
 </tr><tr><td><code>build_covariate_reference_table(data, id, time, Parameter, Covariate, Category, Formula, yaml_data, INIT=NULL)</code></td>
 <td>✓</td>
-<td>Build the <code>covariate_search</code> table from parallel vectors: validates the FORMULA vocab (built-ins <code>linear</code>/<code>power</code>/<code>exponential</code>, else an expression), computes REFERENCE (median / user), LEVELS from the data, and TIME_DEPENDENT (&gt;1 distinct value within a subject); optional <code>INIT</code> column</td>
-<td>data, aligned spec vectors, lookup yaml</td>
+<td>Build the <code>covariate_search</code> table from parallel vectors. Validates the spec (equal vector lengths, <code>STATUS</code> ∈ <code>con</code>/<code>cat</code>, one Category per covariate across rows, covariate/id/time columns present) and the FORMULA vocab (built-ins — con: <code>linear</code>/<code>power</code>/<code>exponential</code>, cat: <code>linear</code>/<code>power</code> — else an expression that parses <strong>and</strong> references <code>cov</code>). <strong>REFERENCE comes from baseline only</strong> (<code>Time == 0</code>, first row per ID): <code>round(median, 2)</code> for <code>con</code>, most-prevalent level for <code>cat</code>. <strong>LEVELS comes from the FULL dataset, not baseline</strong> — unique non-<code>NA</code> values of the whole column, so a level that only appears away from baseline (e.g. a time-varying dose under a <code>power</code> formula) is still captured; ordered to match <code>yaml_data[[cov]]$values</code> (falls back to lexicographic <code><a href="https://rdrr.io/r/base/sort.html" class="external-link">sort()</a></code> only when the yaml lists no values), <code>NA</code> for <code>con</code>. Cross-checks those levels against the yaml, and derives TIME_DEPENDENT from the full data (&gt;1 distinct value within a subject); optional <code>INIT</code> column</td>
+<td>data, aligned spec vectors, <code>yaml_data</code> (needs <code>$&lt;cov&gt;$values</code> per categorical covariate — supplies both the legal set and the level ordering)</td>
 <td>
-<code>data.frame</code> (COVARIATE, PARAMETER, FORMULA, STATUS, LEVELS, REFERENCE, TIME_DEPENDENT[, INIT])</td>
+<code>data.frame</code> in spec-row order, columns PARAMETER, COVARIATE, STATUS, FORMULA, LEVELS, REFERENCE, TIME_DEPENDENT[, INIT]</td>
 <td>
-<code><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop()</a></code> on spec/vocab errors</td>
-<td>feeds <code>initialize_covariate_search</code>; TIME_DEPENDENT drives covariate placement</td>
+<code><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop()</a></code> on spec/vocab errors, on a categorical covariate absent from <code>yaml_data</code>, and on a data level not defined in <code>yaml_data</code>; <code><a href="https://rdrr.io/r/base/warning.html" class="external-link">warning()</a></code> when <code>yaml_data</code> defines a level never observed in the data, and <code><a href="https://rdrr.io/r/base/warning.html" class="external-link">warning()</a></code> per time-dependent covariate flagging that its REFERENCE still reflects baseline only</td>
+<td>calls <code>parse_covariate_expression</code>; nested <code>formula_ok</code>, <code>compute_ref_levels</code>, <code>compute_time_dependent</code>; feeds <code>initialize_covariate_search</code>; TIME_DEPENDENT drives covariate placement</td>
 </tr><tr><td><code>validate_param_transformations(covariate_search, data_file, id_col, model_name, models_folder="models")</code></td>
 <td>✓</td>
 <td>Fail-fast guard for every <strong>population</strong> (time-constant) covariate target: parameterization must be classifiable as normal <code>P = TV*EXP(ETA)</code> or log <code>P = EXP(TV+ETA)</code>; a log target must have a separate <code>TV_&lt;param&gt;</code> line (inline <code>P = EXP(THETA+ETA)</code> rejected — the additive term would land outside the <code>EXP</code>); rejects disguised-log <code>TV_P = EXP(THETA(n))</code> and unbalanced parens</td>
