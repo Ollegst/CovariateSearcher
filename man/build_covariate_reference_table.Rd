@@ -59,10 +59,14 @@ LEVELS, REFERENCE, TIME_DEPENDENT (and INIT when supplied) -- one row per
 Combines a user-specified Parameter/Covariate/Category/Formula mapping with
 subject-level longitudinal data to automatically compute reference values
 (median for continuous covariates, most prevalent level for categorical
-covariates) and detected levels from baseline (Time == 0) data, cross-check
-categorical levels against a YAML covariate specification, and determine
-whether each covariate is time-dependent using the FULL dataset (not just
-baseline). The result is a long table ready for
+covariates) from baseline (Time == 0) data, detect categorical LEVELS from
+the FULL dataset ordered to match \code{yaml_data} (so a level that only
+appears away from baseline, e.g. via a time-varying dose under a power
+formula, is still captured), cross-check those levels against the YAML
+covariate specification, and determine whether each covariate is
+time-dependent using the FULL dataset (a time-dependent covariate emits a
+\code{warning()} noting that its REFERENCE still reflects baseline only).
+The result is a long table ready for
 \code{\link{validate_covariate_search_table}} /
 \code{\link{initialize_covariate_search}}.
 }

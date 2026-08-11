@@ -107,6 +107,20 @@ list_covariate_formulas <- function() {
 # Robust to models that already carry covariates: it inspects the EXP() that
 # directly wraps the parameter's ETA and asks whether a typical-value term
 # (anything besides ETA) sits inside that SAME EXP.
+#
+# MU-referencing of a genuine TV_PARAM line (MU_n = LOG(TV_PARAM); PARAM =
+# EXP(MU_n+ETA)) looks identical to that structurally -- a typical-value term
+# riding alongside ETA inside EXP() -- but is algebraically EXP(LOG(TV)+ETA) ==
+# TV*EXP(ETA), the "normal" space, not "log". validate_param_transformations
+# already forbids the one case that would make this ambiguous (TV_PARAM itself
+# written as EXP(THETA(n))), so when the EXP()-riding symbol turns out to be a
+# MU reference specifically to TV_PARAM, the parameter's own
+# `$THETA ; NAME ; units ; RATIO|LOG` tag (required by validate_parameter_blocks
+# when initialize_covariate_search runs with validate_parameters = TRUE) is the
+# disambiguator instead of assuming "log". A MU reference to anything OTHER than
+# TV_PARAM (e.g. MU_n = LOG(THETA(n)) with no separate TV_ line at all) is left
+# alone: that is genuinely "log" and must still trip validate_param_transformations'
+# no_tv check, since there is no TV_ line for model_add_cov to append to.
 
 # Return the content inside the first EXP(...) whose body contains an ETA(...),
 # paren-balanced; NA if the parameter's ETA is not wrapped in an EXP at all.
@@ -128,6 +142,21 @@ list_covariate_formulas <- function() {
   NA_character_
 }
 
+# Exact-name lookup of the "value ; NAME ; units ; RATIO|LOG" comment tag that
+# validate_parameter_blocks requires on every $THETA/$OMEGA/$SIGMA line. Returns
+# "RATIO", "LOG", or NA if `param` has no such line.
+.theta_tag_for <- function(modelcode, param) {
+  for (line in modelcode[grepl(";", modelcode, fixed = TRUE)]) {
+    fields <- trimws(strsplit(sub("^[^;]*", "", line), ";")[[1]])
+    fields <- fields[nzchar(fields)]
+    if (length(fields) >= 2 && identical(fields[1], param)) {
+      tag <- toupper(fields[length(fields)])
+      if (tag %in% c("RATIO", "LOG")) return(tag)
+    }
+  }
+  NA_character_
+}
+
 # Classify parameter `param`'s transformation from the model code lines.
 detect_param_transform <- function(modelcode, param) {
   idx <- grep(paste0("^\\s*", param, "\\b\\s*=.*\\bETA\\("), modelcode)
@@ -139,7 +168,29 @@ detect_param_transform <- function(modelcode, param) {
   # Is there a typical-value term (anything besides ETA) inside the same EXP?
   wo <- gsub("\\bETA\\(\\s*\\d+\\s*\\)", "", inner)
   wo <- gsub("[-+*/^() \t]", "", wo)
-  if (nzchar(wo)) "log" else "normal"
+  if (!nzchar(wo)) return("normal")
+  # MU-referencing of a genuine TV_<param> line specifically: `wo`'s own line
+  # must be "wo = LOG(TV_<param>)", not LOG() of anything else (e.g. a raw
+  # THETA(n), which would mean there is no separate typical-value line at all).
+  # Also require a line-start "TV_<param> = ..." assignment -- the SAME
+  # criterion model_add_cov uses to find where to write the covariate and
+  # validate_param_transformations' no_tv check uses to validate it exists.
+  # A conditionally-assigned TV (e.g. "IF(SEX.EQ.1) TV_CL = THETA(1)", never
+  # starting the line with "TV_CL") would satisfy the text pattern above but
+  # not this one, and reclassifying that as "normal" would make model_add_cov
+  # silently fall back to writing the covariate onto the PARAM = EXP(MU+ETA)
+  # line itself, destroying the MU-referenced form -- and skip the no_tv stop()
+  # that exists precisely to catch a log parameter with nowhere safe to write.
+  mu_line <- grep(
+    paste0("^\\s*", wo, "\\b\\s*=\\s*LOG\\(\\s*TV_", param, "\\s*\\)"),
+    modelcode, ignore.case = TRUE, value = TRUE
+  )
+  has_tv_line <- length(grep(paste0("^\\s*TV_", param, "\\b"), modelcode)) > 0L
+  if (length(mu_line) > 0L && has_tv_line) {
+    tag <- .theta_tag_for(modelcode, param)
+    if (!is.na(tag)) return(if (tag == "RATIO") "normal" else "log")
+  }
+  "log"
 }
 
 # ---- Expression formulas ------------------------------------------------------

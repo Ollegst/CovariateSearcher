@@ -245,6 +245,41 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag,
   })
 
 }
+
+# TRUE if `rhs` has a "+" or "-" at paren depth 0 -- i.e. an appended
+# "* factor" would (by NONMEM/Fortran precedence) bind only to the last term
+# instead of the whole expression, and the RHS needs wrapping first.
+.rhs_needs_paren_wrap <- function(rhs) {
+  depth <- 0L
+  for (ch in strsplit(rhs, "")[[1]]) {
+    if (ch == "(") depth <- depth + 1L
+    else if (ch == ")") depth <- depth - 1L
+    else if (depth == 0L && ch %in% c("+", "-")) return(TRUE)
+  }
+  FALSE
+}
+
+# Wrap a "NAME = RHS [; comment]" line's RHS in parentheses, preserving the
+# comment outside them. Only call when .rhs_needs_paren_wrap() is TRUE: a line
+# already a pure multiplicative chain (e.g. from a PRIOR call to this same
+# function) must NOT be re-wrapped, or each subsequent covariate addition
+# nests one more paren layer around the earlier ones -- putting them at paren
+# depth > 0, where strip_covariate_factors' depth-0 scan can no longer find
+# and remove them during backward elimination.
+.wrap_rhs_in_parens <- function(line) {
+  name_eq <- regmatches(line, regexpr("^\\s*[^=]+=\\s*", line))
+  rest    <- sub("^\\s*[^=]+=\\s*", "", line)
+  cmt_pos <- regexpr(";", rest, fixed = TRUE)
+  if (cmt_pos > 0) {
+    rhs <- substr(rest, 1, cmt_pos - 1)
+    cmt <- substr(rest, cmt_pos, nchar(rest))
+  } else {
+    rhs <- rest
+    cmt <- ""
+  }
+  paste0(name_eq, "(", trimws(rhs), ")", if (nzchar(cmt)) paste0("    ", cmt) else "")
+}
+
 #'
 #' @title Core functionality to add covariate to NONMEM model file with enhanced logging
 #' @description Modifies NONMEM control file to add covariate relationship with detailed logging
@@ -545,6 +580,16 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   if (length(linetu) > 0) {
     original_line <- modelcode[linetu]
     log_function(paste("Original line:", original_line))
+
+    # A multiplicative append needs the existing RHS parenthesized first, but
+    # only when it actually has a top-level +/- (see .rhs_needs_paren_wrap);
+    # an already-multiplicative RHS must be left flat so a later removal can
+    # still find each factor at paren depth 0. An additive append never wraps,
+    # since "+ term" is always safe to tack onto a sum as-is.
+    if (identical(op_mode, "mult") &&
+        .rhs_needs_paren_wrap(sub(";.*$", "", sub("^[^=]*=", "", modelcode[linetu])))) {
+      modelcode[linetu] <- .wrap_rhs_in_parens(modelcode[linetu])
+    }
 
     # Add covariate to parameter line
     if(grepl(";", modelcode[linetu])){
@@ -1227,6 +1272,23 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
   }
 
   log_msg(paste("Modified", lines_modified, "parameter lines"))
+
+  # A covariate term that theta_numbers_to_remove says exists but no line
+  # actually changed means strip_covariate_factors()/the categorical gsub
+  # could not find it -- e.g. a multiplicative wrap (.wrap_rhs_in_parens)
+  # added by a LATER covariate addition nested this one at paren depth > 0,
+  # where the depth-0 scan can't see it. Proceeding would still delete its
+  # $THETA line and renumber the survivors, silently rebinding a live $PK
+  # reference to a different parameter. Fail loud instead.
+  if (lines_modified == 0) {
+    stop(
+      "Could not find covariate '", covariate_to_remove, "' referenced in any ",
+      "parameter equation, even though THETA(", paste(theta_numbers_to_remove, collapse = ", "),
+      ") matched its name. Refusing to remove its $THETA line(s) blind -- that ",
+      "would silently rebind a surviving THETA to the wrong parameter after ",
+      "renumbering. Inspect the model's $PK block by hand."
+    )
+  }
 
   # Step 6: Remove IF-THEN-ELSE blocks for categorical covariates
   if (cov_info$STATUS == "cat") {
