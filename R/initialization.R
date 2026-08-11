@@ -304,10 +304,14 @@ load_tags <- function(search_state) {
 #' Combines a user-specified Parameter/Covariate/Category/Formula mapping with
 #' subject-level longitudinal data to automatically compute reference values
 #' (median for continuous covariates, most prevalent level for categorical
-#' covariates) and detected levels from baseline (Time == 0) data, cross-check
-#' categorical levels against a YAML covariate specification, and determine
-#' whether each covariate is time-dependent using the FULL dataset (not just
-#' baseline). The result is a long table ready for
+#' covariates) from baseline (Time == 0) data, detect categorical LEVELS from
+#' the FULL dataset ordered to match \code{yaml_data} (so a level that only
+#' appears away from baseline, e.g. via a time-varying dose under a power
+#' formula, is still captured), cross-check those levels against the YAML
+#' covariate specification, and determine whether each covariate is
+#' time-dependent using the FULL dataset (a time-dependent covariate emits a
+#' \code{warning()} noting that its REFERENCE still reflects baseline only).
+#' The result is a long table ready for
 #' \code{\link{validate_covariate_search_table}} /
 #' \code{\link{initialize_covariate_search}}.
 #'
@@ -428,18 +432,36 @@ build_covariate_reference_table <- function(data, id, time,
     dplyr::slice(1) %>%
     dplyr::ungroup()
 
-  # ---- Step 3: REFERENCE + LEVELS per unique covariate -------------------
+  # ---- Step 3: REFERENCE (baseline) + LEVELS (full dataset) --------------
+  # LEVELS is drawn from the full dataset, not just baseline: a value can only
+  # be present later but absent at baseline if the covariate varies within a
+  # subject, i.e. is time-dependent, so restricting to baseline risks missing
+  # levels for exactly the covariates that need them most (e.g. a categorical
+  # covariate driven by a time-varying dose via a power formula).
   compute_ref_levels <- function(cov) {
     status <- cov_status[[cov]]
-    x <- baseline[[cov]]
-    x <- x[!is.na(x)]
+    x_baseline <- baseline[[cov]]
+    x_baseline <- x_baseline[!is.na(x_baseline)]
 
     if (status == "con") {
-      list(reference = as.character(round(median(x), 2)), levels = NA_character_)
+      list(reference = as.character(round(median(x_baseline), 2)), levels = NA_character_)
     } else {
-      tab <- table(x)
-      levels_found <- sort(unique(as.character(x)))
+      tab <- table(x_baseline)
       most_prevalent <- names(tab)[which.max(tab)]
+
+      x_full <- data[[cov]]
+      x_full <- x_full[!is.na(x_full)]
+      levels_found <- unique(as.character(x_full))
+
+      # Order to match yaml_data's own ordering (e.g. dose levels), not a
+      # lexicographic string sort ("150" < "25" < "300" ...).
+      yaml_order <- as.character(yaml_data[[cov]]$values)
+      levels_found <- if (length(yaml_order) > 0) {
+        levels_found[order(match(levels_found, yaml_order), levels_found)]
+      } else {
+        sort(levels_found)
+      }
+
       list(reference = most_prevalent, levels = paste(levels_found, collapse = ";"))
     }
   }
@@ -460,13 +482,13 @@ build_covariate_reference_table <- function(data, id, time,
 
     extra_in_data <- setdiff(data_levels, yaml_values)
     if (length(extra_in_data) > 0) {
-      stop("Covariate '", cov, "': level(s) found in baseline data not defined in yaml_data: ",
+      stop("Covariate '", cov, "': level(s) found in data not defined in yaml_data: ",
            paste(extra_in_data, collapse = ", "))
     }
 
     extra_in_yaml <- setdiff(yaml_values, data_levels)
     if (length(extra_in_yaml) > 0) {
-      warning("Covariate '", cov, "': yaml_data defines level(s) never observed in baseline data: ",
+      warning("Covariate '", cov, "': yaml_data defines level(s) never observed in data: ",
               paste(extra_in_yaml, collapse = ", "))
     }
   }
@@ -479,6 +501,11 @@ build_covariate_reference_table <- function(data, id, time,
   }
 
   time_dep <- setNames(vapply(unique_covs, compute_time_dependent, character(1)), unique_covs)
+
+  for (cov in unique_covs[time_dep[unique_covs] == "Yes"]) {
+    warning("Covariate '", cov, "' is time-dependent; REFERENCE (",
+            ref_levels[[cov]]$reference, ") was calculated from baseline (Time == 0) data only.")
+  }
 
   # ---- Step 6: assemble final long table ---------------------------------
   spec_df$LEVELS         <- vapply(spec_df$COVARIATE, function(cov) ref_levels[[cov]]$levels, character(1))
