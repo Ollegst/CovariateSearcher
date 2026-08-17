@@ -74,6 +74,19 @@ check_cov_na <- function(data, con = character(0), cat = character(0),
   out
 }
 
+# Header naming across the disposition functions below (popPK report
+# convention):
+#   "Overall" = the pooled all-studies row or column. One word, everywhere.
+#   "Total"   = only where it means a denominator sum - the internal counts
+#               (subj_tot / obs_tot / blq_tot) and the "total = excluded +
+#               included" logic. It never appears in a column header.
+# So the usable-count headers are parallel to the subject header rather than
+# prefixed with "Total": "Number of Subjects", "Number of Observations",
+# "Number (%) of BLQ Observations".
+#
+# nonmem_exclusion_summary(), covariate_missing_summary() and
+# create_table1_summary() already follow the rule.
+
 #' High-level disposition of subjects and observations by study
 #'
 #' One row per study plus an Overall row. EXCLFLG is the single arbiter: a row
@@ -109,24 +122,63 @@ check_cov_na <- function(data, con = character(0), cat = character(0),
 #' @param dat        data.frame.
 #' @param id,evid,mdv,exclflg,study  column-name overrides.
 #' @param incl_value EXCLFLG value meaning "include" (default 0).
+#' @param transpose Logical. If `TRUE`, measures are returned as rows and
+#'   studies as columns. If `FALSE`, the original orientation (one row per
+#'   study + Overall) is returned. Default `TRUE`.
 #'
-#' @return data.frame, one row per study + Overall.
+#' @return A data.frame. If `transpose = FALSE`: one row per study + Overall.
+#'   If `transpose = TRUE`: `Measure | studies`.
 nonmem_disposition_overview <- function(dat,
                                         id         = "ID",
                                         evid       = "EVID",
                                         mdv        = "MDV",
                                         exclflg    = "EXCLFLG",
                                         study      = "STUDYID",
-                                        incl_value = 0) {
+                                        incl_value = 0,
+                                        transpose  = TRUE) {
 
-  # validate
-  needed <- c(id = id, evid = evid, mdv = mdv, exclflg = exclflg, study = study)
-  miss   <- needed[!needed %in% names(dat)]
-  if (length(miss))
-    stop("Column(s) not found in 'dat': ",
-         paste(sprintf("'%s' (arg '%s')", miss, names(miss)), collapse = ", "))
+  # Validate
+  needed <- c(
+    id      = id,
+    evid    = evid,
+    mdv     = mdv,
+    exclflg = exclflg,
+    study   = study
+  )
 
-  # normalise
+  miss <- needed[!needed %in% names(dat)]
+
+  if (length(miss)) {
+    stop(
+      "Column(s) not found in 'dat': ",
+      paste(
+        sprintf("'%s' (arg '%s')", miss, names(miss)),
+        collapse = ", "
+      ),
+      call. = FALSE
+    )
+  }
+
+  if (!is.logical(transpose) ||
+      length(transpose) != 1L ||
+      is.na(transpose)) {
+    stop("`transpose` must be TRUE or FALSE.", call. = FALSE)
+  }
+
+  # Preserve the existing study order.
+  # Existing factor levels are read but are not changed or reassigned.
+  study_values <- dat[[study]]
+
+  if (is.factor(study_values)) {
+    studies <- levels(study_values)
+    studies <- studies[studies %in% as.character(study_values)]
+  } else {
+    studies <- unique(as.character(study_values))
+  }
+
+  studies <- studies[!is.na(studies)]
+
+  # Normalise
   d <- data.frame(
     id      = dat[[id]],
     evid    = suppressWarnings(as.numeric(dat[[evid]])),
@@ -135,16 +187,21 @@ nonmem_disposition_overview <- function(dat,
     study   = as.character(dat[[study]]),
     stringsAsFactors = FALSE
   )
+
   incl_chr <- trimws(as.character(incl_value))
-  eq <- function(x, val) !is.na(x) & x == val
+
+  eq <- function(x, val) {
+    !is.na(x) & x == val
+  }
 
   d$kept <- eq(d$exclflg, incl_chr)         # retained per EXCLFLG, verbatim
   d$obs  <- eq(d$evid, 0) & !eq(d$mdv, 1)   # usable PK observation (NONMEM fits)
 
-  # raw per-study counts
+  # Raw per-study counts
   counts <- function(s) {
     subj_tot <- length(unique(s$id))                 # ALL rows
     subj_inc <- length(unique(s$id[s$kept]))         # >= 1 kept row anywhere
+
     data.frame(
       study    = NA_character_,
       subj_tot = subj_tot,
@@ -156,14 +213,24 @@ nonmem_disposition_overview <- function(dat,
       stringsAsFactors = FALSE
     )
   }
-  studies <- sort(unique(d$study))
-  raw <- do.call(rbind, lapply(studies, function(st) {
-    r <- counts(d[d$study == st, ]); r$study <- st; r
-  }))
+
+  raw <- do.call(
+    rbind,
+    lapply(studies, function(st) {
+      r <- counts(d[!is.na(d$study) & d$study == st, , drop = FALSE])
+      r$study <- st
+      r
+    })
+  )
 
   # Overall = column sum of the study rows
-  tot <- raw[1, , drop = FALSE]; tot$study <- "Overall"
-  for (cn in setdiff(names(raw), "study")) tot[[cn]] <- sum(raw[[cn]])
+  tot <- raw[1, , drop = FALSE]
+  tot$study <- "Overall"
+
+  for (cn in setdiff(names(raw), "study")) {
+    tot[[cn]] <- sum(raw[[cn]])
+  }
+
   raw <- rbind(raw, tot)
 
   # format
@@ -171,7 +238,8 @@ nonmem_disposition_overview <- function(dat,
     pct <- ifelse(denom > 0, 100 * n / denom, 0)
     sprintf("%d (%.1f%%)", n, pct)
   }
-  data.frame(
+
+  out <- data.frame(
     Study                                 = raw$study,
     `Number of Subjects`                  = raw$subj_tot,
     `Number (%) of Excluded Subjects`     = fmt(raw$subj_exc, raw$subj_tot),
@@ -181,6 +249,32 @@ nonmem_disposition_overview <- function(dat,
     `Number (%) of Included Observations` = fmt(raw$obs_inc, raw$obs_tot),
     check.names = FALSE, stringsAsFactors = FALSE
   )
+
+  if (!transpose) {
+    return(out)
+  }
+
+  # Transpose:
+  # - Study values become column names
+  # - Original measure names become the first column
+  out_matrix <- t(
+    as.matrix(
+      out[, setdiff(names(out), "Study"), drop = FALSE]
+    )
+  )
+
+  colnames(out_matrix) <- out$Study
+
+  out_transposed <- data.frame(
+    Measure = rownames(out_matrix),
+    out_matrix,
+    check.names = FALSE,
+    stringsAsFactors = FALSE
+  )
+
+  rownames(out_transposed) <- NULL
+
+  out_transposed
 }
 
 #' Excluded measurements by reason (rows) and study (columns)
@@ -205,23 +299,62 @@ nonmem_disposition_overview <- function(dat,
 #' @param dat        data.frame.
 #' @param evid,mdv,exclflg,study  column-name overrides.
 #' @param incl_value EXCLFLG value meaning "include" (default 0).
+#' @param transpose Logical. If `TRUE`, studies are returned as rows and
+#'   exclusion reasons as columns. If `FALSE`, the original orientation is
+#'   returned. Default `TRUE`.
 #'
-#' @return data.frame: Reason | <study 1> | <study 2> | ... | Overall.
+#' @return A data.frame. If `transpose = FALSE`: `Reason | studies | Overall`.
+#'   If `transpose = TRUE`: `Study | reasons`.
 nonmem_exclusion_summary <- function(dat,
                                      evid       = "EVID",
                                      mdv        = "MDV",
                                      exclflg    = "EXCLFLG",
                                      study      = "STUDYID",
-                                     incl_value = 0) {
+                                     incl_value = 0,
+                                     transpose  = TRUE) {
 
-  # validate
-  needed <- c(evid = evid, mdv = mdv, exclflg = exclflg, study = study)
-  miss   <- needed[!needed %in% names(dat)]
-  if (length(miss))
-    stop("Column(s) not found in 'dat': ",
-         paste(sprintf("'%s' (arg '%s')", miss, names(miss)), collapse = ", "))
+  # Validate
+  needed <- c(
+    evid    = evid,
+    mdv     = mdv,
+    exclflg = exclflg,
+    study   = study
+  )
 
-  # normalise
+  miss <- needed[!needed %in% names(dat)]
+
+  if (length(miss)) {
+    stop(
+      "Column(s) not found in 'dat': ",
+      paste(
+        sprintf("'%s' (arg '%s')", miss, names(miss)),
+        collapse = ", "
+      ),
+      call. = FALSE
+    )
+  }
+
+  if (!is.logical(transpose) ||
+      length(transpose) != 1L ||
+      is.na(transpose)) {
+    stop("`transpose` must be TRUE or FALSE.", call. = FALSE)
+  }
+
+  # Retain the existing study order without reassigning factor levels
+  study_values <- dat[[study]]
+
+  if (is.factor(study_values)) {
+    studies <- levels(study_values)
+    studies <- studies[
+      studies %in% as.character(study_values)
+    ]
+  } else {
+    studies <- unique(as.character(study_values))
+  }
+
+  studies <- studies[!is.na(studies)]
+
+  # Normalise
   d <- data.frame(
     evid    = suppressWarnings(as.numeric(dat[[evid]])),
     mdv     = suppressWarnings(as.numeric(dat[[mdv]])),
@@ -229,38 +362,121 @@ nonmem_exclusion_summary <- function(dat,
     study   = as.character(dat[[study]]),
     stringsAsFactors = FALSE
   )
+
   incl_chr <- trimws(as.character(incl_value))
-  eq <- function(x, val) !is.na(x) & x == val
 
-  d$meas      <- eq(d$evid, 0) & !eq(d$mdv, 1)        # usable measurement
-  d$excl_meas <- d$meas & !eq(d$exclflg, incl_chr)    # excluded measurement
+  eq <- function(x, val) {
+    !is.na(x) & x == val
+  }
 
-  fmt <- function(n, denom)
-    sprintf("%d (%.1f%%)", n, if (denom > 0) 100 * n / denom else 0)
+  d$meas <- eq(d$evid, 0) & !eq(d$mdv, 1)
 
-  studies   <- sort(unique(d$study))
-  meas_tot  <- vapply(studies, function(st) sum(d$meas[d$study == st]), numeric(1))
+  d$excl_meas <- d$meas &
+    !eq(d$exclflg, incl_chr)
+
+  fmt <- function(n, denom) {
+    sprintf(
+      "%d (%.1f%%)",
+      n,
+      if (denom > 0) 100 * n / denom else 0
+    )
+  }
+
+  meas_tot <- vapply(
+    studies,
+    function(st) {
+      sum(d$meas & !is.na(d$study) & d$study == st)
+    },
+    numeric(1)
+  )
+
   grand_tot <- sum(d$meas)
 
-  # reasons present among excluded measurements, ordered by total frequency
-  reasons <- names(sort(table(d$exclflg[d$excl_meas]), decreasing = TRUE))
-  if (!length(reasons))
-    return(data.frame(Reason = character(0), check.names = FALSE,
-                      stringsAsFactors = FALSE))
+  # Reasons ordered by total excluded count, most frequent first
+  reasons <- names(
+    sort(
+      table(d$exclflg[d$excl_meas]),
+      decreasing = TRUE
+    )
+  )
 
-  # reason x study matrix
+  if (!length(reasons)) {
+    first_col <- if (transpose) "Study" else "Reason"
+
+    out <- data.frame(
+      character(0),
+      stringsAsFactors = FALSE
+    )
+
+    names(out) <- first_col
+    return(out)
+  }
+
+  # Reason x study table
   rows <- lapply(reasons, function(r) {
-    cells <- vapply(studies,
-                    function(st) sum(d$excl_meas & d$study == st & d$exclflg == r),
-                    numeric(1))
-    row <- data.frame(Reason = r, check.names = FALSE, stringsAsFactors = FALSE)
-    for (st in studies) row[[st]] <- fmt(cells[[st]], meas_tot[[st]])
-    row[["Overall"]] <- fmt(sum(cells), grand_tot)
+
+    cells <- vapply(
+      studies,
+      function(st) {
+        sum(
+          d$excl_meas &
+            !is.na(d$study) &
+            d$study == st &
+            d$exclflg == r
+        )
+      },
+      numeric(1)
+    )
+
+    row <- data.frame(
+      Reason = r,
+      check.names = FALSE,
+      stringsAsFactors = FALSE
+    )
+
+    for (st in studies) {
+      row[[st]] <- fmt(
+        cells[[st]],
+        meas_tot[[st]]
+      )
+    }
+
+    row[["Overall"]] <- fmt(
+      sum(cells),
+      grand_tot
+    )
+
     row
   })
+
   out <- do.call(rbind, rows)
   rownames(out) <- NULL
-  out
+
+  if (!transpose) {
+    return(out)
+  }
+
+  # Transpose:
+  # - studies and Overall become rows
+  # - exclusion reasons become columns
+  out_matrix <- t(
+    as.matrix(
+      out[, setdiff(names(out), "Reason"), drop = FALSE]
+    )
+  )
+
+  colnames(out_matrix) <- out$Reason
+
+  out_transposed <- data.frame(
+    Study = rownames(out_matrix),
+    out_matrix,
+    check.names = FALSE,
+    stringsAsFactors = FALSE
+  )
+
+  rownames(out_transposed) <- NULL
+
+  out_transposed
 }
 
 #' BLQ (below-limit-of-quantification) disposition by study
@@ -273,16 +489,27 @@ nonmem_exclusion_summary <- function(dat,
 #'
 #' BLQ observation definition
 #' --------------------------
-#'   EVID == 0 & LDV == 1  -- a usable-PK-timepoint record flagged as BLQ.
-#'   (MDV is NOT used to define BLQ here: whether a BLQ record is itself
-#'   further marked MDV=1 depends on the M1/M3 handling method, which is
-#'   independent of "is this observation BLQ" -- that logic, if needed,
-#'   belongs in EXCLFLG upstream, same as nonmem_disposition_overview().)
+#'   Uses the same usable-observation population as
+#'   nonmem_disposition_overview(): EVID == 0 & MDV != 1. Within that
+#'   population, a row is BLQ if LDV == 1 and quantifiable (non-BLQ)
+#'   otherwise. BLQ and quantifiable therefore partition the exact same
+#'   observation pool nonmem_disposition_overview() reports on, so
+#'   blq_tot + quantifiable_tot == that function's Number of Observations,
+#'   and this function's excluded-BLQ count is always a subset of its
+#'   excluded-observations count.
 #'
-#' Columns (counts shown as "N (x.x%)", % over that row's total BLQ observations)
-#'   Number of BLQ Observations             : all BLQ records (denominator)
-#'   Number (%) of Excluded BLQ Observations: BLQ records dropped by EXCLFLG
-#'   Number (%) of Included BLQ Observations: BLQ records retained
+#' Columns
+#'   Number (%) of BLQ Observations           : BLQ records, % of (BLQ +
+#'                                               quantifiable observations)
+#'                                               -- i.e. % of the same
+#'                                               observation pool
+#'                                               nonmem_disposition_overview()
+#'                                               reports as
+#'                                               "Number of Observations".
+#'   Number (%) of Excluded BLQ Observations  : BLQ records dropped by
+#'                                               EXCLFLG, % of total BLQ
+#'   Number (%) of Included BLQ Observations  : BLQ records retained, % of
+#'                                               total BLQ
 #'
 #' Overall row = plain column sum of the per-study counts (percentages then
 #' recomputed from the summed counts) -- a true pooled total, same convention
@@ -308,6 +535,19 @@ nonmem_blq_overview <- function(dat,
     stop("Column(s) not found in 'dat': ",
          paste(sprintf("'%s' (arg '%s')", miss, names(miss)), collapse = ", "))
 
+  # Preserve the existing study order.
+  # Existing factor levels are read but are not changed or reassigned.
+  study_values <- dat[[study]]
+
+  if (is.factor(study_values)) {
+    studies <- levels(study_values)
+    studies <- studies[studies %in% as.character(study_values)]
+  } else {
+    studies <- unique(as.character(study_values))
+  }
+
+  studies <- studies[!is.na(studies)]
+
   # normalise
   d <- data.frame(
     evid    = suppressWarnings(as.numeric(dat[[evid]])),
@@ -320,20 +560,22 @@ nonmem_blq_overview <- function(dat,
   incl_chr <- trimws(as.character(incl_value))
   eq <- function(x, val) !is.na(x) & x == val
 
-  d$kept <- eq(d$exclflg, incl_chr)              # retained per EXCLFLG, verbatim
-  d$blq  <- eq(d$evid, 0) & eq(d$ldv, 1)         # BLQ observation
+  d$kept  <- eq(d$exclflg, incl_chr)                        # retained per EXCLFLG, verbatim
+  d$obs   <- eq(d$evid, 0) & !eq(d$mdv, 1)                  # usable PK observation, same as nonmem_disposition_overview()
+  d$blq   <- d$obs & eq(d$ldv, 1)                           # BLQ observation, within the usable-observation pool
+  d$quant <- d$obs & !eq(d$ldv, 1)                          # quantifiable (non-BLQ) observation, within the same pool
 
   # raw per-study counts
   counts <- function(s) {
     data.frame(
-      study   = NA_character_,
-      blq_tot = sum(s$blq),
-      blq_exc = sum(s$blq & !s$kept),
-      blq_inc = sum(s$blq &  s$kept),
+      study     = NA_character_,
+      blq_tot   = sum(s$blq),
+      blq_exc   = sum(s$blq & !s$kept),
+      blq_inc   = sum(s$blq &  s$kept),
+      quant_tot = sum(s$quant),
       stringsAsFactors = FALSE
     )
   }
-  studies <- sort(unique(d$study))
   raw <- do.call(rbind, lapply(studies, function(st) {
     r <- counts(d[d$study %in% st, ]); r$study <- st; r   # %in%, not == (avoids NA-in-study subsetting bug)
   }))
@@ -350,7 +592,7 @@ nonmem_blq_overview <- function(dat,
   }
   data.frame(
     Study                                     = raw$study,
-    `Number of BLQ Observations`              = raw$blq_tot,
+    `Number (%) of BLQ Observations`          = fmt(raw$blq_tot, raw$blq_tot + raw$quant_tot),
     `Number (%) of Excluded BLQ Observations` = fmt(raw$blq_exc, raw$blq_tot),
     `Number (%) of Included BLQ Observations` = fmt(raw$blq_inc, raw$blq_tot),
     check.names = FALSE, stringsAsFactors = FALSE
@@ -1040,20 +1282,11 @@ covariate_association <- function(data, cat_vars, con_vars = NULL,
 }
 #' Boxplots of continuous covariates by categorical covariates, with eta
 #'
-#' facet_grid: continuous covariates = rows, categorical = columns. Each panel
-#' shows boxplots of the continuous variable split by the categorical's levels,
-#' annotated with the correlation ratio eta (top-left), coloured by strength:
-#' black (< eta_moderate), yellow (moderate), green (>= eta_strong).
-#'
-#' Categorical values are used as-is from the data (already decoded, so their
-#' factor levels are the intended order). Each covariate's x-axis follows its
-#' OWN factor levels, independently per facet - a level name shared across
-#' covariates (e.g. "Missing") is not forced to a common position. Never
-#' re-derived or sorted. Strip labels: yaml short+unit.
-#'
-#' Outliers are not drawn and not allowed to inflate the axis: each continuous
-#' row is trimmed to the whisker envelope across its groups, so the row scale
-#' collapses to the visible boxes. Box quartiles unaffected; eta uses FULL data.
+#' facet_grid of continuous covariates against categorical ones, each panel
+#' annotated with the correlation ratio eta, coloured black / yellow / green by
+#' strength. Levels are read from the decoded data per covariate, never
+#' re-derived. Outliers are hidden and trimmed off the scale so the axis follows
+#' the visible boxes; quartiles and eta still use the full data.
 #'
 #' @param data           data.frame.
 #' @param con_vars       continuous covariate columns (numeric).
@@ -1065,17 +1298,26 @@ covariate_association <- function(data, cat_vars, con_vars = NULL,
 #' @param eta_moderate   eta at/above which the label turns yellow (default 0.25).
 #' @param eta_strong     eta at/above which the label turns green  (default 0.37).
 #' @param box_fill,strip_fill  cosmetic colours.
+#' @param text_scale     multiplies base text and the eta annotation (default 1).
+#' @param axis_text_scale,strip_text_scale  multiply axis and strip text
+#'   (default 1). 1 throughout reproduces the untuned plot.
+#' @param transpose      swap the grid to categorical rows x continuous columns
+#'   and lay the boxes horizontally, so level names read upright (default FALSE).
 #'
 #' @return a ggplot object.
 plot_cont_cat <- function(data, con_vars, cat_vars,
-                          yaml_data      = NULL,
-                          missing_values = -99,
-                          trim           = TRUE,
-                          label_width    = 16,
-                          eta_moderate   = 0.25,
-                          eta_strong     = 0.37,
-                          box_fill       = "#cfe0db",
-                          strip_fill     = "#9db0ac") {
+                          yaml_data        = NULL,
+                          missing_values   = -99,
+                          trim             = TRUE,
+                          label_width      = 16,
+                          eta_moderate     = 0.25,
+                          eta_strong       = 0.37,
+                          box_fill         = "#cfe0db",
+                          strip_fill       = "#9db0ac",
+                          text_scale       = 1,
+                          axis_text_scale  = 1,
+                          strip_text_scale = 1,
+                          transpose        = FALSE) {
 
   if (!requireNamespace("ggplot2", quietly = TRUE))
     stop("ggplot2 is required.")
@@ -1087,6 +1329,12 @@ plot_cont_cat <- function(data, con_vars, cat_vars,
   bad_con <- con_vars[!vapply(data[con_vars], is.numeric, logical(1))]
   if (length(bad_con))
     stop("Continuous variable(s) are not numeric: ", paste(bad_con, collapse = ", "))
+
+  if (!is.logical(transpose) || length(transpose) != 1L || is.na(transpose))
+    stop("`transpose` must be TRUE or FALSE.")
+  scales <- c(text_scale, axis_text_scale, strip_text_scale)
+  if (!is.numeric(scales) || any(!is.finite(scales)) || any(scales <= 0))
+    stop("`text_scale`, `axis_text_scale` and `strip_text_scale` must be positive numbers.")
 
   col_mod <- "#DAA520"   # yellow/goldenrod (moderate)
   col_str <- "#2E7D32"   # green (strong)
@@ -1179,22 +1427,51 @@ plot_cont_cat <- function(data, con_vars, cat_vars,
   eta_df$con_name <- factor(eta_df$con_name, levels = con_lab)
   eta_df$cat_name <- factor(eta_df$cat_name, levels = cat_lab)
 
-  # plot
-  ggplot(long, aes(x = x, y = y)) +
-    geom_boxplot(fill = box_fill, outlier.shape = NA, linewidth = 0.3) +
+  # plot. Untransposed: continuous down the rows, categorical across the
+  # columns, boxes vertical, column widths sized by level count. Transposed: the
+  # grid swaps and the boxes lie horizontally, so the level names read upright
+  # and it is the row heights that follow the level counts.
+  p <- if (isTRUE(transpose)) {
+    # A discrete y axis stacks bottom-up, which would print each covariate's
+    # levels in reverse. Flipping the limits keeps them reading top-down in the
+    # same order the untransposed plot reads left-to-right.
+    ggplot(long, aes(x = y, y = x)) +
+      scale_y_discrete(labels = strip_tag, limits = rev) +
+      scale_x_continuous(expand = expansion(mult = c(0.05, 0.10))) +
+      facet_grid(cat_name ~ con_name, scales = "free", space = "free_y")
+  } else {
+    ggplot(long, aes(x = x, y = y)) +
+      scale_x_discrete(labels = strip_tag) +
+      scale_y_continuous(expand = expansion(mult = c(0.05, 0.10))) +
+      facet_grid(con_name ~ cat_name, scales = "free", space = "free_x")
+  }
+
+  # Horizontal boxes grow from the left edge, so the top-left corner the
+  # vertical layout leaves empty is occupied here - annotate top-right instead.
+  eta_layer <- if (isTRUE(transpose)) {
+    geom_text(data = eta_df, aes(x = Inf, y = Inf, label = lab, colour = col),
+              hjust = 1.1, vjust = 1.4, size = 2.2 * text_scale,
+              inherit.aes = FALSE)
+  } else {
     geom_text(data = eta_df, aes(x = -Inf, y = Inf, label = lab, colour = col),
-              hjust = -0.1, vjust = 1.4, size = 2.2, inherit.aes = FALSE) +
+              hjust = -0.1, vjust = 1.4, size = 2.2 * text_scale,
+              inherit.aes = FALSE)
+  }
+
+  p +
+    geom_boxplot(fill = box_fill, outlier.shape = NA, linewidth = 0.3) +
+    eta_layer +
     scale_colour_identity() +
-    scale_x_discrete(labels = strip_tag) +
-    facet_grid(con_name ~ cat_name, scales = "free", space = "free_x") +
-    scale_y_continuous(expand = expansion(mult = c(0.05, 0.10))) +
     theme_bw() +
     theme(
-      text         = element_text(size = 5),
-      axis.text.x  = element_text(angle = 45, hjust = 1, size = 5),
-      axis.text.y  = element_text(size = 5),
+      text         = element_text(size = 5 * text_scale),
+      axis.text.x  = element_text(angle = if (isTRUE(transpose)) 0 else 45,
+                                  hjust = if (isTRUE(transpose)) 0.5 else 1,
+                                  size  = 5 * axis_text_scale),
+      axis.text.y  = element_text(size = 5 * axis_text_scale),
       axis.title   = element_blank(),
-      strip.text   = element_text(size = 5, color = "white", face = "bold"),
+      strip.text   = element_text(size = 5 * strip_text_scale,
+                                  color = "white", face = "bold"),
       strip.background = element_rect(fill = strip_fill),
       panel.grid.minor = element_blank())
 }
@@ -1716,120 +1993,341 @@ library(tidyr)
 
 #' Summarise dose regimens by study and number of subjects
 #'
-#' Takes a decoded analysis dataset and returns a table with one row per
-#' dose/regimen combination and one column per study, where each cell is the
-#' number of distinct subjects.
+#' One row per regimen, one column per study, cells = distinct subjects.
 #'
-#' The regimen label is built by pasting the dose and frequency columns, e.g.
-#' `DOSE = 100`, `FREQ = "BID"` -> `"100 mg BID"`.
+#' Labels come from `dose_col`, printed as the data holds them (a decoded
+#' `"75 mg"` prints verbatim, no unit is appended), then `freq_col` if given,
+#' with the drugs a subject is on joined by `" + "` - e.g.
+#' `"Camizestrant 75 mg + Abemaciclib 150 mg"`. Drug names are the names of
+#' `dose_col`. A missing, blank, or zero dose (`"0 mg"` too) means the drug was
+#' not given and it is left out; a subject on nothing is dropped with a warning.
+#' Row and column order come from existing factor levels, never re-derived.
 #'
-#' @param data Decoded dataset (data.frame / tibble). One or more rows per
-#'   subject is fine - subjects are de-duplicated on `id_col`.
-#' @param study_col,id_col,dose_col,freq_col Column names (as strings) for the
-#'   study, subject id, dose amount, and dosing frequency/regimen.
-#' @param dose_unit Unit string inserted into the regimen label (default "mg").
-#'   Set to "" to drop it.
-#' @param total Logical; append a `Total` column (distinct subjects per
-#'   regimen, across studies) and a `Total` row (distinct subjects per study,
-#'   across regimens). Default TRUE. Because a subject dosed under more than
-#'   one regimen is counted once per regimen but only once in the totals,
-#'   totals need not equal the sum of the cells.
+#' @param data Decoded dataset; one or more rows per subject.
+#' @param study_col,id_col Study and subject-id column names.
+#' @param dose_col Dose column(s), optionally named with the drug names to print.
+#' @param freq_col Frequency column(s), or `NULL` for none.
+#' @param total Append a `Total` column and row of distinct subjects. Because a
+#'   subject can appear under more than one regimen, totals need not equal the
+#'   sum of the cells. Default TRUE.
+#' @param transpose Return studies as rows rather than regimens. Default TRUE.
+#' @param exclflg Exclusion-flag column (default "FLAG"); rows whose value
+#'   differs from `incl_value` are dropped. Absent from `data` -> no filtering.
+#' @param incl_value Value of `exclflg` meaning "include" (default 0).
 #'
-#' @return A tibble: `Regimen`, one integer column per study (ordered), and
-#'   optionally a `Total` column and a trailing `Total` row. Empty cells are 0.
+#' @return A tibble: `Regimen` plus one column per study, or its transpose.
+#'   Empty cells are 0.
 summarize_dose_regimen <- function(data,
-                                   study_col = "STUDY",
-                                   id_col    = "ID",
-                                   dose_col  = "DOSE",
-                                   freq_col  = "FREQ",
-                                   dose_unit = "mg",
-                                   total     = TRUE) {
+                                   study_col  = "STUDY",
+                                   id_col     = "ID",
+                                   dose_col   = "DOSE",
+                                   freq_col   = "FREQ",
+                                   total      = TRUE,
+                                   transpose  = TRUE,
+                                   exclflg    = "FLAG",
+                                   incl_value = 0) {
 
-  # validate columns
+  if (!is.character(dose_col) || !length(dose_col)) {
+    stop("`dose_col` must be a character vector of one or more column names.",
+         call. = FALSE)
+  }
+
+  if (!is.null(freq_col) &&
+      (!is.character(freq_col) ||
+       !length(freq_col) %in% c(1L, length(dose_col)))) {
+    stop("`freq_col` must be NULL, one column name, or one per `dose_col`.",
+         call. = FALSE)
+  }
+
   needed  <- c(study_col, id_col, dose_col, freq_col)
   missing <- setdiff(needed, names(data))
+
   if (length(missing)) {
     stop(
-      "Column(s) not found in data: ", paste(missing, collapse = ", "),
-      ".\n  Available columns: ", paste(names(data), collapse = ", "),
-      "\n  Pass the correct names via study_col/id_col/dose_col/freq_col.",
+      "Column(s) not found in data: ",
+      paste(missing, collapse = ", "),
+      ".\nAvailable columns: ",
+      paste(names(data), collapse = ", "),
+      "\nPass the correct names via ",
+      "study_col/id_col/dose_col/freq_col.",
       call. = FALSE
     )
   }
 
-  unit <- if (nzchar(dose_unit)) paste0(" ", dose_unit) else ""
+  if (!is.logical(total) || length(total) != 1L || is.na(total)) {
+    stop("`total` must be TRUE or FALSE.", call. = FALSE)
+  }
 
-  # one row per subject x regimen, with a regimen label
-  long <- data %>%
-    transmute(
-      .study   = as.character(.data[[study_col]]),
-      .id      = .data[[id_col]],
-      .dose    = .data[[dose_col]],
-      .freq    = .data[[freq_col]],
-      .regimen = paste0(.data[[dose_col]], unit, " ", .data[[freq_col]])
-    ) %>%
-    distinct(.study, .id, .dose, .freq, .regimen)
+  if (!is.logical(transpose) ||
+      length(transpose) != 1L ||
+      is.na(transpose)) {
+    stop("`transpose` must be TRUE or FALSE.", call. = FALSE)
+  }
 
-  # row order: by dose (numeric where possible) then frequency
-  reg_levels <- long %>%
-    distinct(.dose, .freq, .regimen) %>%
-    mutate(.dose_num = suppressWarnings(as.numeric(as.character(.dose)))) %>%
-    arrange(.dose_num, .dose, .freq) %>%
+  # Restrict to the final dataset. Values are compared as trimmed strings, the
+  # same convention as nonmem_disposition_overview(). A dataset carrying no
+  # such column encodes no exclusions and is counted in full.
+  if (length(exclflg) == 1L && exclflg %in% names(data)) {
+    keep <- trimws(as.character(data[[exclflg]])) ==
+      trimws(as.character(incl_value))
+
+    data <- data[!is.na(keep) & keep, , drop = FALSE]
+  }
+
+  # Drug prefixes. A lone unnamed column keeps the bare label; several unnamed
+  # columns fall back to the column names.
+  drug <- names(dose_col)
+
+  if (is.null(drug)) {
+    drug <- rep("", length(dose_col))
+  }
+
+  if (length(dose_col) > 1L) {
+    drug[!nzchar(drug)] <- unname(dose_col)[!nzchar(drug)]
+  }
+
+  freqs <- if (is.null(freq_col)) {
+    rep(NA_character_, length(dose_col))
+  } else {
+    rep_len(freq_col, length(dose_col))
+  }
+
+  # Use existing factor levels without modifying them.
+  # For non-factor columns, use order of first appearance.
+  get_existing_order <- function(x) {
+    if (is.factor(x)) {
+      levels(x)
+    } else {
+      unique(as.character(x))
+    }
+  }
+
+  # The dose amount, whether the column holds a number or a decoded label that
+  # carries its unit ("75 mg" -> 75). Used to spot zero doses and to order the
+  # regimen rows, never to print.
+  dose_num <- function(x) {
+    if (is.factor(x)) {
+      x <- as.character(x)
+    }
+
+    if (is.numeric(x)) {
+      return(as.numeric(x))
+    }
+
+    suppressWarnings(as.numeric(
+      sub("^[^0-9+-]*([-+]?[0-9]*\\.?[0-9]+([eE][-+]?[0-9]+)?).*$", "\\1",
+          trimws(as.character(x)))
+    ))
+  }
+
+  # A drug is not administered when its dose is missing, blank, or zero.
+  not_dosed <- function(x) {
+    chr <- trimws(as.character(x))
+    num <- dose_num(x)
+
+    is.na(chr) | !nzchar(chr) | (!is.na(num) & num == 0)
+  }
+
+  # Print 75 and 7.5, never 75.0 or 7.5e+01. A value that is not a bare number
+  # is already the label the data carries, so it is printed untouched.
+  fmt_dose <- function(x) {
+    if (is.factor(x)) {
+      x <- as.character(x)
+    }
+
+    num <- suppressWarnings(as.numeric(x))
+    out <- as.character(x)
+    ok  <- !is.na(num)
+
+    out[ok] <- vapply(
+      num[ok],
+      function(v) {
+        format(v, trim = TRUE, scientific = FALSE, drop0trailing = TRUE)
+      },
+      character(1)
+    )
+
+    out
+  }
+
+  study_order <- get_existing_order(data[[study_col]])
+
+  # One label part per drug, empty where that drug was not administered.
+  parts <- lapply(seq_along(dose_col), function(i) {
+    dose <- data[[dose_col[i]]]
+
+    part <- paste0(
+      if (nzchar(drug[i])) paste0(drug[i], " ") else "",
+      fmt_dose(dose)
+    )
+
+    if (!is.na(freqs[i])) {
+      fq   <- trimws(as.character(data[[freqs[i]]]))
+      part <- ifelse(!is.na(fq) & nzchar(fq), paste(part, fq), part)
+    }
+
+    part[not_dosed(dose)] <- ""
+    part
+  })
+
+  # Row order, one key per drug. A decoded column already carries the intended
+  # order in its levels, so the level index is used as-is and nothing is
+  # re-derived or reassigned. A non-factor column has no such order to read and
+  # falls back to its numeric dose amount.
+  keys <- lapply(seq_along(dose_col), function(i) {
+    dose <- data[[dose_col[i]]]
+
+    key <- if (is.factor(dose)) {
+      as.integer(dose)
+    } else {
+      dose_num(dose)
+    }
+
+    key[not_dosed(dose)] <- NA_real_
+    as.numeric(key)
+  })
+
+  regimen <- Reduce(
+    function(a, b) {
+      ifelse(
+        nzchar(a) & nzchar(b),
+        paste(a, b, sep = " + "),
+        ifelse(nzchar(a), a, b)
+      )
+    },
+    parts
+  )
+
+  long <- data.frame(
+    .study   = data[[study_col]],
+    .id      = data[[id_col]],
+    .regimen = regimen,
+    stringsAsFactors = FALSE
+  )
+
+  key_cols <- paste0(".dose", seq_along(dose_col))
+
+  for (i in seq_along(dose_col)) {
+    long[[key_cols[i]]] <- keys[[i]]
+  }
+
+  # A row with no drug administered carries no regimen.
+  undosed <- !nzchar(long$.regimen)
+
+  if (any(undosed)) {
+    lost <- setdiff(
+      unique(long$.id[undosed]),
+      unique(long$.id[!undosed])
+    )
+
+    long <- long[!undosed, , drop = FALSE]
+
+    if (length(lost)) {
+      warning(
+        length(lost), " subject(s) had no dose in ",
+        paste(dose_col, collapse = "/"),
+        " and are absent from the table.",
+        call. = FALSE
+      )
+    }
+  }
+
+  long <- long %>%
+    distinct(.study, .id, .regimen, .keep_all = TRUE)
+
+  # Existing factor order is used by arrange().
+  # No levels are reassigned.
+  regimen_order <- long %>%
+    distinct(across(all_of(c(".regimen", key_cols)))) %>%
+    arrange(across(all_of(key_cols)), .regimen) %>%
     pull(.regimen)
 
-  # column order: studies sorted
-  study_levels <- sort(unique(long$.study))
-
-  # count distinct subjects per regimen x study, pivot wide
-  wide <- long %>%
-    count(.regimen, .study, name = "n_subj") %>%
-    mutate(
-      .regimen = factor(.regimen, levels = reg_levels),
-      .study   = factor(.study,   levels = study_levels)
+  counts <- long %>%
+    count(
+      .regimen,
+      .study,
+      name  = "n_subj",
+      .drop = FALSE
     ) %>%
+    mutate(
+      .study = as.character(.study)
+    ) %>%
+    arrange(
+      match(.regimen, regimen_order),
+      match(.study, study_order)
+    )
+
+  wide <- counts %>%
     pivot_wider(
       names_from  = .study,
       values_from = n_subj,
-      values_fill = 0,
+      values_fill = 0L,
       names_sort  = FALSE
     ) %>%
-    arrange(.regimen) %>%
+    arrange(match(.regimen, regimen_order)) %>%
     rename(Regimen = .regimen) %>%
-    mutate(Regimen = as.character(Regimen))
+    select(
+      Regimen,
+      any_of(study_order),
+      everything()
+    )
 
-  # optional Total column (subjects per regimen) and row (per study)
   if (total) {
-    # Total column: distinct subjects per regimen, across studies
-    reg_totals <- long %>%
+
+    # Distinct subjects per regimen across studies
+    regimen_totals <- long %>%
       distinct(.regimen, .id) %>%
       count(.regimen, name = "Total") %>%
-      rename(Regimen = .regimen) %>%
-      mutate(Regimen = as.character(Regimen))
-    wide <- wide %>% left_join(reg_totals, by = "Regimen")
+      rename(Regimen = .regimen)
 
-    # Total row: distinct subjects per study, plus overall distinct subjects
+    wide <- wide %>%
+      left_join(regimen_totals, by = "Regimen")
+
+    # Distinct subjects per study
     study_totals <- long %>%
       distinct(.study, .id) %>%
-      count(.study, name = "n") %>%
-      tidyr::complete(.study = study_levels, fill = list(n = 0)) %>%
-      arrange(match(.study, study_levels))
-    total_row <- as.list(setNames(study_totals$n, study_totals$.study))
+      count(.study, name = "n", .drop = FALSE) %>%
+      mutate(.study = as.character(.study)) %>%
+      arrange(match(.study, study_order))
+
+    total_row <- as.list(
+      setNames(study_totals$n, study_totals$.study)
+    )
+
     total_row$Regimen <- "Total"
-    total_row$Total   <- dplyr::n_distinct(long$.id)
-    wide <- bind_rows(wide, as_tibble(total_row)[, names(wide)])
+    total_row$Total   <- n_distinct(long$.id)
+
+    total_row <- as_tibble(total_row)[, names(wide)]
+
+    wide <- bind_rows(wide, total_row)
   }
 
-  wide
+  if (!transpose) {
+    return(wide)
+  }
+
+  values <- wide %>%
+    select(-Regimen)
+
+  transposed <- t(as.matrix(values)) %>%
+    as.data.frame(check.names = FALSE)
+
+  colnames(transposed) <- wide$Regimen
+
+  transposed %>%
+    tibble::rownames_to_column(var = "Study") %>%
+    as_tibble()
 }
 
 
-# example usage
+# example usage - single drug, DOSE decoded to "100 mg" / "200 mg"
 # dat <- yspec::decode_dataset(dat, spec, c(flags$catcov))
 # tab <- summarize_dose_regimen(dat,
 #                               study_col = "STUDY",
 #                               id_col    = "ID",
 #                               dose_col  = "DOSE",
-#                               freq_col  = "FREQ")
+#                               freq_col  = "FREQ",
+#                               transpose = FALSE)
 # print(tab)
 #
 # Resulting shape:
@@ -1837,3 +2335,22 @@ summarize_dose_regimen <- function(data,
 #   100 mg QD       42     55     97
 #   200 mg BID      38      0     38
 #   Total           80     55    120
+#
+# Combination - one dose column per drug, names supply the drug labels
+# tab <- summarize_dose_regimen(dat,
+#                               study_col  = "STUDY",
+#                               id_col     = "ID",
+#                               freq_col   = NULL,
+#                               dose_col   = c("Camizestrant" = "MPDOSPK",
+#                                              "Abemaciclib"  = "MPABEPK",
+#                                              "Palbociclib"  = "MPPALBPK",
+#                                              "Ribociclib"   = "MPRIBOPK"),
+#                               exclflg    = "FLAG",
+#                               incl_value = 0,
+#                               transpose  = FALSE)
+#
+# Resulting shape:
+#   Regimen                                  D1234  D5678  Total
+#   Camizestrant 75 mg + Abemaciclib 150 mg     42     10     52
+#   Camizestrant 75 mg + Palbociclib 125 mg     38      0     38
+#   Total                                       80     10     90
