@@ -995,6 +995,10 @@ utils::globalVariables(c("Scenario", "VALUE", "NAME", "COLOR", "MIN", "MAX",
 #'   `c(0, 3)`. `NULL` (default) auto-scales to the data (the box whiskers plus
 #'   a small margin). The plot is drawn with `coord_flip()`, so this sets the
 #'   visual x-axis the reader sees.
+#' @param x_breaks Numeric vector, or `NULL`. Tick positions on that same ratio
+#'   axis, e.g. `c(0.5, 0.8, 1, 1.15, 1.25)`. `NULL` (default) lets ggplot2
+#'   choose, which lands on round numbers that need not include 1 or the
+#'   relevance bounds. Breaks outside `x_lim` are simply not drawn.
 #' @param typical_subject Controls the reference-subject subtitle under the
 #'   title. `TRUE` (default) uses the ready-made string that
 #'   [create_covariate_table()] / [build_scenario_parameters()] attach as
@@ -1058,6 +1062,7 @@ plot_exposure_forest <- function(data,
                                  fontsize = 9,
                                  title = NULL,
                                  x_lim = NULL,
+                                 x_breaks = NULL,
                                  typical_subject = TRUE,
                                  filename = NULL,
                                  output_format = c("emf", "png"),
@@ -1170,6 +1175,10 @@ plot_exposure_forest <- function(data,
     axis_lim <- c(min(d$MIN, na.rm = TRUE) - 0.2, max(d$MAX, na.rm = TRUE) + 0.2)
   }
 
+  # Tick positions on that same ratio axis. NULL keeps ggplot2's default breaks;
+  # a numeric vector replaces them.
+  ratio_scale <- if (is.null(x_breaks)) NULL else scale_y_continuous(breaks = x_breaks)
+
   # Shaded reference band(s) (behind the boxes), mapped to `fill` so they get
   # legend swatches next to the boxplot colours. The inner band is the clinical-
   # relevance range; `outer_range` (when not NULL) adds a wider band drawn
@@ -1217,6 +1226,7 @@ plot_exposure_forest <- function(data,
     scale_fill_manual(NULL, values = fill_values,
                       breaks = names(fill_values)) +
     scale_x_discrete(limits = rev(scen_levels)) +
+    ratio_scale +
     geom_hline(yintercept = 1, linetype = 2) +
     theme(
       legend.position   = "bottom",
@@ -1337,6 +1347,9 @@ plot_exposure_forest <- function(data,
 #' @param outer_range Passed to [plot_exposure_forest()]. `NULL` (default) draws
 #'   only the clinical-relevance band on parameter forests (the wider 0.5-2 band
 #'   is dropped); pass e.g. `c(0.5, 2)` to add it back.
+#' @param x_breaks Numeric vector, or `NULL`. Tick positions on the ratio axis
+#'   of every parameter forest, e.g. `c(0.5, 0.8, 1, 1.15, 1.25)`. `NULL`
+#'   (default) lets ggplot2 choose. Passed to [plot_exposure_forest()].
 #' @param typical_subject Reference-subject subtitle. `TRUE` (default) uses the
 #'   string `build_scenario_parameters()` attached to `param_sets`; `FALSE`/`NULL`
 #'   suppresses it; a character string is shown verbatim (custom). Passed on to
@@ -1388,6 +1401,7 @@ plot_parameter_forests <- function(param_sets,
                                     width = 6,
                                     height = 6,
                                     outer_range = NULL,
+                                    x_breaks = NULL,
                                     typical_subject = TRUE,
                                     param_info = NULL,
                                     scenario = NULL,
@@ -1516,6 +1530,7 @@ plot_parameter_forests <- function(param_sets,
       width           = width,
       height          = height,
       outer_range     = outer_range,
+      x_breaks        = x_breaks,
       typical_subject = typical_subject,
       ...
     )

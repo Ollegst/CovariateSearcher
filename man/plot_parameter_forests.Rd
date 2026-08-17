@@ -15,6 +15,7 @@ plot_parameter_forests(
   width = 6,
   height = 6,
   outer_range = NULL,
+  x_breaks = NULL,
   typical_subject = TRUE,
   param_info = NULL,
   scenario = NULL,
@@ -63,6 +64,10 @@ multi-page PDF of every parameter forest to the same folder.}
 \item{outer_range}{Passed to \code{\link[=plot_exposure_forest]{plot_exposure_forest()}}. \code{NULL} (default) draws
 only the clinical-relevance band on parameter forests (the wider 0.5-2 band
 is dropped); pass e.g. \code{c(0.5, 2)} to add it back.}
+
+\item{x_breaks}{Numeric vector, or \code{NULL}. Tick positions on the ratio axis
+of every parameter forest, e.g. \code{c(0.5, 0.8, 1, 1.15, 1.25)}. \code{NULL}
+(default) lets ggplot2 choose. Passed to \code{\link[=plot_exposure_forest]{plot_exposure_forest()}}.}
 
 \item{typical_subject}{Reference-subject subtitle. \code{TRUE} (default) uses the
 string \code{build_scenario_parameters()} attached to \code{param_sets}; \code{FALSE}/\code{NULL}

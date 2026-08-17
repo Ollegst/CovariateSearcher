@@ -16,6 +16,7 @@ plot_exposure_forest(
   fontsize = 9,
   title = NULL,
   x_lim = NULL,
+  x_breaks = NULL,
   typical_subject = TRUE,
   filename = NULL,
   output_format = c("emf", "png"),
@@ -75,6 +76,11 @@ horizontal (ratio) axis - the change relative to the reference - e.g.
 \code{c(0, 3)}. \code{NULL} (default) auto-scales to the data (the box whiskers plus
 a small margin). The plot is drawn with \code{coord_flip()}, so this sets the
 visual x-axis the reader sees.}
+
+\item{x_breaks}{Numeric vector, or \code{NULL}. Tick positions on that same ratio
+axis, e.g. \code{c(0.5, 0.8, 1, 1.15, 1.25)}. \code{NULL} (default) lets ggplot2
+choose, which lands on round numbers that need not include 1 or the
+relevance bounds. Breaks outside \code{x_lim} are simply not drawn.}
 
 \item{typical_subject}{Controls the reference-subject subtitle under the
 title. \code{TRUE} (default) uses the ready-made string that
