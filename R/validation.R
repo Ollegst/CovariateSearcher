@@ -604,14 +604,23 @@ update_all_model_statuses <- function(search_state, show_progress = TRUE) {
     cat(sprintf("✅ Status update complete: %d completed, %d failed total\n",
                 total_completed, total_failed))
 
-    # Report models that just became significant
+    # Report models that just became significant. Both directions are read off
+    # the same delta_ofv column, where the identical number means opposite
+    # things: an addition stores parent - child, so a large positive value is a
+    # gain worth keeping, while a removal stores child - parent, so a large
+    # positive value is the cost of dropping the covariate - a removal the
+    # search must reject. Reporting a backward step under the forward wording
+    # announces a rejected removal as an improvement. Direction comes from
+    # .is_removal_model(), the same predicate .signed_delta_ofv() used to choose
+    # the sign, so the verdict cannot contradict the number it describes.
     if (length(status_changes$newly_completed) > 0) {
       tryCatch({
         required_cols_for_summary <- c("model_name", "delta_ofv", "covariate_tested")
         if (all(required_cols_for_summary %in% names(search_state$search_database))) {
 
-          # Use dynamic threshold from config instead of hardcoded 3.84
+          # Use dynamic thresholds from config instead of hardcoded 3.84
           forward_p_value <- search_state$search_config$forward_p_value %||% 0.05
+          backward_p_value <- search_state$search_config$backward_p_value %||% 0.001
 
           # First filter by newly completed models
           db_candidates <- search_state$search_database[
@@ -620,6 +629,8 @@ update_all_model_statuses <- function(search_state, show_progress = TRUE) {
 
           # Now check each model with its covariate-specific threshold
           if (nrow(db_candidates) > 0) {
+            is_removal <- .is_removal_model(search_state,
+                                            db_candidates$model_name)
             significant_rows <- logical(nrow(db_candidates))
             
             for (j in seq_len(nrow(db_candidates))) {
@@ -640,45 +651,66 @@ update_all_model_statuses <- function(search_state, show_progress = TRUE) {
                 }
               }
               
-              # Calculate threshold for this specific covariate
-              threshold_for_cov <- pvalue_to_threshold(forward_p_value, df = cov_df)
+              # Calculate threshold for this specific covariate, at the p-value
+              # its own direction is tested against
+              p_value_for_row <- if (is_removal[j]) {
+                backward_p_value
+              } else {
+                forward_p_value
+              }
+              threshold_for_cov <- pvalue_to_threshold(p_value_for_row, df = cov_df)
               significant_rows[j] <- db_candidates$delta_ofv[j] > threshold_for_cov
             }
             
-            db_filtered <- db_candidates[significant_rows, ]
+            sig_added <- significant_rows & !is_removal
+            sig_removed <- significant_rows & is_removal
 
-            if (nrow(db_filtered) > 0) {
-              order_idx <- order(db_filtered$delta_ofv, decreasing = TRUE)
-              significant_new <- db_filtered[order_idx, ]
+            # One group per direction, each headed by what its sign supports.
+            report_groups <- list(
+              list(rows = db_candidates[sig_added, , drop = FALSE],
+                   heading = "⭐ New significant improvements:",
+                   suffix = ""),
+              list(rows = db_candidates[sig_removed, , drop = FALSE],
+                   heading = "🔒 Removal rejected - covariate retained:",
+                   suffix = " (cost of removal)")
+            )
 
-              cat("⭐ New significant improvements:\n")
+            for (group in report_groups) {
+              if (nrow(group$rows) == 0) next
+
+              order_idx <- order(group$rows$delta_ofv, decreasing = TRUE)
+              significant_new <- group$rows[order_idx, , drop = FALSE]
+
+              cat(group$heading, "\n", sep = "")
               for (i in seq_len(nrow(significant_new))) {
                 row <- significant_new[i, ]
-              covariate_display <- tryCatch({
-                cov_val <- row$covariate_tested
-                if (is.na(cov_val) || is.null(cov_val) ||
-                    nchar(as.character(cov_val)) == 0) {
-                  "Unknown"
-                } else {
-                  as.character(cov_val)
-                }
-              }, error = function(e) {
-                "Unknown"
-              })
 
-              delta_val <- tryCatch({
-                if (is.numeric(row$delta_ofv) && !is.na(row$delta_ofv)) {
-                  sprintf("%.2f", row$delta_ofv)
-                } else {
+                covariate_display <- tryCatch({
+                  cov_val <- row$covariate_tested
+                  if (is.na(cov_val) || is.null(cov_val) ||
+                      nchar(as.character(cov_val)) == 0) {
+                    "Unknown"
+                  } else {
+                    as.character(cov_val)
+                  }
+                }, error = function(e) {
                   "Unknown"
-                }
-              }, error = function(e) {
-                "Unknown"
-              })
+                })
 
-              cat(sprintf("   %s (%s): ΔOFV = %s\n",
-                          as.character(row$model_name), covariate_display, delta_val))
-            }
+                delta_val <- tryCatch({
+                  if (is.numeric(row$delta_ofv) && !is.na(row$delta_ofv)) {
+                    sprintf("%.2f", row$delta_ofv)
+                  } else {
+                    "Unknown"
+                  }
+                }, error = function(e) {
+                  "Unknown"
+                })
+
+                cat(sprintf("   %s (%s): ΔOFV = %s%s\n",
+                            as.character(row$model_name), covariate_display,
+                            delta_val, group$suffix))
+              }
             }
           }
         }

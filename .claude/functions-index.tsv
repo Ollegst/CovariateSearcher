@@ -139,7 +139,7 @@ utilities.R	pvalue_to_threshold	pvalue_to_threshold(p_value, df=1)	yes	ef9ac2095
 validation.R	force_update_models	force_update_models(search_state, model_names)	yes	0ddc26f31d5132575be286ac6b60a10f
 validation.R	get_model_max_rse	get_model_max_rse(search_state, model_name)	yes	797b0f9eb4c48e60f907e5f4b20eec9d
 validation.R	print_parameter_validation	print_parameter_validation(validation_result, verbose=TRUE)	yes	1ce1be70c8f66ca8c3dec8ae0794ecf8
-validation.R	update_all_model_statuses	update_all_model_statuses(search_state, show_progress=TRUE)	yes	244dc4390e6e595e20130ca799a4ae11
+validation.R	update_all_model_statuses	update_all_model_statuses(search_state, show_progress=TRUE)	yes	00006e9de7a30e8aa69aa42cbcb968da
 validation.R	update_model_status_from_files	update_model_status_from_files(search_state, model_name, force=FALSE)	yes	61e6aca75d07458045ecfcb3a65c0c60
 validation.R	validate_base_model_parameters	validate_base_model_parameters(base_model_path, models_folder=NULL, strict=TRUE, check_omega_structure=TRUE, check_comments=TRUE)	yes	e5fedb4d9884227d46afc1504764ba41
 validation.R	validate_covariate_parameter_mapping	validate_covariate_parameter_mapping(covariate_search, model_name, models_folder="models", covariate_tags=NULL, strict=TRUE, verbose=TRUE)	no	31f59b9514597395881a459e982fb9c7

@@ -192,3 +192,102 @@ test_that("timestamp parsing does not leave LC_TIME changed", {
 
   expect_equal(Sys.getlocale("LC_TIME"), before)
 })
+
+
+# A finished run inside `models_dir` whose .ext reports the given OFV.
+write_finished_run <- function(models_dir, run, ofv) {
+  dir.create(file.path(models_dir, run), recursive = TRUE, showWarnings = FALSE)
+
+  writeLines(
+    c(
+      "Wed Jul 29 14:30:08 EDT 2026",
+      " #TERM:",
+      "0MINIMIZATION SUCCESSFUL",
+      "Stop Time:",
+      "Sat 25 Jul 2026 06:50:30 AM EDT"
+    ),
+    file.path(models_dir, run, paste0(run, ".lst"))
+  )
+
+  writeLines(
+    c(
+      "TABLE NO.     1: First Order Conditional Estimation",
+      " ITERATION THETA1 THETA2 OBJ",
+      " 0 1.0 2.0 -100.00",
+      sprintf(" -1000000000 1.10 2.20 %.2f", ofv)
+    ),
+    file.path(models_dir, run, paste0(run, ".ext"))
+  )
+
+  writeLines("covariance", file.path(models_dir, run, paste0(run, ".cov")))
+  invisible(models_dir)
+}
+
+
+# A base model plus three children whose ΔOFV land either side of the two
+# thresholds (df=1: forward 3.84, backward 10.83): a removal clear of the
+# backward one, an addition clear of the forward one, and a removal between them.
+setup_step_report <- function() {
+  models_dir <- tempfile("models")
+  dir.create(models_dir, recursive = TRUE)
+
+  write_finished_run(models_dir, "run2", -123.45)  # removal,  ΔOFV +76.55
+  write_finished_run(models_dir, "run3", -223.45)  # addition, ΔOFV +23.45
+  write_finished_run(models_dir, "run4", -195.00)  # removal,  ΔOFV  +5.00
+
+  list(
+    models_folder = models_dir,
+    search_config = list(
+      forward_p_value = 0.05,
+      backward_p_value = 0.001,
+      require_cov_step = TRUE
+    ),
+    search_database = data.frame(
+      model_name = c("run1", "run2", "run3", "run4"),
+      parent_model = c(NA_character_, "run1", "run1", "run1"),
+      covariate_tested = c(NA_character_, "beta_SEX_CL",
+                           "beta_AGE_CL", "beta_WT_V1"),
+      action = c("base_model", "remove_covariate",
+                 "add_covariate", "remove_covariate"),
+      phase = c("base", "backward", "forward", "backward"),
+      step_number = c(0L, 1L, 1L, 1L),
+      status = c("completed", "in_progress", "in_progress", "in_progress"),
+      ofv = c(-200, NA_real_, NA_real_, NA_real_),
+      delta_ofv = NA_real_,
+      rse_max = NA_real_,
+      error_message = NA_character_,
+      estimation_issue = NA_character_,
+      completion_time = as.POSIXct(NA),
+      stringsAsFactors = FALSE
+    )
+  )
+}
+
+
+test_that("a significant removal is reported as retained, not as an improvement", {
+  out <- capture.output(update_all_model_statuses(setup_step_report()))
+
+  improved <- grep("New significant improvements", out)
+  retained <- grep("Removal rejected", out)
+  expect_length(improved, 1)
+  expect_length(retained, 1)
+
+  # Both read the same delta_ofv column: the addition bought 23.45 OFV points,
+  # the removal cost 76.55 of them. Announcing the second as an improvement is
+  # the inversion this guards against.
+  expect_true(any(grepl("^   run3 \\(beta_AGE_CL\\): ΔOFV = 23.45$", out)))
+  expect_true(any(grepl(
+    "^   run2 \\(beta_SEX_CL\\): ΔOFV = 76.55 \\(cost of removal\\)$", out
+  )))
+  expect_gt(grep("^   run2 ", out), retained)
+  expect_lt(grep("^   run3 ", out), retained)
+})
+
+
+test_that("a removal is judged at the backward p-value, not the forward one", {
+  out <- capture.output(update_all_model_statuses(setup_step_report()))
+
+  # ΔOFV 5.00 clears the forward threshold but not the backward one, so this
+  # covariate is droppable and there is nothing significant to announce.
+  expect_false(any(grepl("^   run4 ", out)))
+})
