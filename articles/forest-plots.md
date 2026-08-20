@@ -330,6 +330,7 @@ for (m in c("AUC", "Cmax", "Cmin")) {
 | `reference` | `"Typical subject"` | denominator scenario, highlighted |
 | `scenario` | `NULL` | the scenario **table** - a data frame, or a path to the saved `scenario_table_<model>.rds`. Sets the axis order, supplies the typical-subject subtitle, and is required before any summary table is written. A plain character vector gives the order only. Needed here because [`group_by()`](https://dplyr.tidyverse.org/reference/group_by.html)/[`summarise()`](https://dplyr.tidyverse.org/reference/summarise.html) dropped both |
 | `x_lim` | `NULL` | fix the ratio axis |
+| `x_breaks` | `NULL` | tick positions on the ratio axis, e.g. `c(0.5, 0.8, 1, 1.15, 1.25)`; `NULL` uses ggplot2’s default breaks |
 | `fontsize` | `9` | base font size |
 | `title` | `NULL` | built from the metric when `NULL` |
 | `filename` | `NULL` | no file written when `NULL`; `width`/`height` are required when set |

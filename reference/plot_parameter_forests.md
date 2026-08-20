@@ -44,6 +44,7 @@ plot_parameter_forests(
   width = 6,
   height = 6,
   outer_range = NULL,
+  x_breaks = NULL,
   typical_subject = TRUE,
   param_info = NULL,
   scenario = NULL,
@@ -121,6 +122,13 @@ plot_parameter_forests(
   `NULL` (default) draws only the clinical-relevance band on parameter
   forests (the wider 0.5-2 band is dropped); pass e.g. `c(0.5, 2)` to
   add it back.
+
+- x_breaks:
+
+  Numeric vector, or `NULL`. Tick positions on the ratio axis of every
+  parameter forest, e.g. `c(0.5, 0.8, 1, 1.15, 1.25)`. `NULL` (default)
+  lets ggplot2 choose. Passed to
+  [`plot_exposure_forest()`](https://ollegst.github.io/CovariateSearcher/reference/plot_exposure_forest.md).
 
 - typical_subject:
 

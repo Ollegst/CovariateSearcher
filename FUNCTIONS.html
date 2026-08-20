@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="index.html">CovariateSearcher</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.5</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.7</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -48,7 +48,7 @@
 
 <div id="covariatesearcher--function-reference" class="section level1">
 
-<p><strong>What this is:</strong> an agent-facing map of <em>every</em> function in <code>R/</code>, so future sessions don’t have to re-read the whole codebase. Originally generated from a full read of the pre-refactor code (v0.1.30). <strong>Last audited 2026-08-12 against v0.4.5: 29 files in <code>R/</code>, 145 top-level functions, 90 exports in NAMESPACE</strong> — every defined function appears below. Keep it in sync as the modular reorg lands.</p>
+<p><strong>What this is:</strong> an agent-facing map of <em>every</em> function in <code>R/</code>, so future sessions don’t have to re-read the whole codebase. Originally generated from a full read of the pre-refactor code (v0.1.30). <strong>Last audited 2026-08-20 against v0.4.7: 29 files in <code>R/</code>, 145 top-level functions, 90 exports in NAMESPACE</strong> — every defined function appears below. Keep it in sync as the modular reorg lands.</p>
 <p><strong>Legend:</strong> <code>Exp</code> ✓ = exported (<code>@export</code>), · = internal/documented-internal. <em>Side effects</em> flag file writes, <code>bbr::</code> calls, <code>&lt;&lt;-</code>, <code><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop()</a></code>, hardcoded paths. <em>Nested</em> = a closure defined inside another function (not top-level).</p>
 <p><strong>Housekeeping:</strong> this file is a dev/agent aid, not package content — <code>^FUNCTIONS\.md$</code> is in <code>.Rbuildignore</code> (done), so it doesn’t ship or trip <code>R CMD check</code>.</p>
 <hr><div class="section level2">
@@ -457,12 +457,15 @@
 </td>
 </tr><tr><td><code>update_all_model_statuses(search_state, show_progress=TRUE)</code></td>
 <td>✓</td>
-<td>Update all non-terminal models; report newly-significant via per-df thresholds. Three skip filters: terminal status (<code>completed</code>/<code>failed</code>/<code>estimation_error</code>), the bbr tag <code>do_not_run</code>, and — when the DB has the column — <code>created_by_search = FALSE</code>, <strong>unless</strong> some row names that model as its <code>parent_model</code> (step evaluation needs the parent’s OFV for ΔOFV; the base model is the usual case). Rereading a foreign model each cycle would otherwise relabel a long-finished run as <code>failed</code> (no output dir reads as a failed launch)</td>
-<td><code>search_state</code></td>
+<td>Update all non-terminal models; report newly-significant via per-df thresholds. Three skip filters: pending status per <code>.is_pending_status()</code> (terminal = <code>completed</code>/<code>failed</code>/<code>estimation_error</code>), the bbr tag <code>do_not_run</code>, and — when the DB has the column — <code>created_by_search = FALSE</code>, <strong>unless</strong> some row names that model as its <code>parent_model</code> (step evaluation needs the parent’s OFV for ΔOFV; the base model is the usual case). Rereading a foreign model each cycle would otherwise relabel a long-finished run as <code>failed</code> (no output dir reads as a failed launch). <strong>The end-of-run significance report is direction-aware (2026-08-20):</strong> it resolves <em>both</em> <code>forward_p_value</code> (<code>%||% 0.05</code>) and <code>backward_p_value</code> (<code>%||% 0.001</code>) from <code>search_config</code>, classifies each newly-completed row with <code>.is_removal_model()</code>, and tests that row’s <code>delta_ofv</code> against <code>pvalue_to_threshold(&lt;its own direction's p&gt;, df)</code> — the df still coming from the row’s <code>covariate_tested</code> tag (<code>extract_covariate_name_from_tag</code> → <code>calculate_covariate_df</code>, falling back to 1). The comparison stays <code>delta_ofv &gt; threshold</code> for both directions because the two store opposite sign conventions, so the same positive number means “gain worth keeping” for an addition and “cost of dropping it” for a removal; only the heading differs. Removals therefore print under <strong><code>🔒 Removal rejected - covariate retained:</code></strong> with a <code>(cost of removal)</code> suffix instead of being announced as improvements under <code>⭐ New significant improvements:</code> — the pre-2026-08-20 behaviour, which also judged them at the forward p-value</td>
+<td>
+<code>search_state</code>; <code>$search_config$forward_p_value</code>/<code>$backward_p_value</code>
+</td>
 <td>updated <code>search_state</code>
 </td>
-<td><code>cat</code></td>
-<td>calls <code>update_model_status_from_files</code>, <code>.is_search_model</code>, <code>extract_covariate_name_from_tag</code>, <code>calculate_covariate_df</code>, <code>pvalue_to_threshold</code>; called-by <code>submit_and_wait_for_step</code>, <code>select_best_model</code>
+<td>
+<code>cat</code> — progress lines, the <code>%d completed, %d failed total</code> summary, and (only under <code>show_progress</code>, only when something newly completed, and only when <code>model_name</code>/<code>delta_ofv</code>/<code>covariate_tested</code> are all present) the two significance headings, each group ordered by descending <code>delta_ofv</code>; the whole report is wrapped in a <code>tryCatch</code> that degrades to <code>⚠️  Could not generate significance summary</code> rather than failing the status update</td>
+<td>calls <code>update_model_status_from_files</code>, <code>.is_pending_status</code>, <code>.is_search_model</code>, <code>.is_removal_model</code>, <code>extract_covariate_name_from_tag</code>, <code>calculate_covariate_df</code>, <code>pvalue_to_threshold</code>; called-by <code>submit_and_wait_for_step</code>, <code>select_best_model</code>, <code>continue_search</code>, <code>run_scm_selective_forward</code>
 </td>
 </tr><tr><td><code>get_model_max_rse(search_state, model_name)</code></td>
 <td>✓</td>
@@ -1898,16 +1901,16 @@
 <th>Returns</th>
 <th>Side effects</th>
 <th>Calls / Called-by</th>
-</tr></thead><tbody><tr><td><code>plot_exposure_forest(data, metric=c("AUC","Cmax","Cmin"), ss=TRUE, ClinicalRelevanceLow=0.8, ClinicalRelevanceHigh=1.25, outer_range=c(0.5,2), reference="Typical subject", scenario=NULL, fontsize=9, title=NULL, x_lim=NULL, typical_subject=TRUE, filename=NULL, output_format=c("emf","png"), metric_info=NULL, model=NULL, percentiles=c(0.05,0.95), lookup=NULL, spec=NULL, width, height)</code></td>
+</tr></thead><tbody><tr><td><code>plot_exposure_forest(data, metric=c("AUC","Cmax","Cmin"), ss=TRUE, ClinicalRelevanceLow=0.8, ClinicalRelevanceHigh=1.25, outer_range=c(0.5,2), reference="Typical subject", scenario=NULL, fontsize=9, title=NULL, x_lim=NULL, x_breaks=NULL, typical_subject=TRUE, filename=NULL, output_format=c("emf","png"), metric_info=NULL, model=NULL, percentiles=c(0.05,0.95), lookup=NULL, spec=NULL, width, height)</code></td>
 <td>✓</td>
-<td>Forest plot of one metric normalised to the reference-scenario median (box 2.5/25/50/75/97.5). <code>scenario</code> (replaced <code>scenario_order</code>) sets axis order <strong>and</strong> the typical-subject subtitle — must be a <strong>data.frame</strong> (or path) for either to apply, and for any table to be written; <code>metric_info</code> triggers the absolute+relative summary tables. <strong><code>ss=TRUE</code> appends “ss” to the metric in the auto title AND to the saved file stem</strong> (<code>AUC_forest</code> → <code>AUC_forest_ss.emf</code>; skipped if the stem already ends in “ss”), so steady-state and single-dose plots don’t overwrite each other</td>
+<td>Forest plot of one metric normalised to the reference-scenario median (box 2.5/25/50/75/97.5). <code>scenario</code> (replaced <code>scenario_order</code>) sets axis order <strong>and</strong> the typical-subject subtitle — must be a <strong>data.frame</strong> (or path) for either to apply, and for any table to be written; <code>metric_info</code> triggers the absolute+relative summary tables. <strong><code>ss=TRUE</code> appends “ss” to the metric in the auto title AND to the saved file stem</strong> (<code>AUC_forest</code> → <code>AUC_forest_ss.emf</code>; skipped if the stem already ends in “ss”), so steady-state and single-dose plots don’t overwrite each other. <strong>Ratio-axis control is split in two:</strong> <code>x_lim</code> sets the limits (<code>coord_flip(ylim=)</code>), <code>x_breaks</code> sets the tick positions (<code>scale_y_continuous(breaks=)</code>, added as <code>NULL</code> — a no-op — when not given, so ggplot2’s default breaks stand); breaks outside <code>x_lim</code> are simply not drawn</td>
 <td>data, metric, bands, filename</td>
 <td>
 <code>ggplot</code> (invisibly; saved if <code>filename</code>)</td>
 <td>
 <strong>file write</strong> <code>ggsave</code> — <strong><code><a href="https://rdrr.io/pkg/devEMF/man/emf.html" class="external-link">devEMF::emf</a></code></strong>(undeclared)/png; <code><a href="https://rdrr.io/r/tools/fileutils.html" class="external-link">tools::file_path_sans_ext</a></code>; <code>stats::</code>; <code>dplyr::</code>
 </td>
-<td>calls <code>theme_forest</code>, <code>boxquantile</code>; upstream <code>simulate_scenario_profiles</code>
+<td>calls <code>theme_forest</code>, <code>boxquantile</code>, <code>.load_if_path</code>, <code>.spec_to_lookup</code>, <code>.resolve_quantity_info</code>, <code>.require_quantity_labels</code>, <code>.scenario_summary_table</code>; upstream <code>simulate_scenario_profiles</code>, <code>plot_parameter_forests</code>
 </td>
 </tr><tr><td><code>theme_forest(base_size=12, base_family="")</code></td>
 <td>✓</td>
@@ -1925,7 +1928,7 @@
 <td>named numeric length-5</td>
 <td><code><a href="https://rdrr.io/r/stats/quantile.html" class="external-link">stats::quantile</a></code></td>
 <td><code>stat_summary</code></td>
-</tr></tbody></table><p><strong>Notes:</strong> <code>grid</code>/<code>tools</code>/<code>grDevices</code> un-declared base-priority (<code>devEMF</code> is in <code>Suggests:</code>). <code>plot_exposure_forest</code> + <code>theme_forest</code> are exported and <strong>in NAMESPACE</strong>. Hardcoded palette + band strings. Gained <code>x_lim</code> (fix the ratio axis), <code>scenario</code> (merged axis order + typical-subject subtitle), <code>outer_range</code> (optional 0.5–2 band) and the summary-table arguments.</p>
+</tr></tbody></table><p><strong>Notes:</strong> <code>grid</code>/<code>tools</code>/<code>grDevices</code> un-declared base-priority (<code>devEMF</code> is in <code>Suggests:</code>). <code>plot_exposure_forest</code> + <code>theme_forest</code> are exported and <strong>in NAMESPACE</strong>. Hardcoded palette + band strings. Gained <code>x_lim</code> (fix the ratio axis), <code>x_breaks</code> (tick positions on that same axis), <code>scenario</code> (merged axis order + typical-subject subtitle), <code>outer_range</code> (optional 0.5–2 band) and the summary-table arguments.</p>
 </div>
 <div class="section level3">
 <h3 id="rforest-plotsr--parameter-forest-plots">R/forest-plots.R — parameter forest plots<a class="anchor" aria-label="anchor" href="#rforest-plotsr--parameter-forest-plots"></a></h3>
@@ -1937,16 +1940,17 @@
 <th>Returns</th>
 <th>Side effects</th>
 <th>Calls / Called-by</th>
-</tr></thead><tbody><tr><td><code>plot_parameter_forests(param_sets, model, parameters=NULL, output_plot_folder="results/figure", output_rds_folder=NULL, output_format=c("emf","png"), combined_pdf=TRUE, width=6, height=6, outer_range=NULL, typical_subject=TRUE, param_info=NULL, scenario=NULL, reference="Typical subject", percentiles=c(0.05,0.95), lookup=NULL, spec=NULL, models_folder="models", verbose=TRUE, ...)</code></td>
+</tr></thead><tbody><tr><td><code>plot_parameter_forests(param_sets, model, parameters=NULL, output_plot_folder="results/figure", output_rds_folder=NULL, output_format=c("emf","png"), combined_pdf=TRUE, width=6, height=6, outer_range=NULL, x_breaks=NULL, typical_subject=TRUE, param_info=NULL, scenario=NULL, reference="Typical subject", percentiles=c(0.05,0.95), lookup=NULL, spec=NULL, models_folder="models", verbose=TRUE, ...)</code></td>
 <td>✓</td>
-<td>One forest per structural parameter, each showing <strong>only the scenarios that move it</strong> (reference + scenarios whose median differs). <strong>Always skips parameters with no covariate effect</strong> (flat across scenarios — e.g. a non-beta theta like <code>add_error</code>); not optional. Plot and RDS outputs go to separate folders</td>
+<td>One forest per structural parameter, each showing <strong>only the scenarios that move it</strong> (reference + scenarios whose median differs). <strong>Always skips parameters with no covariate effect</strong> (flat across scenarios — e.g. a non-beta theta like <code>add_error</code>); not optional. Plot and RDS outputs go to separate folders. Only <code>outer_range</code>, <code>x_breaks</code>, <code>typical_subject</code>, <code>output_format</code>, <code>width</code>/<code>height</code> are forwarded <strong>by name</strong> to <code>plot_exposure_forest</code> (so every parameter forest shares the same tick positions); anything else (<code>x_lim</code>, <code>fontsize</code>, the relevance bounds) rides on <code>...</code>
+</td>
 <td>
 <code>param_sets</code> (object or <code>.rds</code> path), model</td>
 <td>invisibly the plots; files written</td>
 <td>
 <strong>file write</strong> plots (<code>emf</code>/<code>png</code>, optional combined PDF) + summary-table RDS; <code>dir.create</code>
 </td>
-<td>calls <code>stack_scenario_parameters</code>, <code>.structural_param_names</code>, <code>.scenario_summary_table</code>, <code>.resolve_quantity_info</code>
+<td>calls <code>plot_exposure_forest</code> (once per parameter), <code>stack_scenario_parameters</code> (which reaches <code>.structural_param_names</code>), <code>.load_if_path</code>, <code>.spec_to_lookup</code>, <code>.resolve_quantity_info</code>, <code>.require_quantity_labels</code>, <code>.scenario_summary_table</code>
 </td>
 </tr><tr><td><code>stack_scenario_parameters(param_sets, model=NULL, models_folder="models")</code></td>
 <td>✓</td>
@@ -1966,8 +1970,7 @@
 <td>named <code>character</code>
 </td>
 <td><code>readLines</code></td>
-<td>called-by <code>stack_scenario_parameters</code>, <code>plot_parameter_forests</code>
-</td>
+<td>called-by <code>stack_scenario_parameters</code> (its only call site; <code>plot_parameter_forests</code> reaches it only through that)</td>
 </tr></tbody></table><p><strong>Notes:</strong> <code>build_scenario_parameters</code> attaches <code>attr(param_sets, "scenario_table")</code> + <code>attr(., "covariate_lookup")</code>, and <code>plot_parameter_forests</code> falls back to them — so <strong>no <code>scenario</code>/<code>lookup</code> argument is needed</strong> for the parameter table (only <code>param_info</code>); rebuild <code>param_sets</code> to get the attrs. <code>plot_exposure_forest</code> still needs an explicit <code>scenario=</code> (the summarise step drops attributes).</p>
 </div>
 <div class="section level3">

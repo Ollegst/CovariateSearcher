@@ -19,7 +19,7 @@ memory."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">CovariateSearcher</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.5</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.7</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -83,6 +83,7 @@ memory.</p>
 <span>  fontsize <span class="op">=</span> <span class="fl">9</span>,</span>
 <span>  title <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  x_lim <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  x_breaks <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  typical_subject <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  filename <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  output_format <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"emf"</span>, <span class="st">"png"</span><span class="op">)</span>,</span>
@@ -165,6 +166,13 @@ horizontal (ratio) axis - the change relative to the reference - e.g.
 <code>c(0, 3)</code>. <code>NULL</code> (default) auto-scales to the data (the box whiskers plus
 a small margin). The plot is drawn with <code>coord_flip()</code>, so this sets the
 visual x-axis the reader sees.</p></dd>
+
+
+<dt id="arg-x-breaks">x_breaks<a class="anchor" aria-label="anchor" href="#arg-x-breaks"></a></dt>
+<dd><p>Numeric vector, or <code>NULL</code>. Tick positions on that same ratio
+axis, e.g. <code>c(0.5, 0.8, 1, 1.15, 1.25)</code>. <code>NULL</code> (default) lets ggplot2
+choose, which lands on round numbers that need not include 1 or the
+relevance bounds. Breaks outside <code>x_lim</code> are simply not drawn.</p></dd>
 
 
 <dt id="arg-typical-subject">typical_subject<a class="anchor" aria-label="anchor" href="#arg-typical-subject"></a></dt>

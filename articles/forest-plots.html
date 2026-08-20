@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">CovariateSearcher</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.5</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.7</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -610,17 +610,24 @@ dropped both</td>
 <td>fix the ratio axis</td>
 </tr>
 <tr class="odd">
+<td><code>x_breaks</code></td>
+<td><code>NULL</code></td>
+<td>tick positions on the ratio axis,
+e.g. <code>c(0.5, 0.8, 1, 1.15, 1.25)</code>; <code>NULL</code> uses
+ggplot2’s default breaks</td>
+</tr>
+<tr class="even">
 <td><code>fontsize</code></td>
 <td><code>9</code></td>
 <td>base font size</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>title</code></td>
 <td><code>NULL</code></td>
 <td>built from the metric when <code>NULL</code>
 </td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>filename</code></td>
 <td><code>NULL</code></td>
 <td>no file written when <code>NULL</code>;

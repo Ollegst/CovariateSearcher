@@ -23,6 +23,7 @@ plot_exposure_forest(
   fontsize = 9,
   title = NULL,
   x_lim = NULL,
+  x_breaks = NULL,
   typical_subject = TRUE,
   filename = NULL,
   output_format = c("emf", "png"),
@@ -108,6 +109,13 @@ plot_exposure_forest(
   `NULL` (default) auto-scales to the data (the box whiskers plus a
   small margin). The plot is drawn with `coord_flip()`, so this sets the
   visual x-axis the reader sees.
+
+- x_breaks:
+
+  Numeric vector, or `NULL`. Tick positions on that same ratio axis,
+  e.g. `c(0.5, 0.8, 1, 1.15, 1.25)`. `NULL` (default) lets ggplot2
+  choose, which lands on round numbers that need not include 1 or the
+  relevance bounds. Breaks outside `x_lim` are simply not drawn.
 
 - typical_subject:
 

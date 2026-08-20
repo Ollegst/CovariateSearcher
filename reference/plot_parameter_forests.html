@@ -49,7 +49,7 @@ alongside the plots."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">CovariateSearcher</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.5</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.7</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -124,6 +124,7 @@ alongside the plots.</p>
 <span>  width <span class="op">=</span> <span class="fl">6</span>,</span>
 <span>  height <span class="op">=</span> <span class="fl">6</span>,</span>
 <span>  outer_range <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  x_breaks <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  typical_subject <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  param_info <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  scenario <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -193,6 +194,12 @@ multi-page PDF of every parameter forest to the same folder.</p></dd>
 <dd><p>Passed to <code><a href="plot_exposure_forest.html">plot_exposure_forest()</a></code>. <code>NULL</code> (default) draws
 only the clinical-relevance band on parameter forests (the wider 0.5-2 band
 is dropped); pass e.g. <code>c(0.5, 2)</code> to add it back.</p></dd>
+
+
+<dt id="arg-x-breaks">x_breaks<a class="anchor" aria-label="anchor" href="#arg-x-breaks"></a></dt>
+<dd><p>Numeric vector, or <code>NULL</code>. Tick positions on the ratio axis
+of every parameter forest, e.g. <code>c(0.5, 0.8, 1, 1.15, 1.25)</code>. <code>NULL</code>
+(default) lets ggplot2 choose. Passed to <code><a href="plot_exposure_forest.html">plot_exposure_forest()</a></code>.</p></dd>
 
 
 <dt id="arg-typical-subject">typical_subject<a class="anchor" aria-label="anchor" href="#arg-typical-subject"></a></dt>
