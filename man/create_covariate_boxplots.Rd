@@ -120,8 +120,8 @@ box, in the same units as \code{label_size}. \code{NULL} (default) derives it fr
 \code{base_size} (\code{base_size/.pt * 0.6}). Set it to size the counts without
 touching the axis and strip text, which \code{base_size} would also rescale.}
 
-\item{ss}{logical; steady state? If TRUE (default) an "ss" suffix is added to
-the metric label on the y axis ("\if{html}{\out{<drug>}} AUCss (\if{html}{\out{<unit>}})") and "_ss" to every
+\item{ss}{logical; steady state? If TRUE (default) a ",ss" suffix is added to
+the metric label on the y axis ("\if{html}{\out{<drug>}} AUC,ss (\if{html}{\out{<unit>}})") and "_ss" to every
 saved file name, so steady-state and single-dose runs of the same drug do
 not overwrite each other. Nothing is appended where the label or file stem
 already ends in "ss", which is common when the labels come from a spec

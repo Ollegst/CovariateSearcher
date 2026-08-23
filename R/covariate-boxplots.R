@@ -46,8 +46,8 @@ utils::globalVariables(c("y", "facet_grp", "xlev", "Freq"))
 #'   - a yspec object, a path to a spec YAML, or a spec-shaped list (each entry's
 #'   `short` becomes the label, plus its `unit`). Every `type` must have an
 #'   entry or the call stops.
-#' @param ss logical; steady state? If TRUE (default) an "ss" suffix is added to
-#'   the metric label on the y axis ("<drug> AUCss (<unit>)") and "_ss" to every
+#' @param ss logical; steady state? If TRUE (default) a ",ss" suffix is added to
+#'   the metric label on the y axis ("<drug> AUC,ss (<unit>)") and "_ss" to every
 #'   saved file name, so steady-state and single-dose runs of the same drug do
 #'   not overwrite each other. Nothing is appended where the label or file stem
 #'   already ends in "ss", which is common when the labels come from a spec
@@ -255,9 +255,9 @@ create_covariate_boxplots <- function(data,
     # unicode renders there. A metric whose spec carries no unit gets the label
     # on its own rather than an empty pair of brackets.
     y_label_text <- if (!is.null(pinfo$unit) && nzchar(pinfo$unit)) {
-      paste0(drug, " ", add_ss(pinfo$label), " (", pinfo$unit, ")")
+      paste0(drug, " ", add_ss(pinfo$label, ","), " (", pinfo$unit, ")")
     } else {
-      paste0(drug, " ", add_ss(pinfo$label))
+      paste0(drug, " ", add_ss(pinfo$label, ","))
     }
     results[[t]] <- list()
 
