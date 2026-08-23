@@ -10,7 +10,8 @@ get_param2(
   shrinkage = "etasd",
   models_folder = "models",
   spec_pk = NULL,
-  lookup = NULL
+  lookup = NULL,
+  include_ci = FALSE
 )
 }
 \arguments{
@@ -26,6 +27,11 @@ get_param2(
 
 \item{lookup}{List. Optional covariate lookup spec (each entry carrying \code{values}
 and \code{decode}) used to decode categorical covariate levels in labels}
+
+\item{include_ci}{Logical. Additionally return \code{nonmem_name} (NONMEM's own
+parameter name, kept as a join key for bootstrap results) and \code{CI}, the
+asymptotic interval \verb{estimate ± 1.96 * SE} mapped onto the reported scale.
+\code{FALSE} (default) leaves the returned columns exactly as they were.}
 }
 \value{
 A formatted data frame with model parameters and statistics

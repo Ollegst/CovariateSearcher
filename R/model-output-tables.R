@@ -329,6 +329,192 @@ decode_cov_level <- function(cov_name, level, lookup) {
 }
 
 
+#' Name a covariate the way its spec does
+#'
+#' @description Internal helper. A covariate tag carries the dataset's column
+#'   name (`ASIAN`), which is the join key everywhere but rarely how the
+#'   covariate should read in a table (`Race2`). Takes `short` from the lookup
+#'   entry, then its `label`, then `short` from `spec_pk`, and keeps the column
+#'   name when none of them spells one out - the same order
+#'   `create_covariate_table()` resolves its own covariate labels in.
+#' @param cov_name Character string. Covariate column name, as parsed from the
+#'   `beta_` tag.
+#' @param lookup List or NULL. Lookup spec keyed by covariate name.
+#' @param spec_pk List or NULL. Parameter/dataset spec keyed by column name.
+#' @return Character string. Never `NA` - it falls back to `cov_name`.
+#' @keywords internal
+#' @noRd
+.cov_display_name <- function(cov_name, lookup = NULL, spec_pk = NULL) {
+  usable <- function(v) {
+    !is.null(v) && length(v) >= 1 && !is.na(v[1]) && nzchar(as.character(v)[1])
+  }
+  field <- function(entry, name) {
+    v <- tryCatch(entry[[name]], error = function(e) NULL)
+    if (is.null(v)) v <- tryCatch(`$`(entry, name), error = function(e) NULL)
+    v
+  }
+
+  entry <- if (!is.null(lookup)) lookup[[cov_name]] else NULL
+  if (!is.null(entry)) {
+    for (nm in c("short", "label")) {
+      v <- field(entry, nm)
+      if (usable(v)) return(as.character(v)[1])
+    }
+  }
+
+  spec_entry <- if (!is.null(spec_pk)) {
+    tryCatch(spec_pk[[cov_name]], error = function(e) NULL)
+  } else {
+    NULL
+  }
+  if (!is.null(spec_entry)) {
+    v <- field(spec_entry, "short")
+    if (usable(v)) return(as.character(v)[1])
+  }
+
+  cov_name
+}
+
+
+#' Put an estimation-scale value onto the reported scale
+#'
+#' @description Internal helper. The reported value of a parameter is not always
+#'   what NONMEM estimated: a `;LOG` theta is exponentiated, and an OMEGA diagonal
+#'   is shown as a CV percentage. Applying the same mapping to an estimate and to
+#'   the bounds of its confidence interval keeps the two in the same units.
+#'   All three transformations are monotone increasing, so a lower bound stays a
+#'   lower bound.
+#' @param value Numeric vector on NONMEM's estimation scale.
+#' @param random_effect_sd Numeric vector from `bbr::param_estimates()`; `NA`
+#'   marks a THETA.
+#' @param trans Character vector of control-stream transformations ("LOG", "RATIO").
+#' @param diag Logical vector. `TRUE` for diagonal OMEGA/SIGMA elements.
+#' @return Numeric vector on the reported scale.
+#' @keywords internal
+#' @noRd
+.to_report_scale <- function(value, random_effect_sd, trans, diag) {
+  dplyr::case_when(
+    is.na(random_effect_sd) & trans == "RATIO" ~ value,
+    is.na(random_effect_sd) & trans == "LOG" ~ exp(value),
+    diag == TRUE ~ 100 * sqrt(ifelse(exp(value) - 1 >= 0, exp(value) - 1, NA)),
+    diag == FALSE ~ value
+  )
+}
+
+
+#' Format a confidence interval as `[low, high]`
+#'
+#' @param low,high Numeric vectors of interval bounds.
+#' @param digits Significant digits to keep (default 3).
+#' @return Character vector; `NA_character_` where either bound is missing.
+#' @keywords internal
+#' @noRd
+.format_ci <- function(low, high, digits = 3) {
+  as_str <- function(x) {
+    vapply(x, function(v) {
+      if (is.na(v)) NA_character_
+      else format(signif(v, digits), trim = TRUE, scientific = FALSE)
+    }, character(1))
+  }
+  ifelse(is.na(low) | is.na(high), NA_character_,
+         paste0("[", as_str(low), ", ", as_str(high), "]"))
+}
+
+
+#' Re-punctuate a bootstrap confidence interval as `[low, high]`
+#'
+#' @description Bootstrap summaries carry the interval as one pre-formatted
+#'   string, conventionally hyphen-separated (`"[65.2-81.1]"`), which is
+#'   ambiguous once a bound is negative (`"[-0.23--0.15]"`). The number pattern
+#'   cannot itself match a separating hyphen, so the split is unambiguous.
+#'   A string that does not parse is passed through untouched rather than dropped.
+#' @param x Character vector of intervals, hyphen- or comma-separated, with or
+#'   without enclosing brackets.
+#' @return Character vector of `"[low, high]"` strings.
+#' @keywords internal
+#' @noRd
+.reformat_boot_ci <- function(x) {
+  x <- trimws(as.character(x))
+  num <- "-?[0-9]*\\.?[0-9]+(?:[eE][+-]?[0-9]+)?"
+  pattern <- paste0("^\\[?\\s*(", num, ")\\s*[,-]\\s*(", num, ")\\s*\\]?$")
+  matched <- regmatches(x, regexec(pattern, x))
+
+  vapply(seq_along(x), function(i) {
+    parts <- matched[[i]]
+    if (length(parts) != 3) return(x[i])
+    paste0("[", parts[2], ", ", parts[3], "]")
+  }, character(1))
+}
+
+
+#' Attach bootstrap median and confidence interval to a parameter table
+#'
+#' @description Matches `boot_results` to the report rows on NONMEM's own
+#'   parameter names (`THETA1`, `OMEGA(1,1)`, ...), which `get_param2()` carries
+#'   in `nonmem_name`. Matching by name rather than by position survives the rows
+#'   the report drops (fixed `SIGMA(1,1)`, zero off-diagonals) and a bootstrap
+#'   table ordered `THETA10` before `THETA2`.
+#' @param param_est Data frame from `get_param2(include_ci = TRUE)`.
+#' @param boot_results Data frame of bootstrap summaries. Column names are
+#'   matched case-insensitively: the parameter name from
+#'   `parameter_names`/`parameter`/`param`, the central value from
+#'   `median`/`estimate`/`value`, and the interval from the first column whose
+#'   name contains "CI".
+#' @return `param_est` with `boot_median` and `boot_ci` columns added.
+#' @keywords internal
+#' @noRd
+.join_bootstrap_results <- function(param_est, boot_results) {
+  boot <- as.data.frame(boot_results, stringsAsFactors = FALSE)
+  nm <- names(boot)
+
+  pick <- function(candidates) {
+    hit <- which(tolower(nm) %in% tolower(candidates))
+    if (length(hit) > 0) nm[hit[1]] else NA_character_
+  }
+  name_col <- pick(c("parameter_names", "parameter_name", "parameter", "param"))
+  med_col <- pick(c("median", "estimate", "value"))
+  ci_hits <- grep("ci", nm, ignore.case = TRUE, value = TRUE)
+  ci_col <- if (length(ci_hits) > 0) ci_hits[1] else NA_character_
+
+  missing_cols <- c(
+    if (is.na(name_col)) "parameter name (parameter_names/parameter/param)",
+    if (is.na(med_col)) "central value (median/estimate/value)",
+    if (is.na(ci_col)) "confidence interval (a column whose name contains 'CI')"
+  )
+  if (length(missing_cols) > 0) {
+    stop(sprintf(
+      "`boot_results` is missing the %s column(s). Columns found: %s",
+      paste(missing_cols, collapse = "; "), paste(nm, collapse = ", ")
+    ), call. = FALSE)
+  }
+
+  keys <- trimws(as.character(boot[[name_col]]))
+  if (anyDuplicated(keys) > 0) {
+    stop(sprintf(
+      "`boot_results` holds more than one row for: %s",
+      paste(unique(keys[duplicated(keys)]), collapse = ", ")
+    ), call. = FALSE)
+  }
+
+  boot_tbl <- data.frame(
+    nonmem_name = keys,
+    boot_median = round(suppressWarnings(as.numeric(boot[[med_col]])), 2),
+    boot_ci = .reformat_boot_ci(boot[[ci_col]]),
+    stringsAsFactors = FALSE
+  )
+
+  unmatched <- setdiff(keys, stats::na.omit(param_est$nonmem_name))
+  if (length(unmatched) > 0) {
+    cat(sprintf(
+      "  Bootstrap parameters with no row in the report (not shown): %s\n",
+      paste(unmatched, collapse = ", ")
+    ))
+  }
+
+  dplyr::left_join(param_est, boot_tbl, by = "nonmem_name")
+}
+
+
 #' Get Model Parameters and Statistics
 #'
 #' @description Internal function to extract and format model parameters with estimates and statistics
@@ -339,6 +525,10 @@ decode_cov_level <- function(cov_name, level, lookup) {
 #' @param spec_pk List. Optional parameter specifications with labels and units
 #' @param lookup List. Optional covariate lookup spec (each entry carrying `values`
 #'   and `decode`) used to decode categorical covariate levels in labels
+#' @param include_ci Logical. Additionally return `nonmem_name` (NONMEM's own
+#'   parameter name, kept as a join key for bootstrap results) and `CI`, the
+#'   asymptotic interval `estimate ± 1.96 * SE` mapped onto the reported scale.
+#'   `FALSE` (default) leaves the returned columns exactly as they were.
 #' @return A formatted data frame with model parameters and statistics
 #' @keywords internal
 get_param2 <- function(model_number,
@@ -346,7 +536,12 @@ get_param2 <- function(model_number,
                        shrinkage = "etasd",
                        models_folder = "models",
                        spec_pk = NULL,
-                       lookup = NULL) {
+                       lookup = NULL,
+                       include_ci = FALSE) {
+
+  # NULL/NA reads as "not asked for", so the flag can be threaded through from a
+  # caller's own optional argument without a guard at every call site.
+  include_ci <- isTRUE(include_ci)
 
   # Read model using bbr
   model_path <- file.path(models_folder, model_number)
@@ -423,20 +618,23 @@ get_param2 <- function(model_number,
     ) %>%
     dplyr::filter(!(parameter_names2 == "SIGMA(1,1)" & fixed == TRUE)) %>%
     dplyr::mutate(
-      Parameter = dplyr::case_when(
-        is.na(random_effect_sd) & trans == "RATIO" ~ estimate,
-        is.na(random_effect_sd) & trans == "LOG" ~ exp(estimate),
-        diag == TRUE ~ 100 * sqrt(ifelse(exp(estimate) - 1 >= 0, exp(estimate) - 1, NA)),
-        diag == FALSE ~ estimate
-      ),
+      Parameter = .to_report_scale(estimate, random_effect_sd, trans, diag),
       RSE = dplyr::case_when(
         is.na(random_effect_sd) & trans == "RATIO" ~ abs((stderr/estimate) * 100),
         is.na(random_effect_sd) & trans == "LOG" ~ abs(stderr) * 100,
         diag == TRUE ~  100 * stderr * exp(estimate) / (2 * (exp(estimate) - 1)),
         diag == FALSE ~ 100 * stderr / estimate
+      ),
+      # Built on the estimation scale, then mapped over like the estimate, so the
+      # interval carries the units the Estimate column shows. A parameter with no
+      # standard error (held at a FIX value, or an unsuccessful covariance step)
+      # leaves it NA.
+      CI = .format_ci(
+        .to_report_scale(estimate - 1.96 * stderr, random_effect_sd, trans, diag),
+        .to_report_scale(estimate + 1.96 * stderr, random_effect_sd, trans, diag)
       )
     ) %>%
-    dplyr::select(-"parameter_names2")
+    dplyr::rename(nonmem_name = "parameter_names2")
 
   # Extract shrinkage for diagonal OMEGA elements only
   shrinkage_df <- dplyr::filter(
@@ -450,7 +648,13 @@ get_param2 <- function(model_number,
 
   # Combine all parameters
   param_est <- param_est %>%
-    dplyr::select(parameter_names, Parameter, RSE, fixed) %>%
+    # all_of, not any_of: the four are built in the mutate above and their
+    # absence is a bug, not something to carry on past. The optional two exist
+    # either way and are selected only when asked for.
+    dplyr::select(
+      dplyr::all_of(c("parameter_names", "Parameter", "RSE", "fixed")),
+      dplyr::all_of(if (include_ci) c("nonmem_name", "CI") else character(0))
+    ) %>%
     dplyr::left_join(shrinkage_df, by = "parameter_names") %>%
     dplyr::bind_rows(OFV, COND_NUM) %>%
     dplyr::rowwise() %>%
@@ -498,21 +702,26 @@ get_param2 <- function(model_number,
               last_part   <- if (length(extra) > 0) extra[length(extra)] else NA_character_
               is_level    <- !is.na(last_part) && !is.na(suppressWarnings(as.numeric(last_part)))
               param_label <- if (param_name %in% names(spec_pk)) spec_pk[[param_name]]$label else param_name
+              # The tag's own COV token stays the lookup key; only what is
+              # printed becomes the name the spec gives it.
+              cov_display <- .cov_display_name(cov_name, lookup, spec_pk)
 
               if (is_level) {
                 level   <- last_part
                 decoded <- decode_cov_level(cov_name, level, lookup)
                 if (!is.na(decoded)) {
-                  paste0("Effect of ", decoded, " (", cov_name, ") on ", param_label)
+                  # Covariate first, level in parentheses - the order the short
+                  # name reads in, so the two columns agree.
+                  paste0("Effect of ", cov_display, " (", decoded, ") on ", param_label)
                 } else {
-                  paste0("Effect of ", cov_name, " level ", level, " on ", param_label)
+                  paste0("Effect of ", cov_display, " level ", level, " on ", param_label)
                 }
               } else if (length(extra) > 0) {
                 # multi-theta: the theta name(s) attach to the covariate side (e.g.
                 # WT_EMAX), matching how categorical levels attach to the covariate.
-                paste0("Effect of ", paste(c(cov_name, extra), collapse = "_"), " on ", param_label)
+                paste0("Effect of ", paste(c(cov_display, extra), collapse = "_"), " on ", param_label)
               } else {
-                paste0("Effect of ", cov_name, " on ", param_label)
+                paste0("Effect of ", cov_display, " on ", param_label)
               }
             }
           },
@@ -536,21 +745,25 @@ get_param2 <- function(model_number,
               last_part   <- if (length(extra) > 0) extra[length(extra)] else NA_character_
               is_level    <- !is.na(last_part) && !is.na(suppressWarnings(as.numeric(last_part)))
               param_short <- if (param_name %in% names(spec_pk)) spec_pk[[param_name]]$short else param_name
+              cov_display <- .cov_display_name(cov_name, lookup, spec_pk)
 
               if (is_level) {
                 level   <- last_part
                 decoded <- decode_cov_level(cov_name, level, lookup)
+                # "SEX: Female~Vc/F" - the covariate, then the level it refers
+                # to, punctuated as create_covariate_table() punctuates its own
+                # scenario labels.
                 if (!is.na(decoded)) {
-                  paste0(cov_name, " ", decoded, "~", param_short)
+                  paste0(cov_display, ": ", decoded, "~", param_short)
                 } else {
-                  paste0(cov_name, " level ", level, "~", param_short)
+                  paste0(cov_display, ": level ", level, "~", param_short)
                 }
               } else if (length(extra) > 0) {
                 # multi-theta: theta name(s) attach to the covariate side (WT_EMAX);
                 # parameter stays after '~'.
-                paste0(paste(c(cov_name, extra), collapse = "_"), "~", param_short)
+                paste0(paste(c(cov_display, extra), collapse = "_"), "~", param_short)
               } else {
-                paste0(cov_name, "~", param_short)
+                paste0(cov_display, "~", param_short)
               }
             }
           },
@@ -635,7 +848,13 @@ get_param2 <- function(model_number,
           TRUE ~ as.character(Parameter)
         )
       ) %>%
-      dplyr::select(-fixed, -is_omega)
+      dplyr::select(-fixed)
+
+    # is_omega tells a missing shrinkage apart from one that was never expected,
+    # which only the merged bootstrap column needs.
+    if (!include_ci) {
+      param_est <- dplyr::select(param_est, -is_omega)
+    }
   }
 
   return(param_est)
@@ -653,16 +872,60 @@ get_param2 <- function(model_number,
 #'   `yaml::read_yaml("data/spec/lookup.yaml")`) where each covariate entry carries
 #'   `values` and `decode`. When `NULL` (default) or when a covariate/level has no
 #'   usable decode, the generic "level N" label is used.
+#' @param bootstrap Logical. Report a single model beside a non-parametric
+#'   bootstrap. The final-model columns collapse to `Estimate` and
+#'   `RSE (%) [Shrinkage (%)]`, an asymptotic `95% CI` column
+#'   (`estimate ± 1.96 * SE`) is added, and the bootstrap `Median` and
+#'   `95% CI-bootstrap` follow under their own spanning header. Requires exactly
+#'   one model name and a `boot_results`. Default `FALSE` leaves the table as it
+#'   was.
+#'
+#'   The interval is built where the standard error lives and then mapped onto
+#'   the reported scale, so it carries the units of the Estimate beside it. Two
+#'   cases leave it empty: a parameter with no standard error (held at a FIX
+#'   value, or an unsuccessful covariance step), and an OMEGA whose lower bound
+#'   reaches a negative variance, which has no CV% - roughly, once the printed
+#'   RSE passes the high twenties for a small OMEGA. The bound is left out
+#'   rather than floored at zero, which would state a limit the estimation did
+#'   not support.
+#' @param boot_results Bootstrap summaries as a data frame, or a path to a
+#'   `.csv`/`.rds` holding one. Rows are matched to the report on NONMEM's own
+#'   parameter names (`THETA1`, `OMEGA(1,1)`, ...), so order does not matter and
+#'   extra rows are reported and skipped. Needs a parameter-name column
+#'   (`parameter_names`/`parameter`/`param`), a central-value column
+#'   (`median`/`estimate`/`value`) and one column whose name contains "CI",
+#'   holding the interval as `"[65.2-81.1]"` or `"[65.2, 81.1]"`. Values are used
+#'   as given: they must already be on the scale the report shows (CV% for OMEGA
+#'   diagonals, back-transformed THETAs).
 #' @return flextable object with formatted parameter table
 #' @export
 model_report <- function(model_names,
                          shrinkage = "etasd",
                          models_folder = "models",
                          spec_pk = NULL,
-                         lookup = NULL) {
+                         lookup = NULL,
+                         bootstrap = FALSE,
+                         boot_results = NULL) {
 
   if (length(model_names) == 0) {
     stop("At least one model name must be provided")
+  }
+
+  bootstrap <- isTRUE(bootstrap)
+
+  if (bootstrap) {
+    if (length(model_names) != 1) {
+      stop(sprintf(
+        paste("bootstrap = TRUE reports one model against its bootstrap;",
+              "%d model names were given."), length(model_names)
+      ), call. = FALSE)
+    }
+    if (is.null(boot_results)) {
+      stop("bootstrap = TRUE requires `boot_results`.", call. = FALSE)
+    }
+    boot_results <- .load_if_path(boot_results, "boot_results")
+  } else if (!is.null(boot_results)) {
+    warning("`boot_results` is ignored while bootstrap = FALSE.", call. = FALSE)
   }
 
   count_model <- length(model_names)
@@ -684,7 +947,8 @@ model_report <- function(model_names,
         shrinkage = shrinkage,
         models_folder = models_folder,
         spec_pk = spec_pk,
-        lookup = lookup
+        lookup = lookup,
+        include_ci = bootstrap
       )
       cat("✓\n")
       list(success = TRUE, data = param_table, model = model_name)
@@ -732,6 +996,10 @@ model_report <- function(model_names,
     purrr::reduce(dplyr::full_join, by = c("parameter_names", "label", "comment")) %>%
     dplyr::arrange(comment)
 
+  if (bootstrap) {
+    param_est <- .join_bootstrap_results(param_est, boot_results)
+  }
+
   # Create grouped table with section headers
   grouped_table <- param_est %>%
     dplyr::group_by(comment) %>%
@@ -751,7 +1019,37 @@ model_report <- function(model_names,
     )
 
   # Rename columns based on single vs multiple models
-  if (count_model == 1) {
+  if (count_model == 1 && bootstrap) {
+    # Estimate keeps its own column; RSE and shrinkage merge into one the way the
+    # multi-model columns merge them. Section header rows carry no numbers, and
+    # neither do OFV, the conditional number, or a parameter held at a FIX value.
+    for (needed in c("RSE", "SHRINKAGE", "CI", "is_omega")) {
+      if (!needed %in% names(grouped_table)) grouped_table[[needed]] <- NA
+    }
+
+    grouped_table <- grouped_table %>%
+      dplyr::mutate(
+        # An OMEGA keeps the bracket even when its shrinkage could not be read,
+        # as the multi-model column does: without it the row is indistinguishable
+        # from a THETA that never had one.
+        rse_shrinkage = dplyr::case_when(
+          is.na(RSE) & is.na(SHRINKAGE) ~ "",
+          is.na(RSE) ~ paste0("NA [", SHRINKAGE, "]"),
+          !is.na(SHRINKAGE) ~ paste0(RSE, " [", SHRINKAGE, "]"),
+          !is.na(is_omega) & is_omega ~ paste0(RSE, " [NA]"),
+          TRUE ~ as.character(RSE)
+        )
+      ) %>%
+      dplyr::select(
+        "parameter_names", "label",
+        Estimate = "Parameter",
+        `RSE (%) [Shrinkage (%)]` = "rse_shrinkage",
+        `95% CI` = "CI",
+        Median = "boot_median",
+        `95% CI-bootstrap` = "boot_ci"
+      )
+
+  } else if (count_model == 1) {
     # For single model, check which columns actually exist before renaming
     col_names <- names(grouped_table)
 
@@ -786,8 +1084,18 @@ model_report <- function(model_names,
   }
 
   # Create and format flextable
-  flextable_object <- grouped_table %>%
-    flextable::flextable() %>%
+  flextable_object <- flextable::flextable(grouped_table)
+
+  # Spanning header separating the final model's columns from the bootstrap's
+  if (bootstrap) {
+    flextable_object <- flextable::add_header_row(
+      flextable_object,
+      values = c("", "Final model", "Non-parametric bootstrap"),
+      colwidths = c(2, 3, 2)
+    )
+  }
+
+  flextable_object <- flextable_object %>%
     flextable::align(j = c(-1), align = "center", part = "all") %>%
     theme_pps_table() %>%
     flextable::bold(
