@@ -115,7 +115,7 @@ usual ggplot \code{size} units. \code{NULL} (default) derives it from \code{base
 narrow or the panel count is high, e.g. \code{label_size = 1.8}.}
 
 \item{ss}{logical; steady state? If TRUE (default) an "ss" suffix is added to
-the metric label on the y axis ("\if{html}{\out{<drug>}} AUCss, \if{html}{\out{<unit>}}") and "_ss" to every
+the metric label on the y axis ("\if{html}{\out{<drug>}} AUCss (\if{html}{\out{<unit>}})") and "_ss" to every
 saved file name, so steady-state and single-dose runs of the same drug do
 not overwrite each other. Nothing is appended where the label or file stem
 already ends in "ss", which is common when the labels come from a spec
