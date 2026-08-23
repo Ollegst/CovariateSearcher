@@ -379,7 +379,7 @@ create_covariate_boxplots <- function(data,
             inherit.aes = FALSE,
             vjust = 0.5,                            # box centred on the median line
             size  = med_size,
-            label.size = 0.25,                      # thin border box around the number
+            linewidth = 0.25,                       # thin border box around the number
             label.padding = grid::unit(0.12, "lines"),
             fill = "white",
             colour = "grey15",
