@@ -65,11 +65,15 @@ utils::globalVariables(c("y", "facet_grp", "xlev", "Freq"))
 #' @param show_median logical; if TRUE (default) each box carries its median
 #'   value in a small white label sitting on the median line.
 #' @param show_n logical; if TRUE (default) the number of subjects in each box
-#'   is printed underneath it as "n = <count>".
+#'   is printed in bold underneath it as "n = <count>".
 #' @param label_size numeric or NULL. Text size of the median label, in the
 #'   usual ggplot `size` units. `NULL` (default) derives it from `base_size`
 #'   (`base_size/.pt * 0.65`); give a number to shrink it where the boxes are
 #'   narrow or the panel count is high, e.g. `label_size = 1.8`.
+#' @param n_size numeric or NULL. Text size of the "n = <count>" line under each
+#'   box, in the same units as `label_size`. `NULL` (default) derives it from
+#'   `base_size` (`base_size/.pt * 0.6`). Set it to size the counts without
+#'   touching the axis and strip text, which `base_size` would also rescale.
 #' @param percent_change logical; if TRUE the median label also shows the change
 #'   from the **first level of the same panel**, e.g. `1,234 (-10%)`. The first
 #'   level is the reference and carries no suffix, and a panel holding a single
@@ -143,6 +147,7 @@ create_covariate_boxplots <- function(data,
                                       show_n = TRUE,
                                       percent_change = FALSE,
                                       label_size = NULL,
+                                      n_size = NULL,
                                       ss = TRUE) {
 
   type <- as.character(type)
@@ -383,10 +388,13 @@ create_covariate_boxplots <- function(data,
       }
 
       if (isTRUE(show_n)) {
+        # Sized off base_size like the rest of the plot unless `n_size` overrides
+        # it outright, for crowded panels where the counts crowd the boxes.
+        cnt_size <- if (is.null(n_size)) base_size / .pt * 0.6 else n_size
         combined <- combined +
           geom_text(data = cnt, aes(x = xlev, label = paste0("n = ", Freq)),
-                    y = -Inf, vjust = -0.5, size = base_size / .pt * 0.6,
-                    colour = "grey30", inherit.aes = FALSE)
+                    y = -Inf, vjust = -0.5, size = cnt_size,
+                    fontface = "bold", colour = "grey30", inherit.aes = FALSE)
       }
 
       combined <- combined +

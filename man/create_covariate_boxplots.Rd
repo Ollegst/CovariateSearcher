@@ -26,6 +26,7 @@ create_covariate_boxplots(
   show_n = TRUE,
   percent_change = FALSE,
   label_size = NULL,
+  n_size = NULL,
   ss = TRUE
 )
 }
@@ -101,7 +102,7 @@ device. (The combined multi-page file is always a PDF.)}
 value in a small white label sitting on the median line.}
 
 \item{show_n}{logical; if TRUE (default) the number of subjects in each box
-is printed underneath it as "n = \if{html}{\out{<count>}}".}
+is printed in bold underneath it as "n = \if{html}{\out{<count>}}".}
 
 \item{percent_change}{logical; if TRUE the median label also shows the change
 from the \strong{first level of the same panel}, e.g. \verb{1,234 (-10\%)}. The first
@@ -113,6 +114,11 @@ box (the pooled \code{Total} panel) gets none either. Requires
 usual ggplot \code{size} units. \code{NULL} (default) derives it from \code{base_size}
 (\code{base_size/.pt * 0.65}); give a number to shrink it where the boxes are
 narrow or the panel count is high, e.g. \code{label_size = 1.8}.}
+
+\item{n_size}{numeric or NULL. Text size of the "n = \if{html}{\out{<count>}}" line under each
+box, in the same units as \code{label_size}. \code{NULL} (default) derives it from
+\code{base_size} (\code{base_size/.pt * 0.6}). Set it to size the counts without
+touching the axis and strip text, which \code{base_size} would also rescale.}
 
 \item{ss}{logical; steady state? If TRUE (default) an "ss" suffix is added to
 the metric label on the y axis ("\if{html}{\out{<drug>}} AUCss (\if{html}{\out{<unit>}})") and "_ss" to every
