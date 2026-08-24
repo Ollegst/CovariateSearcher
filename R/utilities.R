@@ -129,6 +129,41 @@ extract_covariate_name_from_tag <- function(tag) {
 }
 
 
+#' Put a caller's footnote under a plot
+#'
+#' @description One rendering of a footnote for every plot the package builds,
+#'   so a figure set does not carry it three different ways. Left-aligned
+#'   against the plot edge rather than the panel, and sized relative to the
+#'   theme so it follows a caller's `base_size` without being told about it.
+#'
+#'   A `NULL`, empty or all-blank footnote returns the plot untouched, which is
+#'   what lets the argument default to `NULL` and cost nothing.
+#' @param p A ggplot object.
+#' @param footnote Character vector, or `NULL`. Several elements are placed on
+#'   their own lines.
+#' @return The plot, with a caption added when there was one to add.
+#' @keywords internal
+#' @noRd
+.add_footnote <- function(p, footnote) {
+  if (is.null(footnote)) return(p)
+  footnote <- as.character(footnote)
+  footnote <- footnote[!is.na(footnote)]
+  if (length(footnote) == 0 || !any(nzchar(trimws(footnote)))) return(p)
+
+  p +
+    ggplot2::labs(caption = paste(footnote, collapse = "\n")) +
+    ggplot2::theme(
+      plot.caption = ggplot2::element_text(
+        size = ggplot2::rel(0.8), colour = "grey30", hjust = 0,
+        margin = ggplot2::margin(t = 6)
+      ),
+      # Against the plot edge, not the panel: a footnote belongs to the figure,
+      # not to the axes.
+      plot.caption.position = "plot"
+    )
+}
+
+
 #' Has a model reached a final answer?
 #'
 #' @description The three statuses that settle a model: it produced a usable

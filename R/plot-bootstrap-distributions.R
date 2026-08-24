@@ -191,6 +191,11 @@
 #'   that moved across the draws.
 #' @param bins Integer. Histogram bins per panel (default 30).
 #' @param ncol Integer. Panel columns; `NULL` (default) lets ggplot2 choose.
+#' @param footnote Character or `NULL`. Free text placed under the figure,
+#'   left-aligned against the plot edge. Several elements go on their own
+#'   lines. `NULL` (default) adds nothing. Rendered the same way
+#'   [create_covariate_boxplots()] renders its own, so the two sit together in
+#'   one report.
 #' @param wrap_width Integer. A panel title longer than this is broken across
 #'   two lines at a space, never mid-word; the first line takes as many words as
 #'   fit within it. Default 22, sized for a facet strip rather than the table's
@@ -238,6 +243,7 @@ plot_bootstrap_distributions <- function(boot_run,
                                          parameters = NULL,
                                          bins = 30,
                                          ncol = NULL,
+                                         footnote = NULL,
                                          wrap_width = 22) {
 
   if (!is.character(model_name) || length(model_name) != 1) {
@@ -358,7 +364,8 @@ plot_bootstrap_distributions <- function(boot_run,
     levels = panel_titles
   )
 
-  .bootstrap_distribution_plot(draws, quantile_tbl, final_tbl, bins, ncol)
+  .bootstrap_distribution_plot(draws, quantile_tbl, final_tbl, bins, ncol,
+                               footnote)
 }
 
 
@@ -371,12 +378,14 @@ plot_bootstrap_distributions <- function(boot_run,
 #' @param final_tbl Per-panel `final_estimate`, one to a panel.
 #' @param bins Histogram bins per panel.
 #' @param ncol Panel columns, or `NULL` to let ggplot2 choose.
+#' @param footnote Caller's footnote, or `NULL`.
 #' @return A ggplot2 object.
 #' @keywords internal
 #' @noRd
 .bootstrap_distribution_plot <- function(draws, quantile_tbl, final_tbl,
-                                         bins = 30, ncol = NULL) {
-  ggplot(draws, aes(x = value)) +
+                                         bins = 30, ncol = NULL,
+                                         footnote = NULL) {
+  p <- ggplot(draws, aes(x = value)) +
     geom_histogram(bins = bins, fill = "grey60", colour = "white",
                    linewidth = 0.2) +
     geom_vline(data = quantile_tbl, aes(xintercept = q_value),
@@ -386,6 +395,8 @@ plot_bootstrap_distributions <- function(boot_run,
     facet_wrap(~ panel, scales = "free", ncol = ncol) +
     labs(x = "Value", y = "Count") +
     theme_bw()
+
+  .add_footnote(p, footnote)
 }
 
 

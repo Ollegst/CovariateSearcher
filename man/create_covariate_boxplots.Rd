@@ -27,6 +27,7 @@ create_covariate_boxplots(
   percent_change = FALSE,
   label_size = NULL,
   n_size = NULL,
+  footnote = NULL,
   ss = TRUE
 )
 }
@@ -119,6 +120,12 @@ narrow or the panel count is high, e.g. \code{label_size = 1.8}.}
 box, in the same units as \code{label_size}. \code{NULL} (default) derives it from
 \code{base_size} (\code{base_size/.pt * 0.6}). Set it to size the counts without
 touching the axis and strip text, which \code{base_size} would also rescale.}
+
+\item{footnote}{character or NULL. Free text placed under every figure this
+call produces, left-aligned against the plot edge and sized relative to
+\code{base_size}. Several elements go on their own lines. \code{NULL} (default) adds
+nothing. The text is used verbatim - it carries no provenance of its own,
+so name the script or dataset in it if the figure needs to be traceable.}
 
 \item{ss}{logical; steady state? If TRUE (default) a ",ss" suffix is added to
 the metric label on the y axis ("\if{html}{\out{<drug>}} AUC,ss (\if{html}{\out{<unit>}})") and "_ss" to every

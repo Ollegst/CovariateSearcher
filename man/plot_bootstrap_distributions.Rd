@@ -13,6 +13,7 @@ plot_bootstrap_distributions(
   parameters = NULL,
   bins = 30,
   ncol = NULL,
+  footnote = NULL,
   wrap_width = 22
 )
 }
@@ -41,6 +42,12 @@ that moved across the draws.}
 \item{bins}{Integer. Histogram bins per panel (default 30).}
 
 \item{ncol}{Integer. Panel columns; \code{NULL} (default) lets ggplot2 choose.}
+
+\item{footnote}{Character or \code{NULL}. Free text placed under the figure,
+left-aligned against the plot edge. Several elements go on their own
+lines. \code{NULL} (default) adds nothing. Rendered the same way
+\code{\link[=create_covariate_boxplots]{create_covariate_boxplots()}} renders its own, so the two sit together in
+one report.}
 
 \item{wrap_width}{Integer. A panel title longer than this is broken across
 two lines at a space, never mid-word; the first line takes as many words as

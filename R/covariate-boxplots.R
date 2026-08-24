@@ -74,6 +74,11 @@ utils::globalVariables(c("y", "facet_grp", "xlev", "Freq"))
 #'   box, in the same units as `label_size`. `NULL` (default) derives it from
 #'   `base_size` (`base_size/.pt * 0.6`). Set it to size the counts without
 #'   touching the axis and strip text, which `base_size` would also rescale.
+#' @param footnote character or NULL. Free text placed under every figure this
+#'   call produces, left-aligned against the plot edge and sized relative to
+#'   `base_size`. Several elements go on their own lines. `NULL` (default) adds
+#'   nothing. The text is used verbatim - it carries no provenance of its own,
+#'   so name the script or dataset in it if the figure needs to be traceable.
 #' @param percent_change logical; if TRUE the median label also shows the change
 #'   from the **first level of the same panel**, e.g. `1,234 (-10%)`. The first
 #'   level is the reference and carries no suffix, and a panel holding a single
@@ -148,6 +153,7 @@ create_covariate_boxplots <- function(data,
                                       percent_change = FALSE,
                                       label_size = NULL,
                                       n_size = NULL,
+                                      footnote = NULL,
                                       ss = TRUE) {
 
   type <- as.character(type)
@@ -412,6 +418,9 @@ create_covariate_boxplots <- function(data,
         combined <- combined +
           theme(strip.background = element_blank(), strip.text = element_blank())
       }
+
+      # Last, so the caption's own theme settings survive the ones above.
+      combined <- .add_footnote(combined, footnote)
 
       results[[t]][[covariate]] <- combined
 
