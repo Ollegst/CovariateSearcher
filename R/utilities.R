@@ -633,3 +633,38 @@ decode_dataset <- function(data, yaml_file, column_names) {
   return(data)
 }
 
+
+# Resolve `metric_info`/`param_info` to a named list(label=, unit=) per quantity.
+# Accepts that list directly, OR a spec: a yspec object, a path to a spec YAML,
+# or a spec-shaped list (entries carrying `short`) - in which case each entry's
+# `short` (label) and `unit` are taken from the spec.
+.resolve_quantity_info <- function(x) {
+  if (is.null(x)) return(NULL)
+  # Read a field from a spec column / list entry via `[[` then `$` (a yspec
+  # column object is NOT a plain list, so `is.list()` on it is FALSE - access
+  # the field directly, as spec[[var]]$short does).
+  fld <- function(e, f) {
+    v <- tryCatch(e[[f]], error = function(z) NULL)
+    if (is.null(v)) v <- tryCatch(`$`(e, f), error = function(z) NULL)
+    if (!is.null(v) && length(v) >= 1 && nzchar(as.character(v)[1])) {
+      as.character(v)[1]
+    } else {
+      NULL
+    }
+  }
+  is_spec <- (is.character(x) && length(x) == 1L) || inherits(x, "yspec") ||
+    (is.list(x) && length(x) > 0 &&
+       any(vapply(x, function(e) !is.null(fld(e, "short")), logical(1))))
+  if (!is_spec) return(x)                              # already a label/unit list
+  if (is.character(x) && length(x) == 1L) x <- yspec::ys_load(x)
+  out <- list()
+  for (nm in names(x)) {
+    e   <- x[[nm]]
+    lab <- fld(e, "short")                             # prefer the concise `short`
+    if (is.null(lab)) lab <- fld(e, "label")
+    if (is.null(lab)) lab <- nm
+    out[[nm]] <- list(label = lab, unit = fld(e, "unit"))
+  }
+  out
+}
+

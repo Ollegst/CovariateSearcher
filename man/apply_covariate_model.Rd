@@ -9,7 +9,9 @@ apply_covariate_model(
   covariate_search,
   individual_thetas,
   covariates,
-  models_folder = "models"
+  models_folder = "models",
+  eta = FALSE,
+  seed = 1234
 )
 }
 \arguments{
@@ -24,19 +26,36 @@ value for any covariate an equation references that is not in
 \item{individual_thetas}{Data frame whose columns are \code{THETA1}, \code{THETA2}, ...
 the sampled THETA draws on the \strong{estimation scale} (raw, as returned by
 \code{\link[=sample_individual_thetas]{sample_individual_thetas()}}; a log-parameterised THETA stays on the log
-scale -- the equation's \code{EXP} back-transforms it). One row per draw.}
+scale -- the equation's \code{EXP} back-transforms it). One row per draw; when
+\code{eta = TRUE}, row \emph{i}'s THETA draw is paired with ETA draw \emph{i}.}
 
 \item{covariates}{A single covariate scenario: a named vector or one-row data
 frame of covariate values (e.g. one row of \code{\link[=create_covariate_table]{create_covariate_table()}}).
 Applied to every draw. Extra names (such as \code{Scenario}) are ignored.}
 
 \item{models_folder}{Character. Folder containing the model. Default "models".}
+
+\item{eta}{Logical. If \code{TRUE}, draw one ETA vector per row of
+\code{individual_thetas} from the model's final \verb{$OMEGA} matrix (read from its
+\code{.ext} file, the same way \code{\link[=sample_individual_thetas]{sample_individual_thetas()}} reads THETA
+uncertainty) and evaluate \verb{$PK} with those draws instead of \code{ETA = 0}, so
+the result carries between-subject variability on top of the sampled
+THETA uncertainty and covariate effect. \code{OMEGA} elements never estimated
+(e.g. off-diagonal under a diagonal \verb{$OMEGA}) are treated as 0
+(uncorrelated). If \verb{$PK} references an \code{ETA(k)} beyond the OMEGA matrix's
+size, \strong{stops} rather than silently falling back (checked once, up
+front, before \verb{$PK} is interpreted). Default \code{FALSE} reproduces the
+typical-subject value for the scenario.}
+
+\item{seed}{Integer. Random seed for the ETA draw when \code{eta = TRUE}.
+Ignored otherwise. Default 1234.}
 }
 \value{
 A \code{data.frame} with an \code{ID} column and the structural (non-\code{beta_})
 THETA columns, each holding that parameter's value for the scenario on the
 \strong{natural scale}, obtained by evaluating the model's own \verb{$PK} equations
-with \code{ETA = 0}. One row per row of \code{individual_thetas}.
+with \code{ETA = 0} (or, when \code{eta = TRUE}, a sampled ETA draw). One row per
+row of \code{individual_thetas}.
 }
 \description{
 Reproduces a NONMEM model's typical-subject structural parameters in R for one

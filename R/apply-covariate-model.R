@@ -27,22 +27,39 @@
 #' @param individual_thetas Data frame whose columns are `THETA1`, `THETA2`, ...
 #'   the sampled THETA draws on the **estimation scale** (raw, as returned by
 #'   [sample_individual_thetas()]; a log-parameterised THETA stays on the log
-#'   scale -- the equation's `EXP` back-transforms it). One row per draw.
+#'   scale -- the equation's `EXP` back-transforms it). One row per draw; when
+#'   `eta = TRUE`, row *i*'s THETA draw is paired with ETA draw *i*.
 #' @param covariates A single covariate scenario: a named vector or one-row data
 #'   frame of covariate values (e.g. one row of [create_covariate_table()]).
 #'   Applied to every draw. Extra names (such as `Scenario`) are ignored.
 #' @param models_folder Character. Folder containing the model. Default "models".
+#' @param eta Logical. If `TRUE`, draw one ETA vector per row of
+#'   `individual_thetas` from the model's final `$OMEGA` matrix (read from its
+#'   `.ext` file, the same way [sample_individual_thetas()] reads THETA
+#'   uncertainty) and evaluate `$PK` with those draws instead of `ETA = 0`, so
+#'   the result carries between-subject variability on top of the sampled
+#'   THETA uncertainty and covariate effect. `OMEGA` elements never estimated
+#'   (e.g. off-diagonal under a diagonal `$OMEGA`) are treated as 0
+#'   (uncorrelated). If `$PK` references an `ETA(k)` beyond the OMEGA matrix's
+#'   size, **stops** rather than silently falling back (checked once, up
+#'   front, before `$PK` is interpreted). Default `FALSE` reproduces the
+#'   typical-subject value for the scenario.
+#' @param seed Integer. Random seed for the ETA draw when `eta = TRUE`.
+#'   Ignored otherwise. Default 1234.
 #'
 #' @return A `data.frame` with an `ID` column and the structural (non-`beta_`)
 #'   THETA columns, each holding that parameter's value for the scenario on the
 #'   **natural scale**, obtained by evaluating the model's own `$PK` equations
-#'   with `ETA = 0`. One row per row of `individual_thetas`.
+#'   with `ETA = 0` (or, when `eta = TRUE`, a sampled ETA draw). One row per
+#'   row of `individual_thetas`.
 #' @export
 apply_covariate_model <- function(model_name,
                                   covariate_search,
                                   individual_thetas,
                                   covariates,
-                                  models_folder = "models") {
+                                  models_folder = "models",
+                                  eta = FALSE,
+                                  seed = 1234) {
 
   # covariate_search may be given as an object or a character path (.csv/.rds).
   covariate_search <- .load_if_path(covariate_search, "covariate_search")
@@ -110,6 +127,42 @@ apply_covariate_model <- function(model_name,
     stop("No $PK or $PRED block found in model '", model_name, "'.")
   }
 
+  N <- nrow(individual_thetas)
+
+  # ---- ETA draws (optional) --------------------------------------------------
+  # One MVN(0, OMEGA) draw per row of individual_thetas, paired by row index
+  # with that row's THETA draw. OMEGA comes from the model's own FINAL .ext
+  # estimates, same file/row sample_individual_thetas() reads THETA from.
+  eta_draws <- NULL
+  if (isTRUE(eta)) {
+    omega_mat <- .read_final_omega_matrix(model_name, models_folder)
+    omega_mat <- .make_psd(omega_mat)
+    set.seed(seed)
+    eta_draws <- tryCatch(
+      mvtnorm::rmvnorm(N, mean = rep(0, nrow(omega_mat)), sigma = omega_mat,
+                       method = "svd"),
+      error = function(err) {
+        stop("Failed to draw ETAs from '", model_name, "'s OMEGA matrix: ",
+             conditionMessage(err))
+      }
+    )
+
+    # Fail fast if $PK references an ETA beyond what OMEGA provides. Every
+    # eval_r() call inside the $PK interpreter below is wrapped in its own
+    # tryCatch (do_assign(), the IF-condition checks), so a stop() raised from
+    # inside e$ETA() would otherwise be swallowed into a silent raw-THETA
+    # fallback -- checking here, before interpretation starts, surfaces it.
+    pk_code <- sub(";.*$", "", pk)                       # strip comments
+    # \\b guard so THETA( doesn't match as ETA( (see .exp_inner_containing_eta).
+    eta_refs <- regmatches(pk_code,
+                           gregexpr("\\bETA\\(\\s*\\d+\\s*\\)", pk_code, ignore.case = TRUE))
+    eta_idx <- as.integer(gsub("\\D", "", unlist(eta_refs)))
+    if (length(eta_idx) > 0 && max(eta_idx) > ncol(eta_draws)) {
+      stop("Model '", model_name, "' $PK references ETA(", max(eta_idx),
+           ") but its OMEGA matrix only has ", ncol(eta_draws), " element(s).")
+    }
+  }
+
   # ---- Covariate values: covariate_search REFERENCE, overridden by scenario --
   cov_vals <- list()
   if (!is.null(covariate_search$COVARIATE) && "REFERENCE" %in% names(covariate_search)) {
@@ -124,12 +177,11 @@ apply_covariate_model <- function(model_name,
     if (!is.na(v)) cov_vals[[nm]] <- v
   }
 
-  N <- nrow(individual_thetas)
-
   # ---- Evaluation environment ------------------------------------------------
   # THETA(k) -> the sampled draws for THETA k (length-N vector); ETA(k) -> 0
-  # (typical subject); NONMEM intrinsics -> their R equivalents; covariates ->
-  # their scenario/reference values. $PK assignments accumulate in this env.
+  # (typical subject), or a sampled length-N draw when `eta = TRUE`; NONMEM
+  # intrinsics -> their R equivalents; covariates -> their scenario/reference
+  # values. $PK assignments accumulate in this env.
   e <- new.env(parent = baseenv())
   e$THETA <- function(k) {
     col <- paste0("THETA", as.integer(k))
@@ -138,7 +190,18 @@ apply_covariate_model <- function(model_name,
     }
     individual_thetas[[col]]
   }
-  e$ETA   <- function(k) 0
+  e$ETA <- if (is.null(eta_draws)) {
+    function(k) 0
+  } else {
+    function(k) {
+      k <- as.integer(k)
+      if (k > ncol(eta_draws)) {
+        stop("Model references ETA(", k, ") but '", model_name,
+             "'s OMEGA matrix only has ", ncol(eta_draws), " element(s).")
+      }
+      eta_draws[, k]
+    }
+  }
   e$EXP <- exp; e$LOG <- log; e$LOG10 <- log10; e$SQRT <- sqrt; e$ABS <- abs
   for (nm in names(cov_vals)) assign(nm, cov_vals[[nm]], envir = e)
 
@@ -275,4 +338,46 @@ apply_covariate_model <- function(model_name,
   }
 
   out
+}
+
+
+#' Read the final OMEGA point-estimate matrix from a NONMEM .ext file
+#'
+#' @description Builds the full symmetric BSV matrix implied by the model's
+#'   FINAL `OMEGA(i,j)` estimates, from the columns `.ext`'s `read.table()`
+#'   sanitises to `OMEGA(i,j)` / `OMEGA.i.j.` (same spelling
+#'   [sample_individual_thetas()]'s THETA reading relies on). Matrix positions
+#'   with no such column (an element never estimated, e.g. off-diagonal under
+#'   a diagonal `$OMEGA`) are 0.
+#' @keywords internal
+#' @noRd
+.read_final_omega_matrix <- function(model, models_folder) {
+  ext_file <- .find_model_component(model, models_folder, "ext")
+  if (is.na(ext_file)) {
+    stop("`.ext` file not found for '", model, "' under '", models_folder, "'.")
+  }
+  ext <- read_ext_iterations(ext_file)
+  if (nrow(ext) == 0) {
+    stop("Could not read parameter estimates from: ", ext_file)
+  }
+  final_rows <- ext[ext$TYPE %in% "FINAL", , drop = FALSE]
+  if (nrow(final_rows) == 0) {
+    stop("No FINAL parameter row (ITERATION -1000000000) found in ", ext_file)
+  }
+  final_row <- final_rows[nrow(final_rows), , drop = FALSE]
+
+  block_pat  <- "^OMEGA[.(](\\d+)[,.](\\d+)[.)]$"
+  omega_cols <- grep(block_pat, names(final_row), value = TRUE)
+  if (length(omega_cols) == 0) {
+    stop("No OMEGA columns found in ", ext_file)
+  }
+  i_idx <- as.integer(sub(block_pat, "\\1", omega_cols))
+  j_idx <- as.integer(sub(block_pat, "\\2", omega_cols))
+  vals  <- as.numeric(final_row[1, omega_cols])
+
+  n_eta <- max(i_idx, j_idx)
+  mat <- matrix(0, n_eta, n_eta)
+  mat[cbind(i_idx, j_idx)] <- vals
+  mat[cbind(j_idx, i_idx)] <- vals
+  mat
 }

@@ -77,8 +77,11 @@ utils::globalVariables(c("y", "facet_grp", "xlev", "Freq"))
 #' @param footnote character or NULL. Free text placed under every figure this
 #'   call produces, left-aligned against the plot edge and sized relative to
 #'   `base_size`. Several elements go on their own lines. `NULL` (default) adds
-#'   nothing. The text is used verbatim - it carries no provenance of its own,
-#'   so name the script or dataset in it if the figure needs to be traceable.
+#'   no text of your own - name the script or upstream dataset in it if the
+#'   figure needs to be traceable to where its numbers came from. Every figure
+#'   also gets its own "Source: <path(s)>" line appended automatically, naming
+#'   the file(s) (one per `output_format`) that plot is about to be saved to -
+#'   this happens regardless of `footnote`, including when it is `NULL`.
 #' @param percent_change logical; if TRUE the median label also shows the change
 #'   from the **first level of the same panel**, e.g. `1,234 (-10%)`. The first
 #'   level is the reference and carries no suffix, and a panel holding a single
@@ -419,15 +422,26 @@ create_covariate_boxplots <- function(data,
           theme(strip.background = element_blank(), strip.text = element_blank())
       }
 
-      # Last, so the caption's own theme settings survive the ones above.
-      combined <- .add_footnote(combined, footnote)
+      # Computed before the footnote (not after, where it used to sit) so the
+      # saved path(s) can be reported on the figure itself.
+      base_name <- add_ss(paste0(pfx, drug, "-", covariate, "-", t), "_")
+      fnames <- file.path(output_folder, t, paste0(base_name, ".", output_format))
+
+      # Last, so the caption's own theme settings survive the ones above. The
+      # file(s) this plot is about to be saved to are appended after any
+      # caller-supplied footnote text, so every figure documents its own
+      # source without the caller having to know its output path in advance.
+      combined <- .add_footnote(
+        combined,
+        c(footnote, paste0("Source: ", paste(fnames, collapse = ", ")))
+      )
 
       results[[t]][[covariate]] <- combined
 
-      base_name <- add_ss(paste0(pfx, drug, "-", covariate, "-", t), "_")
       saved <- character(0)
-      for (fmt in output_format) {
-        fname <- file.path(output_folder, t, paste0(base_name, ".", fmt))
+      for (fi in seq_along(output_format)) {
+        fmt   <- output_format[fi]
+        fname <- fnames[fi]
         if (fmt == "emf") {
           ggsave(filename = fname, plot = combined, device = devEMF::emf,
                  width = fig_w, height = fig_h)

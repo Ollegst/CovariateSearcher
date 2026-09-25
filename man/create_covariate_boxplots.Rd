@@ -124,8 +124,11 @@ touching the axis and strip text, which \code{base_size} would also rescale.}
 \item{footnote}{character or NULL. Free text placed under every figure this
 call produces, left-aligned against the plot edge and sized relative to
 \code{base_size}. Several elements go on their own lines. \code{NULL} (default) adds
-nothing. The text is used verbatim - it carries no provenance of its own,
-so name the script or dataset in it if the figure needs to be traceable.}
+no text of your own - name the script or upstream dataset in it if the
+figure needs to be traceable to where its numbers came from. Every figure
+also gets its own "Source: <path(s)>" line appended automatically, naming
+the file(s) (one per \code{output_format}) that plot is about to be saved to -
+this happens regardless of \code{footnote}, including when it is \code{NULL}.}
 
 \item{ss}{logical; steady state? If TRUE (default) a ",ss" suffix is added to
 the metric label on the y axis ("\if{html}{\out{<drug>}} AUC,ss (\if{html}{\out{<unit>}})") and "_ss" to every

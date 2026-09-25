@@ -1,11 +1,12 @@
 file	name	signature	exported	hash
-apply-covariate-model.R	apply_covariate_model	apply_covariate_model(model_name, covariate_search, individual_thetas, covariates, models_folder="models")	yes	e22966ec5bc8aa7e2d1fb04d5f767e2a
+apply-covariate-model.R	.read_final_omega_matrix	.read_final_omega_matrix(model, models_folder)	no	0ad31f4ec60130687e2c945002f2edcf
+apply-covariate-model.R	apply_covariate_model	apply_covariate_model(model_name, covariate_search, individual_thetas, covariates, models_folder="models", eta=FALSE, seed=1234)	yes	15f0265bb3747c43c573ebd965b5e53f
 build-scenario-parameters.R	build_scenario_parameters	build_scenario_parameters(model, covariate_search, thetas, data, percentiles=c(0.05, 0.95), models_folder="models", lookup=NULL, spec=NULL, id_col="ID", wrap_width=30, scenario_table_path=paste0("scenario_table_", model, ".rds"))	yes	545dd07aa633bc451c3a481753ceeeda
 continue-search.R	.scm_backward_rows	.scm_backward_rows(search_state)	no	56e1daa604f1886d2fcd940d34afcb53
 continue-search.R	.scm_continue_backward	.scm_continue_backward(search_state, last_step, backward_p_value, rse_threshold, auto_submit, auto_retry)	no	77316bdc5080d0f0d6edfaaa6b1243b1
 continue-search.R	.scm_phase_is_backward	.scm_phase_is_backward(phase)	no	a8de68bb31eb84fbfed2b7257daa2270
 continue-search.R	continue_search	continue_search(search_state=NULL, checkpoint=NULL, scm_type=NULL, full_scm=TRUE, forward_p_value=NULL, backward_p_value=NULL, rse_threshold=NULL, auto_submit=TRUE, auto_retry=TRUE)	yes	138bdac5930b00aea93095095b5010b6
-covariate-boxplots.R	create_covariate_boxplots	create_covariate_boxplots(data, spec, con=NULL, cat=NULL, type=c("AUC", "Cmax", "Cmin"), drug, param_info, stratification=NULL, total_panel=TRUE, output_folder="results/figure/simulations", width=NULL, height=NULL, base_size=10, verbose=TRUE, combined_pdf=TRUE, prefix=NULL, output_format=c("emf", "png"), show_median=TRUE, show_n=TRUE, percent_change=FALSE, label_size=NULL, ss=TRUE)	yes	807896fc11d936e194e699157a17f841
+covariate-boxplots.R	create_covariate_boxplots	create_covariate_boxplots(data, spec, con=NULL, cat=NULL, type=c("AUC", "Cmax", "Cmin"), drug, param_info, stratification=NULL, total_panel=TRUE, output_folder="results/figure/simulations", width=NULL, height=NULL, base_size=10, verbose=TRUE, combined_pdf=TRUE, prefix=NULL, output_format=c("emf", "png"), show_median=TRUE, show_n=TRUE, percent_change=FALSE, label_size=NULL, n_size=NULL, footnote=NULL, ss=TRUE)	yes	db540926c9c2594ef5dd58af764a9f3d
 covariate-formula.R	.cov_pow_logadd	.cov_pow_logadd(cova, ref, n)	no	21ba25f1821ce329913359dfc9c0e41c
 covariate-formula.R	.cov_pow_nonmem	.cov_pow_nonmem(cova, ref, n)	no	4774175d39cfbc909b3ec1185502812b
 covariate-formula.R	.exp_inner_containing_eta	.exp_inner_containing_eta(rhs)	no	a31e264d338e61449e8398b1af5900ec
@@ -44,7 +45,6 @@ forest-plots.R	.make_psd	.make_psd(s, tol=1e-08)	no	6bb1571388dfe790dbc02b5025ef
 forest-plots.R	.read_nonmem_matrix	.read_nonmem_matrix(mfile)	no	f5ed2565680b8296c114550c34c070d0
 forest-plots.R	.read_theta_cov	.read_theta_cov(model, models_folder, theta_names)	no	2289a375e74d61a10ece37ee99ee4a85
 forest-plots.R	.require_quantity_labels	.require_quantity_labels(q_info, quantities, arg="metric_info")	no	47b9e30b79c41c7f5b7b8ab693b7fc0f
-forest-plots.R	.resolve_quantity_info	.resolve_quantity_info(x)	no	08a3505a79b4a3d05939678814a7626c
 forest-plots.R	.scenario_summary_table	.scenario_summary_table(long, quantities, q_info, scenario_tbl, reference, percentiles=c(0.05, 0.95), lookup=NULL, relative=FALSE, digits=2)	no	0c180b8a664e7acc865756bccb519d1c
 forest-plots.R	.spec_to_lookup	.spec_to_lookup(spec)	no	c2fd238ea1704ac63281c6ab228c8956
 forest-plots.R	.structural_param_names	.structural_param_names(model_name, models_folder="models")	no	394c40dfd2556dd03c9ec6ac3252391f
@@ -87,17 +87,17 @@ model-output-tables.R	calculate_condition_number	calculate_condition_number(mode
 model-output-tables.R	decode_cov_level	decode_cov_level(cov_name, level, lookup)	no	ce51662c1cc4f12fec395bd13e517ddd
 model-output-tables.R	extract_model_params	extract_model_params(model_name, models_folder="models")	no	a7a678771e7219147986eeece0d8aad2
 model-output-tables.R	extract_params	extract_params(lines, block_tag, remove_prefix=FALSE)	no	71205205d82db3253b8f81d27b043434
-model-output-tables.R	get_param2	get_param2(model_number, count_model, shrinkage="etasd", models_folder="models", spec_pk=NULL, lookup=NULL, include_ci=FALSE)	no	783b57677d468fa803a1d07786d2aa6a
-model-output-tables.R	model_report	model_report(model_names, shrinkage="etasd", models_folder="models", spec_pk=NULL, lookup=NULL, bootstrap=FALSE, boot_results=NULL)	yes	9141565aecd0cf52dacb795c82336027
+model-output-tables.R	get_param2	get_param2(model_number, count_model, shrinkage="etasd", models_folder="models", spec_pk=NULL, lookup=NULL, include_ci=FALSE)	no	dfa099b9922eb4371263176d531c9808
+model-output-tables.R	model_report	model_report(model_names, shrinkage="etasd", models_folder="models", spec_pk=NULL, lookup=NULL, bootstrap=FALSE, boot_results=NULL)	yes	7084bcb16fdc392f2000e720e69d901f
 model-output-tables.R	theme_pps_table	theme_pps_table(x)	yes	aad765a60d5ecfc2d330db5cf36dd44a
 monitoring-files.R	read_ext_file	read_ext_file(search_state, model_name)	yes	2059e1830f198c5e6b20580073682712
-plot-bootstrap-distributions.R	.bootstrap_distribution_plot	.bootstrap_distribution_plot(draws, quantile_tbl, final_tbl, bins=30, ncol=NULL)	no	e5aa5fd11d97de3988ca36297bf7fb03
+plot-bootstrap-distributions.R	.bootstrap_distribution_plot	.bootstrap_distribution_plot(draws, quantile_tbl, final_tbl, bins=30, ncol=NULL, footnote=NULL)	no	fe2fd7a52453f5df12bd51ff0a695d6f
 plot-bootstrap-distributions.R	.bootstrap_draws	.bootstrap_draws(boot_run)	no	f598b0f069aea6e3801d20908992b074
 plot-bootstrap-distributions.R	.name_scale_inputs	.name_scale_inputs(nonmem_name, log_cols)	no	d1e9f229243561567625956c9ab7d058
 plot-bootstrap-distributions.R	.nonmem_name_order	.nonmem_name_order(nonmem_name)	no	3e00bf5cff744d8a32c109ba19bdcd4c
 plot-bootstrap-distributions.R	.select_boot_parameters	.select_boot_parameters(parameters, draws)	no	cbedf33b6c076d2f5b77c1401f9a6b34
 plot-bootstrap-distributions.R	.wrap_two_lines	.wrap_two_lines(x, width=22)	no	4e35b54efbba04f2b2a56f7c91b89a26
-plot-bootstrap-distributions.R	plot_bootstrap_distributions	plot_bootstrap_distributions(boot_run, model_name, models_folder="models", spec_pk=NULL, lookup=NULL, parameters=NULL, bins=30, ncol=NULL, wrap_width=22)	yes	a95918d5fe6aa09224b0d6010a1627d3
+plot-bootstrap-distributions.R	plot_bootstrap_distributions	plot_bootstrap_distributions(boot_run, model_name, models_folder="models", spec_pk=NULL, lookup=NULL, parameters=NULL, bins=30, ncol=NULL, footnote=NULL, wrap_width=22)	yes	90aea50f213b0dbaf10e3ab85c183827
 plot_nonmem_iterations.R	.listing_column_meta	.listing_column_meta(ext_cols, model_name, models_dir)	no	bb3b254c05728ce32a32e7fd042d29b3
 plot_nonmem_iterations.R	plot_nonmem_iterations	plot_nonmem_iterations(model_name, models_dir="models", transform=TRUE, skip_iterations=0, obj_var="OBJ", max_iterations=100)	yes	cb98fcbfa2b162189d0c8238672af97b
 plot_nonmem_iterations.R	read_ext_iterations	read_ext_iterations(ext_file)	yes	0db3ec07f832e8078230b12a20316b6a
@@ -134,12 +134,14 @@ scm-selective-forward.R	get_covariates_from_models	get_covariates_from_models(se
 scm-selective-forward.R	get_significant_models_from_step	get_significant_models_from_step(search_state, step_number, p_value, rse_threshold=NULL, phase=c("forward", "backward"))	yes	a5716ba472589be4a53b4d94e29db52b
 scm-selective-forward.R	get_step_models	get_step_models(search_state, step_number, p_value=NULL, rse_threshold=NULL, phase=c("forward", "backward"))	yes	52e295c81d87fa217ac54534a31f9bc8
 scm-selective-forward.R	run_scm_selective_forward	run_scm_selective_forward(search_state, base_model_id=NULL, forward_p_value=NULL, rse_threshold=NULL, auto_submit=TRUE, auto_retry=TRUE, resume=FALSE)	yes	c5630bb664d47bd77567b703cbec55fc
+utilities.R	.add_footnote	.add_footnote(p, footnote)	no	95ff2589eb7d35a27545d60f95b3d671
 utilities.R	.ensure_provenance_column	.ensure_provenance_column(search_state)	no	c8b683a1892302aecd63a48f3657caf3
 utilities.R	.is_pending_status	.is_pending_status(status)	no	fcb1eb0b2b2626f97869bf23c4b9ff22
 utilities.R	.is_removal_model	.is_removal_model(search_state, model_name)	no	e49121086dae9a821d708c88b86c9206
 utilities.R	.is_search_model	.is_search_model(search_state, model_name)	no	3b0f33b071ae7cf3c3b62f9f0cfaafbb
 utilities.R	.is_terminal_status	.is_terminal_status(status)	no	e9909f5e99d1aceaafddb58c286712d2
 utilities.R	.load_if_path	.load_if_path(x, what="input")	no	10e4143daf1bb20466e324e58df347ec
+utilities.R	.resolve_quantity_info	.resolve_quantity_info(x)	no	08a3505a79b4a3d05939678814a7626c
 utilities.R	.resolve_rse_threshold	.resolve_rse_threshold(search_state, rse_threshold=NULL)	no	69364eb4db5e4adc82619b0d811a9377
 utilities.R	.scm_checkpoint_name	.scm_checkpoint_name(step, phase, event)	no	39fb7488e18db29d49e519d6bde96bf4
 utilities.R	.signed_delta_ofv	.signed_delta_ofv(search_state, model_name, model_ofv, reference_ofv, direction=NULL)	no	4360efeed7059192b08c8fec25248543

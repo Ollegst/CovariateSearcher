@@ -84,7 +84,11 @@
       "Bash(cd \"/c/Program Files/Positron/resources/app/extensions/positron-r\" && grep -n -A 8 '\"positron\\\\.r\\\\.interpreters\\\\.\\\\\\(default\\\\|condaDiscovery\\\\|pixiDiscovery\\\\\\)\"' package.json | head -60; echo \"=== nls ===\"; grep -n -i 'interpreters\\\\.\\\\\\(default\\\\|condaDiscovery\\\\|pixiDiscovery\\\\\\)' package.nls.json 2>/dev/null | head)",
       "Bash(cd \"/c/Program Files/Positron/resources/app\" && grep -rhoE '.{260}\"interpreters\\\\.startupBehavior\"' out/vs/workbench/workbench.desktop.main.js | head -3)",
       "Bash(python -)",
-      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\kdgc151\\\\AppData\\\\Local\\\\Programs\\\\R\\\\R-4.4.2\\\\bin\" -Recurse -Filter \"R.exe\" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName; \"--- python? ---\"; foreach \\($c in @\\('python','python3','py','conda'\\)\\) { $g = Get-Command $c -ErrorAction SilentlyContinue; if \\($g\\) { \"$c -> \" + $g.Source } else { \"$c -> none\" } })"
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\kdgc151\\\\AppData\\\\Local\\\\Programs\\\\R\\\\R-4.4.2\\\\bin\" -Recurse -Filter \"R.exe\" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName; \"--- python? ---\"; foreach \\($c in @\\('python','python3','py','conda'\\)\\) { $g = Get-Command $c -ErrorAction SilentlyContinue; if \\($g\\) { \"$c -> \" + $g.Source } else { \"$c -> none\" } })",
+      "PowerShell($f = \"C:\\\\Users\\\\kdgc151\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-kdgc151-OneDrive---AZCollaboration-CovariateSearcher-CovariateSearcher\\\\427315f5-3d3f-40a3-9371-20c5b316e1b4\\\\tasks\\\\buoy9yscn.output\"; \\(Get-Content $f | Measure-Object -Line\\).Lines; Get-Content $f -Tail 15)",
+      "PowerShell(cd \"C:\\\\Users\\\\kdgc151\\\\OneDrive - AZCollaboration\\\\CovariateSearcher\\\\CovariateSearcher\"; git status --short; echo \"=== numstat ===\"; git diff --numstat; echo \"=== mtime ===\"; \\(Get-Item FUNCTIONS.md\\).LastWriteTime)",
+      "PowerShell(cd \"C:\\\\Users\\\\kdgc151\\\\OneDrive - AZCollaboration\\\\CovariateSearcher\\\\CovariateSearcher\"; git --% diff -- .claude/functions-index.tsv)",
+      "PowerShell(cd \"C:\\\\Users\\\\kdgc151\\\\OneDrive - AZCollaboration\\\\CovariateSearcher\\\\CovariateSearcher\"; git --% diff --word-diff=porcelain -- FUNCTIONS.md | Select-Object -First 120)"
     ],
     "additionalDirectories": [
       "C:\\Users\\kdgc151\\.claude\\agents"
