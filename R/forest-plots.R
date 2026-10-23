@@ -172,23 +172,6 @@ sample_individual_thetas <- function(model,
 # Internal helpers
 # -----------------------------------------------------------------------------
 
-#' Locate a model component file (flat or bbr per-model subfolder)
-#'
-#' @description Thin wrapper over [find_model_file()] that tolerates both the
-#'   flat layout (`models/run.ext`) and the bbr output-subfolder layout
-#'   (`models/run/run.ext`). `exts` are extension stems without the dot.
-#' @keywords internal
-#' @noRd
-.find_model_component <- function(model, models_folder, exts) {
-  dotted <- paste0(".", exts)
-  hit <- find_model_file(file.path(models_folder, model), dotted)          # flat
-  if (is.null(hit)) {
-    hit <- find_model_file(file.path(models_folder, model, model), dotted) # subfolder
-  }
-  if (is.null(hit)) NA_character_ else hit
-}
-
-
 #' Read the THETA covariance matrix from a NONMEM .cov/.cor file
 #'
 #' @description Returns an `n_theta x n_theta` covariance matrix ordered to match

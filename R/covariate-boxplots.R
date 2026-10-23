@@ -78,10 +78,17 @@ utils::globalVariables(c("y", "facet_grp", "xlev", "Freq"))
 #'   call produces, left-aligned against the plot edge and sized relative to
 #'   `base_size`. Several elements go on their own lines. `NULL` (default) adds
 #'   no text of your own - name the script or upstream dataset in it if the
-#'   figure needs to be traceable to where its numbers came from. Every figure
-#'   also gets its own "Source: <path(s)>" line appended automatically, naming
-#'   the file(s) (one per `output_format`) that plot is about to be saved to -
-#'   this happens regardless of `footnote`, including when it is `NULL`.
+#'   figure needs to be traceable to where its numbers came from. Unless
+#'   `source_note = FALSE`, a "Source: <path>" line is appended after it.
+#' @param source_note logical; if TRUE (default) every saved figure gets a
+#'   "Source: <path>" line under it naming that file itself, so the `.emf` and
+#'   the `.png` each carry their own path. The returned plot and its page in the
+#'   combined PDF name the first `output_format`'s file. It is added whether or
+#'   not `footnote` is given. Set FALSE to leave it out; with `footnote = NULL`
+#'   the figure then has no caption at all.
+#' @param footnote_size numeric or NULL. Text size, in points, of the whole
+#'   caption (the `footnote` text and the Source line together). `NULL`
+#'   (default) uses 0.8 x `base_size`.
 #' @param percent_change logical; if TRUE the median label also shows the change
 #'   from the **first level of the same panel**, e.g. `1,234 (-10%)`. The first
 #'   level is the reference and carries no suffix, and a panel holding a single
@@ -157,6 +164,8 @@ create_covariate_boxplots <- function(data,
                                       label_size = NULL,
                                       n_size = NULL,
                                       footnote = NULL,
+                                      source_note = TRUE,
+                                      footnote_size = NULL,
                                       ss = TRUE) {
 
   type <- as.character(type)
@@ -427,30 +436,32 @@ create_covariate_boxplots <- function(data,
       base_name <- add_ss(paste0(pfx, drug, "-", covariate, "-", t), "_")
       fnames <- file.path(output_folder, t, paste0(base_name, ".", output_format))
 
-      # Last, so the caption's own theme settings survive the ones above. The
-      # file(s) this plot is about to be saved to are appended after any
-      # caller-supplied footnote text, so every figure documents its own
-      # source without the caller having to know its output path in advance.
-      combined <- .add_footnote(
-        combined,
-        c(footnote, paste0("Source: ", paste(fnames, collapse = ", ")))
-      )
-
-      results[[t]][[covariate]] <- combined
+      # Last, so the caption's own theme settings survive the ones above. With
+      # `source_note`, the file a plot is saved to is appended after any
+      # caller-supplied footnote text, so each saved figure names its own path
+      # without the caller knowing it in advance.
+      with_caption <- function(fname) {
+        source_line <- if (isTRUE(source_note)) paste0("Source: ", fname)
+        .add_footnote(combined, c(footnote, source_line), size = footnote_size)
+      }
 
       saved <- character(0)
       for (fi in seq_along(output_format)) {
         fmt   <- output_format[fi]
         fname <- fnames[fi]
+        captioned <- with_caption(fname)
         if (fmt == "emf") {
-          ggsave(filename = fname, plot = combined, device = devEMF::emf,
+          ggsave(filename = fname, plot = captioned, device = devEMF::emf,
                  width = fig_w, height = fig_h)
         } else {
-          ggsave(filename = fname, plot = combined,
+          ggsave(filename = fname, plot = captioned,
                  width = fig_w, height = fig_h)
         }
         saved <- c(saved, fname)
       }
+
+      # The returned plot (also the combined-PDF page) names the first format's file.
+      results[[t]][[covariate]] <- with_caption(fnames[1])
 
       if (verbose) {
         cat(sprintf("    done -> %s\n", paste(saved, collapse = ", ")))

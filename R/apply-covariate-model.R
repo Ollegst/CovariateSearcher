@@ -7,16 +7,20 @@
 #' Apply a Model's Covariate Relationships to Individual Thetas
 #'
 #' @description
-#' Reproduces a NONMEM model's typical-subject structural parameters in R for one
-#' covariate scenario by **evaluating the model's own `$PK` equations** with the
-#' sampled THETA draws and `ETA = 0`. Covariate effects (already written into the
-#' equations) and any log/normal parameterization are handled automatically,
-#' because the actual equation is run: `CL = EXP(TV_CL + 0)` yields CL on the
-#' natural scale directly. There is no separate covariate-factor step and no
-#' transform detection, so the R result cannot drift from the NONMEM model.
+#' Reproduces a NONMEM model's typical-subject structural parameters in R for
+#' one or many covariate scenarios by **evaluating the model's own `$PK`
+#' equations** with the sampled THETA draws and `ETA = 0`. Covariate effects
+#' (already written into the equations) and any log/normal parameterization
+#' are handled automatically, because the actual equation is run:
+#' `CL = EXP(TV_CL + 0)` yields CL on the natural scale directly. There is no
+#' separate covariate-factor step and no transform detection, so the R result
+#' cannot drift from the NONMEM model.
 #'
 #' Categorical covariates (written as `$PK` `IF/ELSEIF` blocks) are handled the
-#' same way -- the block is evaluated for the scenario's covariate value.
+#' same way -- the block is evaluated for the scenario's covariate value. When
+#' `covariates` supplies one value per row instead (real per-subject
+#' combinations), each row is routed through the `IF/ELSEIF/ELSE` branch its
+#' own covariate values select, independently of every other row.
 #'
 #' @param model_name Character. Model name without extension, e.g. "run28".
 #' @param covariate_search Covariate-search table with columns `COVARIATE`,
@@ -29,9 +33,19 @@
 #'   [sample_individual_thetas()]; a log-parameterised THETA stays on the log
 #'   scale -- the equation's `EXP` back-transforms it). One row per draw; when
 #'   `eta = TRUE`, row *i*'s THETA draw is paired with ETA draw *i*.
-#' @param covariates A single covariate scenario: a named vector or one-row data
-#'   frame of covariate values (e.g. one row of [create_covariate_table()]).
-#'   Applied to every draw. Extra names (such as `Scenario`) are ignored.
+#' @param covariates A covariate scenario: a named vector or one-row data frame
+#'   of covariate values (e.g. one row of [create_covariate_table()]) is
+#'   applied to every draw. A data frame with the same number of rows as
+#'   `individual_thetas` instead pairs row *i*'s covariate values with row
+#'   *i*'s THETA (and ETA, when `eta = TRUE`) draw -- e.g. real per-subject
+#'   covariate combinations pulled straight from a dataset. In the per-row
+#'   form, a column is only treated as a covariate if its name is listed in
+#'   `covariate_search$COVARIATE`; anything else (such as `Scenario`) is
+#'   ignored outright, whatever it contains. Every row of a REGISTERED
+#'   covariate needs a real value: an `NA` for even one row **stops** rather
+#'   than falling back to `covariate_search`'s `REFERENCE` -- real per-subject
+#'   data is expected to be complete, so a missing value there is treated as
+#'   an error to fix upstream, not something to patch over silently.
 #' @param models_folder Character. Folder containing the model. Default "models".
 #' @param eta Logical. If `TRUE`, draw one ETA vector per row of
 #'   `individual_thetas` from the model's final `$OMEGA` matrix (read from its
@@ -64,12 +78,20 @@ apply_covariate_model <- function(model_name,
   # covariate_search may be given as an object or a character path (.csv/.rds).
   covariate_search <- .load_if_path(covariate_search, "covariate_search")
 
-  # ---- Normalise the single covariate scenario to a named vector ------------
+  N <- nrow(individual_thetas)
+
+  # ---- Normalise the covariate scenario(s) -----------------------------------
+  # One row (or a named vector) broadcasts to every draw. An N-row data frame
+  # instead pairs row i's values with row i's THETA/ETA draw, like
+  # individual_thetas/eta_draws already do.
   if (is.data.frame(covariates)) {
-    if (nrow(covariates) != 1) {
-      stop("`covariates` must be a single scenario (one row).")
+    if (nrow(covariates) == 1) {
+      covariates <- unlist(covariates[1, , drop = TRUE])
+    } else if (nrow(covariates) != N) {
+      stop("`covariates` must be a single scenario (one row) or have the ",
+           "same number of rows as `individual_thetas` (", N, "); got ",
+           nrow(covariates), " row(s).")
     }
-    covariates <- unlist(covariates[1, , drop = TRUE])
   }
   if (is.null(names(covariates))) {
     stop("`covariates` must be named (one value per covariate column).")
@@ -127,8 +149,6 @@ apply_covariate_model <- function(model_name,
     stop("No $PK or $PRED block found in model '", model_name, "'.")
   }
 
-  N <- nrow(individual_thetas)
-
   # ---- ETA draws (optional) --------------------------------------------------
   # One MVN(0, OMEGA) draw per row of individual_thetas, paired by row index
   # with that row's THETA draw. OMEGA comes from the model's own FINAL .ext
@@ -164,17 +184,49 @@ apply_covariate_model <- function(model_name,
   }
 
   # ---- Covariate values: covariate_search REFERENCE, overridden by scenario --
-  cov_vals <- list()
+  # A scalar covariate that is NA is dropped, falling through to REFERENCE --
+  # a deliberate "leave this one at reference" scenario value. A per-row
+  # (length-N) covariate column is held to a stricter rule, but only for a
+  # REGISTERED covariate (a name listed in covariate_search$COVARIATE): every
+  # row needs a real value, so ANY NA there -- one row or every row -- is
+  # refused outright rather than silently patched from REFERENCE. A column
+  # whose name is not a registered covariate (e.g. a `Scenario` label riding
+  # along in the table) is not held to that rule at all and is simply
+  # ignored, whatever it happens to contain.
+  ref_vals <- list()
+  known_covs <- character(0)
   if (!is.null(covariate_search$COVARIATE) && "REFERENCE" %in% names(covariate_search)) {
+    known_covs <- as.character(covariate_search$COVARIATE)
     for (i in seq_len(nrow(covariate_search))) {
-      cv <- as.character(covariate_search$COVARIATE[i])
+      cv <- known_covs[i]
       rv <- suppressWarnings(as.numeric(covariate_search$REFERENCE[i]))
-      if (nzchar(cv) && !is.na(rv)) cov_vals[[cv]] <- rv
+      if (nzchar(cv) && !is.na(rv)) ref_vals[[cv]] <- rv
     }
   }
+  cov_vals <- ref_vals
   for (nm in names(covariates)) {
-    v <- suppressWarnings(as.numeric(covariates[[nm]]))
-    if (!is.na(v)) cov_vals[[nm]] <- v
+    # as.character() first: as.numeric() on a bare factor column returns its
+    # internal level codes, not the values it displays (e.g. factor("M","F")
+    # -> 2, 1 by alphabetical level order) -- silently wrong, not NA, so the
+    # NA check below would never catch it. Going through the character labels
+    # is safe for an already-numeric or -character column too.
+    v <- suppressWarnings(as.numeric(as.character(covariates[[nm]])))
+    if (length(v) > 1L && length(v) != N) {
+      stop("Covariate '", nm, "' in `covariates` has length ", length(v),
+           ", expected 1 or ", N, ".")
+    }
+    if (length(v) == 1L) {
+      if (!is.na(v)) cov_vals[[nm]] <- v
+      next
+    }
+    if (!(nm %in% known_covs)) next   # not a registered covariate - ignore entirely
+    if (anyNA(v)) {
+      stop("Covariate '", nm, "' in `covariates` has NA for row(s) ",
+           paste(which(is.na(v)), collapse = ", "),
+           " -- every row needs a value when `covariates` is given per row",
+           " (no REFERENCE fallback for a missing per-row covariate).")
+    }
+    cov_vals[[nm]] <- v
   }
 
   # ---- Evaluation environment ------------------------------------------------
@@ -223,20 +275,50 @@ apply_covariate_model <- function(model_name,
   eval_r <- function(txt) eval(parse(text = nm_to_r(txt)), envir = e)
 
   # ---- Interpret the $PK block, honouring IF / ELSEIF / ELSE / ENDIF ---------
-  # Covariates are scalar for one scenario, so each IF condition is a single
-  # TRUE/FALSE selecting a branch; THETA draws make the assigned values vectors.
+  # Each stack entry is a length-N logical MASK (one flag per row). A
+  # condition is evaluated for every row -- THETA(k)/ETA(k) are already
+  # length-N, and a per-row `covariates` column may vary too -- so different
+  # rows can be in different IF/ELSEIF/ELSE branches at once. do_assign()
+  # writes only the rows its mask selects, leaving other rows' already-
+  # assigned values untouched, so a variable set across several branches ends
+  # up with each row's own branch's value. A branch guarded only by scalar
+  # inputs ends up with a uniformly all-TRUE or all-FALSE mask, which selects
+  # (or skips) the whole vector at once, the same as an unconditional line.
   skipped       <- character(0)
-  active_stack  <- logical(0)     # is the current (innermost) branch active?
-  matched_stack <- logical(0)    # has any branch of this IF matched yet?
-  is_active <- function() length(active_stack) == 0 || all(active_stack)
+  active_stack  <- list()     # length-N logical mask per nesting level
+  matched_stack <- list()     # length-N: has this row matched a branch yet?
+  is_active <- function() {
+    if (length(active_stack) == 0) return(rep(TRUE, N))
+    Reduce(`&`, active_stack)
+  }
+  # Coerce a condition's result to a length-N logical mask: a scalar result
+  # (every covariate involved is scalar) broadcasts, and NA (an unevaluable or
+  # not-yet-assigned operand) reads as "not matched" rather than erroring.
+  as_mask <- function(x) {
+    x <- as.logical(x)
+    if (length(x) == 1L) x <- rep(x, N)
+    x[is.na(x)] <- FALSE
+    x
+  }
 
-  do_assign <- function(line) {
+  do_assign <- function(line, mask = NULL) {
     if (!grepl("=", line)) return(invisible())
     lhs <- trimws(sub("=.*$", "", line))
     rhs <- trimws(sub("^[^=]*=", "", line))
     if (!grepl("^[A-Za-z][A-Za-z0-9_]*$", lhs)) return(invisible())
+    if (is.null(mask)) mask <- is_active()
+    if (!any(mask)) return(invisible())    # nothing in this branch, don't touch lhs at all
     val <- tryCatch(eval_r(rhs), error = function(err) { skipped <<- c(skipped, line); NULL })
-    if (!is.null(val)) assign(lhs, val, envir = e)
+    if (is.null(val)) return(invisible())
+    if (length(val) == 1L) val <- rep(val, N)
+    if (exists(lhs, envir = e, inherits = FALSE)) {
+      full <- get(lhs, envir = e)
+      if (length(full) == 1L) full <- rep(full, N)
+    } else {
+      full <- rep(NA_real_, N)
+    }
+    full[mask] <- val[mask]
+    assign(lhs, full, envir = e)
     invisible()
   }
 
@@ -257,20 +339,21 @@ apply_covariate_model <- function(model_name,
       cond <- sub("(?i)\\)\\s*THEN\\s*$", "", cond, perl = TRUE)
       if (length(active_stack)) {
         i <- length(active_stack)
-        if (isTRUE(matched_stack[i])) {
-          active_stack[i] <- FALSE
-        } else {
-          c_ok <- isTRUE(tryCatch(eval_r(cond), error = function(err) FALSE))
-          active_stack[i] <- c_ok; matched_stack[i] <- c_ok
-        }
+        outer <- if (i > 1) Reduce(`&`, active_stack[seq_len(i - 1)]) else rep(TRUE, N)
+        already <- matched_stack[[i]]
+        c_ok <- as_mask(tryCatch(eval_r(cond), error = function(err) FALSE))
+        active_stack[[i]]  <- outer & !already & c_ok
+        matched_stack[[i]] <- already | c_ok
       }
       next
     }
     if (grepl("^ELSE\\b", up)) {
       if (length(active_stack)) {
         i <- length(active_stack)
-        active_stack[i]  <- !isTRUE(matched_stack[i])
-        matched_stack[i] <- TRUE
+        outer <- if (i > 1) Reduce(`&`, active_stack[seq_len(i - 1)]) else rep(TRUE, N)
+        already <- matched_stack[[i]]
+        active_stack[[i]]  <- outer & !already
+        matched_stack[[i]] <- rep(TRUE, N)
       }
       next
     }
@@ -278,21 +361,24 @@ apply_covariate_model <- function(model_name,
     if (grepl("(?i)^IF\\s*\\(.*\\)\\s*THEN\\s*$", ln, perl = TRUE)) {
       cond <- sub("(?i)^IF\\s*\\(", "", ln, perl = TRUE)
       cond <- sub("(?i)\\)\\s*THEN\\s*$", "", cond, perl = TRUE)
-      c_ok <- is_active() && isTRUE(tryCatch(eval_r(cond), error = function(err) FALSE))
-      active_stack  <- c(active_stack, c_ok)
-      matched_stack <- c(matched_stack, c_ok)
+      outer <- is_active()
+      c_ok  <- outer & as_mask(tryCatch(eval_r(cond), error = function(err) FALSE))
+      active_stack  <- c(active_stack, list(c_ok))
+      matched_stack <- c(matched_stack, list(c_ok))
       next
     }
     # single-line IF( ... ) LHS = RHS
     if (grepl("(?i)^IF\\s*\\(", ln, perl = TRUE)) {
       m <- regmatches(ln, regexec("(?i)^IF\\s*\\((.*?)\\)\\s*(.*)$", ln, perl = TRUE))[[1]]
-      if (length(m) == 3 && is_active()) {
-        if (isTRUE(tryCatch(eval_r(m[2]), error = function(err) FALSE))) do_assign(m[3])
+      if (length(m) == 3) {
+        outer <- is_active()
+        c_ok  <- outer & as_mask(tryCatch(eval_r(m[2]), error = function(err) FALSE))
+        do_assign(m[3], mask = c_ok)
       }
       next
     }
     # plain assignment
-    if (is_active()) do_assign(ln)
+    do_assign(ln)
   }
 
   # ---- Map each structural THETA position to its parameter's value -----------
@@ -335,6 +421,21 @@ apply_covariate_model <- function(model_name,
             "; returned the raw sampled value(s) instead.",
             if (length(skipped)) paste0(" Skipped $PK line(s): ",
                                         paste(utils::head(skipped, 5), collapse = " | ")) else "")
+  }
+
+  # A parameter can exist (so it isn't in missing_params) and still be NA for
+  # some rows only: a $PK branch that assigns it for the first time with no
+  # ELSE/default leaves the rows that took no branch at NA, even though every
+  # row's covariate input was itself perfectly valid -- e.g. a real SEXN = 5
+  # with no matching IF/ELSEIF for it. That is otherwise silent, most likely
+  # in a per-row (real per-subject) `covariates` call, where different rows
+  # can take different -- or no -- branches of the same $PK block.
+  na_cols <- setdiff(names(out), c("ID", missing_params))
+  na_cols <- na_cols[vapply(na_cols, function(cn) anyNA(out[[cn]]), logical(1))]
+  if (length(na_cols) > 0) {
+    warning("apply_covariate_model(): ", paste(na_cols, collapse = ", "),
+            " contain NA for some row(s) -- likely a $PK branch with no ",
+            "matching ELSE/default for that row's covariate combination.")
   }
 
   out

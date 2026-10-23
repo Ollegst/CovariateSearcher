@@ -129,6 +129,23 @@ extract_covariate_name_from_tag <- function(tag) {
 }
 
 
+#' Locate a model component file (flat or bbr per-model subfolder)
+#'
+#' @description Thin wrapper over [find_model_file()] that tolerates both the
+#'   flat layout (`models/run.ext`) and the bbr output-subfolder layout
+#'   (`models/run/run.ext`). `exts` are extension stems without the dot.
+#' @keywords internal
+#' @noRd
+.find_model_component <- function(model, models_folder, exts) {
+  dotted <- paste0(".", exts)
+  hit <- find_model_file(file.path(models_folder, model), dotted)          # flat
+  if (is.null(hit)) {
+    hit <- find_model_file(file.path(models_folder, model, model), dotted) # subfolder
+  }
+  if (is.null(hit)) NA_character_ else hit
+}
+
+
 #' Put a caller's footnote under a plot
 #'
 #' @description One rendering of a footnote for every plot the package builds,
@@ -141,10 +158,12 @@ extract_covariate_name_from_tag <- function(tag) {
 #' @param p A ggplot object.
 #' @param footnote Character vector, or `NULL`. Several elements are placed on
 #'   their own lines.
+#' @param size Numeric or `NULL`. Caption text size in points. `NULL` (default)
+#'   sizes it at 0.8 of the theme's base text size.
 #' @return The plot, with a caption added when there was one to add.
 #' @keywords internal
 #' @noRd
-.add_footnote <- function(p, footnote) {
+.add_footnote <- function(p, footnote, size = NULL) {
   if (is.null(footnote)) return(p)
   footnote <- as.character(footnote)
   footnote <- footnote[!is.na(footnote)]
@@ -154,7 +173,8 @@ extract_covariate_name_from_tag <- function(tag) {
     ggplot2::labs(caption = paste(footnote, collapse = "\n")) +
     ggplot2::theme(
       plot.caption = ggplot2::element_text(
-        size = ggplot2::rel(0.8), colour = "grey30", hjust = 0,
+        size = if (is.null(size)) ggplot2::rel(0.8) else size,
+        colour = "grey30", hjust = 0,
         margin = ggplot2::margin(t = 6)
       ),
       # Against the plot edge, not the panel: a footnote belongs to the figure,

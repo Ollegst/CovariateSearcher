@@ -29,9 +29,19 @@ the sampled THETA draws on the \strong{estimation scale} (raw, as returned by
 scale -- the equation's \code{EXP} back-transforms it). One row per draw; when
 \code{eta = TRUE}, row \emph{i}'s THETA draw is paired with ETA draw \emph{i}.}
 
-\item{covariates}{A single covariate scenario: a named vector or one-row data
-frame of covariate values (e.g. one row of \code{\link[=create_covariate_table]{create_covariate_table()}}).
-Applied to every draw. Extra names (such as \code{Scenario}) are ignored.}
+\item{covariates}{A covariate scenario: a named vector or one-row data frame
+of covariate values (e.g. one row of \code{\link[=create_covariate_table]{create_covariate_table()}}) is
+applied to every draw. A data frame with the same number of rows as
+\code{individual_thetas} instead pairs row \emph{i}'s covariate values with row
+\emph{i}'s THETA (and ETA, when \code{eta = TRUE}) draw -- e.g. real per-subject
+covariate combinations pulled straight from a dataset. In the per-row
+form, a column is only treated as a covariate if its name is listed in
+\code{covariate_search$COVARIATE}; anything else (such as \code{Scenario}) is
+ignored outright, whatever it contains. Every row of a REGISTERED
+covariate needs a real value: an \code{NA} for even one row \strong{stops} rather
+than falling back to \code{covariate_search}'s \code{REFERENCE} -- real per-subject
+data is expected to be complete, so a missing value there is treated as
+an error to fix upstream, not something to patch over silently.}
 
 \item{models_folder}{Character. Folder containing the model. Default "models".}
 
@@ -58,14 +68,18 @@ with \code{ETA = 0} (or, when \code{eta = TRUE}, a sampled ETA draw). One row pe
 row of \code{individual_thetas}.
 }
 \description{
-Reproduces a NONMEM model's typical-subject structural parameters in R for one
-covariate scenario by \strong{evaluating the model's own \verb{$PK} equations} with the
-sampled THETA draws and \code{ETA = 0}. Covariate effects (already written into the
-equations) and any log/normal parameterization are handled automatically,
-because the actual equation is run: \code{CL = EXP(TV_CL + 0)} yields CL on the
-natural scale directly. There is no separate covariate-factor step and no
-transform detection, so the R result cannot drift from the NONMEM model.
+Reproduces a NONMEM model's typical-subject structural parameters in R for
+one or many covariate scenarios by \strong{evaluating the model's own \verb{$PK}
+equations} with the sampled THETA draws and \code{ETA = 0}. Covariate effects
+(already written into the equations) and any log/normal parameterization
+are handled automatically, because the actual equation is run:
+\code{CL = EXP(TV_CL + 0)} yields CL on the natural scale directly. There is no
+separate covariate-factor step and no transform detection, so the R result
+cannot drift from the NONMEM model.
 
 Categorical covariates (written as \verb{$PK} \code{IF/ELSEIF} blocks) are handled the
-same way -- the block is evaluated for the scenario's covariate value.
+same way -- the block is evaluated for the scenario's covariate value. When
+\code{covariates} supplies one value per row instead (real per-subject
+combinations), each row is routed through the \code{IF/ELSEIF/ELSE} branch its
+own covariate values select, independently of every other row.
 }

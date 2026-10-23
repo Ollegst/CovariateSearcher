@@ -28,6 +28,8 @@ create_covariate_boxplots(
   label_size = NULL,
   n_size = NULL,
   footnote = NULL,
+  source_note = TRUE,
+  footnote_size = NULL,
   ss = TRUE
 )
 }
@@ -125,10 +127,19 @@ touching the axis and strip text, which \code{base_size} would also rescale.}
 call produces, left-aligned against the plot edge and sized relative to
 \code{base_size}. Several elements go on their own lines. \code{NULL} (default) adds
 no text of your own - name the script or upstream dataset in it if the
-figure needs to be traceable to where its numbers came from. Every figure
-also gets its own "Source: <path(s)>" line appended automatically, naming
-the file(s) (one per \code{output_format}) that plot is about to be saved to -
-this happens regardless of \code{footnote}, including when it is \code{NULL}.}
+figure needs to be traceable to where its numbers came from. Unless
+\code{source_note = FALSE}, a "Source: \if{html}{\out{<path>}}" line is appended after it.}
+
+\item{source_note}{logical; if TRUE (default) every saved figure gets a
+"Source: \if{html}{\out{<path>}}" line under it naming that file itself, so the \code{.emf} and
+the \code{.png} each carry their own path. The returned plot and its page in the
+combined PDF name the first \code{output_format}'s file. It is added whether or
+not \code{footnote} is given. Set FALSE to leave it out; with \code{footnote = NULL}
+the figure then has no caption at all.}
+
+\item{footnote_size}{numeric or NULL. Text size, in points, of the whole
+caption (the \code{footnote} text and the Source line together). \code{NULL}
+(default) uses 0.8 x \code{base_size}.}
 
 \item{ss}{logical; steady state? If TRUE (default) a ",ss" suffix is added to
 the metric label on the y axis ("\if{html}{\out{<drug>}} AUC,ss (\if{html}{\out{<unit>}})") and "_ss" to every
