@@ -111,7 +111,9 @@ apply_covariate_model <- function(model_name,
 
   # Return the lines of a $BLOCK (header + body, up to the next $ record).
   get_block <- function(tag) {
-    starts <- grep(paste0("^\\s*\\$", tag), lines, ignore.case = TRUE)
+    # (?![A-Za-z]): $THETA but not the $PRIOR records $THETAP / $THETAPV.
+    starts <- grep(paste0("^\\s*\\$", tag, "(?![A-Za-z])"), lines,
+                   ignore.case = TRUE, perl = TRUE)
     if (length(starts) == 0) return(character(0))
     out <- character(0)
     for (s in starts) {
@@ -131,7 +133,8 @@ apply_covariate_model <- function(model_name,
   theta_block <- get_block("THETA")
   theta_names <- character(0)
   for (ln in theta_block) {
-    if (grepl("^\\s*\\$", ln)) next
+    # A value on the record line itself ("$THETA 0.5 ; CL") is a THETA too.
+    if (grepl("^\\s*\\$", ln)) ln <- sub("^\\s*\\$[A-Za-z]+\\s*", "", ln)
     parts <- strsplit(ln, ";")[[1]]
     if (!grepl("[0-9]", parts[1])) next
     theta_names <- c(theta_names,

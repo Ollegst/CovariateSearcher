@@ -821,9 +821,11 @@ validate_parameter_blocks <- function(model_file,
   warnings <- character(0)
 
   # Find all parameter block starts
-  theta_lines <- grep("^\\s*\\$THETA", model_lines, ignore.case = TRUE)
-  omega_lines <- grep("^\\s*\\$OMEGA", model_lines, ignore.case = TRUE)
-  sigma_lines <- grep("^\\s*\\$SIGMA", model_lines, ignore.case = TRUE)
+  # (?![A-Za-z]) leaves out the $PRIOR records ($THETAP, $THETAPV, $OMEGAP,
+  # $OMEGAPD, $SIGMAP, $SIGMAPD), which hold priors rather than parameters.
+  theta_lines <- grep("^\\s*\\$THETA(?![A-Za-z])", model_lines, ignore.case = TRUE, perl = TRUE)
+  omega_lines <- grep("^\\s*\\$OMEGA(?![A-Za-z])", model_lines, ignore.case = TRUE, perl = TRUE)
+  sigma_lines <- grep("^\\s*\\$SIGMA(?![A-Za-z])", model_lines, ignore.case = TRUE, perl = TRUE)
 
   all_blocks <- list(
     THETA = theta_lines,

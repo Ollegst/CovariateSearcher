@@ -1,6 +1,6 @@
 file	name	signature	exported	hash
 apply-covariate-model.R	.read_final_omega_matrix	.read_final_omega_matrix(model, models_folder)	no	0ad31f4ec60130687e2c945002f2edcf
-apply-covariate-model.R	apply_covariate_model	apply_covariate_model(model_name, covariate_search, individual_thetas, covariates, models_folder="models", eta=FALSE, seed=1234)	yes	19ef8c4cd54d4d09084c0ef08d635913
+apply-covariate-model.R	apply_covariate_model	apply_covariate_model(model_name, covariate_search, individual_thetas, covariates, models_folder="models", eta=FALSE, seed=1234)	yes	4f5344e757e587387b0bc8569e999a01
 build-scenario-parameters.R	build_scenario_parameters	build_scenario_parameters(model, covariate_search, thetas, data, percentiles=c(0.05, 0.95), models_folder="models", lookup=NULL, spec=NULL, id_col="ID", wrap_width=30, scenario_table_path=paste0("scenario_table_", model, ".rds"))	yes	545dd07aa633bc451c3a481753ceeeda
 continue-search.R	.scm_backward_rows	.scm_backward_rows(search_state)	no	56e1daa604f1886d2fcd940d34afcb53
 continue-search.R	.scm_continue_backward	.scm_continue_backward(search_state, last_step, backward_p_value, rse_threshold, auto_submit, auto_retry)	no	77316bdc5080d0f0d6edfaaa6b1243b1
@@ -10,7 +10,7 @@ covariate-boxplots.R	create_covariate_boxplots	create_covariate_boxplots(data, s
 covariate-formula.R	.cov_pow_logadd	.cov_pow_logadd(cova, ref, n)	no	21ba25f1821ce329913359dfc9c0e41c
 covariate-formula.R	.cov_pow_nonmem	.cov_pow_nonmem(cova, ref, n)	no	4774175d39cfbc909b3ec1185502812b
 covariate-formula.R	.exp_inner_containing_eta	.exp_inner_containing_eta(rhs)	no	a31e264d338e61449e8398b1af5900ec
-covariate-formula.R	.theta_tag_for	.theta_tag_for(modelcode, param)	no	8f516db2806fd3fd0374aaef0e272e23
+covariate-formula.R	.theta_tag_for	.theta_tag_for(modelcode, param)	no	b4b8bafb502bf16cd14670c2f1039189
 covariate-formula.R	.translate_expr_to_nonmem	.translate_expr_to_nonmem(expr, cova, ref, thetas, n)	no	c3c4ab95fab9536d65e98d320f1ae2cb
 covariate-formula.R	detect_param_transform	detect_param_transform(modelcode, param)	no	d668827681d7a8006e23cc4c3cff2525
 covariate-formula.R	get_covariate_formula	get_covariate_formula(status, formula)	no	e9b237eee077ce287bcec81d21d2d95b
@@ -46,7 +46,7 @@ forest-plots.R	.read_theta_cov	.read_theta_cov(model, models_folder, theta_names
 forest-plots.R	.require_quantity_labels	.require_quantity_labels(q_info, quantities, arg="metric_info")	no	47b9e30b79c41c7f5b7b8ab693b7fc0f
 forest-plots.R	.scenario_summary_table	.scenario_summary_table(long, quantities, q_info, scenario_tbl, reference, percentiles=c(0.05, 0.95), lookup=NULL, relative=FALSE, digits=2)	no	0c180b8a664e7acc865756bccb519d1c
 forest-plots.R	.spec_to_lookup	.spec_to_lookup(spec)	no	c2fd238ea1704ac63281c6ab228c8956
-forest-plots.R	.structural_param_names	.structural_param_names(model_name, models_folder="models")	no	394c40dfd2556dd03c9ec6ac3252391f
+forest-plots.R	.structural_param_names	.structural_param_names(model_name, models_folder="models")	no	15f5fe24052bcc506939e0bc5a93084a
 forest-plots.R	boxquantile	boxquantile(y)	no	5c5a5afd7edbb58b5783b72c71cda300
 forest-plots.R	create_covariate_table	create_covariate_table(model_name, covariate_search, data, percentiles=c(0.05, 0.95), models_folder="models", id_col="ID", lookup=NULL, spec=NULL, wrap_width=30)	yes	2026e359295d65de52db994c2b67577c
 forest-plots.R	plot_exposure_forest	plot_exposure_forest(data, metric=c("AUC", "Cmax", "Cmin"), ss=TRUE, ClinicalRelevanceLow=0.8, ClinicalRelevanceHigh=1.25, outer_range=c(0.5, 2), reference="Typical subject", scenario=NULL, fontsize=9, title=NULL, x_lim=NULL, x_breaks=NULL, typical_subject=TRUE, filename=NULL, output_format=c("emf", "png"), metric_info=NULL, model=NULL, percentiles=c(0.05, 0.95), lookup=NULL, spec=NULL, width, height)	yes	444c9f2a2904408d5432c7d4b59152ce
@@ -73,9 +73,9 @@ model-modification.R	.rhs_needs_paren_wrap	.rhs_needs_paren_wrap(rhs)	no	fa276e1
 model-modification.R	.wrap_rhs_in_parens	.wrap_rhs_in_parens(line)	no	83a72733c44856ce999f5f5492f42202
 model-modification.R	add_covariate_to_model	add_covariate_to_model(search_state, base_model_id, covariate_tag, step_number=NULL, lookup_file=NULL, phase="forward_selection")	yes	92b6c9857b2a6b1131d331a615df22e0
 model-modification.R	fix_theta_renumbering	fix_theta_renumbering(modelcode, theta_numbers_to_remove, log_function)	yes	bd897df50b5b76de58c39845cf7f33a9
-model-modification.R	model_add_cov	model_add_cov(search_state, ref_model, cov_on_param, id_var="ID", data_file, covariate_search, capture_log=FALSE, lookup_file=NULL)	yes	78005ccffdfc894eb1492ca181f1c561
+model-modification.R	model_add_cov	model_add_cov(search_state, ref_model, cov_on_param, id_var="ID", data_file, covariate_search, capture_log=FALSE, lookup_file=NULL)	yes	0a4934f04d5a0c8619695793157afeb4
 model-modification.R	prepare_search_base_model	prepare_search_base_model(base_model_path, covariate_tags, new_model_number, data_file_path, covariate_search_path, models_folder="models", idcol="ID", overwrite=TRUE, lookup_file=NULL)	yes	79adce32ab1a3c884b9a683e5c33954b
-model-modification.R	remove_covariate_from_model	remove_covariate_from_model(search_state, model_name, covariate_tag, save_as_new_model=TRUE, step_number=NULL)	yes	a29e642fb2f8bf303e4dccbef9257069
+model-modification.R	remove_covariate_from_model	remove_covariate_from_model(search_state, model_name, covariate_tag, save_as_new_model=TRUE, step_number=NULL)	yes	3e62b9cba6e0579385701f05a31c3cff
 model-modification.R	strip_covariate_factors	strip_covariate_factors(line, theta_nums)	no	d04d0beb036cbb0af8543312dcf6db99
 model-output-tables.R	.cov_display_name	.cov_display_name(cov_name, lookup=NULL, spec_pk=NULL)	no	c5f9278422d815c9e9b1866d92acaf2d
 model-output-tables.R	.format_ci	.format_ci(low, high, digits=3)	no	d6f0b32309461c7c8c4dce43c4a339bb
@@ -85,7 +85,7 @@ model-output-tables.R	.to_report_scale	.to_report_scale(value, random_effect_sd,
 model-output-tables.R	calculate_condition_number	calculate_condition_number(model_number, models_folder="models", tolerance=1e-10)	no	88434beea6444ac74ad80f5b8012e076
 model-output-tables.R	decode_cov_level	decode_cov_level(cov_name, level, lookup)	no	ce51662c1cc4f12fec395bd13e517ddd
 model-output-tables.R	extract_model_params	extract_model_params(model_name, models_folder="models")	no	a7a678771e7219147986eeece0d8aad2
-model-output-tables.R	extract_params	extract_params(lines, block_tag, remove_prefix=FALSE)	no	71205205d82db3253b8f81d27b043434
+model-output-tables.R	extract_params	extract_params(lines, block_tag, remove_prefix=FALSE)	no	6bcc7d8ae23e43530b340adb0bf153f6
 model-output-tables.R	get_param2	get_param2(model_number, count_model, shrinkage="etasd", models_folder="models", spec_pk=NULL, lookup=NULL, include_ci=FALSE)	no	dfa099b9922eb4371263176d531c9808
 model-output-tables.R	model_report	model_report(model_names, shrinkage="etasd", models_folder="models", spec_pk=NULL, lookup=NULL, bootstrap=FALSE, boot_results=NULL)	yes	7084bcb16fdc392f2000e720e69d901f
 model-output-tables.R	theme_pps_table	theme_pps_table(x)	yes	aad765a60d5ecfc2d330db5cf36dd44a
@@ -157,4 +157,4 @@ validation.R	update_all_model_statuses	update_all_model_statuses(search_state, s
 validation.R	update_model_status_from_files	update_model_status_from_files(search_state, model_name, force=FALSE)	yes	61e6aca75d07458045ecfcb3a65c0c60
 validation.R	validate_base_model_parameters	validate_base_model_parameters(base_model_path, models_folder=NULL, strict=TRUE, check_omega_structure=TRUE, check_comments=TRUE)	yes	e5fedb4d9884227d46afc1504764ba41
 validation.R	validate_covariate_parameter_mapping	validate_covariate_parameter_mapping(covariate_search, model_name, models_folder="models", covariate_tags=NULL, strict=TRUE, verbose=TRUE)	no	31f59b9514597395881a459e982fb9c7
-validation.R	validate_parameter_blocks	validate_parameter_blocks(model_file, check_omega_structure=TRUE, check_comments=TRUE, allow_empty_units=TRUE)	yes	397916ba1154c90f96eaae1766f46d9b
+validation.R	validate_parameter_blocks	validate_parameter_blocks(model_file, check_omega_structure=TRUE, check_comments=TRUE, allow_empty_units=TRUE)	yes	f06a382b9631771053d1009d0c27ed84

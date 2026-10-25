@@ -789,7 +789,9 @@ simulate_scenario_profiles <- function(param_sets,
   lines <- readLines(ctl_path[1], warn = FALSE)
 
   get_block <- function(tag) {
-    starts <- grep(paste0("^\\s*\\$", tag), lines, ignore.case = TRUE)
+    # (?![A-Za-z]): $THETA but not the $PRIOR records $THETAP / $THETAPV.
+    starts <- grep(paste0("^\\s*\\$", tag, "(?![A-Za-z])"), lines,
+                   ignore.case = TRUE, perl = TRUE)
     if (length(starts) == 0) return(character(0))
     out <- character(0)
     for (s in starts) {
@@ -807,7 +809,8 @@ simulate_scenario_profiles <- function(param_sets,
 
   theta_names <- character(0)
   for (ln in get_block("THETA")) {
-    if (grepl("^\\s*\\$", ln)) next
+    # A value on the record line itself ("$THETA 0.5 ; CL") is a THETA too.
+    if (grepl("^\\s*\\$", ln)) ln <- sub("^\\s*\\$[A-Za-z]+\\s*", "", ln)
     parts <- strsplit(ln, ";")[[1]]
     if (!grepl("[0-9]", parts[1])) next
     theta_names <- c(theta_names, if (length(parts) >= 2) trimws(parts[2]) else "")

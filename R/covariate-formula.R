@@ -146,7 +146,10 @@ list_covariate_formulas <- function() {
 # validate_parameter_blocks requires on every $THETA/$OMEGA/$SIGMA line. Returns
 # "RATIO", "LOG", or NA if `param` has no such line.
 .theta_tag_for <- function(modelcode, param) {
-  for (line in modelcode[grepl(";", modelcode, fixed = TRUE)]) {
+  # Comment-only lines are skipped: a commented-out "; CL ; L/h ; LOG" is not
+  # the parameter's tag.
+  for (line in modelcode[grepl(";", modelcode, fixed = TRUE) &
+                           !grepl("^\\s*;", modelcode)]) {
     fields <- trimws(strsplit(sub("^[^;]*", "", line), ";")[[1]])
     fields <- fields[nzchar(fields)]
     if (length(fields) >= 2 && identical(fields[1], param)) {

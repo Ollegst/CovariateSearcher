@@ -66,7 +66,9 @@ extract_params <- function(lines, block_tag, remove_prefix = FALSE) {
   # Find all indices where the block starts
   block_starts <- which(stringr::str_detect(
     lines,
-    stringr::regex(paste0("^\\$", block_tag), ignore_case = TRUE)
+    # (?![A-Za-z]): $THETA but not the $PRIOR records $THETAP / $THETAPV
+    # (likewise $OMEGAP / $OMEGAPD, $SIGMAP / $SIGMAPD).
+    stringr::regex(paste0("^\\$", block_tag, "(?![A-Za-z])"), ignore_case = TRUE)
   ))
 
   # Process each block header found
@@ -75,7 +77,7 @@ extract_params <- function(lines, block_tag, remove_prefix = FALSE) {
     # Extract the remainder of the header line (after the $TAG token)
     header_remainder <- stringr::str_remove(
       lines[start_idx],
-      stringr::regex(paste0("^\\$", block_tag, "\\S*\\s*"), ignore_case = TRUE)
+      stringr::regex(paste0("^\\$", block_tag, "\\s*"), ignore_case = TRUE)
     )
 
     # Get the lines after the header
@@ -103,9 +105,12 @@ extract_params <- function(lines, block_tag, remove_prefix = FALSE) {
       block_lines <- c(header_remainder, block_lines)
     }
 
-    # Remove blank lines
+    # Remove blank lines and comment-only lines ("; structural parameters", or a
+    # commented-out "; 0.5 ; OLD_CL ; ; RATIO"): split on ";" below, a comment
+    # would otherwise become a parameter row and shift every name after it.
     block_lines <- block_lines %>%
-      purrr::keep(~ stringr::str_detect(.x, "\\S"))
+      purrr::keep(~ stringr::str_detect(.x, "\\S")) %>%
+      purrr::discard(~ stringr::str_detect(.x, "^\\s*;"))
 
     # If nothing left, return empty tibble
     if (length(block_lines) == 0) {
