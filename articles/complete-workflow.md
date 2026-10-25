@@ -47,9 +47,9 @@ Everything else is derived:
 
 | column | derived from |
 |----|----|
-| `REFERENCE` | median of the baseline values (`con`) or the most frequent level (`cat`) |
-| `LEVELS` | observed baseline levels, `;`-separated (`cat` only) |
-| `TIME_DEPENDENT` | `Yes` if a subject has more than one value in the full dataset |
+| `REFERENCE` | median of the baseline values (`con`) or the most frequent baseline level (`cat`) |
+| `LEVELS` | every level observed in the **full dataset**, not only at baseline, `;`-separated and in the order of the spec’s `values` (`cat` only) |
+| `TIME_DEPENDENT` | `Yes` if a subject has more than one value in the full dataset; such a covariate also warns that its `REFERENCE` reflects baseline only |
 | `cov_to_test` | `beta_<COVARIATE>_<PARAMETER>` |
 
 `INIT` is optional - without it every covariate beta starts at `0.1`.
@@ -218,7 +218,7 @@ view_comprehensive_table(res$search_state)
 | `starting_phase` | `"forward"` | which phase runs first |
 | `full_scm` | `TRUE` | `TRUE` runs both phases (`backward` start gives backward → forward → backward); `FALSE` runs only `starting_phase` |
 | `forward_p_value` | `NULL` | entry p-value; `NULL` uses the search config (0.05) |
-| `backward_p_value` | `NULL` | retention p-value; `NULL` uses the search config (0.01) |
+| `backward_p_value` | `NULL` | retention p-value; `NULL` uses the search config (0.001) |
 | `rse_threshold` | `NULL` | maximum RSE %; `NULL` uses the search config (50) |
 | `require_cov_step` | `TRUE` | a model counts as completed only with a successful `$COVARIANCE` step |
 | `auto_submit` | `TRUE` | `FALSE` creates the models without submitting them |

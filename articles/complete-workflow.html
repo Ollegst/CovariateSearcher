@@ -71,7 +71,7 @@
       <h1>Complete SCM Workflow</h1>
             
       
-      <small class="dont-index">Source: <a href="https://github.com/Ollegst/CovariateSearcher/blob/feature/package-rebuild/vignettes/articles/complete-workflow.Rmd" class="external-link"><code>vignettes/articles/complete-workflow.Rmd</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/Ollegst/CovariateSearcher/blob/main/vignettes/articles/complete-workflow.Rmd" class="external-link"><code>vignettes/articles/complete-workflow.Rmd</code></a></small>
       <div class="d-none name"><code>complete-workflow.Rmd</code></div>
     </div>
 
@@ -128,18 +128,20 @@ derived:</p>
 <tr class="odd">
 <td><code>REFERENCE</code></td>
 <td>median of the baseline values (<code>con</code>) or the most
-frequent level (<code>cat</code>)</td>
+frequent baseline level (<code>cat</code>)</td>
 </tr>
 <tr class="even">
 <td><code>LEVELS</code></td>
-<td>observed baseline levels, <code>;</code>-separated (<code>cat</code>
-only)</td>
+<td>every level observed in the <strong>full dataset</strong>, not only
+at baseline, <code>;</code>-separated and in the order of the spec’s
+<code>values</code> (<code>cat</code> only)</td>
 </tr>
 <tr class="odd">
 <td><code>TIME_DEPENDENT</code></td>
 <td>
 <code>Yes</code> if a subject has more than one value in the full
-dataset</td>
+dataset; such a covariate also warns that its <code>REFERENCE</code>
+reflects baseline only</td>
 </tr>
 <tr class="even">
 <td><code>cov_to_test</code></td>
@@ -382,7 +384,7 @@ gives backward → forward → backward); <code>FALSE</code> runs only
 <td><code>backward_p_value</code></td>
 <td><code>NULL</code></td>
 <td>retention p-value; <code>NULL</code> uses the search config
-(0.01)</td>
+(0.001)</td>
 </tr>
 <tr class="even">
 <td><code>rse_threshold</code></td>

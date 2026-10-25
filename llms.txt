@@ -638,6 +638,8 @@ Functions for generating reports and tables
   : View Comprehensive Table
 - [`plot_nonmem_iterations()`](https://ollegst.github.io/CovariateSearcher/reference/plot_nonmem_iterations.md)
   : Plot NONMEM Iteration Data
+- [`plot_bootstrap_distributions()`](https://ollegst.github.io/CovariateSearcher/reference/plot_bootstrap_distributions.md)
+  : Plot Bootstrap Parameter Distributions
 
 ## Monitoring and Reporting
 

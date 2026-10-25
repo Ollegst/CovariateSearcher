@@ -41,6 +41,10 @@ create_covariate_boxplots(
   show_n = TRUE,
   percent_change = FALSE,
   label_size = NULL,
+  n_size = NULL,
+  footnote = NULL,
+  source_note = TRUE,
+  footnote_size = NULL,
   ss = TRUE
 )
 ```
@@ -157,7 +161,7 @@ create_covariate_boxplots(
 - show_n:
 
   logical; if TRUE (default) the number of subjects in each box is
-  printed underneath it as "n = ".
+  printed in bold underneath it as "n = ".
 
 - percent_change:
 
@@ -174,14 +178,46 @@ create_covariate_boxplots(
   (`base_size/.pt * 0.65`); give a number to shrink it where the boxes
   are narrow or the panel count is high, e.g. `label_size = 1.8`.
 
+- n_size:
+
+  numeric or NULL. Text size of the "n = " line under each box, in the
+  same units as `label_size`. `NULL` (default) derives it from
+  `base_size` (`base_size/.pt * 0.6`). Set it to size the counts without
+  touching the axis and strip text, which `base_size` would also
+  rescale.
+
+- footnote:
+
+  character or NULL. Free text placed under every figure this call
+  produces, left-aligned against the plot edge and sized relative to
+  `base_size`. Several elements go on their own lines. `NULL` (default)
+  adds no text of your own - name the script or upstream dataset in it
+  if the figure needs to be traceable to where its numbers came from.
+  Unless `source_note = FALSE`, a "Source: " line is appended after it.
+
+- source_note:
+
+  logical; if TRUE (default) every saved figure gets a "Source: " line
+  under it naming that file itself, so the `.emf` and the `.png` each
+  carry their own path. The returned plot and its page in the combined
+  PDF name the first `output_format`'s file. It is added whether or not
+  `footnote` is given. Set FALSE to leave it out; with `footnote = NULL`
+  the figure then has no caption at all.
+
+- footnote_size:
+
+  numeric or NULL. Text size, in points, of the whole caption (the
+  `footnote` text and the Source line together). `NULL` (default) uses
+  0.8 x `base_size`.
+
 - ss:
 
-  logical; steady state? If TRUE (default) an "ss" suffix is added to
-  the metric label on the y axis (" AUCss, ") and "\_ss" to every saved
-  file name, so steady-state and single-dose runs of the same drug do
-  not overwrite each other. Nothing is appended where the label or file
-  stem already ends in "ss", which is common when the labels come from a
-  spec holding `AUCss`. Matches the `ss` argument of
+  logical; steady state? If TRUE (default) a ",ss" suffix is added to
+  the metric label on the y axis (" AUC,ss ()") and "\_ss" to every
+  saved file name, so steady-state and single-dose runs of the same drug
+  do not overwrite each other. Nothing is appended where the label or
+  file stem already ends in "ss", which is common when the labels come
+  from a spec holding `AUCss`. Matches the `ss` argument of
   [`plot_exposure_forest()`](https://ollegst.github.io/CovariateSearcher/reference/plot_exposure_forest.md).
 
 ## Value

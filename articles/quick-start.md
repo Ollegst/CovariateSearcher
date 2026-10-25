@@ -238,9 +238,16 @@ A model is kept when **both** hold:
     | `EMAX*cov/(EC50+cov)` | 2   | 5.99                          |
     | every theta `FIX`     | 0   | kept on any ΔOFV \> 0         |
 
-2.  **Maximum RSE below `rse_threshold`** (default 50%). In backward
-    elimination an `NA` RSE is tolerated, for workflows that run without
-    `$COVARIANCE`.
+2.  **Maximum RSE below `rse_threshold`** (default 50%). A model whose
+    RSE could not be read fails this when `require_cov_step = TRUE` (the
+    default) and passes it when `require_cov_step = FALSE`, for
+    workflows that run without `$COVARIANCE`.
+
+The model must also have completed. One test applies in every phase, and
+the RSE rule is the same in both. Backward elimination reverses the ΔOFV
+comparison: a **removal** is accepted when it costs *less* than the
+threshold, at the stricter `backward_p_value` (default 0.001), and the
+remaining model must still pass the RSE limit.
 
 ------------------------------------------------------------------------
 

@@ -71,7 +71,7 @@
       <h1>YAML Specification Files</h1>
             
       
-      <small class="dont-index">Source: <a href="https://github.com/Ollegst/CovariateSearcher/blob/feature/package-rebuild/vignettes/articles/yaml-specification-files.Rmd" class="external-link"><code>vignettes/articles/yaml-specification-files.Rmd</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/Ollegst/CovariateSearcher/blob/main/vignettes/articles/yaml-specification-files.Rmd" class="external-link"><code>vignettes/articles/yaml-specification-files.Rmd</code></a></small>
       <div class="d-none name"><code>yaml-specification-files.Rmd</code></div>
     </div>
 
@@ -187,8 +187,9 @@ not advisory:</p>
 <ul>
 <li>a covariate with <code>Category = "cat"</code> that has <strong>no
 entry at all</strong> stops the build;</li>
-<li>a level present in your baseline data but <strong>missing from
-<code>values</code></strong> stops the build, naming the level;</li>
+<li>a level present anywhere in your data (not only at baseline) but
+<strong>missing from <code>values</code></strong> stops the build,
+naming the level;</li>
 <li>a level declared in <code>values</code> but <strong>never
 observed</strong> in the data is a warning, not an error — it is usually
 a spec written for a larger population.</li>

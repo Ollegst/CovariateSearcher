@@ -65,7 +65,7 @@ tells you how to decode.'></head><body>
   <main id="main" class="col-md-9"><div class="page-header">
 
       <h1>Create Covariate Boxplots for AUC / Cmax / Cmin</h1>
-      <small class="dont-index">Source: <a href="https://github.com/Ollegst/CovariateSearcher/blob/feature/package-rebuild/R/covariate-boxplots.R" class="external-link"><code>R/covariate-boxplots.R</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/Ollegst/CovariateSearcher/blob/main/R/covariate-boxplots.R" class="external-link"><code>R/covariate-boxplots.R</code></a></small>
       <div class="d-none name"><code>create_covariate_boxplots.Rd</code></div>
     </div>
 
@@ -108,6 +108,10 @@ tells you how to decode.</p>
 <span>  show_n <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  percent_change <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  label_size <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  n_size <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  footnote <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  source_note <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  footnote_size <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  ss <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -220,7 +224,7 @@ value in a small white label sitting on the median line.</p></dd>
 
 <dt id="arg-show-n">show_n<a class="anchor" aria-label="anchor" href="#arg-show-n"></a></dt>
 <dd><p>logical; if TRUE (default) the number of subjects in each box
-is printed underneath it as "n = <count>".</count></p></dd>
+is printed in bold underneath it as "n = <count>".</count></p></dd>
 
 
 <dt id="arg-percent-change">percent_change<a class="anchor" aria-label="anchor" href="#arg-percent-change"></a></dt>
@@ -238,9 +242,40 @@ usual ggplot <code>size</code> units. <code>NULL</code> (default) derives it fro
 narrow or the panel count is high, e.g. <code>label_size = 1.8</code>.</p></dd>
 
 
+<dt id="arg-n-size">n_size<a class="anchor" aria-label="anchor" href="#arg-n-size"></a></dt>
+<dd><p>numeric or NULL. Text size of the "n = <count>" line under each
+box, in the same units as <code>label_size</code>. <code>NULL</code> (default) derives it from
+<code>base_size</code> (<code>base_size/.pt * 0.6</code>). Set it to size the counts without
+touching the axis and strip text, which <code>base_size</code> would also rescale.</count></p></dd>
+
+
+<dt id="arg-footnote">footnote<a class="anchor" aria-label="anchor" href="#arg-footnote"></a></dt>
+<dd><p>character or NULL. Free text placed under every figure this
+call produces, left-aligned against the plot edge and sized relative to
+<code>base_size</code>. Several elements go on their own lines. <code>NULL</code> (default) adds
+no text of your own - name the script or upstream dataset in it if the
+figure needs to be traceable to where its numbers came from. Unless
+<code>source_note = FALSE</code>, a "Source: <path>" line is appended after it.</path></p></dd>
+
+
+<dt id="arg-source-note">source_note<a class="anchor" aria-label="anchor" href="#arg-source-note"></a></dt>
+<dd><p>logical; if TRUE (default) every saved figure gets a
+"Source: <path>" line under it naming that file itself, so the <code>.emf</code> and
+the <code>.png</code> each carry their own path. The returned plot and its page in the
+combined PDF name the first <code>output_format</code>'s file. It is added whether or
+not <code>footnote</code> is given. Set FALSE to leave it out; with <code>footnote = NULL</code>
+the figure then has no caption at all.</path></p></dd>
+
+
+<dt id="arg-footnote-size">footnote_size<a class="anchor" aria-label="anchor" href="#arg-footnote-size"></a></dt>
+<dd><p>numeric or NULL. Text size, in points, of the whole
+caption (the <code>footnote</code> text and the Source line together). <code>NULL</code>
+(default) uses 0.8 x <code>base_size</code>.</p></dd>
+
+
 <dt id="arg-ss">ss<a class="anchor" aria-label="anchor" href="#arg-ss"></a></dt>
-<dd><p>logical; steady state? If TRUE (default) an "ss" suffix is added to
-the metric label on the y axis ("<drug> AUCss, <unit>") and "_ss" to every
+<dd><p>logical; steady state? If TRUE (default) a ",ss" suffix is added to
+the metric label on the y axis ("<drug> AUC,ss (<unit>)") and "_ss" to every
 saved file name, so steady-state and single-dose runs of the same drug do
 not overwrite each other. Nothing is appended where the label or file stem
 already ends in "ss", which is common when the labels come from a spec

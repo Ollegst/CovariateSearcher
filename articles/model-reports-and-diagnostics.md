@@ -2,12 +2,17 @@
 
 ## Model Reports and Diagnostics
 
-Two functions for looking at a finished model.
+Functions for looking at a finished model.
 [`model_report()`](https://ollegst.github.io/CovariateSearcher/reference/model_report.md)
 builds the parameter table you publish.
 [`plot_nonmem_iterations()`](https://ollegst.github.io/CovariateSearcher/reference/plot_nonmem_iterations.md)
 shows how the estimation got there — the trajectory behind the numbers
-in that table.
+in that table. When the model has been bootstrapped,
+[`model_report()`](https://ollegst.github.io/CovariateSearcher/reference/model_report.md)
+can report the bootstrap beside the fit, and
+[`plot_bootstrap_distributions()`](https://ollegst.github.io/CovariateSearcher/reference/plot_bootstrap_distributions.md)
+shows each parameter’s bootstrap distribution against the final
+estimate.
 
 They are usually read together: the table says a parameter is 121.85
 with 4.8% RSE, the trajectory says whether it settled there or was still
@@ -35,6 +40,8 @@ article or the Viewer pane, and can be exported without further work.
 | `models_folder` | `"models"` | where the models live |
 | `spec_pk` | `NULL` | parameter metadata; an R object, **not** a path |
 | `lookup` | `NULL` | covariate metadata, used to decode categorical levels |
+| `bootstrap` | `FALSE` | report one model beside its bootstrap; see [Reporting a bootstrap](#reporting-a-bootstrap) |
+| `boot_results` | `NULL` | the bootstrap summaries `bootstrap = TRUE` needs — a data frame or a `.csv`/`.rds` path |
 
 #### Parameter names come from `spec_pk`
 
@@ -171,6 +178,62 @@ pk_res <- model_report(
 The comparison is a full join on parameter name, so a parameter present
 in one model and absent from another simply leaves a gap — which is what
 makes a base model and its covariate models readable side by side.
+
+#### Reporting a bootstrap
+
+With `bootstrap = TRUE`, one model is reported next to the summaries of
+its non-parametric bootstrap:
+
+``` r
+
+pk_res <- model_report(
+  model_names  = "run28",
+  spec_pk      = spec_pk,
+  bootstrap    = TRUE,
+  boot_results = "results/run28-boot/boot_summary.csv"   # or a data frame
+)
+```
+
+The final-model columns change shape, and the bootstrap gets its own
+spanning header:
+
+| column                    | holds                                       |
+|---------------------------|---------------------------------------------|
+| `Estimate`                | the final estimate                          |
+| `RSE (%) [Shrinkage (%)]` | as in the normal table                      |
+| `95% CI`                  | asymptotic interval, `estimate ± 1.96 × SE` |
+| `Median`                  | bootstrap median                            |
+| `95% CI-bootstrap`        | bootstrap interval                          |
+
+It takes **exactly one** model name and a `boot_results`; anything else
+stops the call. A `boot_results` passed without `bootstrap = TRUE` is
+ignored, with a warning.
+
+The asymptotic interval is built on the scale the standard error belongs
+to and then mapped onto the reported scale, so it is in the same units
+as the `Estimate` beside it. It is left empty in two cases rather than
+given a made-up bound:
+
+- the parameter has no standard error (a `FIX` value, or the covariance
+  step failed);
+- an OMEGA whose lower bound would be a negative variance, which has no
+  CV%. For a small OMEGA this starts once the printed RSE passes the
+  high twenties.
+
+`boot_results` is one row per parameter, matched to the report on
+NONMEM’s own names, so row order does not matter and rows the report has
+no use for are listed and skipped. It needs three columns:
+
+| column | accepted names | example |
+|----|----|----|
+| parameter | `parameter_names`, `parameter` or `param` | `THETA1`, `OMEGA(1,1)` |
+| central value | `median`, `estimate` or `value` | `73.4` |
+| interval | any one name containing “CI” | `"[65.2-81.1]"` or `"[65.2, 81.1]"` |
+
+**The values are printed as given.** They must already be on the scale
+the report shows: back-transformed THETAs, and CV% for OMEGA diagonals.
+Summarising raw bootstrap draws without that step puts log-scale numbers
+next to natural- scale estimates.
 
 #### Models that fail to load
 
@@ -324,6 +387,73 @@ additions:
 p <- plot_nonmem_iterations("run28", skip_iterations = 5, max_iterations = 500)
 p + ggplot2::labs(title = "run28 - final estimation step")
 ```
+
+------------------------------------------------------------------------
+
+### Bootstrap distributions
+
+[`plot_bootstrap_distributions()`](https://ollegst.github.io/CovariateSearcher/reference/plot_bootstrap_distributions.md)
+draws one histogram per parameter of a bootstrap run. Each panel marks
+the final model’s estimate in **red** and the bootstrap’s 2.5th, 50th
+and 97.5th percentiles in **blue**. A red line well away from the blue
+median, or close to one of the outer percentiles, is what to look for.
+
+``` r
+
+boot_run <- bbr::read_model(file.path("models", "run28-boot"))
+
+p <- plot_bootstrap_distributions(
+  boot_run,
+  model_name = "run28",       # the model the bootstrap was built from
+  spec_pk    = spec_pk,       # panel titles with units, as in model_report()
+  lookup     = lookup
+)
+p
+
+## Covariate effects only
+plot_bootstrap_distributions(boot_run, "run28", spec_pk = spec_pk,
+                             parameters = "~")
+```
+
+`boot_run` can be the `bbr` bootstrap model, the table of draws from
+[`bbr::bootstrap_estimates()`](https://metrumresearchgroup.github.io/bbr/reference/summarize_bootstrap.html)
+(long, with `parameter_names`/`estimate`, or wide, with one column per
+parameter), or a path to a `.csv`/`.rds` holding either. Draws that did
+not converge are dropped.
+
+| argument | default | effect |
+|----|----|----|
+| `model_name` | — | supplies the red line (its estimates) and the labels (its control stream) |
+| `models_folder` | `"models"` | where that model lives |
+| `spec_pk`, `lookup` | `NULL` | panel titles and decoded levels, as in [`model_report()`](https://ollegst.github.io/CovariateSearcher/reference/model_report.md) |
+| `parameters` | `NULL` | which parameters get a panel. Matched against the NONMEM name (`THETA1`) and the panel title (`CL/F (L/h)`); an entry matching neither exactly is used as a regular expression |
+| `bins` | `30` | histogram bins per panel |
+| `ncol` | `NULL` | panel columns; `NULL` lets ggplot2 choose |
+| `wrap_width` | `22` | a longer panel title is broken onto two lines at a space; `NULL`/`Inf` keeps one line |
+| `footnote` | `NULL` | caption text under the figure, one line per element — rendered the same way as the boxplots’ caption |
+
+Panels are titled and ordered exactly as
+[`model_report()`](https://ollegst.github.io/CovariateSearcher/reference/model_report.md)
+names its rows, so a panel can be read against its table row. Draws are
+shown on the scale the report uses, not the one NONMEM estimated on: a
+`;LOG` THETA is exponentiated and an OMEGA/SIGMA diagonal becomes a CV%,
+through the same mapping the table applies. If a record’s lines are not
+all annotated, its `;LOG` tags are not used and its panels stay as
+NONMEM wrote them — the same rule
+[`plot_nonmem_iterations()`](https://ollegst.github.io/CovariateSearcher/reference/plot_nonmem_iterations.md)
+follows.
+
+Two kinds of parameter are left out unless you name them in
+`parameters`:
+
+- one that did not move across the draws, which has no distribution to
+  show;
+- an OMEGA off-diagonal, which is plotted as the covariance NONMEM
+  estimated while the table shows a correlation, so the two would not
+  match.
+
+The result is a ggplot, so save it with
+[`ggplot2::ggsave()`](https://ggplot2.tidyverse.org/reference/ggsave.html).
 
 ------------------------------------------------------------------------
 

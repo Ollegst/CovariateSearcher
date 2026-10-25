@@ -12,7 +12,8 @@ get_param2(
   shrinkage = "etasd",
   models_folder = "models",
   spec_pk = NULL,
-  lookup = NULL
+  lookup = NULL,
+  include_ci = FALSE
 )
 ```
 
@@ -43,6 +44,14 @@ get_param2(
 
   List. Optional covariate lookup spec (each entry carrying `values` and
   `decode`) used to decode categorical covariate levels in labels
+
+- include_ci:
+
+  Logical. Additionally return `nonmem_name` (NONMEM's own parameter
+  name, kept as a join key for bootstrap results) and `CI`, the
+  asymptotic interval `estimate ± 1.96 * SE` mapped onto the reported
+  scale. `FALSE` (default) leaves the returned columns exactly as they
+  were.
 
 ## Value
 

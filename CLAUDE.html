@@ -43,7 +43,7 @@
   <main id="main" class="col-md-9"><div class="page-header">
 
       <h1>CovariateSearcher</h1>
-      <small class="dont-index">Source: <a href="https://github.com/Ollegst/CovariateSearcher/blob/feature/package-rebuild/CLAUDE.md" class="external-link"><code>CLAUDE.md</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/Ollegst/CovariateSearcher/blob/main/CLAUDE.md" class="external-link"><code>CLAUDE.md</code></a></small>
     </div>
 
 <div id="covariatesearcher" class="section level1">
@@ -65,7 +65,9 @@
 </div>
 <div class="section level2">
 <h2 id="running-r">Running R<a class="anchor" aria-label="anchor" href="#running-r"></a></h2>
-<pre><code>&amp; "C:\Users\kdgc151\AppData\Local\Programs\R\R-4.4.2\bin\Rscript.exe" -e "&lt;expr&gt;"</code></pre>
+<p>R is not on PATH. Use the Rscript for the machine you are on — whichever of these exists:</p>
+<pre><code>&amp; "D:\Program Files\R\R-4.4.2\bin\Rscript.exe" -e "&lt;expr&gt;"
+&amp; "C:\Users\kdgc151\AppData\Local\Programs\R\R-4.4.2\bin\Rscript.exe" -e "&lt;expr&gt;"</code></pre>
 <p>Do not redirect a native command’s stderr with <code>2&gt;&amp;1</code> in Windows PowerShell — it wraps each line in an ErrorRecord and reports a false failure.</p>
 </div>
 <div class="section level2">
@@ -81,7 +83,7 @@
 <p><a href="FUNCTIONS.html">FUNCTIONS.md</a> maps every function in <code>R/</code> — signature, purpose, side effects, and call graph — plus hand-curated sections on cross-cutting hazards, duplicate implementations, and known bugs.</p>
 <p><strong>Read it before writing a new helper.</strong> This package has ~130 functions across 29 files, many internal; the most common avoidable mistake here is reimplementing something that already exists. The hazard sections exist because several functions have names that misdescribe what they read.</p>
 <p>To check whether it is current:</p>
-<pre><code>&amp; "C:\Users\kdgc151\AppData\Local\Programs\R\R-4.4.2\bin\Rscript.exe" ".claude\scripts\functions-index.R"</code></pre>
+<pre><code>&amp; &lt;Rscript.exe&gt; ".claude\scripts\functions-index.R"</code></pre>
 <p>The <code>functions-index</code> agent applies the resulting drift report. Everything above the <code>## Package scaffolding</code> heading is human knowledge no parser can regenerate — do not rewrite it.</p>
 </div>
 <div class="section level2">

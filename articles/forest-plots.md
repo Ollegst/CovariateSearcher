@@ -14,8 +14,11 @@ Covariate effects visualised two ways, from the same starting point:
 those parameters through an mrgsolve model to `AUC`/`Cmax`/`Cmin`.
 
 Both vary one covariate at a time around a typical subject, using
-parameter uncertainty. For exposure in the *real* population, split by
-covariate group, see [Covariate
+parameter uncertainty. To simulate a population of subjects with their
+own covariates and between-subject variability, see [Simulating a
+population](#simulating-a-population). For exposure in the *real*
+population from the model’s own post-hoc estimates, split by covariate
+group, see [Covariate
 Boxplots](https://ollegst.github.io/CovariateSearcher/articles/covariate-boxplots.md).
 
 ------------------------------------------------------------------------
@@ -46,9 +49,12 @@ that:
     `double CL = THETA3;`. **No covariate terms and no `EXP()`**: both
     are already in the incoming values, and repeating either
     double-counts.
-3.  **No between-subject variability** - no `$OMEGA`, no `ETA`. The
-    spread you want is the parameter uncertainty already in the draws;
-    adding random effects layers IIV on top of it.
+3.  **No between-subject variability** - no `$OMEGA`, no `ETA`. For the
+    forests the spread you want is the parameter uncertainty already in
+    the draws. When you do want BSV, draw it in R with
+    `apply_covariate_model(eta = TRUE)` (see [Simulating a
+    population](#simulating-a-population)): it arrives already applied
+    in the incoming values, so the mrgsolve model stays the same.
 4.  **`$CAPTURE` the concentration** you will derive metrics from.
 5.  `$SIGMA`/`EPS` only if you also want a noisy `DV`; exposure metrics
     are normally taken from the noise-free concentration.
@@ -396,13 +402,104 @@ silently producing an unlabelled column.
 
 ------------------------------------------------------------------------
 
+### Simulating a population
+
+The forests hold every covariate at its reference but one, and evaluate
+`$PK` with `ETA = 0` -
+[`build_scenario_parameters()`](https://ollegst.github.io/CovariateSearcher/reference/build_scenario_parameters.md)
+has no option to change either. To simulate subjects as they actually
+vary, call
+[`apply_covariate_model()`](https://ollegst.github.io/CovariateSearcher/reference/apply_covariate_model.md)
+directly. The result has the same shape as one entry of `params`, so the
+rest of the pipeline is unchanged.
+
+``` r
+
+## One row per subject in the modelling population. Covariates must be the
+## NUMERIC codes the model tests (SEX = 1/2), not decoded labels: a label
+## cannot be read as a number, and the call stops on it.
+subjects <- read.csv("./data/derived/analysis.csv", stringsAsFactors = FALSE) %>%
+  filter(EXFLG == 0) %>%
+  group_by(ID) %>%
+  slice(1) %>%
+  ungroup()
+
+## One THETA draw per subject
+thetas_pop <- sample_individual_thetas(
+  model         = runno,
+  models_folder = model_folder,
+  Nsamples      = nrow(subjects),
+  seed          = 1234
+)
+
+pop_params <- apply_covariate_model(
+  model_name        = runno,
+  covariate_search  = covariate_search,
+  individual_thetas = thetas_pop,
+  covariates        = subjects,   # row i's covariates go with THETA draw i
+  models_folder     = model_folder,
+  eta               = TRUE,       # add BSV drawn from the model's OMEGA
+  seed              = 2024        # seed for the ETA draw
+)
+
+## simulate_scenario_profiles() takes a named list; one entry is enough
+pop_profiles <- simulate_scenario_profiles(
+  param_sets = list(Population = pop_params),
+  mod        = mod,
+  dose       = dose,
+  end        = 24
+)
+```
+
+Each simulated subject then carries three sources of variation:
+parameter uncertainty (its THETA draw), its own covariates, and its own
+ETAs.
+
+| argument | default | effect |
+|----|----|----|
+| `covariates` | \- | **One row** (or a named vector): applied to every draw, as the forests do. **One row per draw**: row *i*’s covariates go with THETA draw *i* (and ETA draw *i*), and each row takes the `IF/ELSEIF/ELSE` branch of `$PK` its own values select |
+| `eta` | `FALSE` | `TRUE` draws one ETA vector per row from the model’s final `OMEGA` (read from the `.ext`) and evaluates `$PK` with it instead of `ETA = 0` |
+| `seed` | `1234` | seed for the ETA draw; ignored when `eta = FALSE` |
+
+Rules for the per-row form:
+
+- **Only columns named in `covariate_search$COVARIATE` are read.**
+  Anything else (`ID`, a `Scenario` label, other dataset columns) is
+  ignored. A covariate the model uses but the search table does not list
+  is therefore never set: the `$PK` line using it cannot be evaluated,
+  and the call warns and returns that parameter’s raw THETA draw. Add
+  the covariate to the table.
+- **Every row needs a value.** An `NA` in a listed covariate stops the
+  call. It is *not* filled from `REFERENCE`: real subject data is
+  expected to be complete, so a gap is something to fix upstream.
+- **A row that matches no branch warns.** If a `$PK` `IF` block has no
+  `ELSE` and a row’s value matches none of its conditions (say
+  `SEX = 3`), the parameter it assigns comes back `NA` for that row,
+  with a warning.
+- **`ID` in the result numbers the rows `1..N`**, in the order of
+  `subjects`, not the dataset’s subject IDs.
+
+And for the ETA draw:
+
+- `OMEGA` elements that were never estimated (the off-diagonals of a
+  diagonal `$OMEGA`) are treated as 0, i.e. uncorrelated.
+- If `$PK` uses an `ETA(k)` beyond the size of the `OMEGA` matrix, the
+  call stops before anything is evaluated.
+- A fixed `seed` reproduces the draw; change it for an independent
+  replicate.
+
+`eta = TRUE` works with a single scenario too: one covariate row plus
+`Nsamples` draws gives the BSV distribution of a typical subject.
+
+------------------------------------------------------------------------
+
 ### Function reference
 
 | function | in | out |
 |----|----|----|
 | [`sample_individual_thetas()`](https://ollegst.github.io/CovariateSearcher/reference/sample_individual_thetas.md) | model name | `data.frame(ID, THETA1..n)`, estimation scale |
 | [`create_covariate_table()`](https://ollegst.github.io/CovariateSearcher/reference/create_covariate_table.md) | search table + data | scenario table (one row per scenario) |
-| [`apply_covariate_model()`](https://ollegst.github.io/CovariateSearcher/reference/apply_covariate_model.md) | thetas + one scenario | natural-scale structural parameters |
+| [`apply_covariate_model()`](https://ollegst.github.io/CovariateSearcher/reference/apply_covariate_model.md) | thetas + one scenario, or one covariate row per draw | natural-scale structural parameters; with `eta = TRUE`, including BSV |
 | [`build_scenario_parameters()`](https://ollegst.github.io/CovariateSearcher/reference/build_scenario_parameters.md) | the three above | named list of per-scenario parameter sets |
 | [`stack_scenario_parameters()`](https://ollegst.github.io/CovariateSearcher/reference/stack_scenario_parameters.md) | that list | one long data frame with a `Scenario` column |
 | [`simulate_scenario_profiles()`](https://ollegst.github.io/CovariateSearcher/reference/simulate_scenario_profiles.md) | parameter sets + mrgsolve model | stacked concentration-time profiles |

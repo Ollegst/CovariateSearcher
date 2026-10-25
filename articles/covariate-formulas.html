@@ -71,7 +71,7 @@
       <h1>Covariate Formulas</h1>
             
       
-      <small class="dont-index">Source: <a href="https://github.com/Ollegst/CovariateSearcher/blob/feature/package-rebuild/vignettes/articles/covariate-formulas.Rmd" class="external-link"><code>vignettes/articles/covariate-formulas.Rmd</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/Ollegst/CovariateSearcher/blob/main/vignettes/articles/covariate-formulas.Rmd" class="external-link"><code>vignettes/articles/covariate-formulas.Rmd</code></a></small>
       <div class="d-none name"><code>covariate-formulas.Rmd</code></div>
     </div>
 
@@ -147,6 +147,20 @@ both renderings, so this is handled for you.</p>
 line, a log-scale parameter needs that line to exist:</p>
 <pre><code><span><span class="va">TV_V1</span> <span class="op">=</span> <span class="fu">THETA</span><span class="op">(</span><span class="fl">2</span><span class="op">)</span></span>
 <span><span class="va">V1</span>    <span class="op">=</span> <span class="fu">EXP</span><span class="op">(</span><span class="va">TV_V1</span> <span class="op">+</span> <span class="fu">ETA</span><span class="op">(</span><span class="fl">2</span><span class="op">)</span><span class="op">)</span></span></code></pre>
+<p>MU-referenced parameters are recognised as well:</p>
+<pre><code><span><span class="va">TV_CL</span> <span class="op">=</span> <span class="fu">THETA</span><span class="op">(</span><span class="fl">1</span><span class="op">)</span></span>
+<span><span class="va">MU_1</span>  <span class="op">=</span> <span class="fu">LOG</span><span class="op">(</span><span class="va">TV_CL</span><span class="op">)</span></span>
+<span><span class="va">CL</span>    <span class="op">=</span> <span class="fu">EXP</span><span class="op">(</span><span class="va">MU_1</span> <span class="op">+</span> <span class="fu">ETA</span><span class="op">(</span><span class="fl">1</span><span class="op">)</span><span class="op">)</span></span></code></pre>
+<p>Despite the <code>EXP()</code>, this is
+<code>CL = TV_CL*EXP(ETA(1))</code>, so it is not treated as log scale
+automatically. The scale comes from the <code>$THETA</code> line’s tag
+instead: <code>RATIO</code> places the covariate as a multiplicative
+factor on <code>TV_CL</code>, <code>LOG</code> as an additive term, and
+a parameter with no tag is treated as log scale. This applies only when
+the model has both a <code>MU_n = LOG(TV_&lt;param&gt;)</code> line and
+a <code>TV_&lt;param&gt; = ...</code> line of its own; a
+<code>TV_</code> assigned only inside an <code>IF</code> block is
+handled as before.</p>
 <p>At initialization, <code><a href="../reference/validate_param_transformations.html">validate_param_transformations()</a></code>
 checks every parameter that will receive a population covariate and
 stops on these:</p>
@@ -353,12 +367,18 @@ first appearance:</p>
 <code>*</code>, <code>/</code>, <code>^</code> (or <code>**</code>), and
 the functions <code>exp</code>, <code>log</code>, <code>log10</code>,
 <code>sqrt</code>. Conditionals (<code>if</code>, <code>ifelse</code>)
-are rejected, which keeps every expression a single factor — per-level
-behaviour is what <code>cat</code>/<code>linear</code> is for.</p>
+are rejected, which keeps every expression a single factor. For a
+separate effect per level, use <code>STATUS = "cat"</code> with
+<code>FORMULA = "linear"</code> instead.</p>
+<p>An expression is accepted with either <code>STATUS</code>,
+<code>con</code> or <code>cat</code>. For a <code>cat</code> covariate,
+<code>cov</code> is the level’s numeric value, so an expression suits
+levels that are genuinely numeric (dose 35/70/125/150 mg), the way
+<code>power</code> does.</p>
 <p>An expression must reference <code>cov</code>, and must contain at
 least one symbol that is not <code>cov</code>/<code>ref</code>;
 otherwise there is nothing to estimate.</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">cov_tbl</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/build_covariate_reference_table.html">build_covariate_reference_table</a></span><span class="op">(</span></span>
 <span>  data      <span class="op">=</span> <span class="va">data</span>,</span>
 <span>  id        <span class="op">=</span> <span class="st">"ID"</span>,</span>
@@ -402,7 +422,7 @@ It never transforms it.</p>
 scale — writing it that way is your responsibility. Use
 <code><a href="https://rdrr.io/r/base/Log.html" class="external-link">log()</a></code> in the expression and it is rendered as NONMEM’s
 <code>LOG()</code>:</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">Formula</span> <span class="op">=</span> <span class="st">"log(EMAX*cov/(EC50+cov))"</span>      <span class="co"># on a log-scale parameter</span></span></code></pre></div>
 <p>which produces</p>
 <pre><code><span><span class="va">TV_V</span> <span class="op">=</span> <span class="fu">THETA</span><span class="op">(</span><span class="fl">2</span><span class="op">)</span> <span class="op">+</span> <span class="op">(</span><span class="fu">LOG</span><span class="op">(</span><span class="fu">THETA</span><span class="op">(</span><span class="fl">3</span><span class="op">)</span> <span class="op">*</span> <span class="va">AGE</span><span class="op">/</span><span class="op">(</span><span class="fu">THETA</span><span class="op">(</span><span class="fl">4</span><span class="op">)</span> <span class="op">+</span> <span class="va">AGE</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
@@ -469,7 +489,7 @@ given, so anything NONMEM accepts works:</p>
 <p>For a multi-theta expression the entries are matched <strong>by
 name</strong>, so order does not matter and any theta you leave out
 defaults to <code>0.1</code>:</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">INIT</span> <span class="op">=</span> <span class="st">"EC50=10; EMAX=0.5"</span>     <span class="co"># same as "EMAX=0.5; EC50=10"</span></span>
 <span><span class="va">INIT</span> <span class="op">=</span> <span class="st">"EC50=10"</span>               <span class="co"># EMAX falls back to 0.1</span></span></code></pre></div>
 <p>For a categorical covariate a single <code>INIT</code> value is
@@ -490,9 +510,8 @@ declares</strong>, and the table check enforces it:</p>
 <tbody>
 <tr class="odd">
 <td>
-<code>power</code>, <code>linear</code>, <code>exponential</code>,
-<code>cat.power</code>, <code>cat.linear</code>
-</td>
+<code>linear</code>, <code>power</code> (with <code>con</code> or
+<code>cat</code>), <code>exponential</code> (<code>con</code> only)</td>
 <td>one estimate: <code>0.1</code>, <code>(0, 0.5, 2)</code>,
 <code>0.75 FIX</code>
 </td>
@@ -553,7 +572,7 @@ the covariate adds.</strong></p>
 </tr>
 </tbody>
 </table>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/calculate_covariate_df.html">calculate_covariate_df</a></span><span class="op">(</span><span class="st">"WT"</span>, <span class="va">search_state</span><span class="op">$</span><span class="va">covariate_search</span><span class="op">)</span></span>
 <span><span class="fu"><a href="../reference/pvalue_to_threshold.html">pvalue_to_threshold</a></span><span class="op">(</span><span class="fl">0.05</span>, df <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span>
 <span><span class="co">#&gt; 5.991465</span></span></code></pre></div>

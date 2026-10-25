@@ -32,6 +32,10 @@ What each custom agent does and cannot do:
 
 ## Running R
 
+R is not on PATH. Use the Rscript for the machine you are on — whichever
+of these exists:
+
+    & "D:\Program Files\R\R-4.4.2\bin\Rscript.exe" -e "<expr>"
     & "C:\Users\kdgc151\AppData\Local\Programs\R\R-4.4.2\bin\Rscript.exe" -e "<expr>"
 
 Do not redirect a native command’s stderr with `2>&1` in Windows
@@ -66,7 +70,7 @@ read.
 
 To check whether it is current:
 
-    & "C:\Users\kdgc151\AppData\Local\Programs\R\R-4.4.2\bin\Rscript.exe" ".claude\scripts\functions-index.R"
+    & <Rscript.exe> ".claude\scripts\functions-index.R"
 
 The `functions-index` agent applies the resulting drift report.
 Everything above the `## Package scaffolding` heading is human knowledge

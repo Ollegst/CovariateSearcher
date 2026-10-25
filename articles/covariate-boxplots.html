@@ -71,7 +71,7 @@
       <h1>Covariate Boxplots</h1>
             
       
-      <small class="dont-index">Source: <a href="https://github.com/Ollegst/CovariateSearcher/blob/feature/package-rebuild/vignettes/articles/covariate-boxplots.Rmd" class="external-link"><code>vignettes/articles/covariate-boxplots.Rmd</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/Ollegst/CovariateSearcher/blob/main/vignettes/articles/covariate-boxplots.Rmd" class="external-link"><code>vignettes/articles/covariate-boxplots.Rmd</code></a></small>
       <div class="d-none name"><code>covariate-boxplots.Rmd</code></div>
     </div>
 
@@ -228,7 +228,7 @@ instead of listing covariates by hand.</p>
 <span>  type          <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"AUC"</span>, <span class="st">"Cmax"</span>, <span class="st">"Cmin"</span><span class="op">)</span>,   <span class="co"># or just "AUC"</span></span>
 <span>  drug          <span class="op">=</span> <span class="va">compound_name</span>,</span>
 <span>  param_info    <span class="op">=</span> <span class="va">spec_pk</span>,        <span class="co"># labels/units per metric, from pk-extend.yml</span></span>
-<span>  ss            <span class="op">=</span> <span class="cn">TRUE</span>,           <span class="co"># steady state: "ss" on the y-axis metric label</span></span>
+<span>  ss            <span class="op">=</span> <span class="cn">TRUE</span>,           <span class="co"># steady state: ",ss" on the y-axis metric label</span></span>
 <span>                                  <span class="co"># and "_ss" on every file name, so a single-dose</span></span>
 <span>                                  <span class="co"># run never overwrites these. Labels that already</span></span>
 <span>                                  <span class="co"># end in "ss" are left alone</span></span>
@@ -256,9 +256,15 @@ median can also show the change from the first level:</p>
 <span>  show_median    <span class="op">=</span> <span class="cn">TRUE</span>,    <span class="co"># the median label on each box</span></span>
 <span>  show_n         <span class="op">=</span> <span class="cn">TRUE</span>,    <span class="co"># "n = 42" under each box</span></span>
 <span>  percent_change <span class="op">=</span> <span class="cn">TRUE</span>,    <span class="co"># median label becomes e.g. 900 (-10%)</span></span>
-<span>  label_size     <span class="op">=</span> <span class="fl">1.8</span>      <span class="co"># shrink the label where boxes are narrow;</span></span>
+<span>  label_size     <span class="op">=</span> <span class="fl">1.8</span>,     <span class="co"># shrink the label where boxes are narrow;</span></span>
+<span>                            <span class="co"># NULL (default) derives it from base_size</span></span>
+<span>  n_size         <span class="op">=</span> <span class="fl">2</span>        <span class="co"># size the "n =" counts on their own;</span></span>
 <span>                            <span class="co"># NULL (default) derives it from base_size</span></span>
 <span><span class="op">)</span></span></code></pre></div>
+<p><code>label_size</code> and <code>n_size</code> use ggplot’s
+<code>size</code> units. Setting them sizes the box annotations without
+touching the axis and strip text, which changing <code>base_size</code>
+would also rescale. The counts are printed in bold.</p>
 <p><code>percent_change</code> compares each box with the <strong>first
 level of the same panel</strong>:</p>
 <table class="table">
@@ -293,6 +299,31 @@ level of the same panel</strong>:</p>
 <p>The first level is the reference so it carries no suffix, and the
 pooled <code>Total</code> panel holds a single box so it gets none
 either.</p>
+</div>
+<div class="section level4">
+<h4 id="caption">Caption<a class="anchor" aria-label="anchor" href="#caption"></a>
+</h4>
+<p>By default every saved figure gets a
+<code>Source: &lt;path&gt;</code> line underneath, naming that file
+itself, so the <code>.emf</code> and the <code>.png</code> each carry
+their own path. Add your own text above it with <code>footnote</code>,
+or drop the Source line:</p>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/create_covariate_boxplots.html">create_covariate_boxplots</a></span><span class="op">(</span></span>
+<span>  <span class="va">...</span>,</span>
+<span>  footnote      <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Simulated steady state, 300 mg QD."</span>,</span>
+<span>                    <span class="st">"Script: scripts/sim-boxplots.R"</span><span class="op">)</span>,  <span class="co"># one line per element</span></span>
+<span>  source_note   <span class="op">=</span> <span class="cn">TRUE</span>,     <span class="co"># FALSE drops the "Source: &lt;path&gt;" line</span></span>
+<span>  footnote_size <span class="op">=</span> <span class="fl">7</span>         <span class="co"># points, for the whole caption;</span></span>
+<span>                            <span class="co"># NULL (default) is 0.8 x base_size</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p>The caption sits under the plot, left-aligned. The ggplot that is
+returned, and its page in the combined PDF, name the file of the first
+<code>output_format</code>. With <code>footnote = NULL</code> and
+<code>source_note = FALSE</code> the figure has no caption at all. If
+the numbers must be traceable to where they came from, name the script
+or upstream dataset in <code>footnote</code> - the Source line only
+names the figure file.</p>
 <p><code>param_info</code> supplies the label and unit for each entry of
 <code>type</code>. Reading them from <code>pk-extend.yml</code> keeps
 them in one place - each entry’s <code>short</code> becomes the label,
@@ -327,13 +358,15 @@ stops.</p>
 <tr class="odd">
 <td><code>ss</code></td>
 <td><code>TRUE</code></td>
-<td>steady state. Appends “ss” to the metric label on the y axis
-(<code>Drug X AUCss, mg*hr/L</code>) <strong>and</strong>
+<td>steady state. Appends “,ss” to the metric label on the y axis
+(<code>Drug X AUC,ss (mg*hr/L)</code>) <strong>and</strong>
 <code>_ss</code> to every saved file name
 (<code>Drug X-WT-AUC_ss.emf</code>,
 <code>Drug X-AUC-Cmax-Cmin_ss-1405.pdf</code>), so single-dose and
 steady-state runs cannot overwrite each other. Nothing is appended where
-the label or file stem already ends in “ss”</td>
+the label or file stem already ends in “ss” - a spec label
+<code>AUCss</code> stays <code>Drug X AUCss (mg*hr/L)</code>
+</td>
 </tr>
 <tr class="even">
 <td><code>stratification</code></td>
@@ -368,8 +401,49 @@ the label or file stem already ends in “ss”</td>
 <tr class="even">
 <td><code>base_size</code></td>
 <td><code>10</code></td>
-<td>ggplot base font size; also scales the <code>n =</code> text and,
-unless <code>label_size</code> is given, the median label</td>
+<td>ggplot base font size; also scales the median label and the
+<code>n =</code> text unless <code>label_size</code> /
+<code>n_size</code> are given</td>
+</tr>
+<tr class="odd">
+<td>
+<code>show_median</code>, <code>show_n</code>
+</td>
+<td><code>TRUE</code></td>
+<td>median label on each box; bold <code>n = &lt;count&gt;</code> under
+it</td>
+</tr>
+<tr class="even">
+<td><code>percent_change</code></td>
+<td><code>FALSE</code></td>
+<td>add the change from the panel’s first level to the median label</td>
+</tr>
+<tr class="odd">
+<td>
+<code>label_size</code>, <code>n_size</code>
+</td>
+<td><code>NULL</code></td>
+<td>size of the median label and of the <code>n =</code> text,
+independently of <code>base_size</code>
+</td>
+</tr>
+<tr class="even">
+<td><code>footnote</code></td>
+<td><code>NULL</code></td>
+<td>your own caption text, one line per element</td>
+</tr>
+<tr class="odd">
+<td><code>source_note</code></td>
+<td><code>TRUE</code></td>
+<td>append a <code>Source: &lt;path&gt;</code> line naming the saved
+file</td>
+</tr>
+<tr class="even">
+<td><code>footnote_size</code></td>
+<td><code>NULL</code></td>
+<td>caption size in points; <code>NULL</code> is 0.8 x
+<code>base_size</code>
+</td>
 </tr>
 <tr class="odd">
 <td>

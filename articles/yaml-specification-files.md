@@ -69,8 +69,8 @@ advisory:
 
 - a covariate with `Category = "cat"` that has **no entry at all** stops
   the build;
-- a level present in your baseline data but **missing from `values`**
-  stops the build, naming the level;
+- a level present anywhere in your data (not only at baseline) but
+  **missing from `values`** stops the build, naming the level;
 - a level declared in `values` but **never observed** in the data is a
   warning, not an error — it is usually a spec written for a larger
   population.
