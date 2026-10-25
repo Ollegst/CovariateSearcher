@@ -131,6 +131,7 @@ reference:
   - create_scm_results_table
   - view_comprehensive_table
   - plot_nonmem_iterations
+  - plot_bootstrap_distributions
 
 - title: Monitoring and Reporting
   desc: Functions for tracking progress and status
