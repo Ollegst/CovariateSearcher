@@ -22,8 +22,31 @@ try {
     # fall through with the default event name
 }
 
-$root    = "C:\Users\kdgc151\OneDrive - AZCollaboration\CovariateSearcher\CovariateSearcher"
-$rscript = "C:\Users\kdgc151\AppData\Local\Programs\R\R-4.4.2\bin\Rscript.exe"
+# Resolved at run time so the hook works on every machine the repo is cloned to:
+# the project dir comes from Claude Code (or from this file's location), and
+# Rscript from PATH or else the newest R under the usual install roots.
+$root = $env:CLAUDE_PROJECT_DIR
+if ([string]::IsNullOrWhiteSpace($root)) { $root = Split-Path (Split-Path $PSScriptRoot) }
+
+$rscript = $null
+try {
+    $onPath = Get-Command Rscript.exe -ErrorAction SilentlyContinue
+    if ($onPath) {
+        $rscript = $onPath.Source
+    } else {
+        $rscript = @("$env:LOCALAPPDATA\Programs\R", "$env:ProgramFiles\R", "D:\Program Files\R") |
+            Where-Object { Test-Path $_ } |
+            ForEach-Object { Get-ChildItem $_ -Directory | Where-Object { $_.Name -match '^R-\d+\.\d+\.\d+$' } } |
+            Sort-Object { [version]($_.Name.Substring(2)) } -Descending |
+            ForEach-Object { Join-Path $_.FullName "bin\Rscript.exe" } |
+            Where-Object { Test-Path $_ } |
+            Select-Object -First 1
+    }
+} catch {
+    exit 0
+}
+if (-not $rscript) { exit 0 }
+
 $script  = Join-Path $root ".claude\scripts\functions-index.R"
 
 if (-not (Test-Path $rscript) -or -not (Test-Path $script)) { exit 0 }
