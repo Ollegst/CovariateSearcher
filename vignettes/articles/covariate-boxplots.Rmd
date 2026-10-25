@@ -167,7 +167,7 @@ results <- create_covariate_boxplots(
   type          = c("AUC", "Cmax", "Cmin"),   # or just "AUC"
   drug          = compound_name,
   param_info    = spec_pk,        # labels/units per metric, from pk-extend.yml
-  ss            = TRUE,           # steady state: "ss" on the y-axis metric label
+  ss            = TRUE,           # steady state: ",ss" on the y-axis metric label
                                   # and "_ss" on every file name, so a single-dose
                                   # run never overwrites these. Labels that already
                                   # end in "ss" are left alone
@@ -195,10 +195,16 @@ create_covariate_boxplots(
   show_median    = TRUE,    # the median label on each box
   show_n         = TRUE,    # "n = 42" under each box
   percent_change = TRUE,    # median label becomes e.g. 900 (-10%)
-  label_size     = 1.8      # shrink the label where boxes are narrow;
+  label_size     = 1.8,     # shrink the label where boxes are narrow;
+                            # NULL (default) derives it from base_size
+  n_size         = 2        # size the "n =" counts on their own;
                             # NULL (default) derives it from base_size
 )
 ```
+
+`label_size` and `n_size` use ggplot's `size` units. Setting them sizes the box
+annotations without touching the axis and strip text, which changing
+`base_size` would also rescale. The counts are printed in bold.
 
 `percent_change` compares each box with the **first level of the same panel**:
 
@@ -212,6 +218,29 @@ create_covariate_boxplots(
 The first level is the reference so it carries no suffix, and the pooled
 `Total` panel holds a single box so it gets none either.
 
+### Caption
+
+By default every saved figure gets a `Source: <path>` line underneath, naming
+that file itself, so the `.emf` and the `.png` each carry their own path. Add
+your own text above it with `footnote`, or drop the Source line:
+
+```{r caption}
+create_covariate_boxplots(
+  ...,
+  footnote      = c("Simulated steady state, 300 mg QD.",
+                    "Script: scripts/sim-boxplots.R"),  # one line per element
+  source_note   = TRUE,     # FALSE drops the "Source: <path>" line
+  footnote_size = 7         # points, for the whole caption;
+                            # NULL (default) is 0.8 x base_size
+)
+```
+
+The caption sits under the plot, left-aligned. The ggplot that is returned, and
+its page in the combined PDF, name the file of the first `output_format`. With
+`footnote = NULL` and `source_note = FALSE` the figure has no caption at all. If
+the numbers must be traceable to where they came from, name the script or
+upstream dataset in `footnote` - the Source line only names the figure file.
+
 `param_info` supplies the label and unit for each entry of `type`. Reading them
 from `pk-extend.yml` keeps them in one place - each entry's `short` becomes the
 label, and its `unit` the unit. A yspec object or a path to the YAML works the
@@ -223,14 +252,20 @@ Every entry of `type` must have a label there, or the call stops.
 |---|---|---|
 | `con`, `cat` | `NULL` | continuous and categorical covariate columns to plot |
 | `type` | `c("AUC","Cmax","Cmin")` | metric columns of `data`; any numeric column works |
-| `ss` | `TRUE` | steady state. Appends "ss" to the metric label on the y axis (`Drug X AUCss, mg*hr/L`) **and** `_ss` to every saved file name (`Drug X-WT-AUC_ss.emf`, `Drug X-AUC-Cmax-Cmin_ss-1405.pdf`), so single-dose and steady-state runs cannot overwrite each other. Nothing is appended where the label or file stem already ends in "ss" |
+| `ss` | `TRUE` | steady state. Appends ",ss" to the metric label on the y axis (`Drug X AUC,ss (mg*hr/L)`) **and** `_ss` to every saved file name (`Drug X-WT-AUC_ss.emf`, `Drug X-AUC-Cmax-Cmin_ss-1405.pdf`), so single-dose and steady-state runs cannot overwrite each other. Nothing is appended where the label or file stem already ends in "ss" - a spec label `AUCss` stays `Drug X AUCss (mg*hr/L)` |
 | `stratification` | `NULL` | column to split into side-by-side panels |
 | `total_panel` | `TRUE` | add the pooled `Total` panel |
 | `output_folder` | `"results/figure/simulations"` | where files are written |
 | `output_format` | `c("emf","png")` | one file per format |
 | `combined_pdf` | `TRUE` | additionally write every plot to one PDF |
 | `prefix` | `NULL` | prepended to every output file name |
-| `base_size` | `10` | ggplot base font size; also scales the `n =` text and, unless `label_size` is given, the median label |
+| `base_size` | `10` | ggplot base font size; also scales the median label and the `n =` text unless `label_size` / `n_size` are given |
+| `show_median`, `show_n` | `TRUE` | median label on each box; bold `n = <count>` under it |
+| `percent_change` | `FALSE` | add the change from the panel's first level to the median label |
+| `label_size`, `n_size` | `NULL` | size of the median label and of the `n =` text, independently of `base_size` |
+| `footnote` | `NULL` | your own caption text, one line per element |
+| `source_note` | `TRUE` | append a `Source: <path>` line naming the saved file |
+| `footnote_size` | `NULL` | caption size in points; `NULL` is 0.8 x `base_size` |
 | `width`, `height` | `NULL` | supply **both** to override the automatic sizing |
 | `verbose` | `TRUE` | per-covariate progress line |
 

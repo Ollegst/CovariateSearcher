@@ -65,6 +65,22 @@ TV_V1 = THETA(2)
 V1    = EXP(TV_V1 + ETA(2))
 ```
 
+MU-referenced parameters are recognised as well:
+
+```
+TV_CL = THETA(1)
+MU_1  = LOG(TV_CL)
+CL    = EXP(MU_1 + ETA(1))
+```
+
+Despite the `EXP()`, this is `CL = TV_CL*EXP(ETA(1))`, so it is not treated as
+log scale automatically. The scale comes from the `$THETA` line's tag instead:
+`RATIO` places the covariate as a multiplicative factor on `TV_CL`, `LOG` as an
+additive term, and a parameter with no tag is treated as log scale. This
+applies only when the model has both a `MU_n = LOG(TV_<param>)` line and a
+`TV_<param> = ...` line of its own; a `TV_` assigned only inside an `IF` block is
+handled as before.
+
 At initialization, `validate_param_transformations()` checks every parameter
 that will receive a population covariate and stops on these:
 
@@ -184,8 +200,12 @@ appearance:
 
 Allowed in an expression: `+`, `-`, `*`, `/`, `^` (or `**`), and the functions
 `exp`, `log`, `log10`, `sqrt`. Conditionals (`if`, `ifelse`) are rejected, which
-keeps every expression a single factor — per-level behaviour is what
-`cat`/`linear` is for.
+keeps every expression a single factor. For a separate effect per level, use
+`STATUS = "cat"` with `FORMULA = "linear"` instead.
+
+An expression is accepted with either `STATUS`, `con` or `cat`. For a `cat`
+covariate, `cov` is the level's numeric value, so an expression suits levels
+that are genuinely numeric (dose 35/70/125/150 mg), the way `power` does.
 
 An expression must reference `cov`, and must contain at least one symbol that is
 not `cov`/`ref`; otherwise there is nothing to estimate.
@@ -281,7 +301,7 @@ check enforces it:
 
 | FORMULA | valid INIT | rejected |
 |---|---|---|
-| `power`, `linear`, `exponential`, `cat.power`, `cat.linear` | one estimate: `0.1`, `(0, 0.5, 2)`, `0.75 FIX` | anything named or multi-entry, e.g. `EMAX=0.5; EC50=10` |
+| `linear`, `power` (with `con` or `cat`), `exponential` (`con` only) | one estimate: `0.1`, `(0, 0.5, 2)`, `0.75 FIX` | anything named or multi-entry, e.g. `EMAX=0.5; EC50=10` |
 | `EMAX*cov/(EC50+cov)` | one named entry per theta: `EMAX=0.5; EC50=10` | a bare value, or a name the formula does not declare |
 
 ```
