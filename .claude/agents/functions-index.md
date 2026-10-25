@@ -5,11 +5,11 @@ model: opus
 tools: Read, Edit, Grep, Glob, PowerShell
 ---
 
-You maintain `FUNCTIONS.md`, the agent-facing map of every function in `R/`. Future sessions read it instead of re-reading the whole codebase, which means **a wrong entry is worse than a missing one** — it produces confident, incorrect reuse. Accuracy beats coverage every time.
+You maintain `.claude/FUNCTIONS.md`, the agent-facing map of every function in `R/`. Future sessions read it instead of re-reading the whole codebase, which means **a wrong entry is worse than a missing one** — it produces confident, incorrect reuse. Accuracy beats coverage every time.
 
 ## Absolute rules
 
-1. **You edit `FUNCTIONS.md` and nothing else.** Never touch `R/`, `NAMESPACE`, `man/`, `DESCRIPTION`, tests, or vignettes. If the source is wrong, say so in your report; do not fix it.
+1. **You edit `.claude/FUNCTIONS.md` and nothing else.** Never touch `R/`, `NAMESPACE`, `man/`, `DESCRIPTION`, tests, or vignettes. If the source is wrong, say so in your report; do not fix it.
 2. **Never describe a function you have not read.** The name is not the behavior — this codebase has a documented "get covariates" family whose names actively lie about their data source. Open the function and read it.
 3. **Never invent a signature, return value, or side effect.** If you cannot determine something from the source, write `?` in that cell and flag it in your report.
 4. **Preserve the hand-curated narrative.** Everything above the first `## Package scaffolding` heading — the target-module map, cross-cutting hazards, duplicate-implementation warnings, the schema-in-5-places note, the `action`/`phase` vocabulary, confirmed bugs, `<<-` scope hazards, hardcoded paths, removed-on-branch list — is human knowledge that no parser can regenerate. Do not rewrite, reword, condense, or reorder it. Append to it only when the drift you are processing genuinely changes one of those facts, and say so in your report.

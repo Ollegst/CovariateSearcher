@@ -69,8 +69,8 @@ $header = @"
 FUNCTIONS.md status - produced just now by .claude/scripts/functions-index.R.
 This is measured from the source, not recalled from memory.
 
-FUNCTIONS.md maps every function in R/ (signature, purpose, side effects, call
-graph). Consult it before writing a new helper - reimplementing something that
+.claude/FUNCTIONS.md maps every function in R/ (signature, purpose, side effects,
+call graph). Consult it before writing a new helper - reimplementing something that
 already exists is the most common avoidable mistake in this package.
 
 Any function listed under MISSING_FROM_DOC, STALE_IN_DOC, SIGNATURE_DRIFT or

@@ -34,11 +34,11 @@ Do not redirect a native command's stderr with `2>&1` in Windows PowerShell — 
 - `man/*.Rd` and `NAMESPACE` are produced by roxygen2. Edit the roxygen block in `R/`, then regenerate with `roxygen2::roxygenise(load_code = 'source')`. This package documents from source, not from a built namespace.
 - `docs/` is built by CI and served from `gh-pages`; it is deliberately untracked.
 
-A `PreToolUse` hook ([.claude/hooks/guard-generated-files.ps1](.claude/hooks/guard-generated-files.ps1)) blocks edits to the first group.
+A `PreToolUse` hook ([.claude/hooks/guard-generated-files.ps1](hooks/guard-generated-files.ps1)) blocks edits to the first group.
 
 ## FUNCTIONS.md
 
-[FUNCTIONS.md](FUNCTIONS.md) maps every function in `R/` — signature, purpose, side effects, and call graph — plus hand-curated sections on cross-cutting hazards, duplicate implementations, and known bugs.
+[.claude/FUNCTIONS.md](FUNCTIONS.md) maps every function in `R/` — signature, purpose, side effects, and call graph — plus hand-curated sections on cross-cutting hazards, duplicate implementations, and known bugs.
 
 **Read it before writing a new helper.** This package has ~130 functions across 29 files, many internal; the most common avoidable mistake here is reimplementing something that already exists. The hazard sections exist because several functions have names that misdescribe what they read.
 

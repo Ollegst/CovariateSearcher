@@ -23,7 +23,7 @@ positional <- args[!grepl("^--", args)]
 root <- if (length(positional) >= 1) positional[[1]] else getwd()
 
 r_dir      <- file.path(root, "R")
-doc_path   <- file.path(root, "FUNCTIONS.md")
+doc_path   <- file.path(root, ".claude", "FUNCTIONS.md")
 ns_path    <- file.path(root, "NAMESPACE")
 state_path <- file.path(root, ".claude", "functions-index.tsv")
 
