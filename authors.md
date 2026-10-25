@@ -8,7 +8,7 @@
 ## Citation
 
 Source:
-[`DESCRIPTION`](https://github.com/Ollegst/CovariateSearcher/blob/main/DESCRIPTION)
+[`DESCRIPTION`](https://github.com/Ollegst/CovariateSearcher/blob/feature/package-rebuild/DESCRIPTION)
 
 Stepanov O (2026). *CovariateSearcher: Stepwise Covariate Modeling with
 NONMEM/bbi Integration*. R package version 0.4.7,
