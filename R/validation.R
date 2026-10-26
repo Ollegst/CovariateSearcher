@@ -800,7 +800,7 @@ validate_parameter_blocks <- function(model_file,
   }
 
   model_lines <- tryCatch({
-    readLines(model_file, warn = FALSE)
+    .read_control_stream(model_file)
   }, error = function(e) {
     return(NULL)
   })
@@ -1241,7 +1241,7 @@ validate_covariate_parameter_mapping <- function(covariate_search,
     stop("Model file not found for mapping validation: ", file.path(models_folder, model_name))
   }
 
-  modelcode <- readLines(model_file, warn = FALSE)
+  modelcode <- .read_control_stream(model_file)
   code_lines <- modelcode[!grepl("^\\s*;", modelcode)]
 
   has_parameter_assignment <- function(param_name) {

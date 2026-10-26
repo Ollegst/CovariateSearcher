@@ -109,7 +109,7 @@ apply_covariate_model <- function(model_name,
     stop("Model control file not found for '", model_name, "' under '",
          models_folder, "' (looked for .ctl / .mod).")
   }
-  lines <- readLines(ctl_path[1], warn = FALSE)
+  lines <- .read_control_stream(ctl_path[1])
 
   # Return the lines of a $BLOCK (header + body, up to the next $ record).
   get_block <- function(tag) {

@@ -388,7 +388,7 @@ adjust_theta_for_covariate <- function(search_state, model_name, covariate_tag,
       return(list(success = FALSE, message = "Model file not found (.ctl or .mod)"))
     }
 
-    modelcode <- readLines(model_file_path)
+    modelcode <- .read_control_stream(model_file_path)
 
     # Find the covariate value from tags
     covariate_value <- search_state$tags[[covariate_tag]]

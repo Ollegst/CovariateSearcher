@@ -89,3 +89,27 @@ test_that("a FIX parameter has no asymptotic interval", {
   expect_true(all(is.na(out$CI[out$nonmem_name %in% c("THETA4", "THETA5")])))
   expect_false(is.na(out$CI[out$nonmem_name %in% "THETA1"]))
 })
+
+
+test_that("model_report keeps a model that only raised a warning", {
+  # REP-06: a warning used to exclude the model, so a one-model report ended
+  # in "all models failed".
+  s <- real_summary()
+  models_dir <- write_basic_model()
+  ft <- NULL
+  printed <- capture.output(
+    ft <- testthat::with_mocked_bindings(
+      read_model = function(path) list(path = path),
+      model_summary = function(mod) s,
+      param_estimates = function(x, ...) {
+        warning("a harmless warning from bbr")
+        bbr:::param_estimates.bbi_nonmem_summary(s)
+      },
+      .package = "bbr",
+      model_report("b1", models_folder = models_dir)
+    )
+  )
+
+  expect_s3_class(ft, "flextable")
+  expect_match(paste(printed, collapse = "\n"), "harmless warning")
+})

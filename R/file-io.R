@@ -19,7 +19,7 @@ read_model_file <- function(search_state, run_name, extensions = c(".ctl", ".mod
   for (ext in extensions) {
     file_path <- paste0(base_path, ext)
     if (file.exists(file_path)) {
-      lines <- readLines(file_path, warn = FALSE)
+      lines <- .read_control_stream(file_path)
       attr(lines, "file_path") <- file_path
       return(lines)
     }
@@ -48,26 +48,48 @@ find_model_file <- function(base_path, extensions = c(".ctl", ".mod")) {
 }
 
 
+# Lines that are not valid UTF-8 re-read as Windows-1252, the encoding a Windows
+# editor saving "ANSI" writes. readLines() does not fail on such bytes: under a
+# UTF-8 locale the line comes back invalid, and grepl() then silently returns
+# FALSE on it - so a comment-only line carrying a cp1252 "µ" stopped matching
+# "^\\s*;" and was counted as a THETA. CP1252 rather than latin1 because latin1
+# turns cp1252's quotes, dashes and euro sign (0x80-0x9F) into control
+# characters. Valid UTF-8 lines are returned untouched; a byte cp1252 leaves
+# undefined becomes "?".
+#' @keywords internal
+#' @noRd
+.repair_encoding <- function(lines) {
+  bad <- !validUTF8(lines)
+  if (any(bad)) {
+    lines[bad] <- iconv(lines[bad], from = "CP1252", to = "UTF-8", sub = "?")
+  }
+  lines
+}
+
+
+# Read a NONMEM control stream (.ctl/.mod), repairing non-UTF-8 lines. warn =
+# FALSE because a file saved without a final newline is common and harmless,
+# and model_report() drops a model on any warning.
+#' @keywords internal
+#' @noRd
+.read_control_stream <- function(path) {
+  .repair_encoding(readLines(path, warn = FALSE))
+}
+
+
 # Read a NONMEM listing as text. Listings are not guaranteed to be valid UTF-8 -
-# a run that wrote PRDERR output can carry stray control bytes, and readLines()
-# then throws "invalid multibyte string" under a UTF-8 locale.
-#
-# Try the session's own encoding first, so a listing that is valid UTF-8 keeps
-# its characters in the diagnostic text callers quote verbatim (error_excerpt,
-# the #TERM block). Only when that fails fall back to latin1, which maps every
-# byte to something and so cannot throw: the status markers are all ASCII and
-# stay greppable whatever else the run emitted. A path that cannot be opened at
-# all fails in both attempts and signals, which is what marks a run as failed.
+# a run that wrote PRDERR output can carry stray bytes. readLines() returns such
+# lines without error, so they are repaired afterwards (.repair_encoding): the
+# status markers are all ASCII and stay greppable whatever else the run
+# emitted, and the diagnostic text callers quote (error_excerpt, the #TERM
+# block) stays readable. A path that cannot be opened signals, which is what
+# marks a run as failed.
 #' @keywords internal
 #' @noRd
 .read_listing_lines <- function(path) {
-  read_with <- function(...) {
-    con <- file(path, open = "r", ...)
-    on.exit(close(con), add = TRUE)
-    readLines(con, warn = FALSE, skipNul = TRUE)
-  }
-
-  tryCatch(read_with(), error = function(e) read_with(encoding = "latin1"))
+  con <- file(path, open = "r")
+  on.exit(close(con), add = TRUE)
+  .repair_encoding(readLines(con, warn = FALSE, skipNul = TRUE))
 }
 
 

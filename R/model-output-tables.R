@@ -157,7 +157,7 @@ extract_model_params <- function(model_name, models_folder = "models") {
   }
 
   # Read the file as a vector of lines
-  lines <- readLines(ctl_path)
+  lines <- .read_control_stream(ctl_path)
 
   # Extract theta parameter names (removing numeric prefixes)
   theta_params <- extract_params(lines, "THETA", remove_prefix = TRUE)
@@ -950,26 +950,34 @@ model_report <- function(model_names,
   for (model_name in model_names) {
     cat(sprintf("  Processing %s... ", model_name))
 
+    # A warning is reported but does not exclude the model: only an error does.
+    # (A warning used to abort the model, so a benign one - a control stream
+    # saved without a final newline, a known extract_params() min() warning -
+    # dropped it from the table.)
+    model_warnings <- character(0)
     result <- tryCatch({
-      param_table <- get_param2(
-        model_number = model_name,
-        count_model = count_model,
-        shrinkage = shrinkage,
-        models_folder = models_folder,
-        spec_pk = spec_pk,
-        lookup = lookup,
-        include_ci = bootstrap
+      param_table <- withCallingHandlers(
+        get_param2(
+          model_number = model_name,
+          count_model = count_model,
+          shrinkage = shrinkage,
+          models_folder = models_folder,
+          spec_pk = spec_pk,
+          lookup = lookup,
+          include_ci = bootstrap
+        ),
+        warning = function(w) {
+          model_warnings <<- c(model_warnings, conditionMessage(w))
+          invokeRestart("muffleWarning")
+        }
       )
       cat("✓\n")
+      for (msg in unique(model_warnings)) cat(sprintf("    Warning: %s\n", msg))
       list(success = TRUE, data = param_table, model = model_name)
     }, error = function(e) {
       cat("✗\n")
       cat(sprintf("    ⚠️  Error: %s\n", conditionMessage(e)))
       list(success = FALSE, error = conditionMessage(e), model = model_name)
-    }, warning = function(w) {
-      cat("⚠️\n")
-      cat(sprintf("    Warning: %s\n", conditionMessage(w)))
-      list(success = FALSE, error = paste("Warning:", conditionMessage(w)), model = model_name)
     })
 
     if (result$success) {

@@ -291,3 +291,18 @@ test_that("a removal is judged at the backward p-value, not the forward one", {
   # covariate is droppable and there is nothing significant to announce.
   expect_false(any(grepl("^   run4 ", out)))
 })
+
+
+test_that("a listing with cp1252 bytes is read without a warning storm", {
+  # NIO-03: readLines() returned the invalid lines without error, so the old
+  # latin1 fallback never ran and every regex pass over them warned.
+  models_dir <- setup_finished_run()
+  lst <- file.path(models_dir, "run1", "run1.lst")
+  con <- file(lst, open = "ab")
+  writeBin(c(charToRaw(" conc in "), as.raw(0xB5), charToRaw("g/L\n")), con)
+  close(con)
+
+  expect_true(all(validUTF8(.read_listing_lines(lst))))
+  expect_no_warning(probe <- read_nonmem_lst(file.path(models_dir, "run1")))
+  expect_equal(probe$status, "completed")
+})

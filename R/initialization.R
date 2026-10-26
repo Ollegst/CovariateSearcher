@@ -192,7 +192,7 @@ initialize_covariate_search <- function(base_model_path,
   # (there is a filename to compare); skip it when an in-memory data.frame was
   # passed for data_file_path.
   if (!is.null(ctl_file) && is.character(data_file_path)) {
-    modelcode <- readLines(ctl_file)
+    modelcode <- .read_control_stream(ctl_file)
     # Find DATA line (case-insensitive, may have spaces)
     data_line <- grep("^\\s*\\$DATA", modelcode, ignore.case = TRUE, value = TRUE)
     if (length(data_line) > 0) {
@@ -890,7 +890,7 @@ validate_param_transformations <- function(covariate_search, data_file, id_col,
     NULL
   }
   if (is.null(ctl)) return(invisible(TRUE))   # base-model existence checked elsewhere
-  modelcode <- readLines(ctl, warn = FALSE)
+  modelcode <- .read_control_stream(ctl)
 
   # A covariate is placed at population level (and thus needs a classifiable
   # transform) when it is time-CONSTANT: at most one distinct value per subject.

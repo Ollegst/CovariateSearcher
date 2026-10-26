@@ -387,7 +387,7 @@ create_covariate_table <- function(model_name,
 
   # THETA annotations look like:  <init> ; <name> ; <unit> ; <trans>
   # The covariate-effect THETAs are named beta_<COV>_<PARAM>[_<LEVEL>].
-  ctl_lines   <- readLines(ctl_path, warn = FALSE)
+  ctl_lines   <- .read_control_stream(ctl_path)
   theta_names <- vapply(strsplit(ctl_lines, ";"), function(parts) {
     if (length(parts) >= 2) trimws(parts[2]) else NA_character_
   }, character(1))
@@ -786,7 +786,7 @@ simulate_scenario_profiles <- function(param_sets,
                   file.path(base_path, paste0(model_name, ".mod")))
   ctl_path <- candidates[file.exists(candidates)]
   if (length(ctl_path) == 0) return(character(0))
-  lines <- readLines(ctl_path[1], warn = FALSE)
+  lines <- .read_control_stream(ctl_path[1])
 
   get_block <- function(tag) {
     # (?![A-Za-z]): $THETA but not the $PRIOR records $THETAP / $THETAPV.
