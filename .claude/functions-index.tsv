@@ -12,7 +12,7 @@ covariate-formula.R	.cov_pow_nonmem	.cov_pow_nonmem(cova, ref, n)	no	4774175d39c
 covariate-formula.R	.exp_inner_containing_eta	.exp_inner_containing_eta(rhs)	no	a31e264d338e61449e8398b1af5900ec
 covariate-formula.R	.theta_tag_for	.theta_tag_for(modelcode, param)	no	d6900264917c4cdce88184a155c0ffff
 covariate-formula.R	.translate_expr_to_nonmem	.translate_expr_to_nonmem(expr, cova, ref, thetas, n)	no	c3c4ab95fab9536d65e98d320f1ae2cb
-covariate-formula.R	detect_param_transform	detect_param_transform(modelcode, param)	no	d668827681d7a8006e23cc4c3cff2525
+covariate-formula.R	detect_param_transform	detect_param_transform(modelcode, param)	no	ffdc1aed56e4fde18134bffa5097f442
 covariate-formula.R	get_covariate_formula	get_covariate_formula(status, formula)	no	e9b237eee077ce287bcec81d21d2d95b
 covariate-formula.R	list_covariate_formulas	list_covariate_formulas()	no	3b61871b813ba177849c4642ee050db7
 covariate-formula.R	parse_covariate_expression	parse_covariate_expression(formula)	no	4006d99fa4e1cc5781c998de07ede8f6

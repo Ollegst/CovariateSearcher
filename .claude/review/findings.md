@@ -435,7 +435,7 @@ by the checker — the corrected versions are the ones below.
   `EXP(TV_CL + ETA(1) + IOVCL)`, MU+IOV and `EXP(TV_CL + ETA(1)*THETA(9))`.) All shapes in FUNCTIONS.md
   keep their classification. Separate edge case, not fixed by either: `EXP(LOG(TV_CL)+ETA)` reads "log".
 - **Must keep:** "normal" without ETA; "unknown" when ETA is not inside EXP; the MU tag override.
-- **Status:** open
+- **Status:** fixed in 6c8365b (2026-10-26)
 
 #### MOD-03 — `add_covariate_to_model` loses its error log and reports "'con' is not a connection"
 - **Location:** R/model-modification.R:155-161 (also 80, 228); consumer R/scm-execution.R:147
