@@ -473,7 +473,7 @@ by the checker — the corrected versions are the ones below.
   model gets `TV_CL = THETA(1) * beta_SEX_CL` with `beta_SEX_CL` never defined. README:147 treats
   `$PRED` as supported.
 - **Proposed fix:** match `$PK` or `$PRED` (with optional leading blanks), stop if neither; same in removal Step 6.
-- **Status:** open
+- **Status:** fixed in 54e55ae (2026-10-26)
 
 #### MOD-07 — Categorical covariate: unused THETA when no non-reference level is observed; df from declared vs observed levels
 - **Location:** R/model-modification.R:513-517, 617-642; R/utilities.R:554-567; R/initialization.R:658
@@ -505,7 +505,7 @@ by the checker — the corrected versions are the ones below.
 - **Location:** R/model-modification.R:1228, 1232, 1332
 - **Type:** inconsistency · **Severity:** failure (loud) · **Verified:** confirmed (both)
 - **Proposed fix:** use the leading-blank-tolerant record patterns in the remover, as the writer does.
-- **Status:** open
+- **Status:** fixed in 54e55ae (2026-10-26)
 
 #### MOD-11 — Dead code in model-modification.R
 - **Location:** R/model-modification.R:503, 461-463, 228; FUNCTIONS.md's "formula block duplicated verbatim" note is stale
@@ -931,7 +931,7 @@ Reviewed by Fable (`D:\R\tmp\review-XAR\`), re-checked by Sonnet (`D:\R\tmp\veri
   remover half is MOD-10.)
 - **Proposed fix:** one record-start matcher `^\s*\$TAG(?![A-Za-z])`, and the same for the block-end
   test in `extract_params` (otherwise an indented `$OMEGA` after a flush `$THETA` is swallowed).
-- **Status:** open (group G2)
+- **Status:** fixed in 54e55ae (2026-10-26)
 
 #### XAR-04 — Validation accepts several bounded values on one `$THETA` line, which the readers cannot handle
 - **Location:** R/validation.R:991-1005 vs R/apply-covariate-model.R:133-146, R/forest-plots.R:810-819, R/model-output-tables.R:111-137

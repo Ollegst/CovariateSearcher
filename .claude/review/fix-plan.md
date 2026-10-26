@@ -204,7 +204,7 @@ Mark items here as they land (`done <commit>`), and the register entry as `fixed
 |---|---|
 | 0 | not started |
 | 1 | done — 10 items, commits 24eade5..c13da8f (2026-10-26) |
-| 2 | not started |
+| 2 | in progress — 2.1 G13 done (a08a8cb), 2.2 G2 done (54e55ae; SIM-09 deferred to 6.x) |
 | 3 | not started |
 | 4 | not started |
 | 5 | not started |
