@@ -21,6 +21,54 @@
 }
 
 
+# Manual override of the model counter (initialize_covariate_search's
+# starting_model_number). Called after update_model_counter(), so
+# search_state$model_counter is the highest model already in the folder. A
+# lower override would make the next models reuse existing run numbers, and
+# copy_model_from(.overwrite = TRUE) would replace those models' files.
+.apply_starting_model_number <- function(search_state, starting_model_number,
+                                         base_model_path) {
+  if (is.null(starting_model_number)) return(search_state)
+
+  if (!is.numeric(starting_model_number) ||
+      length(starting_model_number) != 1 ||
+      is.na(starting_model_number)) {
+    stop("starting_model_number must be a single non-missing numeric value")
+  }
+
+  starting_model_number <- as.integer(starting_model_number)
+
+  if (starting_model_number < 1) {
+    stop("starting_model_number must be >= 1")
+  }
+
+  base_model_number <- suppressWarnings(
+    as.integer(gsub("^run", "", base_model_path))
+  )
+
+  if (!is.na(base_model_number) && starting_model_number < base_model_number) {
+    stop(
+      "starting_model_number (", starting_model_number,
+      ") cannot be lower than base model number (", base_model_number, ")"
+    )
+  }
+
+  highest_existing <- search_state$model_counter %||% 0L
+  if (starting_model_number < highest_existing) {
+    stop(
+      "starting_model_number (", starting_model_number,
+      ") is lower than the highest model already in the models folder (run",
+      highest_existing, "); new models would overwrite existing ones"
+    )
+  }
+
+  search_state$model_counter <- starting_model_number
+
+  cat("Model counter manually set to: run", search_state$model_counter, "\n", sep = "")
+  search_state
+}
+
+
 #' Initialize Covariate Search
 #'
 #' @title Initialize covariate search state with validation and setup
@@ -241,35 +289,8 @@ initialize_covariate_search <- function(base_model_path,
   # Set model counter based on existing models
   search_state <- update_model_counter(search_state)
   # Optional manual override for model numbering
-  if (!is.null(starting_model_number)) {
-
-    if (!is.numeric(starting_model_number) ||
-        length(starting_model_number) != 1 ||
-        is.na(starting_model_number)) {
-      stop("starting_model_number must be a single non-missing numeric value")
-    }
-
-    starting_model_number <- as.integer(starting_model_number)
-
-    if (starting_model_number < 1) {
-      stop("starting_model_number must be >= 1")
-    }
-
-    base_model_number <- suppressWarnings(
-      as.integer(gsub("^run", "", base_model_path))
-    )
-
-    if (!is.na(base_model_number) && starting_model_number < base_model_number) {
-      stop(
-        "starting_model_number (", starting_model_number,
-        ") cannot be lower than base model number (", base_model_number, ")"
-      )
-    }
-
-    search_state$model_counter <- starting_model_number
-
-    cat("Model counter manually set to: run", search_state$model_counter, "\n", sep = "")
-  }
+  search_state <- .apply_starting_model_number(search_state, starting_model_number,
+                                               base_model_path)
 
   scm_rds_dir <- file.path(search_state$models_folder, "scm_rds")
   if (!dir.exists(scm_rds_dir)) {
