@@ -86,7 +86,9 @@ apply_covariate_model <- function(model_name,
   # individual_thetas/eta_draws already do.
   if (is.data.frame(covariates)) {
     if (nrow(covariates) == 1) {
-      covariates <- unlist(covariates[1, , drop = TRUE])
+      # drop = FALSE: a one-column row would otherwise collapse to an unnamed
+      # scalar and lose its covariate name.
+      covariates <- unlist(covariates[1, , drop = FALSE])
     } else if (nrow(covariates) != N) {
       stop("`covariates` must be a single scenario (one row) or have the ",
            "same number of rows as `individual_thetas` (", N, "); got ",
