@@ -1,6 +1,6 @@
 file	name	signature	exported	hash
 apply-covariate-model.R	.read_final_omega_matrix	.read_final_omega_matrix(model, models_folder)	no	0ad31f4ec60130687e2c945002f2edcf
-apply-covariate-model.R	apply_covariate_model	apply_covariate_model(model_name, covariate_search, individual_thetas, covariates, models_folder="models", eta=FALSE, seed=1234)	yes	4d174de5d1bd319d31bf891be9771dcc
+apply-covariate-model.R	apply_covariate_model	apply_covariate_model(model_name, covariate_search, individual_thetas, covariates, models_folder="models", eta=FALSE, seed=1234)	yes	e5eaa1700ebc730f900c6d1119e6475e
 build-scenario-parameters.R	build_scenario_parameters	build_scenario_parameters(model, covariate_search, thetas, data, percentiles=c(0.05, 0.95), models_folder="models", lookup=NULL, spec=NULL, id_col="ID", wrap_width=30, scenario_table_path=paste0("scenario_table_", model, ".rds"))	yes	545dd07aa633bc451c3a481753ceeeda
 continue-search.R	.scm_backward_rows	.scm_backward_rows(search_state)	no	56e1daa604f1886d2fcd940d34afcb53
 continue-search.R	.scm_continue_backward	.scm_continue_backward(search_state, last_step, backward_p_value, rse_threshold, auto_submit, auto_retry)	no	77316bdc5080d0f0d6edfaaa6b1243b1
@@ -31,12 +31,14 @@ database-management.R	load_search_state	load_search_state(filename)	yes	9f18f0e4
 database-management.R	save_search_state	save_search_state(search_state, filename)	yes	e20903dfad05f5ee280883c5591aac75
 database-management.R	update_model_counter	update_model_counter(search_state)	yes	efd91c391af45276a543a7f7af43427f
 database-management.R	view_comprehensive_table	view_comprehensive_table(search_state, use_separate_columns=TRUE)	yes	17d0c47028230b4f0ddf63b6aba7280a
-file-io.R	.read_listing_lines	.read_listing_lines(path)	no	dd20774c7d05c429723e13242d661e63
+file-io.R	.read_control_stream	.read_control_stream(path)	no	14324d01e08c39bdaceeda442341e033
+file-io.R	.read_listing_lines	.read_listing_lines(path)	no	921a90b0144b8754982cf5d905430a98
+file-io.R	.repair_encoding	.repair_encoding(lines)	no	80da1a3c74965618642ff42f1a23805d
 file-io.R	extract_nonmem_timestamps	extract_nonmem_timestamps(model_name, models_folder="models")	yes	a5e2fb8e03170d7f425868216f22a3c1
 file-io.R	find_model_file	find_model_file(base_path, extensions=c(".ctl", ".mod"))	yes	b895cc9ead090b64d46cf3347e71ce8a
 file-io.R	get_model_covariates_from_files	get_model_covariates_from_files(search_state, model_name)	yes	6993360e63869b122655dcfb0fd43d2f
 file-io.R	get_model_status_from_files	get_model_status_from_files(model_path, require_cov_step=TRUE)	yes	fa87a46fec6360dd04741b5f2c803234
-file-io.R	read_model_file	read_model_file(search_state, run_name, extensions=c(".ctl", ".mod"))	yes	28840b4c23127724e6b1a9ca0651deb3
+file-io.R	read_model_file	read_model_file(search_state, run_name, extensions=c(".ctl", ".mod"))	yes	018d8d6ed369d2cc581a26d7026e6fce
 file-io.R	read_nonmem_ext	read_nonmem_ext(model_path)	yes	9b0724d8ebd505c8fd0a9e768a0a3897
 file-io.R	read_nonmem_lst	read_nonmem_lst(model_path)	yes	0355a766d584e2f90c89e2fa2dd2a1ae
 file-io.R	write_model_file	write_model_file(search_state, lines)	yes	13db69e030675ad3c521a80e3cacb576
@@ -46,9 +48,9 @@ forest-plots.R	.read_theta_cov	.read_theta_cov(model, models_folder, theta_names
 forest-plots.R	.require_quantity_labels	.require_quantity_labels(q_info, quantities, arg="metric_info")	no	47b9e30b79c41c7f5b7b8ab693b7fc0f
 forest-plots.R	.scenario_summary_table	.scenario_summary_table(long, quantities, q_info, scenario_tbl, reference, percentiles=c(0.05, 0.95), lookup=NULL, relative=FALSE, digits=2)	no	0c180b8a664e7acc865756bccb519d1c
 forest-plots.R	.spec_to_lookup	.spec_to_lookup(spec)	no	c2fd238ea1704ac63281c6ab228c8956
-forest-plots.R	.structural_param_names	.structural_param_names(model_name, models_folder="models")	no	15f5fe24052bcc506939e0bc5a93084a
+forest-plots.R	.structural_param_names	.structural_param_names(model_name, models_folder="models")	no	887d70ecc3011ba997a3998055208c67
 forest-plots.R	boxquantile	boxquantile(y)	no	5c5a5afd7edbb58b5783b72c71cda300
-forest-plots.R	create_covariate_table	create_covariate_table(model_name, covariate_search, data, percentiles=c(0.05, 0.95), models_folder="models", id_col="ID", lookup=NULL, spec=NULL, wrap_width=30)	yes	2026e359295d65de52db994c2b67577c
+forest-plots.R	create_covariate_table	create_covariate_table(model_name, covariate_search, data, percentiles=c(0.05, 0.95), models_folder="models", id_col="ID", lookup=NULL, spec=NULL, wrap_width=30)	yes	2346b871e8bc308d584b3cc8ad33849b
 forest-plots.R	plot_exposure_forest	plot_exposure_forest(data, metric=c("AUC", "Cmax", "Cmin"), ss=TRUE, ClinicalRelevanceLow=0.8, ClinicalRelevanceHigh=1.25, outer_range=c(0.5, 2), reference="Typical subject", scenario=NULL, fontsize=9, title=NULL, x_lim=NULL, x_breaks=NULL, typical_subject=TRUE, filename=NULL, output_format=c("emf", "png"), metric_info=NULL, model=NULL, percentiles=c(0.05, 0.95), lookup=NULL, spec=NULL, width, height)	yes	4f2f3a671362befa966df3abde396766
 forest-plots.R	plot_parameter_forests	plot_parameter_forests(param_sets, model, parameters=NULL, output_plot_folder="results/figure", output_rds_folder=NULL, output_format=c("emf", "png"), combined_pdf=TRUE, width=6, height=6, outer_range=NULL, x_breaks=NULL, typical_subject=TRUE, param_info=NULL, scenario=NULL, reference="Typical subject", percentiles=c(0.05, 0.95), lookup=NULL, spec=NULL, models_folder="models", verbose=TRUE, ...)	yes	dfdb75cec7bf59984c0c701b65dc15f6
 forest-plots.R	sample_individual_thetas	sample_individual_thetas(model, models_folder="models", Nsamples=1e+05, seed=1234)	yes	5b24b7f5bf06d65fd4a965449986bee9
@@ -62,13 +64,13 @@ initialization.R	.same_data_file	.same_data_file(model_data_file, user_data_file
 initialization.R	add_covariates_to_search	add_covariates_to_search(search_state, additions, tags_yaml_path="data/spec/tags.yaml", verbose=TRUE)	yes	979b6a3a3ec4c81f7ed04c968ee61991
 initialization.R	build_covariate_reference_table	build_covariate_reference_table(data, id, time, Parameter, Covariate, Category, Formula, yaml_data, INIT=NULL)	yes	dd6129547a0819e1d546ba3010b88b33
 initialization.R	generate_tags_from_covariate_search	generate_tags_from_covariate_search(covariate_search, tags_yaml_path="data/spec/tags.yaml", verbose=TRUE)	yes	0fc049f8c638d29beea103847fe8b087
-initialization.R	initialize_covariate_search	initialize_covariate_search(base_model_path, data_file_path, covariate_search_path, models_folder="models", timecol="TIME", idcol="ID", threads=60, validate_parameters=TRUE, require_base_run=TRUE, require_cov_step=TRUE, lookup_file=NULL, starting_model_number=NULL)	yes	22bc4b894425c9364135ac18fb564eef
+initialization.R	initialize_covariate_search	initialize_covariate_search(base_model_path, data_file_path, covariate_search_path, models_folder="models", timecol="TIME", idcol="ID", threads=60, validate_parameters=TRUE, require_base_run=TRUE, require_cov_step=TRUE, lookup_file=NULL, starting_model_number=NULL)	yes	eadff69d11b9f48ddbf4fef2e5e34473
 initialization.R	initialize_search_config	initialize_search_config(search_state, lookup_file=NULL, require_cov_step=TRUE)	yes	8bd708e7879c3608d55273db760b0432
 initialization.R	load_tags	load_tags(search_state)	yes	e057693866516a84841e05ce636412b8
 initialization.R	update_tags_yaml	update_tags_yaml(search_state=NULL, covariate_search=NULL, tags_yaml_path="data/spec/tags.yaml", verbose=TRUE)	yes	87f0d19608394848b2ba022e21d59594
 initialization.R	validate_base_model_for_search	validate_base_model_for_search(base_model_path, models_folder="models", require_cov_step=TRUE)	yes	ba4845f9292ba28fdb3abca8335e524c
 initialization.R	validate_covariate_search_table	validate_covariate_search_table(covariate_search, data_file)	yes	fb1dc9c900e7dc43d8b56660ca8c100d
-initialization.R	validate_param_transformations	validate_param_transformations(covariate_search, data_file, id_col, model_name, models_folder="models")	yes	b482d92bcf8bf1b103bb4ef2f6ca7c19
+initialization.R	validate_param_transformations	validate_param_transformations(covariate_search, data_file, id_col, model_name, models_folder="models")	yes	970b28543f233eb762b7399a78ded312
 initialization.R	validate_setup	validate_setup(search_state)	yes	c83bca450680e40b67d32275f9086b3d
 model-discovery.R	discover_existing_models	discover_existing_models(search_state)	yes	a6bcb9bcb7e6cf54d6f219fc7c543f3a
 model-modification.R	.rhs_needs_paren_wrap	.rhs_needs_paren_wrap(rhs)	no	fa276e13fc7fa082e2cbf7e2e5ceb968
@@ -86,10 +88,10 @@ model-output-tables.R	.reformat_boot_ci	.reformat_boot_ci(x)	no	e543746d8c87ea37
 model-output-tables.R	.to_report_scale	.to_report_scale(value, random_effect_sd, trans, diag)	no	4475e21c3b150c11fb1a00d522214890
 model-output-tables.R	calculate_condition_number	calculate_condition_number(model_number, models_folder="models", tolerance=1e-10)	no	88434beea6444ac74ad80f5b8012e076
 model-output-tables.R	decode_cov_level	decode_cov_level(cov_name, level, lookup)	no	ce51662c1cc4f12fec395bd13e517ddd
-model-output-tables.R	extract_model_params	extract_model_params(model_name, models_folder="models")	no	a7a678771e7219147986eeece0d8aad2
+model-output-tables.R	extract_model_params	extract_model_params(model_name, models_folder="models")	no	9d45e14fd94298643395a236f8845f76
 model-output-tables.R	extract_params	extract_params(lines, block_tag, remove_prefix=FALSE)	no	6bcc7d8ae23e43530b340adb0bf153f6
 model-output-tables.R	get_param2	get_param2(model_number, count_model, shrinkage="etasd", models_folder="models", spec_pk=NULL, lookup=NULL, include_ci=FALSE)	no	1ce07760f90716117085ba92d8e99473
-model-output-tables.R	model_report	model_report(model_names, shrinkage="etasd", models_folder="models", spec_pk=NULL, lookup=NULL, bootstrap=FALSE, boot_results=NULL)	yes	7084bcb16fdc392f2000e720e69d901f
+model-output-tables.R	model_report	model_report(model_names, shrinkage="etasd", models_folder="models", spec_pk=NULL, lookup=NULL, bootstrap=FALSE, boot_results=NULL)	yes	62cc2867f8940124a880bf83526bd039
 model-output-tables.R	theme_pps_table	theme_pps_table(x)	yes	aad765a60d5ecfc2d330db5cf36dd44a
 monitoring-files.R	read_ext_file	read_ext_file(search_state, model_name)	yes	2059e1830f198c5e6b20580073682712
 plot-bootstrap-distributions.R	.bootstrap_distribution_plot	.bootstrap_distribution_plot(draws, quantile_tbl, final_tbl, bins=30, ncol=NULL, footnote=NULL)	no	fe2fd7a52453f5df12bd51ff0a695d6f
@@ -105,7 +107,7 @@ plot_nonmem_iterations.R	read_ext_iterations	read_ext_iterations(ext_file)	yes	9
 recovery-actions.R	.format_theta_init_value	.format_theta_init_value(value, template)	no	da7201b7d4911a0b8e65d2beaa55f90c
 recovery-actions.R	.perturb_theta_init	.perturb_theta_init(spec)	no	bc8e6901462b7953537dde6a8af278f7
 recovery-actions.R	.theta_init_is_fixed	.theta_init_is_fixed(spec)	no	71d66c79f64e0008942b19a14640fbe7
-recovery-actions.R	adjust_theta_for_covariate	adjust_theta_for_covariate(search_state, model_name, covariate_tag, dry_run=FALSE)	yes	1d3165bd3931183ab1798d104c482c0e
+recovery-actions.R	adjust_theta_for_covariate	adjust_theta_for_covariate(search_state, model_name, covariate_tag, dry_run=FALSE)	yes	2cd983540f6a5ed16329822782303b26
 recovery-actions.R	create_retry_model	create_retry_model(search_state, original_model_name, issue_type="estimation_error")	yes	944b02065fe97f5dbd573741cc637571
 recovery-actions.R	handle_failed_retry	handle_failed_retry(search_state, retry_model_name, exclusion_reason="retry_failed")	yes	2b49eb1205204959fab965569ebb2482
 recovery-actions.R	process_estimation_issues	process_estimation_issues(search_state, models_with_issues)	yes	290a1d9c65aafe0d7ad94d31380765f3
@@ -158,5 +160,5 @@ validation.R	print_parameter_validation	print_parameter_validation(validation_re
 validation.R	update_all_model_statuses	update_all_model_statuses(search_state, show_progress=TRUE)	yes	00006e9de7a30e8aa69aa42cbcb968da
 validation.R	update_model_status_from_files	update_model_status_from_files(search_state, model_name, force=FALSE)	yes	61e6aca75d07458045ecfcb3a65c0c60
 validation.R	validate_base_model_parameters	validate_base_model_parameters(base_model_path, models_folder=NULL, strict=TRUE, check_omega_structure=TRUE, check_comments=TRUE)	yes	e5fedb4d9884227d46afc1504764ba41
-validation.R	validate_covariate_parameter_mapping	validate_covariate_parameter_mapping(covariate_search, model_name, models_folder="models", covariate_tags=NULL, strict=TRUE, verbose=TRUE)	no	31f59b9514597395881a459e982fb9c7
-validation.R	validate_parameter_blocks	validate_parameter_blocks(model_file, check_omega_structure=TRUE, check_comments=TRUE, allow_empty_units=TRUE)	yes	f06a382b9631771053d1009d0c27ed84
+validation.R	validate_covariate_parameter_mapping	validate_covariate_parameter_mapping(covariate_search, model_name, models_folder="models", covariate_tags=NULL, strict=TRUE, verbose=TRUE)	no	246ac2e30817d0c8a0c42a44305f0439
+validation.R	validate_parameter_blocks	validate_parameter_blocks(model_file, check_omega_structure=TRUE, check_comments=TRUE, allow_empty_units=TRUE)	yes	41d19381d0a125e4e126ccf546b2dca1

@@ -248,7 +248,7 @@ R >= 4.2 on Windows and on Linux/Metworx).
 - **Note:** write-back then stores those comment lines as UTF-8 (harmless to NONMEM; worth knowing if
   other tools expect cp1252).
 - **Must keep:** valid UTF-8 untouched; ASCII unchanged; `file_path` attribute; `.ctl` before `.mod`.
-- **Status:** open
+- **Status:** fixed in a08a8cb (2026-10-26)
 
 #### NIO-02 — The two run-success readers disagree on when a run has finished (= STA-02)
 - **Location:** R/file-io.R:449 vs R/validation.R:141-155
@@ -278,7 +278,7 @@ R >= 4.2 on Windows and on Linux/Metworx).
   because `expect_silent` wraps the read, not the classification.
 - **Proposed fix:** read once, repair invalid lines with CP1252 as in NIO-01.
 - **Must keep:** `skipNul = TRUE`; an unopenable path still errors (the `read_error` test).
-- **Status:** open
+- **Status:** fixed in a08a8cb (2026-10-26)
 
 #### NIO-04 — `read_ext_iterations` crashes on a TABLE with a header but no rows yet
 - **Location:** R/plot_nonmem_iterations.R:66-82
@@ -668,7 +668,7 @@ checker confirmed the reviewer's `bbr` mocks match the shape of bbr's real captu
 - **Evidence:** a `.ctl` without a trailing newline is excluded; with `bootstrap = TRUE` a single warning
   ends in "all models failed".
 - **Proposed fix:** `warn = FALSE` in the shared control-stream reader (with NIO-01); log warnings and keep the model.
-- **Status:** open
+- **Status:** fixed in a08a8cb (2026-10-26)
 
 #### REP-07 — The bootstrap interval column is chosen by the substring "ci"
 - **Location:** R/model-output-tables.R:481-482
