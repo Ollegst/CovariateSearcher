@@ -176,7 +176,7 @@ independent Opus pass (`D:\R\tmp\verify-scm\`). Verdicts below are the checker's
 - **Proposed fix:** replace with `current_best_model <- prev_step$base_model` (keeps the direct
   resume case) and update the grep test at tests/testthat/test-model-criteria.R:365-389.
 - **Must keep:** "no significant models ⇒ stop the main loop"; the other three pools and the test.
-- **Status:** open — low priority
+- **Status:** fixed in 2bcf8c9 (2026-10-26)
 
 #### SCM-06 — Standard and selective forward treat excluded covariates differently
 - **Location:** R/scm-algorithm.R:204, :342, :355 vs R/scm-selective-forward.R:298, :500, :861
@@ -196,7 +196,7 @@ independent Opus pass (`D:\R\tmp\verify-scm\`). Verdicts below are the checker's
   `create_scm_results_table` reads, while the forward-failure return (:280) is unfiltered.
 - **Proposed fix:** filter on `"forward_selection"`; retire the dead block (:415-519) as recorded.
 - **Must keep:** the return-list field names.
-- **Status:** open
+- **Status:** fixed in 2bcf8c9 (2026-10-26)
 
 #### SCM-08 — Backward's banner states the unreadable-RSE rule differently from the evaluator
 - **Location:** R/scm-backward.R:40-45 vs R/scm-evaluation.R:117-122
@@ -220,7 +220,7 @@ independent Opus pass (`D:\R\tmp\verify-scm\`). Verdicts below are the checker's
 - **Evidence:** tags keep their original case (initialization.R:166/1189); the lower-case
   fallback only fires on a case mismatch, and names with more than two `_` parts are skipped.
 - **Proposed fix:** drop the fallback, or make the comparison case-insensitive.
-- **Status:** open — low priority
+- **Status:** fixed in 2bcf8c9 (2026-10-26)
 
 ### Area 4 — NONMEM file reading and monitoring
 Reviewed by Fable (`D:\R\tmp\review-NIO\`), re-checked by Opus (`D:\R\tmp\verify-NIO\`);
@@ -358,7 +358,7 @@ Reviewed by Fable (`D:\R\tmp\review-STA\`), re-checked by Opus (`D:\R\tmp\verify
   built-ins this fits the same model (checker); for a user expression on a log-scale parameter it is a
   wrong model (written on the log scale by contract, but multiplied in).
 - **Proposed fix:** one shared `.covariate_is_time_varying(data, cov, id)` that ignores NA, used by all three sites.
-- **Status:** open
+- **Status:** fixed in 2bcf8c9 (2026-10-26)
 
 #### STA-06 — No `TIME == 0` rows: continuous REFERENCE becomes NA silently; categorical crashes with an opaque error
 - **Location:** R/initialization.R:429-467, 511-512, 669-691
@@ -458,13 +458,13 @@ by the checker — the corrected versions are the ones below.
   any removed THETA is still referenced on a comment-stripped line. Not right after Step 5 — additive
   categorical IF lines still hold the THETA there.
 - **Must keep:** the three recorded known limitations of the guard.
-- **Status:** open
+- **Status:** fixed in 2bcf8c9 (2026-10-26)
 
 #### MOD-05 — NA in a categorical column writes `ELSEIF(SEX.EQ.NA)` with an extra THETA (root shared with STA-05)
 - **Location:** R/model-modification.R:416-417, 508-513
 - **Type:** bug · **Severity:** failure (NM-TRAN error) · **Verified:** confirmed (both)
 - **Proposed fix:** drop NA before counting levels; one shared time-varying helper (see STA-05).
-- **Status:** open
+- **Status:** fixed in 2bcf8c9 (2026-10-26)
 
 #### MOD-06 — `$PRED` models get no categorical `IF` block
 - **Location:** R/model-modification.R:548; removal Step 6 (~1332)
@@ -483,7 +483,7 @@ by the checker — the corrected versions are the ones below.
   strict). `build_covariate_reference_table` sets LEVELS from the data, so this needs hand-written LEVELS.
 - **Proposed fix:** stop when no non-reference level is observed; require declared LEVELS == observed,
   or count df from observed levels.
-- **Status:** open
+- **Status:** fixed in 2bcf8c9 (2026-10-26)
 
 #### MOD-08 — A character REFERENCE is written as a quoted string in user expressions (`WT/"75"`)
 - **Location:** R/covariate-formula.R:254; R/initialization.R:512, 1461-1465
@@ -746,7 +746,7 @@ Reviewed by Fable (`D:\R\tmp\review-UTL\`), re-checked by Opus (`D:\R\tmp\verify
   subject-constant covariate is then classed time-varying (placement as STA-05); a categorical stops at
   the level check. STA-05's "ignore NA" fix does not catch "." strings.
 - **Proposed fix:** `na = c("", "NA", ".")` at the dataset call sites only (not for every table `.load_if_path` reads).
-- **Status:** open
+- **Status:** fixed in 2bcf8c9 (2026-10-26)
 
 #### UTL-06 — A non-numeric `rse_threshold` is silently replaced by 50% (missing validation at the entry points)
 - **Location:** R/full_scm_search.R:99, 118; R/continue-search.R:227; R/utilities.R:449-453
@@ -989,7 +989,7 @@ Reviewed by Fable (`D:\R\tmp\review-XAR\`), re-checked by Sonnet (`D:\R\tmp\veri
 - **Location:** vignettes/quick-start.Rmd:127
 - **Type:** documentation · **Severity:** cosmetic · **Verified:** code behaviour DELIBERATE (FUNCTIONS.md:204: placement is recomputed from the data)
 - **Proposed fix:** correct the article sentence.
-- **Status:** open
+- **Status:** fixed in 2bcf8c9 (2026-10-26)
 
 #### XAR-06 — REJECTED: a commented-out `beta_` line is not counted by `create_covariate_table`
 - **Reason:** the reviewer's test model left the real `beta_WT_CL` line active. With the actual line
