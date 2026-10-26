@@ -54,7 +54,7 @@
   }
 
   highest_existing <- search_state$model_counter %||% 0L
-  if (starting_model_number < highest_existing) {
+  if (!is.na(highest_existing) && starting_model_number < highest_existing) {
     stop(
       "starting_model_number (", starting_model_number,
       ") is lower than the highest model already in the models folder (run",

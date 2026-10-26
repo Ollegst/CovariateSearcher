@@ -287,7 +287,7 @@ R >= 4.2 on Windows and on Linux/Metworx).
   iteration plot is most wanted. The guard at :66 only catches a bare TABLE line.
 - **Proposed fix:** `if (nrow(df) == 0L)` skip the section.
 - **Must keep:** column layout and TYPE labels used by `sample_individual_thetas` and `.read_final_omega_matrix`.
-- **Status:** open
+- **Status:** fixed in bb86fa6 (2026-10-26)
 
 #### NIO-05 — Each monitoring poll reads every active model's listing about six times
 - **Location:** R/file-io.R:548,559; R/validation.R:92,138,166; R/scm-execution.R:408
@@ -341,14 +341,14 @@ Reviewed by Fable (`D:\R\tmp\review-STA\`), re-checked by Opus (`D:\R\tmp\verify
   new run7 is dropped before submission and never status-checked — the step silently loses that covariate.
 - **Proposed fix:** after `update_model_counter`, `stop()` if `starting_model_number < model_counter`.
 - **Must keep:** jumping numbering upward; the retry exclusion in the counter.
-- **Status:** open
+- **Status:** fixed in c13da8f (2026-10-26)
 
 #### STA-04 — The `$DATA` name check stops on the documented `.rds` dataset input
 - **Location:** R/initialization.R:16-17, 129-156
 - **Type:** bug · **Severity:** failure · **Verified:** confirmed by reading (deterministic)
 - **Evidence:** compares full basenames, so `x.rds` never equals `$DATA x.csv`.
 - **Proposed fix:** compare names without extensions (this also accepts `data.dat` vs `data.csv` — state it), or skip for non-CSV input.
-- **Status:** open
+- **Status:** fixed in 619ea53 (2026-10-26)
 
 #### STA-05 — Time-varying detection counts NA as a level in `model_add_cov` only (root shared with MOD-05)
 - **Location:** R/initialization.R:860-868, 497-501; R/model-modification.R:416-417
@@ -445,7 +445,7 @@ by the checker — the corrected versions are the ones below.
   error log is written, `log_filename` appears in the user's global environment. The half-created
   `run<N>.ctl/.yaml` stays on disk without a database row (as known limitation 2).
 - **Proposed fix:** plain `log_filename <- file.path(...)`.
-- **Status:** open
+- **Status:** fixed in 12c3cf9 (2026-10-26)
 
 #### MOD-04 — Removal renumbers while a removed THETA is still referenced elsewhere
 - **Location:** R/model-modification.R:1298-1328, 1387-1389
@@ -551,7 +551,7 @@ Reviewed by Fable (`D:\R\tmp\review-REC\`), re-checked by Opus (`D:\R\tmp\verify
   `continue_search` (unguarded `yaml::read_yaml`; unregistered folders are found by name only).
 - **Proposed fix:** only consider folders with a `.yaml` (or `.ctl`/`.mod`) beside them, or catch the
   read and list the folder as skipped.
-- **Status:** open
+- **Status:** fixed in 1997c00 (2026-10-26)
 
 #### REC-03 — Resume never recovers or creates retries
 - **Location:** R/resume-reconstruct.R:21; R/continue-search.R:256-343
@@ -630,7 +630,7 @@ checker confirmed the reviewer's `bbr` mocks match the shape of bbr's real captu
 - **Evidence:** off-diagonal RSE is `100*SE/correlation` without `abs()`, so a negative correlation gives a
   negative RSE that never becomes the maximum the RSE test reads.
 - **Proposed fix:** `abs(100 * stderr / estimate)`.
-- **Status:** open
+- **Status:** fixed in a1e2139 (2026-10-26)
 
 #### REP-01 — The "Conditional number" in the parameter table is not NONMEM's condition number
 - **Location:** R/model-output-tables.R:195-199, 248-312; labels at 584/674/686/827
@@ -685,7 +685,7 @@ checker confirmed the reviewer's `bbr` mocks match the shape of bbr's real captu
   RATIO THETA prints CI "[-19600000000, 19600000000]" and a FIX LOG THETA "[0, Inf]". Contradicts the code
   comment and FUNCTIONS.md ("FIX … leaves it NA").
 - **Proposed fix:** treat `stderr >= 1e10` (or the FIX flag) as no SE.
-- **Status:** open
+- **Status:** fixed in 1b5d7f2 (2026-10-26)
 
 #### REP-05 — Every OMEGA/SIGMA diagonal is shown as lognormal CV%, and the table does not say so
 - **Location:** R/model-output-tables.R:404, 630
@@ -799,7 +799,7 @@ mrgsolve could not compile on this machine, so `simulate_scenario_profiles` was 
   commit 41beeb2 (per-row covariates); the tests always use two covariates or a named vector. A final
   model with a single covariate is common, so the forest-plot pipeline fails for it.
 - **Proposed fix:** `unlist(covariates[1, , drop = FALSE])` (or `as.list` first); add a one-covariate test.
-- **Status:** open — high priority
+- **Status:** fixed in 24eade5 (2026-10-26)
 
 #### SIM-01 — MU-referenced `$PK` without a `TV_` line returns log-scale values as the parameters, silently
 - **Location:** R/apply-covariate-model.R:394-419; R/forest-plots.R:826-838 (`.structural_param_names`)
@@ -835,12 +835,12 @@ mrgsolve could not compile on this machine, so `simulate_scenario_profiles` was 
   the relative table uses SEXN: 2.
 - **Proposed fix:** pass `reference = reference`; correct the roxygen. Side effects: a mistyped
   reference will now stop; the "Typical value" colour moves to the chosen reference.
-- **Status:** open
+- **Status:** fixed in f53e7ef (2026-10-26)
 
 #### SIM-08 — A mistyped scenario file path empties the forest plot without a clear error
 - **Location:** R/forest-plots.R:1040-1048 · **Type:** bug · **Severity:** failure · **Verified:** confirmed (checker)
 - **Proposed fix:** stop when a length-1 `.rds`/`.csv` path does not exist (plain order vectors stay valid).
-- **Status:** open
+- **Status:** fixed in 0c0a509 (2026-10-26)
 
 #### SIM-02 — `END IF` (two words) is not recognised by the `$PK` interpreter
 - **Location:** R/apply-covariate-model.R:333; related R/model-modification.R ~1360

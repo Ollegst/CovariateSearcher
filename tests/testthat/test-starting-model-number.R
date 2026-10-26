@@ -22,6 +22,14 @@ test_that("an override at or above the highest existing model is applied", {
   expect_equal(out$model_counter, 20L)
 })
 
+test_that("an unknown existing counter (NA) does not block the override", {
+  out <- NULL
+  invisible(capture.output(
+    out <- .apply_starting_model_number(list(model_counter = NA_real_), 10, "run1")
+  ))
+  expect_equal(out$model_counter, 10L)
+})
+
 test_that("no override leaves the counter alone; the existing checks still apply", {
   expect_equal(.apply_starting_model_number(list(model_counter = 4L), NULL, "run1")$model_counter, 4L)
   expect_error(.apply_starting_model_number(list(model_counter = 1L), 0, "run1"), ">= 1")
