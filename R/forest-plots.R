@@ -1322,8 +1322,8 @@ plot_exposure_forest <- function(data,
 #'   Defaults to the table [build_scenario_parameters()] attaches to `param_sets`,
 #'   so you normally don't pass it (only needed if you built `param_sets` with an
 #'   older version, or want a different table).
-#' @param reference Character. Reference scenario for the relative table's ratio
-#'   denominator. Default "Typical subject".
+#' @param reference Character. Reference scenario: the ratio denominator of both
+#'   the forest plot and the relative table. Default "Typical subject".
 #' @param percentiles Numeric length-2. Interval for the summary tables. Default
 #'   `c(0.05, 0.95)`.
 #' @param lookup,spec Covariate lookup list and/or yspec object used to decode
@@ -1331,8 +1331,7 @@ plot_exposure_forest <- function(data,
 #' @param models_folder Character. Folder containing `model`. Default "models".
 #' @param verbose Logical; print progress. Default `TRUE`.
 #' @param ... Further arguments passed to [plot_exposure_forest()] (e.g.
-#'   `x_lim`, `reference`, `ClinicalRelevanceLow`, `ClinicalRelevanceHigh`,
-#'   `fontsize`).
+#'   `x_lim`, `ClinicalRelevanceLow`, `ClinicalRelevanceHigh`, `fontsize`).
 #'
 #' @return Invisibly, a named list of the ggplot objects (one per parameter).
 #' @seealso [stack_scenario_parameters()], [plot_exposure_forest()]
@@ -1485,6 +1484,7 @@ plot_parameter_forests <- function(param_sets,
       outer_range     = outer_range,
       x_breaks        = x_breaks,
       typical_subject = typical_subject,
+      reference       = reference,
       ...
     )
     if (verbose) cat(sprintf("  [%d/%d] %s (%d scenario(s))\n",
