@@ -1037,6 +1037,12 @@ plot_exposure_forest <- function(data,
   # subtitle -- OR a plain character vector of scenario names (order only). An
   # exposure metrics table built with group_by()/summarise() loses both, which
   # is why the scenario table is passed here.
+  # A single string that names a table file but does not exist is a mistyped
+  # path, not a one-scenario axis order: as an order it would drop every box.
+  if (is.character(scenario) && length(scenario) == 1L &&
+      grepl("\\.(rds|csv)$", scenario, ignore.case = TRUE) && !file.exists(scenario)) {
+    stop("`scenario` file not found: ", scenario, call. = FALSE)
+  }
   if (is.character(scenario) && length(scenario) == 1L && file.exists(scenario)) {
     scenario <- .load_if_path(scenario, "scenario")
   }
