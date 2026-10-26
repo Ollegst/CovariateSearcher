@@ -142,6 +142,17 @@ list_covariate_formulas <- function() {
   NA_character_
 }
 
+# Split `s` at the characters in `ops` that sit outside any parentheses;
+# returns the trimmed, non-empty pieces.
+.split_depth0 <- function(s, ops) {
+  chars <- strsplit(s, "")[[1]]
+  depth <- cumsum(chars == "(") - cumsum(chars == ")") + (chars == ")")
+  cut <- chars %in% ops & depth == 0L
+  chars[cut] <- "\001"
+  parts <- trimws(strsplit(paste(chars, collapse = ""), "\001", fixed = TRUE)[[1]])
+  parts[nzchar(parts)]
+}
+
 # Exact-name lookup of the "value ; NAME ; units ; RATIO|LOG" comment tag that
 # validate_parameter_blocks requires on every $THETA/$OMEGA/$SIGMA line. Returns
 # "RATIO", "LOG", or NA if `param` has no such line.
@@ -183,14 +194,26 @@ detect_param_transform <- function(modelcode, param) {
   # A typical value multiplying the EXP from outside ("TV_CL * EXP(ETA(1) +
   # IOVCL)", "TV_CL * EXP(ETA(1)*THETA(9))") is the normal/proportional form,
   # whatever else shares the EXP with the ETA (an IOV term, a scaled ETA).
+  # Only a bare top-level factor counts: a covariate factor appended earlier,
+  # "(WT/70)**THETA(3)", is not a typical value. A bare THETA(n) counts only
+  # when the EXP holds no typical-value term of its own, so
+  # "EXP(THETA(1)+ETA(1))*THETA(3)" stays log.
   exp_text <- paste0("EXP(", inner, ")")
   pos <- regexpr(exp_text, rhs, fixed = TRUE)
-  outside <- if (pos > 0) {
-    paste0(substr(rhs, 1, pos - 1), substr(rhs, pos + nchar(exp_text), nchar(rhs)))
-  } else ""
-  if (grepl(paste0("\\bTV_?", param, "\\b"), outside, ignore.case = TRUE) ||
-      grepl("\\bTHETA\\(", outside, ignore.case = TRUE)) {
-    return("normal")
+  if (pos > 0) {
+    rest <- paste0(substr(rhs, 1, pos - 1), "@E",
+                   substr(rhs, pos + nchar(exp_text), nchar(rhs)))
+    factors <- .split_depth0(gsub("**", "^", rest, fixed = TRUE), c("*", "/"))
+    terms   <- .split_depth0(inner, c("+", "-"))
+    tv_re    <- paste0("^TV_?", param, "$")
+    theta_re <- "^THETA\\(\\s*\\d+\\s*\\)$"
+    inner_tv <- any(grepl(tv_re, terms, ignore.case = TRUE) |
+                      grepl(theta_re, terms, ignore.case = TRUE) |
+                      grepl("^MU_\\d+$", terms, ignore.case = TRUE))
+    if (any(grepl(tv_re, factors, ignore.case = TRUE)) ||
+        (any(grepl(theta_re, factors, ignore.case = TRUE)) && !inner_tv)) {
+      return("normal")
+    }
   }
 
   # Several symbols inside the EXP besides the ETA (e.g. TV_CL + IOVCL): log

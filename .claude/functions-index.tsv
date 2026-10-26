@@ -10,9 +10,10 @@ covariate-boxplots.R	create_covariate_boxplots	create_covariate_boxplots(data, s
 covariate-formula.R	.cov_pow_logadd	.cov_pow_logadd(cova, ref, n)	no	21ba25f1821ce329913359dfc9c0e41c
 covariate-formula.R	.cov_pow_nonmem	.cov_pow_nonmem(cova, ref, n)	no	4774175d39cfbc909b3ec1185502812b
 covariate-formula.R	.exp_inner_containing_eta	.exp_inner_containing_eta(rhs)	no	a31e264d338e61449e8398b1af5900ec
+covariate-formula.R	.split_depth0	.split_depth0(s, ops)	no	949ddf7254eff35c223a2f3fe6db7a35
 covariate-formula.R	.theta_tag_for	.theta_tag_for(modelcode, param)	no	d6900264917c4cdce88184a155c0ffff
 covariate-formula.R	.translate_expr_to_nonmem	.translate_expr_to_nonmem(expr, cova, ref, thetas, n)	no	c3c4ab95fab9536d65e98d320f1ae2cb
-covariate-formula.R	detect_param_transform	detect_param_transform(modelcode, param)	no	ffdc1aed56e4fde18134bffa5097f442
+covariate-formula.R	detect_param_transform	detect_param_transform(modelcode, param)	no	b88f8476c914503cc29e6dcf6714c26c
 covariate-formula.R	get_covariate_formula	get_covariate_formula(status, formula)	no	e9b237eee077ce287bcec81d21d2d95b
 covariate-formula.R	list_covariate_formulas	list_covariate_formulas()	no	3b61871b813ba177849c4642ee050db7
 covariate-formula.R	parse_covariate_expression	parse_covariate_expression(formula)	no	4006d99fa4e1cc5781c998de07ede8f6
@@ -74,7 +75,7 @@ initialization.R	initialize_search_config	initialize_search_config(search_state,
 initialization.R	load_tags	load_tags(search_state)	yes	e057693866516a84841e05ce636412b8
 initialization.R	update_tags_yaml	update_tags_yaml(search_state=NULL, covariate_search=NULL, tags_yaml_path="data/spec/tags.yaml", verbose=TRUE)	yes	87f0d19608394848b2ba022e21d59594
 initialization.R	validate_base_model_for_search	validate_base_model_for_search(base_model_path, models_folder="models", require_cov_step=TRUE)	yes	ba4845f9292ba28fdb3abca8335e524c
-initialization.R	validate_covariate_search_table	validate_covariate_search_table(covariate_search, data_file)	yes	8f3b9a6d402f040af9e5133223904d7d
+initialization.R	validate_covariate_search_table	validate_covariate_search_table(covariate_search, data_file)	yes	6af3fae8ae547113fbe2633b7eaa8595
 initialization.R	validate_param_transformations	validate_param_transformations(covariate_search, data_file, id_col, model_name, models_folder="models")	yes	6ed78d1c0e5968ec0c673c403ecdd314
 initialization.R	validate_setup	validate_setup(search_state)	yes	c83bca450680e40b67d32275f9086b3d
 model-discovery.R	discover_existing_models	discover_existing_models(search_state)	yes	a6bcb9bcb7e6cf54d6f219fc7c543f3a

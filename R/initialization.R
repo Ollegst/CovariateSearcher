@@ -613,11 +613,14 @@ validate_covariate_search_table <- function(covariate_search, data_file) {
   # `cov`. Anything else (a typo, "exponential" on a categorical) would be
   # parsed as an expression of bare parameter symbols and written into $PK as a
   # factor with no covariate in it.
+  covariate_search$FORMULA <- as.character(covariate_search$FORMULA)
   for (i in seq_len(nrow(covariate_search))) {
     status_i  <- covariate_search$STATUS[i]
-    formula_i <- trimws(as.character(covariate_search$FORMULA[i]))
+    formula_i <- trimws(covariate_search$FORMULA[i])
     builtin   <- exists(paste(status_i, tolower(formula_i), sep = "."),
                         envir = .covariate_formula_registry, inherits = FALSE)
+    # Built-in names are stored lower case, the form the registry uses.
+    if (builtin) covariate_search$FORMULA[i] <- tolower(formula_i)
     expr_def  <- if (builtin) NULL else parse_covariate_expression(formula_i)
     if (!builtin && (is.null(expr_def) || !"cov" %in% all.vars(expr_def$expr))) {
       stop(
@@ -644,12 +647,23 @@ validate_covariate_search_table <- function(covariate_search, data_file) {
          paste(unique(ref_chr[bad_ref]), collapse = ", "))
   }
   covariate_search$REFERENCE <- ref_num
+  # A categorical effect is written as IF(<COV>.EQ.<REFERENCE>): an empty
+  # REFERENCE would give IF(SEX.EQ.NA) and a THETA for every level.
+  no_ref <- covariate_search$STATUS == "cat" & is.na(ref_num)
+  if (any(no_ref)) {
+    stop("Categorical covariate(s) with no REFERENCE in row(s) ",
+         paste(which(no_ref), collapse = ", "), ": ",
+         paste(unique(covariate_search$COVARIATE[no_ref]), collapse = ", "))
+  }
 
-  # cov_to_test carries the beta_ prefix the tags and the model file use.
+  # cov_to_test carries the beta_ prefix the tags and the model file use; a
+  # prefix in another case ("Beta_") is corrected, not doubled.
   if ("cov_to_test" %in% names(covariate_search)) {
     tag <- trimws(as.character(covariate_search$cov_to_test))
+    tag <- sub("^beta_", "beta_", tag, ignore.case = TRUE)
     no_prefix <- !is.na(tag) & tag != "" & !startsWith(tag, "beta_")
-    covariate_search$cov_to_test[no_prefix] <- paste0("beta_", tag[no_prefix])
+    tag[no_prefix] <- paste0("beta_", tag[no_prefix])
+    covariate_search$cov_to_test <- tag
   }
 
   # Single-token COVARIATE / PARAMETER: the beta_<COV>_<PARAM>[_<theta|level>] tag

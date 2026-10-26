@@ -73,4 +73,20 @@ test_that("cov_to_test gets the beta_ prefix the tags use", {
   # XAR-07: an unprefixed value matched nothing after the tags were prefixed.
   out <- validate(base_table(cov_to_test = c("WT_CL", "beta_SEX_V")))
   expect_equal(out$cov_to_test, c("beta_WT_CL", "beta_SEX_V"))
+  # Phase 3 audit: "Beta_WT_CL" became "beta_Beta_WT_CL".
+  out <- validate(base_table(cov_to_test = c("Beta_WT_CL", "BETA_SEX_V")))
+  expect_equal(out$cov_to_test, c("beta_WT_CL", "beta_SEX_V"))
+})
+
+test_that("built-in FORMULA names are stored lower case", {
+  out <- validate(base_table(FORMULA = c("POWER", "Linear")))
+  expect_equal(out$FORMULA, c("power", "linear"))
+  out <- validate(base_table(FORMULA = c("EMAX*cov/(EC50+cov)", "linear")))
+  expect_equal(out$FORMULA[1], "EMAX*cov/(EC50+cov)")
+})
+
+test_that("a categorical row with no REFERENCE stops", {
+  # Phase 3 audit: it became NA and was written as IF(SEX.EQ.NA).
+  expect_error(validate(base_table(REFERENCE = c("75", NA))), "no REFERENCE.*SEX")
+  expect_error(validate(base_table(REFERENCE = c("75", ""))), "no REFERENCE.*SEX")
 })

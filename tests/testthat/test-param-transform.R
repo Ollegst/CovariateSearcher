@@ -27,6 +27,22 @@ test_that("log-scale shapes with extra terms in the EXP stay log", {
   expect_equal(detect_param_transform(mu_iov_ratio, "CL"), "normal")
 })
 
+test_that("a covariate factor outside the EXP is not a typical value", {
+  # Phase 3 audit: any THETA( outside the EXP counted, so a log parameter that
+  # already had a time-varying factor appended became "normal".
+  mu_wt <- c(pk("TV_CL = THETA(1)", "MU_1 = LOG(TV_CL)",
+                "CL = EXP(MU_1 + ETA(1)) * (WT/70)**THETA(3)"),
+             "$THETA", "2.5 ; CL ; L/h ; LOG")
+  expect_equal(detect_param_transform(mu_wt, "CL"), "log")
+  expect_equal(detect_param_transform(
+    pk("CL = EXP(TVCL + ETA(1)) * (WT/70)**THETA(2)"), "CL"), "log")
+  expect_equal(detect_param_transform(pk("CL = EXP(THETA(1) + ETA(1)) * THETA(3)"), "CL"), "log")
+  # A bare THETA multiplying an EXP with no typical value inside is normal.
+  expect_equal(detect_param_transform(pk("CL = THETA(1) * EXP(ETA(1) + IOVCL)"), "CL"), "normal")
+  expect_equal(detect_param_transform(
+    pk("TV_CL = THETA(1)", "CL = TV_CL * EXP(ETA(1) + IOVCL) * (WT/70)**THETA(3)"), "CL"), "normal")
+})
+
 test_that("an unrecognised mix inside the EXP is unknown rather than guessed", {
   expect_equal(detect_param_transform(
     pk("CL = EXP(LOGCL + ETA(1) + IOVCL)"), "CL"), "unknown")
