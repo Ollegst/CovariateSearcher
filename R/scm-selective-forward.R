@@ -245,6 +245,7 @@ run_scm_selective_forward <- function(search_state,
   if (is.null(forward_p_value)) {
     forward_p_value <- search_state$search_config$forward_p_value %||% 0.05
   }
+  .check_rse_threshold(rse_threshold)
   rse_threshold <- .resolve_rse_threshold(search_state, rse_threshold)
 
   cat("🚀 STARTING SCM SELECTIVE FORWARD SELECTION WORKFLOW\n")

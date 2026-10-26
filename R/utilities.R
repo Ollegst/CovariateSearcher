@@ -474,6 +474,38 @@ extract_covariate_name_from_tag <- function(tag) {
 }
 
 
+# Entry-point check for a user-supplied rse_threshold: NULL (use the configured
+# value) or one positive number. .resolve_rse_threshold() quietly falls back to
+# the default for anything else, so a typo such as "30" must stop here (UTL-06).
+.check_rse_threshold <- function(rse_threshold) {
+  if (is.null(rse_threshold)) return(invisible(NULL))
+  if (!is.numeric(rse_threshold) || length(rse_threshold) != 1L ||
+      is.na(rse_threshold) || rse_threshold <= 0) {
+    stop("rse_threshold must be NULL or a single positive number (a percentage), not ",
+         deparse(rse_threshold), call. = FALSE)
+  }
+  invisible(rse_threshold)
+}
+
+
+# The search's require_cov_step setting, read one way everywhere (XAR-05): only
+# an explicit FALSE relaxes it. NA, a string or a vector reads as TRUE, the
+# evaluator's fail-closed rule, so no reader can switch the criterion off by
+# accident. Entry points reject such values outright via
+# .check_require_cov_step().
+.require_cov_step <- function(search_state) {
+  !identical(search_state$search_config$require_cov_step %||% TRUE, FALSE)
+}
+
+.check_require_cov_step <- function(require_cov_step) {
+  if (!isTRUE(require_cov_step) && !identical(require_cov_step, FALSE)) {
+    stop("require_cov_step must be TRUE or FALSE, not ", deparse(require_cov_step),
+         call. = FALSE)
+  }
+  invisible(require_cov_step)
+}
+
+
 #' Convert P-Value to Chi-Square ΔOFV Threshold
 #'
 #' @title Calculate ΔOFV threshold from p-value for likelihood ratio test

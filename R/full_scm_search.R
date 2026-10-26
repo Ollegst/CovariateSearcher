@@ -98,12 +98,11 @@ run_automated_scm_testing <- function(search_state,
   if (!is.null(backward_p_value) && (backward_p_value <= 0 || backward_p_value >= 1)) {
     stop("backward_p_value must be between 0 and 1")
   }
-  if (!is.null(rse_threshold) && (rse_threshold <= 0 || rse_threshold > 100)) {
+  .check_rse_threshold(rse_threshold)
+  if (!is.null(rse_threshold) && rse_threshold > 100) {
     stop("rse_threshold must be between 0 and 100")
   }
-  if (!is.logical(require_cov_step)) {
-    stop("require_cov_step must be TRUE or FALSE")
-  }
+  if (!missing(require_cov_step)) .check_require_cov_step(require_cov_step)
 
   # Set defaults with proper null coalescing
   if (is.null(forward_p_value)) {
@@ -122,7 +121,7 @@ run_automated_scm_testing <- function(search_state,
   # so a FALSE chosen at initialize_covariate_search() is not reset by this
   # argument's default.
   if (missing(require_cov_step)) {
-    require_cov_step <- search_state$search_config$require_cov_step %||% TRUE
+    require_cov_step <- .require_cov_step(search_state)
   }
   search_state$search_config$require_cov_step <- require_cov_step
 
@@ -194,11 +193,40 @@ run_automated_scm_testing <- function(search_state,
       current_model <- initial_backward_results$final_model
       cat(sprintf("✅ Initial backward complete. Final model: %s\n", current_model))
     } else {
-      cat("⚠️ Continuing with current model due to error\n")
+      # Stop like a forward failure (SCM-04). The state here predates the phase,
+      # so its model_counter misses the removal models already written; going
+      # on into forward would reuse their run numbers and overwrite them.
+      # continue_search() re-registers them from disk.
+      if (save_checkpoints) {
+        error_file <- .scm_checkpoint_name(
+          suppressWarnings(max(search_state$search_database$step_number, na.rm = TRUE)),
+          "backward", "error")
+        save_search_state(search_state, error_file)
+        checkpoint_files <- c(checkpoint_files, error_file)
+      }
+      total_time <- as.numeric(difftime(Sys.time(), scm_start_time, units = "mins"))
+      return(list(
+        search_state = search_state,
+        status = "failed",
+        scm_type = scm_type,
+        starting_phase = starting_phase,
+        full_scm = full_scm,
+        error_phase = "initial_backward",
+        error_message = initial_backward_error,
+        final_model = current_model,
+        base_model = base_model_id,
+        forward_results = NULL,
+        initial_backward_results = initial_backward_results,
+        final_backward_results = NULL,
+        final_covariates = character(0),
+        excluded_covariates = get_excluded_covariates(search_state),
+        total_models_created = nrow(search_state$search_database) - 1,
+        total_time_minutes = total_time,
+        checkpoint_files = checkpoint_files,
+        final_summary = sprintf("SCM failed during initial backward elimination after %.1f minutes",
+                                total_time)
+      ))
     }
-
-    # For now, no change to current_model since backward not implemented
-    # current_model would be updated to the result of backward elimination
 
     if (save_checkpoints) {
       checkpoint_file <- .scm_checkpoint_name(

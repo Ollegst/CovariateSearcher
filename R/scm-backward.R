@@ -28,6 +28,7 @@ run_backward_elimination <- function(search_state,
   if (is.null(backward_p_value)) {
     backward_p_value <- search_state$search_config$backward_p_value %||% 0.001
   }
+  .check_rse_threshold(rse_threshold)
   rse_threshold <- .resolve_rse_threshold(search_state, rse_threshold)
 
   # Calculate display threshold (df=1 for typical case)
@@ -38,7 +39,7 @@ run_backward_elimination <- function(search_state,
   cat(sprintf("Starting model: %s\n", starting_model))
   cat(sprintf("ΔOFV threshold: %.2f (for keeping covariate)\n", ofv_threshold_display))
   cat(sprintf("RSE threshold: %g%% (unreadable RSE %s)\n", rse_threshold,
-              if (isTRUE(search_state$search_config$require_cov_step %||% TRUE)) {
+              if (.require_cov_step(search_state)) {
                 "rejected - a covariance step is required"
               } else {
                 "accepted - no covariance step required"
@@ -347,6 +348,7 @@ evaluate_removal_impacts <- function(search_state, base_model, removal_models,
                                      completed_models, backward_p_value,
                                      rse_threshold = NULL) {
 
+  .check_rse_threshold(rse_threshold)
   rse_threshold <- .resolve_rse_threshold(search_state, rse_threshold)
 
   # Get base model OFV

@@ -236,7 +236,7 @@ update_model_status_from_files <- function(search_state, model_name, force = FAL
         }
 
         # Check covariance step: .cov file is only written when covariance succeeds
-        require_cov_step <- search_state$search_config$require_cov_step %||% TRUE
+        require_cov_step <- .require_cov_step(search_state)
         if (require_cov_step && results$status == "completed") {
           # The .cov sits with the rest of the run's output, so anchor it to the
           # directory the .lst was actually found in rather than assuming one.

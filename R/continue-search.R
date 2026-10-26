@@ -198,6 +198,7 @@ continue_search <- function(search_state = NULL,
                             rse_threshold = NULL,
                             auto_submit = TRUE,
                             auto_retry = TRUE) {
+  .check_rse_threshold(rse_threshold)
 
   # ---- 1. Obtain the search state ----------------------------------------
   if (is.null(search_state)) {

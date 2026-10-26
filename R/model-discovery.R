@@ -103,7 +103,7 @@ discover_existing_models <- function(search_state) {
 
     status <- get_model_status_from_files(
       model_path,
-      require_cov_step = search_state$search_config$require_cov_step %||% TRUE
+      require_cov_step = .require_cov_step(search_state)
     )
 
     ofv <- if (status == "completed") {

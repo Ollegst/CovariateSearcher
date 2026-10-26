@@ -117,6 +117,7 @@ initialize_covariate_search <- function(base_model_path,
                                         require_cov_step = TRUE,
                                         lookup_file = NULL,
                                         starting_model_number = NULL) {
+  .check_require_cov_step(require_cov_step)
 
   cat("Initializing CovariateSearcher (Core Module)...\n")
 
@@ -1115,6 +1116,7 @@ validate_param_transformations <- function(covariate_search, data_file, id_col,
 validate_base_model_for_search <- function(base_model_path,
                                            models_folder = "models",
                                            require_cov_step = TRUE) {
+  .check_require_cov_step(require_cov_step)
 
   model_path <- file.path(models_folder, base_model_path)
 
@@ -1207,6 +1209,7 @@ validate_base_model_for_search <- function(base_model_path,
 #' @export
 initialize_search_config <- function(search_state, lookup_file = NULL,
                                      require_cov_step = TRUE) {
+  .check_require_cov_step(require_cov_step)
   resolved_lookup_file <- if (!is.null(lookup_file)) {
     lookup_file
   } else {

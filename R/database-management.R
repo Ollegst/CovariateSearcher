@@ -303,13 +303,22 @@ update_model_counter <- function(search_state) {
     # Filter out retry models (ending with 3 digits)
     main_models <- all_model_names[!grepl("^run\\d+001$", all_model_names)]
 
-    if (length(main_models) > 0) {
-      model_numbers <- as.numeric(gsub("run", "", main_models))
-      sorted_numbers <- sort(model_numbers, na.last = TRUE)
-      search_state$model_counter <- utils::tail(sorted_numbers, 1)
+    model_numbers <- suppressWarnings(as.numeric(sub("^run", "", main_models)))
+    if (any(!is.na(model_numbers))) {
+      search_state$model_counter <- max(model_numbers, na.rm = TRUE)
 
       cat("Model counter set to:", search_state$model_counter,
           "(last in sequence, excluding retry models)\n")
+
+      # A run<N> on disk but not in the database (skipped by auto-heal, or left
+      # by an interrupted phase) must not be reused: copy_model_from() would
+      # overwrite it (REC-07).
+      on_disk <- .highest_model_on_disk(search_state$models_folder)
+      if (!is.na(on_disk) && on_disk > search_state$model_counter) {
+        search_state$model_counter <- on_disk
+        cat("Model counter raised to:", on_disk,
+            "(highest run<N> in the models folder, not in the database)\n")
+      }
 
       if (length(all_model_names) > length(main_models)) {
         retry_models <- setdiff(all_model_names, main_models)
@@ -328,6 +337,18 @@ update_model_counter <- function(search_state) {
   }
 
   return(search_state)
+}
+
+
+# Highest non-retry model number in the models folder, from run<N> folders and
+# run<N>.ctl/.mod/.yaml files; NA when there is none or no folder. Retries
+# (run<N>001) are excluded, as in update_model_counter().
+.highest_model_on_disk <- function(models_folder) {
+  if (is.null(models_folder) || !dir.exists(models_folder)) return(NA_real_)
+  nm <- sub("\\.(ctl|mod|yaml)$", "", list.files(models_folder))
+  nm <- nm[grepl("^run[0-9]+$", nm) & !grepl("^run[0-9]+001$", nm)]
+  if (length(nm) == 0) return(NA_real_)
+  max(as.numeric(sub("^run", "", nm)))
 }
 
 
