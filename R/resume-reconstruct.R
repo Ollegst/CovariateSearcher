@@ -13,6 +13,9 @@
 #' @description Model directories (\code{run<N>}) present in the models folder
 #'   but absent from \code{search_state$search_database}. Retry models
 #'   (\code{run<N>001}) are excluded, as in \code{update_model_counter()}.
+#'   A directory with no \code{run<N>.yaml} beside it is not a bbr model (a
+#'   leftover output folder, a model whose files were deleted): it cannot be
+#'   registered, so it is reported and left out rather than read.
 #' @keywords internal
 .scm_unregistered_models <- function(search_state, models_folder = NULL) {
   mf <- models_folder %||% search_state$models_folder
@@ -20,6 +23,12 @@
   d <- list.dirs(mf, recursive = FALSE, full.names = FALSE)
   d <- d[grepl("^run[0-9]+$", d) & !grepl("^run[0-9]+001$", d)]
   d <- d[!(d %in% search_state$search_database$model_name)]
+  no_yaml <- !file.exists(file.path(mf, paste0(d, ".yaml")))
+  if (any(no_yaml)) {
+    cat(sprintf("  Ignoring model folder(s) with no .yaml beside them: %s\n",
+                paste(d[no_yaml], collapse = ", ")))
+    d <- d[!no_yaml]
+  }
   d[order(suppressWarnings(as.integer(sub("^run", "", d))))]
 }
 
