@@ -179,6 +179,39 @@ detect_param_transform <- function(modelcode, param) {
   wo <- gsub("\\bETA\\(\\s*\\d+\\s*\\)", "", inner)
   wo <- gsub("[-+*/^() \t]", "", wo)
   if (!nzchar(wo)) return("normal")
+
+  # A typical value multiplying the EXP from outside ("TV_CL * EXP(ETA(1) +
+  # IOVCL)", "TV_CL * EXP(ETA(1)*THETA(9))") is the normal/proportional form,
+  # whatever else shares the EXP with the ETA (an IOV term, a scaled ETA).
+  exp_text <- paste0("EXP(", inner, ")")
+  pos <- regexpr(exp_text, rhs, fixed = TRUE)
+  outside <- if (pos > 0) {
+    paste0(substr(rhs, 1, pos - 1), substr(rhs, pos + nchar(exp_text), nchar(rhs)))
+  } else ""
+  if (grepl(paste0("\\bTV_?", param, "\\b"), outside, ignore.case = TRUE) ||
+      grepl("\\bTHETA\\(", outside, ignore.case = TRUE)) {
+    return("normal")
+  }
+
+  # Several symbols inside the EXP besides the ETA (e.g. TV_CL + IOVCL): log
+  # scale when one of them is the typical value (TV_<param>, a THETA, or a MU_
+  # symbol, which goes through the MU-referencing rule below); otherwise the
+  # form is not one the writer knows, and "unknown" makes validation stop
+  # rather than guess. A single symbol keeps the rule below unchanged.
+  inner_syms <- regmatches(inner, gregexpr("[A-Za-z_][A-Za-z0-9_]*", inner))[[1]]
+  inner_syms <- inner_syms[!toupper(inner_syms) %in%
+                             c("ETA", "THETA", "EXP", "LOG", "LOG10", "SQRT", "ABS")]
+  if (length(unique(inner_syms)) >= 2) {
+    mu_sym <- grep("^MU_\\d+$", inner_syms, ignore.case = TRUE, value = TRUE)
+    if (length(mu_sym) > 0) {
+      wo <- mu_sym[1]
+    } else if (any(grepl(paste0("^TV_?", param, "$"), inner_syms, ignore.case = TRUE)) ||
+               grepl("\\bTHETA\\(", inner, ignore.case = TRUE)) {
+      return("log")
+    } else {
+      return("unknown")
+    }
+  }
   # MU-referencing of a genuine TV_<param> line specifically: `wo`'s own line
   # must be "wo = LOG(TV_<param>)", not LOG() of anything else (e.g. a raw
   # THETA(n), which would mean there is no separate typical-value line at all).
