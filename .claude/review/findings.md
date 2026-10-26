@@ -326,7 +326,7 @@ Reviewed by Fable (`D:\R\tmp\review-STA\`), re-checked by Opus (`D:\R\tmp\verify
   require a built-in for that STATUS or an expression using `cov` — the rule `build_covariate_reference_table`
   already applies. Lower-case STATUS first (it is compared case-sensitively there).
 - **Must keep:** user expressions in `cov`/`ref`/theta names; `cat.linear`/`cat.power`; case-insensitive matching.
-- **Status:** fixed in f16b579 (2026-10-26)
+- **Status:** fixed in f16b579 (2026-10-26); audit follow-up in f670f39 (2026-10-26)
 
 #### STA-02 — Duplicate of NIO-02 (run-success readers disagree on "finished"); confirmed again independently.
 
@@ -435,7 +435,7 @@ by the checker — the corrected versions are the ones below.
   `EXP(TV_CL + ETA(1) + IOVCL)`, MU+IOV and `EXP(TV_CL + ETA(1)*THETA(9))`.) All shapes in FUNCTIONS.md
   keep their classification. Separate edge case, not fixed by either: `EXP(LOG(TV_CL)+ETA)` reads "log".
 - **Must keep:** "normal" without ETA; "unknown" when ETA is not inside EXP; the MU tag override.
-- **Status:** fixed in 6c8365b (2026-10-26)
+- **Status:** fixed in 6c8365b (2026-10-26); audit follow-up in f670f39 (2026-10-26)
 
 #### MOD-03 — `add_covariate_to_model` loses its error log and reports "'con' is not a connection"
 - **Location:** R/model-modification.R:155-161 (also 80, 228); consumer R/scm-execution.R:147
@@ -483,7 +483,7 @@ by the checker — the corrected versions are the ones below.
   strict). `build_covariate_reference_table` sets LEVELS from the data, so this needs hand-written LEVELS.
 - **Proposed fix:** stop when no non-reference level is observed; require declared LEVELS == observed,
   or count df from observed levels.
-- **Status:** fixed in 2bcf8c9 (2026-10-26)
+- **Status:** fixed in 2bcf8c9 (2026-10-26); audit follow-up in f670f39 (2026-10-26)
 
 #### MOD-08 — A character REFERENCE is written as a quoted string in user expressions (`WT/"75"`)
 - **Location:** R/covariate-formula.R:254; R/initialization.R:512, 1461-1465
@@ -968,7 +968,7 @@ Reviewed by Fable (`D:\R\tmp\review-XAR\`), re-checked by Sonnet (`D:\R\tmp\veri
 - **Evidence:** tags.yaml gets the prefix, the table does not; `add_covariate_to_model` stops at the first
   add ("No matching covariate definition found"). The docs say this column is generated, not written.
 - **Proposed fix:** add the prefix in `validate_covariate_search_table`.
-- **Status:** fixed in f16b579 (2026-10-26)
+- **Status:** fixed in f16b579 (2026-10-26); audit follow-up in f670f39 (2026-10-26)
 
 #### XAR-08 — Categorical THETAs named from a lookup decode (`beta_SEX_CL_MALE`) are labelled as multi-theta effects
 - **Location:** R/model-modification.R:524-531 vs R/model-output-tables.R:706-722, ~750
