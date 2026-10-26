@@ -164,7 +164,7 @@ independent Opus pass (`D:\R\tmp\verify-scm\`). Verdicts below are the checker's
 - **Proposed fix:** treat an initial-backward error like a forward error — return
   `status = "failed"`, `error_phase = "initial_backward"` — instead of continuing.
 - **Must keep:** the `<<-` error capture; the forward-failure return shape read by `create_scm_results_table`.
-- **Status:** open
+- **Status:** fixed in 043bec2 (2026-10-26)
 
 #### SCM-05 — Fallback-base block in selective forward is unreachable from normal use
 - **Location:** R/scm-selective-forward.R:354-396 vs :402-409
@@ -204,7 +204,7 @@ independent Opus pass (`D:\R\tmp\verify-scm\`). Verdicts below are the checker's
 - **Evidence:** `require_cov_step = NA` passes validation (`is.logical(NA)`); the banner
   (`isTRUE`) says "accepted", the evaluator (`identical(…, FALSE)`, recorded as deliberate) rejects.
 - **Proposed fix:** banner uses `!identical(require_cov_step, FALSE)`.
-- **Status:** open
+- **Status:** fixed in 043bec2 (2026-10-26)
 
 #### SCM-09 — A covariate fixed through `INIT` still gets a removal model every backward step
 - **Location:** R/scm-backward.R:504-532 vs R/utilities.R:552-586
@@ -608,7 +608,7 @@ Reviewed by Fable (`D:\R\tmp\review-REC\`), re-checked by Opus (`D:\R\tmp\verify
 - **Evidence:** the counter comes from the database only; a skipped `run<N>` folder numbered higher
   can be overwritten by `copy_model_from(.overwrite = TRUE)`. Same family as STA-03 / SCM-04.
 - **Proposed fix:** raise the counter to the highest non-retry `run<N>` on disk, or warn.
-- **Status:** open
+- **Status:** fixed in 043bec2 (2026-10-26)
 
 ### Area 6 — Reporting and diagnostics
 Reviewed by Fable (`D:\R\tmp\review-REP\`), re-checked by Opus (`D:\R\tmp\verify-REP\`). The
@@ -756,7 +756,7 @@ Reviewed by Fable (`D:\R\tmp\review-UTL\`), re-checked by Opus (`D:\R\tmp\verify
   is then written into `search_config`. `continue_search`, `run_scm_selective_forward`,
   `run_backward_elimination`, `evaluate_removal_impacts` and `select_best_model` don't check at all.
 - **Proposed fix:** an `is.numeric(rse_threshold) && length 1` check at each exported entry point; leave the helper as designed.
-- **Status:** open
+- **Status:** fixed in 043bec2 (2026-10-26)
 
 #### UTL-02 — `.is_removal_model` resolves a retry's direction one level deep and from the retry's own phase
 - **Location:** R/utilities.R:313-327
@@ -960,7 +960,7 @@ Reviewed by Fable (`D:\R\tmp\review-XAR\`), re-checked by Sonnet (`D:\R\tmp\veri
   "completed", `update_model_status_from_files` errors (caught per model, so completed models stay
   pending), the evaluator rejects. `continue_search` and `reconstruct_step_from_disk` call it unwrapped and abort.
 - **Proposed fix:** one accessor plus a `stop()` at initialization unless TRUE/FALSE; keep the evaluator's fail-closed rule.
-- **Status:** open (group G5)
+- **Status:** fixed in 043bec2 (2026-10-26)
 
 #### XAR-07 — A `cov_to_test` written without the `beta_` prefix passes validation, then nothing can find it
 - **Location:** R/initialization.R:585-593, 1189-1194; R/model-modification.R:55-58, 333-337

@@ -5,7 +5,7 @@ build-scenario-parameters.R	build_scenario_parameters	build_scenario_parameters(
 continue-search.R	.scm_backward_rows	.scm_backward_rows(search_state)	no	56e1daa604f1886d2fcd940d34afcb53
 continue-search.R	.scm_continue_backward	.scm_continue_backward(search_state, last_step, backward_p_value, rse_threshold, auto_submit, auto_retry)	no	77316bdc5080d0f0d6edfaaa6b1243b1
 continue-search.R	.scm_phase_is_backward	.scm_phase_is_backward(phase)	no	a8de68bb31eb84fbfed2b7257daa2270
-continue-search.R	continue_search	continue_search(search_state=NULL, checkpoint=NULL, scm_type=NULL, full_scm=TRUE, forward_p_value=NULL, backward_p_value=NULL, rse_threshold=NULL, auto_submit=TRUE, auto_retry=TRUE)	yes	138bdac5930b00aea93095095b5010b6
+continue-search.R	continue_search	continue_search(search_state=NULL, checkpoint=NULL, scm_type=NULL, full_scm=TRUE, forward_p_value=NULL, backward_p_value=NULL, rse_threshold=NULL, auto_submit=TRUE, auto_retry=TRUE)	yes	f36fed20d40df6f6bb857390836057ad
 covariate-boxplots.R	create_covariate_boxplots	create_covariate_boxplots(data, spec, con=NULL, cat=NULL, type=c("AUC", "Cmax", "Cmin"), drug, param_info, stratification=NULL, total_panel=TRUE, output_folder="results/figure/simulations", width=NULL, height=NULL, base_size=10, verbose=TRUE, combined_pdf=TRUE, prefix=NULL, output_format=c("emf", "png"), show_median=TRUE, show_n=TRUE, percent_change=FALSE, label_size=NULL, n_size=NULL, footnote=NULL, source_note=TRUE, footnote_size=NULL, ss=TRUE)	yes	e343484d4261850b7a71f314c5cfd8b3
 covariate-formula.R	.cov_pow_logadd	.cov_pow_logadd(cova, ref, n)	no	21ba25f1821ce329913359dfc9c0e41c
 covariate-formula.R	.cov_pow_nonmem	.cov_pow_nonmem(cova, ref, n)	no	4774175d39cfbc909b3ec1185502812b
@@ -19,6 +19,7 @@ covariate-formula.R	list_covariate_formulas	list_covariate_formulas()	no	3b61871
 covariate-formula.R	parse_covariate_expression	parse_covariate_expression(formula)	no	4006d99fa4e1cc5781c998de07ede8f6
 covariate-formula.R	parse_named_init	parse_named_init(init_str, theta_names)	no	9fd8b81b19c5531b727b237602b5506b
 covariate-formula.R	register_covariate_formula	register_covariate_formula(status, formula, nonmem=NULL, init="0.1", categorical=FALSE, nonmem_log=NULL)	no	8388ff37571c6fad8f21bed3dd7e5693
+database-management.R	.highest_model_on_disk	.highest_model_on_disk(models_folder)	no	d3187b408d68ea1248f0d41b21e19873
 database-management.R	create_comprehensive_table	create_comprehensive_table(search_state, use_separate_columns=TRUE)	yes	1a21c988977688abf7263e8c864d5f3a
 database-management.R	generate_changes_display	generate_changes_display(action, covariate_tested)	no	acf13049108ddff0329556589b45ec78
 database-management.R	generate_step_description	generate_step_description(step_number, action, covariate_tested)	no	867ff1285419aedb0786e31147c10a3e
@@ -30,7 +31,7 @@ database-management.R	initialize_search_database_core	initialize_search_database
 database-management.R	load_existing_search	load_existing_search(base_model_path, data_file_path, covariate_search_path, models_folder="models", timecol="TIME", idcol="ID", threads=60, require_cov_step=TRUE, lookup_file=NULL)	yes	8aac52d467f560ec808f0c3704d00cd2
 database-management.R	load_search_state	load_search_state(filename)	yes	9f18f0e4cdd8389522b943281433c385
 database-management.R	save_search_state	save_search_state(search_state, filename)	yes	e20903dfad05f5ee280883c5591aac75
-database-management.R	update_model_counter	update_model_counter(search_state)	yes	efd91c391af45276a543a7f7af43427f
+database-management.R	update_model_counter	update_model_counter(search_state)	yes	8114439dc560fd1282ee74fc025d248b
 database-management.R	view_comprehensive_table	view_comprehensive_table(search_state, use_separate_columns=TRUE)	yes	17d0c47028230b4f0ddf63b6aba7280a
 file-io.R	.count_theta_values	.count_theta_values(value_text)	no	4bd3f6f14aae0a159237e54ac3deae86
 file-io.R	.is_record_line	.is_record_line(lines)	no	da559af11e47c9c8522eed989b2c2922
@@ -63,22 +64,22 @@ forest-plots.R	sample_individual_thetas	sample_individual_thetas(model, models_f
 forest-plots.R	simulate_scenario_profiles	simulate_scenario_profiles(param_sets, mod, dose, start=0, end=24, delta=0.1, verbose=TRUE)	yes	31630a0d753dcd881de914a0e7da8ec4
 forest-plots.R	stack_scenario_parameters	stack_scenario_parameters(param_sets, model=NULL, models_folder="models")	yes	da26f92b4e4ccc205a18c4c785794280
 forest-plots.R	theme_forest	theme_forest(base_size=12, base_family="")	yes	68e701b8b48021705855ea61571806f8
-full_scm_search.R	run_automated_scm_testing	run_automated_scm_testing(search_state, base_model_id=NULL, scm_type=c("standard", "selective"), starting_phase=c("forward", "backward"), full_scm=TRUE, forward_p_value=NULL, backward_p_value=NULL, rse_threshold=NULL, require_cov_step=TRUE, auto_submit=TRUE, auto_retry=TRUE, save_checkpoints=TRUE, final_testing=TRUE)	yes	3ef3fa2a96e30d2acebde69dd65dacb3
+full_scm_search.R	run_automated_scm_testing	run_automated_scm_testing(search_state, base_model_id=NULL, scm_type=c("standard", "selective"), starting_phase=c("forward", "backward"), full_scm=TRUE, forward_p_value=NULL, backward_p_value=NULL, rse_threshold=NULL, require_cov_step=TRUE, auto_submit=TRUE, auto_retry=TRUE, save_checkpoints=TRUE, final_testing=TRUE)	yes	2f92d9ecbce106fe64c2f1010e577e1d
 imports.R	%||%	%||%(x, y)	yes	b959f458d556f37040e6dbaec85cd11b
 initialization.R	.apply_starting_model_number	.apply_starting_model_number(search_state, starting_model_number, base_model_path)	no	ae475e51b80eca5f2b97fbf5d51710ee
 initialization.R	.same_data_file	.same_data_file(model_data_file, user_data_file)	no	8eff347576b3c7e22ae3161ecb5347de
 initialization.R	add_covariates_to_search	add_covariates_to_search(search_state, additions, tags_yaml_path="data/spec/tags.yaml", verbose=TRUE)	yes	979b6a3a3ec4c81f7ed04c968ee61991
 initialization.R	build_covariate_reference_table	build_covariate_reference_table(data, id, time, Parameter, Covariate, Category, Formula, yaml_data, INIT=NULL)	yes	51a6bb82ebc297e59e6e1b2b1cf15eed
 initialization.R	generate_tags_from_covariate_search	generate_tags_from_covariate_search(covariate_search, tags_yaml_path="data/spec/tags.yaml", verbose=TRUE)	yes	0fc049f8c638d29beea103847fe8b087
-initialization.R	initialize_covariate_search	initialize_covariate_search(base_model_path, data_file_path, covariate_search_path, models_folder="models", timecol="TIME", idcol="ID", threads=60, validate_parameters=TRUE, require_base_run=TRUE, require_cov_step=TRUE, lookup_file=NULL, starting_model_number=NULL)	yes	03b89373ddce00cd483fb898846f725b
-initialization.R	initialize_search_config	initialize_search_config(search_state, lookup_file=NULL, require_cov_step=TRUE)	yes	8bd708e7879c3608d55273db760b0432
+initialization.R	initialize_covariate_search	initialize_covariate_search(base_model_path, data_file_path, covariate_search_path, models_folder="models", timecol="TIME", idcol="ID", threads=60, validate_parameters=TRUE, require_base_run=TRUE, require_cov_step=TRUE, lookup_file=NULL, starting_model_number=NULL)	yes	4714cd6c415a82fa95a5a7f27e8283c4
+initialization.R	initialize_search_config	initialize_search_config(search_state, lookup_file=NULL, require_cov_step=TRUE)	yes	326a6ab461c805eba56520efd74aeb4f
 initialization.R	load_tags	load_tags(search_state)	yes	e057693866516a84841e05ce636412b8
 initialization.R	update_tags_yaml	update_tags_yaml(search_state=NULL, covariate_search=NULL, tags_yaml_path="data/spec/tags.yaml", verbose=TRUE)	yes	87f0d19608394848b2ba022e21d59594
-initialization.R	validate_base_model_for_search	validate_base_model_for_search(base_model_path, models_folder="models", require_cov_step=TRUE)	yes	ba4845f9292ba28fdb3abca8335e524c
+initialization.R	validate_base_model_for_search	validate_base_model_for_search(base_model_path, models_folder="models", require_cov_step=TRUE)	yes	bcd084f9e9f722f708b566f2fdb33fd5
 initialization.R	validate_covariate_search_table	validate_covariate_search_table(covariate_search, data_file)	yes	6af3fae8ae547113fbe2633b7eaa8595
 initialization.R	validate_param_transformations	validate_param_transformations(covariate_search, data_file, id_col, model_name, models_folder="models")	yes	6ed78d1c0e5968ec0c673c403ecdd314
 initialization.R	validate_setup	validate_setup(search_state)	yes	c83bca450680e40b67d32275f9086b3d
-model-discovery.R	discover_existing_models	discover_existing_models(search_state)	yes	a6bcb9bcb7e6cf54d6f219fc7c543f3a
+model-discovery.R	discover_existing_models	discover_existing_models(search_state)	yes	579d7fd6be7e1c8506b7053af21eb374
 model-modification.R	.rhs_needs_paren_wrap	.rhs_needs_paren_wrap(rhs)	no	fa276e13fc7fa082e2cbf7e2e5ceb968
 model-modification.R	.wrap_rhs_in_parens	.wrap_rhs_in_parens(line)	no	83a72733c44856ce999f5f5492f42202
 model-modification.R	add_covariate_to_model	add_covariate_to_model(search_state, base_model_id, covariate_tag, step_number=NULL, lookup_file=NULL, phase="forward_selection")	yes	8efda3a34236b1333a5ef99b8f63a34f
@@ -127,14 +128,14 @@ scm-algorithm.R	get_excluded_covariates	get_excluded_covariates(search_state, re
 scm-algorithm.R	get_remaining_covariates	get_remaining_covariates(search_state, base_model_id, include_excluded=TRUE)	yes	71c7ef2f40ee7c3e56c09e048140b358
 scm-algorithm.R	run_stepwise_covariate_modeling	run_stepwise_covariate_modeling(search_state, base_model_id=NULL, auto_submit=TRUE, forward_p_value=NULL, rse_threshold=NULL)	yes	cbbc09a648f6cb1ad5256eb9b05ae9f1
 scm-algorithm.R	view_exclusion_status	view_exclusion_status(search_state)	yes	11d37cd2b3c399a8f0e8976a3006b8f1
-scm-backward.R	evaluate_removal_impacts	evaluate_removal_impacts(search_state, base_model, removal_models, completed_models, backward_p_value, rse_threshold=NULL)	yes	760d5a56c3edcb72e7a3b0043e9c21cb
+scm-backward.R	evaluate_removal_impacts	evaluate_removal_impacts(search_state, base_model, removal_models, completed_models, backward_p_value, rse_threshold=NULL)	yes	e3c124e0b1cc22a7fa961b67f1fb9b6b
 scm-backward.R	get_covariate_tag_from_name	get_covariate_tag_from_name(search_state, covariate_name)	yes	2b92a72989e256f8a44da89b5d16f435
 scm-backward.R	get_fixed_covariates	get_fixed_covariates(search_state, covariate_names)	yes	ce43a138ea99a66bc3044fb84c690061
-scm-backward.R	run_backward_elimination	run_backward_elimination(search_state, starting_model, backward_p_value=NULL, auto_submit=TRUE, auto_retry=TRUE, rse_threshold=NULL)	yes	87e7e9c07bb0e739595bbc542bb353ec
+scm-backward.R	run_backward_elimination	run_backward_elimination(search_state, starting_model, backward_p_value=NULL, auto_submit=TRUE, auto_retry=TRUE, rse_threshold=NULL)	yes	29ca037db934049dbbf56deaa32fe894
 scm-evaluation.R	.best_acceptable_model	.best_acceptable_model(search_state, model_names, p_value=NULL, rse_threshold=NULL)	no	70c87dcfaec927f5a17c1bb2610f8c1c
-scm-evaluation.R	.evaluate_model_criteria	.evaluate_model_criteria(search_state, model_names, phase=c("forward", "backward"), p_value=NULL, rse_threshold=NULL)	no	27879a44de217ba5cf03fb37940540ac
+scm-evaluation.R	.evaluate_model_criteria	.evaluate_model_criteria(search_state, model_names, phase=c("forward", "backward"), p_value=NULL, rse_threshold=NULL)	no	76bece942431760be6b4d8ffdfdf14ea
 scm-evaluation.R	.report_rse_rejections	.report_rse_rejections(rejected, context)	no	f5ef25ab8e0b1fea4401e76dbeb11e21
-scm-evaluation.R	select_best_model	select_best_model(search_state, model_names, p_value=NULL, rse_threshold=NULL)	yes	12e8f2990b98207ad4ab7a4857c05d34
+scm-evaluation.R	select_best_model	select_best_model(search_state, model_names, p_value=NULL, rse_threshold=NULL)	yes	809ea97eb2d44dc04ca83d66774fe730
 scm-execution.R	run_univariate_step	run_univariate_step(search_state, base_model_id, covariates_to_test=NULL, step_name, include_excluded=TRUE)	yes	5bc8c0ed8637b509fecda8f1067680e1
 scm-execution.R	submit_and_wait_for_step	submit_and_wait_for_step(search_state, model_names, step_name, max_wait_minutes=NULL, threads=NULL, auto_submit=TRUE, auto_retry=TRUE)	yes	5a2c650a2fe0afcd0f9bd6a0a0d91fe4
 scm-results.R	create_scm_results_table	create_scm_results_table(search_state)	yes	035332140dd7162bfe2e1f69456f270b
@@ -142,8 +143,10 @@ scm-results.R	print_scm_results_table	print_scm_results_table(search_state, show
 scm-selective-forward.R	get_covariates_from_models	get_covariates_from_models(search_state, model_names)	yes	34450aa25d0201cf1b47e5ff2bace653
 scm-selective-forward.R	get_significant_models_from_step	get_significant_models_from_step(search_state, step_number, p_value, rse_threshold=NULL, phase=c("forward", "backward"))	yes	a5716ba472589be4a53b4d94e29db52b
 scm-selective-forward.R	get_step_models	get_step_models(search_state, step_number, p_value=NULL, rse_threshold=NULL, phase=c("forward", "backward"))	yes	52e295c81d87fa217ac54534a31f9bc8
-scm-selective-forward.R	run_scm_selective_forward	run_scm_selective_forward(search_state, base_model_id=NULL, forward_p_value=NULL, rse_threshold=NULL, auto_submit=TRUE, auto_retry=TRUE, resume=FALSE)	yes	93c533060fd633bf25e905505db02508
+scm-selective-forward.R	run_scm_selective_forward	run_scm_selective_forward(search_state, base_model_id=NULL, forward_p_value=NULL, rse_threshold=NULL, auto_submit=TRUE, auto_retry=TRUE, resume=FALSE)	yes	36b7f0b7d7d64a884361eece7bb0923f
 utilities.R	.add_footnote	.add_footnote(p, footnote, size=NULL)	no	6e4ee26c7dc243403b5df562467ce419
+utilities.R	.check_require_cov_step	.check_require_cov_step(require_cov_step)	no	c4329e1076ede27a50503e382c2332a4
+utilities.R	.check_rse_threshold	.check_rse_threshold(rse_threshold)	no	bf490ed5e02b3960fbd1e781be53037d
 utilities.R	.covariate_is_time_varying	.covariate_is_time_varying(data, cov, id)	no	58c20d0feb0c64cdb74db4c22a8f8a83
 utilities.R	.ensure_provenance_column	.ensure_provenance_column(search_state)	no	c8b683a1892302aecd63a48f3657caf3
 utilities.R	.find_model_component	.find_model_component(model, models_folder, exts)	no	b252e047e14179c053c10d19a60fdbc1
@@ -152,6 +155,7 @@ utilities.R	.is_removal_model	.is_removal_model(search_state, model_name)	no	e49
 utilities.R	.is_search_model	.is_search_model(search_state, model_name)	no	3b0f33b071ae7cf3c3b62f9f0cfaafbb
 utilities.R	.is_terminal_status	.is_terminal_status(status)	no	e9909f5e99d1aceaafddb58c286712d2
 utilities.R	.load_if_path	.load_if_path(x, what="input", na=c("", "NA"))	no	2d2e1cccd886f29d1c71bee6539815a8
+utilities.R	.require_cov_step	.require_cov_step(search_state)	no	551ba8d1e43de6c59e3298556f63930c
 utilities.R	.resolve_quantity_info	.resolve_quantity_info(x)	no	08a3505a79b4a3d05939678814a7626c
 utilities.R	.resolve_rse_threshold	.resolve_rse_threshold(search_state, rse_threshold=NULL)	no	69364eb4db5e4adc82619b0d811a9377
 utilities.R	.scm_checkpoint_name	.scm_checkpoint_name(step, phase, event)	no	39fb7488e18db29d49e519d6bde96bf4
@@ -165,7 +169,7 @@ validation.R	force_update_models	force_update_models(search_state, model_names)	
 validation.R	get_model_max_rse	get_model_max_rse(search_state, model_name)	yes	797b0f9eb4c48e60f907e5f4b20eec9d
 validation.R	print_parameter_validation	print_parameter_validation(validation_result, verbose=TRUE)	yes	1ce1be70c8f66ca8c3dec8ae0794ecf8
 validation.R	update_all_model_statuses	update_all_model_statuses(search_state, show_progress=TRUE)	yes	52d1c3e49306ed26873dd8653edae052
-validation.R	update_model_status_from_files	update_model_status_from_files(search_state, model_name, force=FALSE)	yes	61e6aca75d07458045ecfcb3a65c0c60
+validation.R	update_model_status_from_files	update_model_status_from_files(search_state, model_name, force=FALSE)	yes	dca8cacd81efa7ed28a903a2e00f5b1e
 validation.R	validate_base_model_parameters	validate_base_model_parameters(base_model_path, models_folder=NULL, strict=TRUE, check_omega_structure=TRUE, check_comments=TRUE)	yes	e5fedb4d9884227d46afc1504764ba41
 validation.R	validate_covariate_parameter_mapping	validate_covariate_parameter_mapping(covariate_search, model_name, models_folder="models", covariate_tags=NULL, strict=TRUE, verbose=TRUE)	no	246ac2e30817d0c8a0c42a44305f0439
 validation.R	validate_parameter_blocks	validate_parameter_blocks(model_file, check_omega_structure=TRUE, check_comments=TRUE, allow_empty_units=TRUE)	yes	ba199cb34a81f186e8a371e330dc9b63
