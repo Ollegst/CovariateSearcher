@@ -10,5 +10,8 @@
 Model directories (\code{run<N>}) present in the models folder
 but absent from \code{search_state$search_database}. Retry models
 (\code{run<N>001}) are excluded, as in \code{update_model_counter()}.
+A directory with no \code{run<N>.yaml} beside it is not a bbr model (a
+leftover output folder, a model whose files were deleted): it cannot be
+registered, so it is reported and left out rather than read.
 }
 \keyword{internal}
