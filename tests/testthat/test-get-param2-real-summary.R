@@ -9,10 +9,22 @@ real_summary <- function() {
 }
 
 # A control stream annotated to match the summary's parameters, and the
-# example's .cor so the condition number can be read.
-write_basic_model <- function() {
+# example's .cor so the condition number can be read. The summary's OMEGA(2,1)
+# is FIX (a diagonal $OMEGA); `block = TRUE` writes it as an estimated BLOCK(2)
+# for tests that un-fix it.
+write_basic_model <- function(block = FALSE) {
   models_dir <- tempfile("models")
   dir.create(file.path(models_dir, "b1"), recursive = TRUE)
+  omega <- if (block) {
+    c("$OMEGA BLOCK(2)",
+      "0.05 ; IIV_CL ; - ; RATIO",
+      "0.01 ; COR_CL_V2 ; - ; RATIO",
+      "0.2  ; IIV_V2 ; - ; RATIO")
+  } else {
+    c("$OMEGA",
+      "0.05 ; IIV_CL ; - ; RATIO",
+      "0.2  ; IIV_V2 ; - ; RATIO")
+  }
   writeLines(c(
     "$PROBLEM basic", "$THETA",
     "(0, 2)  ; KA ; 1/h ; RATIO",
@@ -20,10 +32,7 @@ write_basic_model <- function() {
     "(0, 10) ; V2 ; L ; RATIO",
     "(0.02)  ; RUVp ; - ; RATIO",
     "(1)     ; RUVa ; - ; RATIO",
-    "$OMEGA BLOCK(2)",
-    "0.05 ; IIV_CL ; - ; RATIO",
-    "0.01 ; COR_CL_V2 ; - ; RATIO",
-    "0.2  ; IIV_V2 ; - ; RATIO",
+    omega,
     "$SIGMA", "1 FIX ; SIG ; - ; RATIO",
     "$EST METHOD=1"
   ), file.path(models_dir, "b1.ctl"))
@@ -33,15 +42,16 @@ write_basic_model <- function() {
 }
 
 # get_param2() on the basic model, with `edit` applied to bbr's parameter table.
-param2_with <- function(edit = identity) {
+param2_with <- function(edit = identity, include_ci = FALSE, block = FALSE) {
   s <- real_summary()
-  models_dir <- write_basic_model()
+  models_dir <- write_basic_model(block)
   testthat::with_mocked_bindings(
     read_model = function(path) list(path = path),
     model_summary = function(mod) s,
     param_estimates = function(x, ...) edit(bbr:::param_estimates.bbi_nonmem_summary(s)),
     .package = "bbr",
-    as.data.frame(get_param2("b1", 1, models_folder = models_dir))
+    as.data.frame(get_param2("b1", 1, models_folder = models_dir,
+                             include_ci = include_ci))
   )
 }
 
@@ -57,10 +67,25 @@ test_that("a negative off-diagonal estimate still gives a positive RSE", {
     p$random_effect_sdse[i] <- 0.1
     p$fixed[i] <- FALSE
     p
-  })
+  }, block = TRUE)
 
   # Off-diagonal RSE is relative to the correlation: 100 * 0.1 / 0.24.
   rse <- out$RSE[out$parameter_names == "COR_CL_V2"]
   expect_length(rse, 1)
   expect_equal(rse, 100 * 0.1 / 0.24, tolerance = 0.01)
+})
+
+
+test_that("a FIX parameter has no asymptotic interval", {
+  # REP-14: bbr reports a FIX element's SE as 1e10, which produced intervals
+  # like [-19600000000, 19600000000].
+  out <- param2_with(function(p) {
+    i <- p$parameter_names %in% c("THETA4", "THETA5")
+    p$fixed[i] <- TRUE
+    p$stderr[i] <- 1e10
+    p
+  }, include_ci = TRUE)
+
+  expect_true(all(is.na(out$CI[out$nonmem_name %in% c("THETA4", "THETA5")])))
+  expect_false(is.na(out$CI[out$nonmem_name %in% "THETA1"]))
 })

@@ -633,10 +633,15 @@ get_param2 <- function(model_number,
       # Built on the estimation scale, then mapped over like the estimate, so the
       # interval carries the units the Estimate column shows. A parameter with no
       # standard error (held at a FIX value, or an unsuccessful covariance step)
-      # leaves it NA.
-      CI = .format_ci(
-        .to_report_scale(estimate - 1.96 * stderr, random_effect_sd, trans, diag),
-        .to_report_scale(estimate + 1.96 * stderr, random_effect_sd, trans, diag)
+      # leaves it NA. bbr reports a FIX element's SE as 1e10 rather than NA, so
+      # the fixed flag is tested as well.
+      CI = ifelse(
+        fixed %in% TRUE,
+        NA_character_,
+        .format_ci(
+          .to_report_scale(estimate - 1.96 * stderr, random_effect_sd, trans, diag),
+          .to_report_scale(estimate + 1.96 * stderr, random_effect_sd, trans, diag)
+        )
       )
     ) %>%
     dplyr::rename(nonmem_name = "parameter_names2")
