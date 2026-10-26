@@ -105,6 +105,21 @@ find_model_file <- function(base_path, extensions = c(".ctl", ".mod")) {
 }
 
 
+# The annotation of a $THETA / $OMEGA / $SIGMA line, "value ; name ; unit ;
+# transform": fields split on ";" with empty ones kept, so a blank unit
+# ("; CL ; ; RATIO") does not shift the transform into its place, and anything
+# after the 4th field (a trailing comment) ignored. The transform is
+# upper-cased: NM-TRAN and validation accept "log" as well as "LOG".
+#' @keywords internal
+#' @noRd
+.parse_annotation <- function(line) {
+  fields <- trimws(strsplit(paste0(line, ";"), ";", fixed = TRUE)[[1]])
+  fields <- c(fields, "", "", "", "")
+  list(value = fields[1], name = fields[2], unit = fields[3],
+       trans = toupper(fields[4]))
+}
+
+
 # Every THETA in the control stream, one row per value, in NONMEM's numbering:
 # all $THETA records in file order ($THETAP / $THETAPV excluded), a value on
 # the record line itself included, blank and comment-only lines skipped, and
@@ -132,15 +147,14 @@ find_model_file <- function(base_path, extensions = c(".ctl", ".mod")) {
       text <- lines[i]
       if (i == s) text <- sub("^\\s*\\$THETA\\s*", "", text, ignore.case = TRUE)
       if (!grepl("\\S", text) || grepl("^\\s*;", text)) next
-      fields <- strsplit(text, ";", fixed = TRUE)[[1]]
-      n <- .count_theta_values(fields[1])
+      ann <- .parse_annotation(text)
+      n <- .count_theta_values(ann$value)
       if (n == 0L) next
-      ann <- trimws(c(fields[-1], "", "", "")[1:3])
       rows[[length(rows) + 1L]] <- data.frame(
         line = i, on_record_line = i == s, n_on_line = n,
-        name = c(ann[1], rep("", n - 1L)),
-        unit = c(ann[2], rep("", n - 1L)),
-        trans = c(toupper(ann[3]), rep("", n - 1L)),
+        name = c(ann$name, rep("", n - 1L)),
+        unit = c(ann$unit, rep("", n - 1L)),
+        trans = c(ann$trans, rep("", n - 1L)),
         stringsAsFactors = FALSE
       )
     }

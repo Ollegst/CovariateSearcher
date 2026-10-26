@@ -122,7 +122,7 @@ extract_params <- function(lines, block_tag, remove_prefix = FALSE) {
       ) %>%
       dplyr::mutate(
         param = stringr::str_trim(param),
-        trans = stringr::str_trim(transformation)
+        trans = toupper(stringr::str_trim(transformation))
       ) %>%
       dplyr::mutate(
         param = if (remove_prefix) stringr::str_remove(param, "^[0-9]+_") else param

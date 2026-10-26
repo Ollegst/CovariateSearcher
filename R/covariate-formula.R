@@ -150,12 +150,20 @@ list_covariate_formulas <- function() {
   # the parameter's tag.
   for (line in modelcode[grepl(";", modelcode, fixed = TRUE) &
                            !grepl("^\\s*;", modelcode)]) {
-    fields <- trimws(strsplit(sub("^[^;]*", "", line), ";")[[1]])
-    fields <- fields[nzchar(fields)]
-    if (length(fields) >= 2 && identical(fields[1], param)) {
+    ann <- .parse_annotation(line)
+    if (!identical(ann$name, param)) next
+    # The transform is the 4th field, as validation and the parameter table read
+    # it: taking the last field let a trailing comment ("; RATIO ; typical
+    # clearance") hide the tag. A line without the unit field
+    # ("; CL ; RATIO") still has its tag as the last field, so that is the
+    # fallback.
+    tag <- ann$trans
+    if (!(tag %in% c("RATIO", "LOG"))) {
+      fields <- trimws(strsplit(line, ";", fixed = TRUE)[[1]][-1])
+      fields <- fields[nzchar(fields)]
       tag <- toupper(fields[length(fields)])
-      if (tag %in% c("RATIO", "LOG")) return(tag)
     }
+    if (length(tag) == 1 && tag %in% c("RATIO", "LOG")) return(tag)
   }
   NA_character_
 }

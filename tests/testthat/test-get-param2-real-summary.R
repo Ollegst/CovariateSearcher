@@ -12,7 +12,7 @@ real_summary <- function() {
 # example's .cor so the condition number can be read. The summary's OMEGA(2,1)
 # is FIX (a diagonal $OMEGA); `block = TRUE` writes it as an estimated BLOCK(2)
 # for tests that un-fix it.
-write_basic_model <- function(block = FALSE) {
+write_basic_model <- function(block = FALSE, ruva_trans = "RATIO") {
   models_dir <- tempfile("models")
   dir.create(file.path(models_dir, "b1"), recursive = TRUE)
   omega <- if (block) {
@@ -31,7 +31,7 @@ write_basic_model <- function(block = FALSE) {
     "(0, 3)  ; CL ; L/h ; RATIO",
     "(0, 10) ; V2 ; L ; RATIO",
     "(0.02)  ; RUVp ; - ; RATIO",
-    "(1)     ; RUVa ; - ; RATIO",
+    paste("(1)     ; RUVa ; - ;", ruva_trans),
     omega,
     "$SIGMA", "1 FIX ; SIG ; - ; RATIO",
     "$EST METHOD=1"
@@ -42,9 +42,10 @@ write_basic_model <- function(block = FALSE) {
 }
 
 # get_param2() on the basic model, with `edit` applied to bbr's parameter table.
-param2_with <- function(edit = identity, include_ci = FALSE, block = FALSE) {
+param2_with <- function(edit = identity, include_ci = FALSE, block = FALSE,
+                        ruva_trans = "RATIO") {
   s <- real_summary()
-  models_dir <- write_basic_model(block)
+  models_dir <- write_basic_model(block, ruva_trans)
   testthat::with_mocked_bindings(
     read_model = function(path) list(path = path),
     model_summary = function(mod) s,
@@ -112,4 +113,16 @@ test_that("model_report keeps a model that only raised a warning", {
 
   expect_s3_class(ft, "flextable")
   expect_match(paste(printed, collapse = "\n"), "harmless warning")
+})
+
+
+test_that("a lowercase log tag gives the same row as LOG", {
+  # REP-04: "log" passed validation but matched no scale branch, so the row was
+  # blank and the RSE fed to the search's RSE test came from the wrong formula.
+  upper <- param2_with(ruva_trans = "LOG")
+  lower <- param2_with(ruva_trans = "log")
+
+  row <- function(out) out[out$parameter_names == "RUVa", c("Parameter", "RSE")]
+  expect_false(is.na(row(lower)$Parameter))
+  expect_equal(row(lower), row(upper))
 })
