@@ -421,7 +421,7 @@ by the checker — the corrected versions are the ones below.
 - **Proposed fix (corrected):** `newtheta <- max(per-value $THETA entry count, max THETA(n) on comment-stripped lines) + 1`.
   Counting `$THETA` lines alone is wrong: `$THETA (0,2.5) (0,30) (0,1)` is 3 THETAs on one line (see MOD-12).
 - **Must keep:** insertion at the end of the last `$THETA` record; `$THETAP` skipped; "no THETA ⇒ 1".
-- **Status:** open
+- **Status:** fixed in fd22066 (2026-10-26)
 
 #### MOD-02 — Parameters with IOV (or an ETA scaled by a THETA) are treated as log scale, so the covariate is added to a natural-scale TV
 - **Location:** R/covariate-formula.R:171-196; R/initialization.R:905-948
@@ -520,7 +520,7 @@ by the checker — the corrected versions are the ones below.
   one-value-per-line rule). The writer currently gets this layout right.
 - **Proposed fix:** count values per line (each `(…)` group or bare number, ignoring `FIX`), with one
   helper shared with MOD-01.
-- **Status:** open — needs a test with a multi-value model
+- **Status:** fixed in fd22066 (2026-10-26)
 
 ### Area 5 — Recovery and resume
 Reviewed by Fable (`D:\R\tmp\review-REC\`), re-checked by Opus (`D:\R\tmp\verify-REC\`).
@@ -941,7 +941,7 @@ Reviewed by Fable (`D:\R\tmp\review-XAR\`), re-checked by Sonnet (`D:\R\tmp\veri
   simulations. The writer is unaffected (it numbers from referenced THETAs). Related to MOD-12 (remover).
 - **Proposed fix:** count each `(…)` group as one value, check the record line too, reject more than one
   value per line — but keep allowing a single value on the record line (`$THETA 0.5 ; CL`).
-- **Status:** open (group G1)
+- **Status:** fixed in fd22066 (2026-10-26)
 
 #### XAR-02 — The results table scores a manual removal as a forward step
 - **Location:** R/scm-results.R:103, 201 vs R/continue-search.R:11-13, R/reporting.R:50
