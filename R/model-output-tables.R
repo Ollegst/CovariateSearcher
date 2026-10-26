@@ -628,7 +628,7 @@ get_param2 <- function(model_number,
         is.na(random_effect_sd) & trans == "RATIO" ~ abs((stderr/estimate) * 100),
         is.na(random_effect_sd) & trans == "LOG" ~ abs(stderr) * 100,
         diag == TRUE ~  100 * stderr * exp(estimate) / (2 * (exp(estimate) - 1)),
-        diag == FALSE ~ 100 * stderr / estimate
+        diag == FALSE ~ abs(100 * stderr / estimate)
       ),
       # Built on the estimation scale, then mapped over like the estimate, so the
       # interval carries the units the Estimate column shows. A parameter with no
