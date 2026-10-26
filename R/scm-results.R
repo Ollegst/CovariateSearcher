@@ -221,8 +221,14 @@ create_scm_results_table <- function(search_state) {
       covariates_str <- get_model_covariates_display(row$model_name)
 
       # Determine status display
-      status_display <- ifelse(row$status == "completed", "Successful",
-                               ifelse(row$status == "failed", "Failed", "In Progress"))
+      # Every status the search writes; "estimation_error" and "error" only in
+      # databases saved by older versions.
+      status_display <- switch(as.character(row$status %||% NA),
+        completed = "Successful",
+        failed = , estimation_error = , error = "Failed",
+        created = , not_run = "Not run",
+        in_progress = , incomplete = "In Progress",
+        if (is.na(row$status)) "Unknown" else as.character(row$status))
 
       # Get description
       description <- row$step_description %||%

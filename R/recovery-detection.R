@@ -40,11 +40,12 @@ detect_estimation_problems <- function(search_state, model_names, check_interval
         detection_time = Sys.time()
       )
 
-      # Update database with issue information
+      # Record the issue only. The .ext may belong to a run still in progress,
+      # so a terminal status here could end a run that would have finished;
+      # status comes from the run's files (REC-06).
       db_idx <- which(search_state$search_database$model_name == model_name)
       if (length(db_idx) > 0) {
         search_state$search_database$estimation_issue[db_idx] <- ext_data$issue_type
-        search_state$search_database$status[db_idx] <- "estimation_error"
       }
 
     } else {
@@ -85,11 +86,20 @@ generate_recovery_report <- function(search_state) {
     dplyr::mutate(percentage = n * 100.0 / nrow(search_state$search_database))
 
   # Retry statistics
-  retry_models <- search_state$search_database[grepl("^run\\d+001$", search_state$search_database$model_name), ]
+  # Retries are the rows the retry path marks action "retry" (the run<N>001
+  # name is the fallback for older databases). A failed retry has status
+  # "failed"; "retry_failed" is only ever an estimation_issue (REC-06).
+  db <- search_state$search_database
+  is_retry <- if ("action" %in% names(db)) {
+    !is.na(db$action) & db$action == "retry"
+  } else {
+    grepl("^run\\d+001$", db$model_name)
+  }
+  retry_models <- db[is_retry, , drop = FALSE]
   retry_stats <- list(
     total_retries = nrow(retry_models),
     successful_retries = sum(retry_models$status == "completed", na.rm = TRUE),
-    failed_retries = sum(retry_models$status %in% c("failed", "retry_failed"), na.rm = TRUE)
+    failed_retries = sum(retry_models$status == "failed", na.rm = TRUE)
   )
 
   # Excluded covariates
