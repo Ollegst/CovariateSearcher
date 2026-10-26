@@ -600,6 +600,58 @@ validate_covariate_search_table <- function(covariate_search, data_file) {
     stop("covariate_search contains missing or empty values in PARAMETER")
   }
 
+  # ---- Normalise once, so every later reader sees one form -------------------
+  # STATUS in lower case: the formula registry and df lower-case it, while the
+  # categorical checks below and the remover compare "cat" exactly.
+  covariate_search$STATUS <- tolower(trimws(as.character(covariate_search$STATUS)))
+  bad_status <- setdiff(unique(covariate_search$STATUS), c("con", "cat"))
+  if (length(bad_status) > 0) {
+    stop("STATUS must be 'con' or 'cat'. Found: ", paste(bad_status, collapse = ", "))
+  }
+
+  # FORMULA: a built-in form for the row's STATUS, or an expression that uses
+  # `cov`. Anything else (a typo, "exponential" on a categorical) would be
+  # parsed as an expression of bare parameter symbols and written into $PK as a
+  # factor with no covariate in it.
+  for (i in seq_len(nrow(covariate_search))) {
+    status_i  <- covariate_search$STATUS[i]
+    formula_i <- trimws(as.character(covariate_search$FORMULA[i]))
+    builtin   <- exists(paste(status_i, tolower(formula_i), sep = "."),
+                        envir = .covariate_formula_registry, inherits = FALSE)
+    expr_def  <- if (builtin) NULL else parse_covariate_expression(formula_i)
+    if (!builtin && (is.null(expr_def) || !"cov" %in% all.vars(expr_def$expr))) {
+      stop(
+        "Row ", i, ": FORMULA '", formula_i, "' for covariate '",
+        covariate_search$COVARIATE[i], "' on parameter '", covariate_search$PARAMETER[i],
+        "' is neither a built-in form for STATUS '", status_i, "' (",
+        paste(sub("^[^.]+\\.", "", grep(paste0("^", status_i, "\\."),
+                                        ls(.covariate_formula_registry), value = TRUE)),
+              collapse = ", "),
+        ") nor an expression in `cov` (e.g. \"EMAX*cov/(EC50+cov)\")."
+      )
+    }
+  }
+
+  # REFERENCE as a number: it is written into $PK, and a character value is
+  # rendered quoted in user expressions (WT/"70") and compared as text with
+  # categorical levels ("1.0" != 1). Empty cells stay NA.
+  ref_chr <- trimws(as.character(covariate_search$REFERENCE))
+  ref_num <- suppressWarnings(as.numeric(ref_chr))
+  bad_ref <- !is.na(ref_chr) & ref_chr != "" & toupper(ref_chr) != "NA" & is.na(ref_num)
+  if (any(bad_ref)) {
+    stop("REFERENCE must be numeric. Non-numeric value(s) in row(s) ",
+         paste(which(bad_ref), collapse = ", "), ": ",
+         paste(unique(ref_chr[bad_ref]), collapse = ", "))
+  }
+  covariate_search$REFERENCE <- ref_num
+
+  # cov_to_test carries the beta_ prefix the tags and the model file use.
+  if ("cov_to_test" %in% names(covariate_search)) {
+    tag <- trimws(as.character(covariate_search$cov_to_test))
+    no_prefix <- !is.na(tag) & tag != "" & !startsWith(tag, "beta_")
+    covariate_search$cov_to_test[no_prefix] <- paste0("beta_", tag[no_prefix])
+  }
+
   # Single-token COVARIATE / PARAMETER: the beta_<COV>_<PARAM>[_<theta|level>] tag
   # convention is positional (parts[2]=covariate, parts[3]=parameter, trailing
   # tokens = theta names or a numeric level), so names must not contain underscores
