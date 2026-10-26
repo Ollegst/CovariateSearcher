@@ -1006,8 +1006,7 @@ validate_parameter_blocks <- function(model_file,
           # Check 5: For THETA and SIGMA, should not have multiple values per line
           if (block_type %in% c("THETA", "SIGMA")) {
             # Each bounded group "(0, x, 100)" is one value, as is each bare
-            # number (bounds used to be deleted before counting, so
-            # "(0,2.5) (0,30)" read as no value at all and passed)
+            # number, so "(0,2.5) (0,30)" counts as two
             num_values <- .count_theta_values(value_part)
 
             if (num_values > 1) {

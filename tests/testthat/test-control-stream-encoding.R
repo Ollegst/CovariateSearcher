@@ -87,3 +87,35 @@ test_that("removing one covariate leaves the other intact despite the cp1252 com
   expect_true("0.5 ; beta_AGE_V ; ; RATIO" %in% ctl)
   expect_false(any(grepl("beta_WT_CL", ctl)))
 })
+
+
+test_that("saving a Windows-1252 model keeps it in Windows-1252", {
+  # Reading repairs the line to UTF-8; writing it back must not silently
+  # re-encode the user's file.
+  models_dir <- write_cp1252_model()
+  path <- file.path(models_dir, "run1.ctl")
+  before <- readBin(path, "raw", file.size(path))
+
+  lines <- read_model_file(list(models_folder = models_dir), "run1")
+  invisible(capture.output(write_model_file(list(), lines)))
+
+  after <- readBin(path, "raw", file.size(path))
+  expect_identical(gsub("\r", "", rawToChar(after[after != as.raw(0xB5)])),
+                   gsub("\r", "", rawToChar(before[before != as.raw(0xB5)])))
+  expect_true(any(after == as.raw(0xB5)))
+  expect_false(any(after == as.raw(0xC2)))
+})
+
+
+test_that("saving a UTF-8 model leaves it UTF-8", {
+  models_dir <- tempfile("models")
+  dir.create(models_dir)
+  path <- file.path(models_dir, "run1.ctl")
+  writeLines(enc2utf8(c("$THETA", "2.5 ; CL ; \u00b5g/L ; RATIO")), path, useBytes = TRUE)
+
+  lines <- read_model_file(list(models_folder = models_dir), "run1")
+  invisible(capture.output(write_model_file(list(), lines)))
+
+  expect_true(all(validUTF8(readLines(path, warn = FALSE))))
+  expect_identical(readLines(path, encoding = "UTF-8")[2], "2.5 ; CL ; \u00b5g/L ; RATIO")
+})

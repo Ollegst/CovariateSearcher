@@ -50,9 +50,9 @@ find_model_file <- function(base_path, extensions = c(".ctl", ".mod")) {
 
 # Lines that are not valid UTF-8 re-read as Windows-1252, the encoding a Windows
 # editor saving "ANSI" writes. readLines() does not fail on such bytes: under a
-# UTF-8 locale the line comes back invalid, and grepl() then silently returns
-# FALSE on it - so a comment-only line carrying a cp1252 "µ" stopped matching
-# "^\\s*;" and was counted as a THETA. CP1252 rather than latin1 because latin1
+# UTF-8 locale the line comes back invalid, and grepl() silently returns FALSE
+# on it - a comment-only line carrying a cp1252 "µ" would not match "^\\s*;"
+# and would be counted as a THETA. CP1252 rather than latin1 because latin1
 # turns cp1252's quotes, dashes and euro sign (0x80-0x9F) into control
 # characters. Valid UTF-8 lines are returned untouched; a byte cp1252 leaves
 # undefined becomes "?".
@@ -91,14 +91,15 @@ find_model_file <- function(base_path, extensions = c(".ctl", ".mod")) {
 # Number of THETA values in the value part of one $THETA line (the text before
 # the first ";"). Each parenthesised group - "(0, 2.5)", "(0, 2.5, 100) FIX" -
 # is one value; outside groups each bare number is one; FIX/FIXED is not a
-# value. "(0,2.5) (0,30)" is 2, "2.5 30" is 2, "0.75 FIX" is 1.
+# value, also when written against the number. "(0,2.5) (0,30)" is 2, "2.5 30"
+# is 2, "0.75 FIX" and "0.75FIX" are 1.
 #' @keywords internal
 #' @noRd
 .count_theta_values <- function(value_text) {
   group_pat <- "\\([^)]*\\)"
   n_groups <- sum(gregexpr(group_pat, value_text)[[1]] > 0)
   rest <- gsub(group_pat, " ", value_text)
-  rest <- gsub("\\bFIX(ED)?\\b", " ", rest, ignore.case = TRUE, perl = TRUE)
+  rest <- gsub("FIX(ED)?", " ", rest, ignore.case = TRUE)
   tokens <- strsplit(trimws(rest), "[[:space:],]+")[[1]]
   number <- "^[-+]?(\\d+\\.?\\d*|\\.\\d+)([eEdD][-+]?\\d+)?$"
   n_groups + sum(grepl(number, tokens))
@@ -205,7 +206,14 @@ write_model_file <- function(search_state, lines) {
   if (is.null(file_path)) {
     stop("No file path found. Make sure the lines were read using read_model_file()")
   }
-  writeLines(lines, file_path)
+  # A file stored as Windows-1252 is read with its lines repaired to UTF-8
+  # (.read_control_stream); it is written back in Windows-1252 so saving a model
+  # does not change the encoding of the user's file.
+  if (file.exists(file_path) &&
+      !all(validUTF8(readLines(file_path, warn = FALSE)))) {
+    lines <- iconv(lines, from = "UTF-8", to = "CP1252", sub = "?")
+  }
+  writeLines(lines, file_path, useBytes = TRUE)
   cat("File saved to:", basename(file_path), "\n")
   return(search_state)
 }

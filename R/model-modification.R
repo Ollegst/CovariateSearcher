@@ -339,9 +339,9 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   log_function(paste("Covariate:", cova, "Parameter:", param, "Reference:", ref))
 
   # Next THETA number: one past both the $THETA entries and every THETA(n) the
-  # code references. Every reference on a line counts (taking only the last per
-  # line bound a covariate to an existing THETA written first, e.g. the additive
-  # SD in SQRT(THETA(5)**2 + THETA(4)**2*IPRED**2)); comments are stripped, and
+  # code references. Every reference on a line counts, so a THETA written first
+  # on its line (the additive SD in SQRT(THETA(5)**2 + THETA(4)**2*IPRED**2))
+  # is never reused for the new covariate; comments are stripped, and
   # $THETA record lines are left out so a glued "$THETA(3)" is not a reference.
   # A count below the highest reference would collide; a count above it
   # (unreferenced entries) is legitimate, hence the larger of the two.

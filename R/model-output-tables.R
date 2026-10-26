@@ -944,10 +944,9 @@ model_report <- function(model_names,
   for (model_name in model_names) {
     cat(sprintf("  Processing %s... ", model_name))
 
-    # A warning is reported but does not exclude the model: only an error does.
-    # (A warning used to abort the model, so a benign one - a control stream
-    # saved without a final newline, a known extract_params() min() warning -
-    # dropped it from the table.)
+    # A warning is reported but does not exclude the model: only an error does,
+    # so a benign warning (a control stream saved without a final newline, a
+    # bbr notice) cannot drop a model from the table.
     model_warnings <- character(0)
     result <- tryCatch({
       param_table <- withCallingHandlers(

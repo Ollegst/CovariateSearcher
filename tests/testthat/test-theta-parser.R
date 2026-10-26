@@ -7,6 +7,8 @@ test_that("values are counted per group and per bare number, FIX ignored", {
   expect_equal(.count_theta_values("2.5 30"), 2)
   expect_equal(.count_theta_values("(0,2.5) 30"), 2)
   expect_equal(.count_theta_values("0.75 FIX"), 1)
+  expect_equal(.count_theta_values("0.75FIX"), 1)
+  expect_equal(.count_theta_values("(0,1)FIXED 2"), 2)
   expect_equal(.count_theta_values("1.5E-02"), 1)
   expect_equal(.count_theta_values(""), 0)
 })

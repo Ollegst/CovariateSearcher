@@ -159,7 +159,15 @@ for (on in names(omega_styles)) for (ln in names(tails)) {
 cat(sprintf("models: %d | comparisons: %d | differences: %d\n",
             length(theta_styles) * length(pk_styles) * length(cov_styles) *
               length(omega_styles) * length(tails), n, length(diffs)))
-if (length(diffs)) cat(paste0("  DIFF ", head(unique(diffs), 40)), sep = "\n")
+if (length(diffs)) {
+  # Every difference, grouped by the function and argument compared (the part
+  # after the model id), so a change can be accounted for in full; then the
+  # first 40 in detail.
+  kinds <- table(sub("^\\S+ ", "", diffs))
+  cat("  differences by comparison:\n")
+  cat(sprintf("    %5d  %s", as.integer(kinds), names(kinds)), sep = "\n")
+  cat(paste0("  DIFF ", head(unique(diffs), 40)), sep = "\n")
+}
 
 # ---- model_add_cov: old vs new on every ordinary base model ---------------------
 load_old("R/model-modification.R", "model_add_cov")

@@ -153,10 +153,9 @@ list_covariate_formulas <- function() {
     ann <- .parse_annotation(line)
     if (!identical(ann$name, param)) next
     # The transform is the 4th field, as validation and the parameter table read
-    # it: taking the last field let a trailing comment ("; RATIO ; typical
-    # clearance") hide the tag. A line without the unit field
-    # ("; CL ; RATIO") still has its tag as the last field, so that is the
-    # fallback.
+    # it, so a trailing comment ("; RATIO ; typical clearance") does not hide
+    # the tag. A line without the unit field ("; CL ; RATIO") has its tag as
+    # the last field, so that is the fallback.
     tag <- ann$trans
     if (!(tag %in% c("RATIO", "LOG"))) {
       fields <- trimws(strsplit(line, ";", fixed = TRUE)[[1]][-1])

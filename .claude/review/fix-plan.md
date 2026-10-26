@@ -190,6 +190,13 @@ and 7 are closed here. **Order matters:** each step uses the one before.
   FUNCTIONS.md (MOD-11), the `.read_listing_lines` note (NIO-03).
 - `globalVariables` (UTL-04) — run `R CMD check` afterwards.
 - NIO-06, XAR-10.
+- **Finish consolidating G1 / G3** (raised by the Phase 2 audit). Done in Phase 2: numbering
+  (`model_add_cov`, remover Step 4, validation) and names in `apply_covariate_model` /
+  `.structural_param_names` use `.parse_theta_records`; `.theta_tag_for` uses `.parse_annotation`.
+  Still separate: `extract_params` (own `separate()`, one row per line — agrees with the parser
+  only because validation now rejects multi-value lines), `.listing_column_meta`,
+  `adjust_theta_for_covariate`, and `validate_parameter_blocks`' own field split. Also: a bound
+  split across lines (`(0,` / `2.5)`) counts as no value in `.count_theta_values`.
 - Articles: update any article whose behaviour changed (forest-plots for SIM-12/SIM-01, recovery-system
   for REC-01, model-reports-and-diagnostics for REP-01/03/05, quick-start for XAR-09).
 - Final: full `R CMD check`, the comparison script, and a fresh `functions-index` audit.
