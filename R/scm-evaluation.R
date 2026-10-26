@@ -87,7 +87,7 @@
                          error = function(e) NA_character_)
     if (is.na(cov_name)) return(1L)
     tryCatch(
-      as.integer(calculate_covariate_df(cov_name, search_state$covariate_search)),
+      as.integer(calculate_covariate_df(cov_name, search_state$covariate_search, tag = tg)),
       error = function(e) 1L
     )
   }, integer(1), USE.NAMES = FALSE)

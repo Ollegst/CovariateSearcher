@@ -524,9 +524,21 @@ get_fixed_covariates <- function(search_state, covariate_names) {
     }
   }
 
-  # TODO: Also check model file for THETA FIX parameters
-  # This would require parsing the model file to identify which THETAs
-  # are associated with which covariates and have FIX status
+  # A covariate whose every THETA is FIX in the table's INIT adds no estimated
+  # parameter (df 0): it is a fixed effect the user chose, not a candidate for
+  # removal. covariate_names are tag values ("WT_CL"), so the tag is rebuilt
+  # to pick the covariate-parameter row (WT may be FIX on CL but estimated on V).
+  for (cov_value in covariate_names) {
+    cov_name <- strsplit(cov_value, "_", fixed = TRUE)[[1]][1]
+    cov_df <- suppressWarnings(tryCatch(
+      calculate_covariate_df(cov_name, search_state$covariate_search,
+                             tag = paste0("beta_", cov_value)),
+      error = function(e) NA_integer_
+    ))
+    if (identical(as.integer(cov_df), 0L)) {
+      fixed_covariates <- c(fixed_covariates, cov_value)
+    }
+  }
 
   return(unique(fixed_covariates))
 }

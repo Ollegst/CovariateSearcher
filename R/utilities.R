@@ -525,17 +525,40 @@ pvalue_to_threshold <- function(p_value, df = 1) {
 #'   a threshold of 0, so it is kept whenever the model improves (any ΔOFV > 0).
 #' @param covariate_name Character. Name of the covariate
 #' @param covariate_search Data frame. Covariate search configuration
+#' @param tag Character or NULL. The covariate's tag as written to the model
+#'   (e.g. "beta_WT_V", or "beta_RACE_CL_2" for one level). INIT, FORMULA and
+#'   LEVELS belong to one covariate-parameter row, so when the covariate is
+#'   tested on more than one parameter the tag picks the row: the one whose
+#'   `cov_to_test` equals it, else the one whose PARAMETER the tag names. NULL
+#'   (default), or a covariate with a single row, uses the first row.
 #' @return Integer. Degrees of freedom (0 for a fully-FIX covariate).
 #' @export
-calculate_covariate_df <- function(covariate_name, covariate_search) {
+calculate_covariate_df <- function(covariate_name, covariate_search, tag = NULL) {
 
   # Find covariate in search table
-  cov_row <- covariate_search[covariate_search$COVARIATE == covariate_name, ]
+  cov_row <- covariate_search[covariate_search$COVARIATE == covariate_name, , drop = FALSE]
 
   if (nrow(cov_row) == 0) {
     warning(sprintf("Covariate %s not found in covariate_search, defaulting to df=1",
                     covariate_name))
     return(1L)
+  }
+
+  # One covariate on several parameters: WT fixed on CL and estimated on V are
+  # different tests, so the tag decides which row's INIT/FORMULA/LEVELS apply.
+  if (nrow(cov_row) > 1 && !is.null(tag) && length(tag) == 1 && !is.na(tag)) {
+    by_tag <- if ("cov_to_test" %in% names(cov_row)) {
+      cov_row[cov_row$cov_to_test %in% tag, , drop = FALSE]
+    } else {
+      cov_row[0, , drop = FALSE]
+    }
+    if (nrow(by_tag) == 0 && "PARAMETER" %in% names(cov_row)) {
+      # Covariate names hold no "_", so beta_<COV>_<PARAM>[_<suffix>] has the
+      # parameter third - also for per-level tags such as beta_RACE_CL_2.
+      tag_param <- strsplit(tag, "_", fixed = TRUE)[[1]][3]
+      by_tag <- cov_row[cov_row$PARAMETER %in% tag_param, , drop = FALSE]
+    }
+    if (nrow(by_tag) > 0) cov_row <- by_tag
   }
 
   # Get first matching row (in case of multiple parameters)

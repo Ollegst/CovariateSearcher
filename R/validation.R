@@ -645,7 +645,8 @@ update_all_model_statuses <- function(search_state, show_progress = TRUE) {
                 )
                 if (!is.na(cov_name)) {
                   cov_df <- tryCatch(
-                    calculate_covariate_df(cov_name, search_state$covariate_search),
+                    calculate_covariate_df(cov_name, search_state$covariate_search,
+                                           tag = cov_tag),
                     error = function(e) 1L
                   )
                 }
