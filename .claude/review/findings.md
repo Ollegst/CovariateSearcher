@@ -380,7 +380,7 @@ Reviewed by Fable (`D:\R\tmp\review-STA\`), re-checked by Opus (`D:\R\tmp\verify
 - **Proposed fix (checker's correction):** do **not** write "estimation_error" or make "error" terminal —
   that breaks the failed counts (scm-results.R:225 shows "In Progress"; reporting.R:115/295 and
   database-management.R:432 stop counting it). Leave the status as "failed" and set only `estimation_issue`.
-- **Status:** open — low priority
+- **Status:** fixed in 01e3094 (2026-10-26)
 
 #### STA-08 — Self-heal fills missing columns with the wrong types
 - **Location:** R/validation.R:34-55
@@ -600,7 +600,7 @@ Reviewed by Fable (`D:\R\tmp\review-REC\`), re-checked by Opus (`D:\R\tmp\verify
   possibly mid-run `.ext`; `generate_recovery_report` counts status "retry_failed", which is only
   ever written to `estimation_issue`.
 - **Proposed fix:** retire it or gate the write on a completed `.ext`; count retries by `action == "retry"`.
-- **Status:** open — low priority
+- **Status:** fixed in 01e3094 (2026-10-26)
 
 #### REC-07 — After auto-heal the model counter ignores skipped folders on disk
 - **Location:** R/resume-reconstruct.R:249; R/database-management.R:299-331; R/model-modification.R:94

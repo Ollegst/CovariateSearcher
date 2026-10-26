@@ -213,7 +213,7 @@ Mark items here as they land (`done <commit>`), and the register entry as `fixed
 | 1 | done — 10 items, commits 24eade5..c13da8f (2026-10-26) |
 | 2 | done — 2.1 G13 (a08a8cb), 2.2 G2 (54e55ae; SIM-09 → 6.x), 2.3 G1 (fd22066; REP-12 → 5.x), 2.4 G3 (bef931c) |
 | 3 | in progress — 3.1 UTL-01 + SCM-09 (f0dd2bc), 3.4 MOD-02 (6c8365b), 3.5 G8 (f16b579), 3.6 G7, 3.7 MOD-04, 3.8 MOD-07, 3.10 SCM-05/07/10 (2bcf8c9); Phase 3 audit (Sonnet) follow-ups f670f39; 3.2, 3.3, 3.9 wait on owner decisions |
-| 4 | in progress — 4.3 G10 SCM-04 + REC-07, 4.4 G5 XAR-05 + SCM-08, 4.7 UTL-06 (043bec2) |
+| 4 | in progress — 4.3 G10 SCM-04 + REC-07, 4.4 G5 XAR-05 + SCM-08, 4.7 UTL-06 (043bec2), 4.5 G9 STA-07 + REC-06 (01e3094) |
 | 5 | not started |
 | 6 | not started |
 | 7 | not started |

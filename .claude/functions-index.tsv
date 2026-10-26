@@ -115,11 +115,11 @@ recovery-actions.R	.format_theta_init_value	.format_theta_init_value(value, temp
 recovery-actions.R	.perturb_theta_init	.perturb_theta_init(spec)	no	bc8e6901462b7953537dde6a8af278f7
 recovery-actions.R	.theta_init_is_fixed	.theta_init_is_fixed(spec)	no	71d66c79f64e0008942b19a14640fbe7
 recovery-actions.R	adjust_theta_for_covariate	adjust_theta_for_covariate(search_state, model_name, covariate_tag, dry_run=FALSE)	yes	2cd983540f6a5ed16329822782303b26
-recovery-actions.R	create_retry_model	create_retry_model(search_state, original_model_name, issue_type="estimation_error")	yes	944b02065fe97f5dbd573741cc637571
+recovery-actions.R	create_retry_model	create_retry_model(search_state, original_model_name, issue_type="estimation_error")	yes	bbfb3b91c296fbb191308ca7bff01376
 recovery-actions.R	handle_failed_retry	handle_failed_retry(search_state, retry_model_name, exclusion_reason="retry_failed")	yes	2b49eb1205204959fab965569ebb2482
 recovery-actions.R	process_estimation_issues	process_estimation_issues(search_state, models_with_issues)	yes	290a1d9c65aafe0d7ad94d31380765f3
-recovery-detection.R	detect_estimation_problems	detect_estimation_problems(search_state, model_names, check_interval_minutes=30)	yes	94a6aef5180f72a95099d8850cc732e5
-recovery-detection.R	generate_recovery_report	generate_recovery_report(search_state)	yes	f34d41b0814970ae98067b4648c5873d
+recovery-detection.R	detect_estimation_problems	detect_estimation_problems(search_state, model_names, check_interval_minutes=30)	yes	c0f59fad6e5d4e80dd8f398d611d7935
+recovery-detection.R	generate_recovery_report	generate_recovery_report(search_state)	yes	a34e11e27b097d906cff380e3d5ea3d3
 reporting.R	generate_scm_report	generate_scm_report(search_state, output_file="scm_report.txt", print_console=TRUE)	yes	72abb173509b34758ad9610c77a4dbb9
 resume-reconstruct.R	.scm_model_parent	.scm_model_parent(models_folder, model)	no	e119e7180f5bdd60e22d876199ff10d9
 resume-reconstruct.R	.scm_unregistered_models	.scm_unregistered_models(search_state, models_folder=NULL)	no	1cc24ba484c0a4e48ca0df574f83ad1b
@@ -138,7 +138,7 @@ scm-evaluation.R	.report_rse_rejections	.report_rse_rejections(rejected, context
 scm-evaluation.R	select_best_model	select_best_model(search_state, model_names, p_value=NULL, rse_threshold=NULL)	yes	809ea97eb2d44dc04ca83d66774fe730
 scm-execution.R	run_univariate_step	run_univariate_step(search_state, base_model_id, covariates_to_test=NULL, step_name, include_excluded=TRUE)	yes	5bc8c0ed8637b509fecda8f1067680e1
 scm-execution.R	submit_and_wait_for_step	submit_and_wait_for_step(search_state, model_names, step_name, max_wait_minutes=NULL, threads=NULL, auto_submit=TRUE, auto_retry=TRUE)	yes	5a2c650a2fe0afcd0f9bd6a0a0d91fe4
-scm-results.R	create_scm_results_table	create_scm_results_table(search_state)	yes	035332140dd7162bfe2e1f69456f270b
+scm-results.R	create_scm_results_table	create_scm_results_table(search_state)	yes	e31414ed4c51869af63519df6ed7507e
 scm-results.R	print_scm_results_table	print_scm_results_table(search_state, show_rse=TRUE, truncate_covariates=35)	yes	a0ff31c7ce6ce404fd8e63f832beba33
 scm-selective-forward.R	get_covariates_from_models	get_covariates_from_models(search_state, model_names)	yes	34450aa25d0201cf1b47e5ff2bace653
 scm-selective-forward.R	get_significant_models_from_step	get_significant_models_from_step(search_state, step_number, p_value, rse_threshold=NULL, phase=c("forward", "backward"))	yes	a5716ba472589be4a53b4d94e29db52b
