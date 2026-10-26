@@ -10,7 +10,7 @@ covariate-boxplots.R	create_covariate_boxplots	create_covariate_boxplots(data, s
 covariate-formula.R	.cov_pow_logadd	.cov_pow_logadd(cova, ref, n)	no	21ba25f1821ce329913359dfc9c0e41c
 covariate-formula.R	.cov_pow_nonmem	.cov_pow_nonmem(cova, ref, n)	no	4774175d39cfbc909b3ec1185502812b
 covariate-formula.R	.exp_inner_containing_eta	.exp_inner_containing_eta(rhs)	no	a31e264d338e61449e8398b1af5900ec
-covariate-formula.R	.theta_tag_for	.theta_tag_for(modelcode, param)	no	b4b8bafb502bf16cd14670c2f1039189
+covariate-formula.R	.theta_tag_for	.theta_tag_for(modelcode, param)	no	d6900264917c4cdce88184a155c0ffff
 covariate-formula.R	.translate_expr_to_nonmem	.translate_expr_to_nonmem(expr, cova, ref, thetas, n)	no	c3c4ab95fab9536d65e98d320f1ae2cb
 covariate-formula.R	detect_param_transform	detect_param_transform(modelcode, param)	no	d668827681d7a8006e23cc4c3cff2525
 covariate-formula.R	get_covariate_formula	get_covariate_formula(status, formula)	no	e9b237eee077ce287bcec81d21d2d95b
@@ -33,7 +33,8 @@ database-management.R	update_model_counter	update_model_counter(search_state)	ye
 database-management.R	view_comprehensive_table	view_comprehensive_table(search_state, use_separate_columns=TRUE)	yes	17d0c47028230b4f0ddf63b6aba7280a
 file-io.R	.count_theta_values	.count_theta_values(value_text)	no	5bf9359297158b443b773c07db3e3797
 file-io.R	.is_record_line	.is_record_line(lines)	no	da559af11e47c9c8522eed989b2c2922
-file-io.R	.parse_theta_records	.parse_theta_records(lines)	no	4909c5e814058f94c379c475b1cd457b
+file-io.R	.parse_annotation	.parse_annotation(line)	no	dc3afe355e05b6dbcc881782c4cf8add
+file-io.R	.parse_theta_records	.parse_theta_records(lines)	no	9bfbbdadb6c380d75c389d87405b454d
 file-io.R	.read_control_stream	.read_control_stream(path)	no	14324d01e08c39bdaceeda442341e033
 file-io.R	.read_listing_lines	.read_listing_lines(path)	no	921a90b0144b8754982cf5d905430a98
 file-io.R	.record_starts	.record_starts(lines, tag)	no	054c613a0efac3b56d0086ee22addfa4
@@ -93,7 +94,7 @@ model-output-tables.R	.to_report_scale	.to_report_scale(value, random_effect_sd,
 model-output-tables.R	calculate_condition_number	calculate_condition_number(model_number, models_folder="models", tolerance=1e-10)	no	88434beea6444ac74ad80f5b8012e076
 model-output-tables.R	decode_cov_level	decode_cov_level(cov_name, level, lookup)	no	ce51662c1cc4f12fec395bd13e517ddd
 model-output-tables.R	extract_model_params	extract_model_params(model_name, models_folder="models")	no	9d45e14fd94298643395a236f8845f76
-model-output-tables.R	extract_params	extract_params(lines, block_tag, remove_prefix=FALSE)	no	d74b062cfa59272c191994bf7bf76593
+model-output-tables.R	extract_params	extract_params(lines, block_tag, remove_prefix=FALSE)	no	767260f9b56629620e3098acc3155a60
 model-output-tables.R	get_param2	get_param2(model_number, count_model, shrinkage="etasd", models_folder="models", spec_pk=NULL, lookup=NULL, include_ci=FALSE)	no	1ce07760f90716117085ba92d8e99473
 model-output-tables.R	model_report	model_report(model_names, shrinkage="etasd", models_folder="models", spec_pk=NULL, lookup=NULL, bootstrap=FALSE, boot_results=NULL)	yes	62cc2867f8940124a880bf83526bd039
 model-output-tables.R	theme_pps_table	theme_pps_table(x)	yes	aad765a60d5ecfc2d330db5cf36dd44a

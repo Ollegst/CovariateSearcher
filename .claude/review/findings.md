@@ -622,7 +622,7 @@ checker confirmed the reviewer's `bbr` mocks match the shape of bbr's real captu
   tagged "log" with RSE 150% gives `get_model_max_rse` = 11.6 (tagged "LOG" → 150), so it silently
   passes the RSE acceptance test. In the report the row is blank.
 - **Proposed fix:** `toupper(trimws(...))` once in `extract_params`.
-- **Status:** open
+- **Status:** fixed in bef931c (2026-10-26)
 
 #### REP-10 — A negative off-diagonal RSE escapes the RSE limit
 - **Location:** R/model-output-tables.R:631 vs 628
@@ -920,7 +920,7 @@ Reviewed by Fable (`D:\R\tmp\review-XAR\`), re-checked by Sonnet (`D:\R\tmp\veri
 - **Proposed fix:** one shared annotation reader that **keeps empty fields** (so `; CL ; ; RATIO` still
   works) and takes field 4, upper-cased; used by `.theta_tag_for`, `extract_params`,
   `validate_parameter_blocks`, `.listing_column_meta`. Keep the exact-name match and the comment-line skip.
-- **Status:** open (group G3)
+- **Status:** fixed in bef931c (2026-10-26)
 
 #### XAR-03 — An indented ` $THETA` makes every model fail the RSE test
 - **Location:** R/model-output-tables.R:71, 80, 92 (`^\$`) vs R/validation.R:826, R/model-modification.R:656 (`^\s*\$`)
