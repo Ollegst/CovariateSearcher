@@ -868,6 +868,21 @@ validate_parameter_blocks <- function(model_file,
         end_line <- length(model_lines)
       }
 
+      # A value may sit on the $THETA record line itself ("$THETA 0.5 ; CL"),
+      # which the line checks below skip. One is allowed; more than one breaks
+      # the one-value-per-line layout every THETA reader relies on.
+      if (block_type == "THETA") {
+        header_rest <- sub("^\\s*\\$THETA\\s*", "", block_header, ignore.case = TRUE)
+        header_value <- strsplit(header_rest, ";", fixed = TRUE)[[1]]
+        n_header <- if (length(header_value)) .count_theta_values(header_value[1]) else 0
+        if (n_header > 1) {
+          issues <- c(issues, sprintf(
+            "Line %d (THETA record line): Multiple values (%d) on one line - should have ONE value per line",
+            start_line, n_header
+          ))
+        }
+      }
+
       # Get block content (skip header)
       block_lines <- model_lines[(start_line + 1):end_line]
 
@@ -990,11 +1005,10 @@ validate_parameter_blocks <- function(model_file,
 
           # Check 5: For THETA and SIGMA, should not have multiple values per line
           if (block_type %in% c("THETA", "SIGMA")) {
-            value_part_clean <- gsub("FIX", "", value_part, ignore.case = TRUE)
-            # Remove bounds syntax like (0, x, 100)
-            value_part_clean <- gsub("\\([^)]+\\)", "", value_part_clean)
-            numbers <- gregexpr("-?\\d+\\.?\\d*([eE][+-]?\\d+)?", value_part_clean)
-            num_values <- length(unlist(regmatches(value_part_clean, numbers)))
+            # Each bounded group "(0, x, 100)" is one value, as is each bare
+            # number (bounds used to be deleted before counting, so
+            # "(0,2.5) (0,30)" read as no value at all and passed)
+            num_values <- .count_theta_values(value_part)
 
             if (num_values > 1) {
               issues <- c(issues, sprintf(

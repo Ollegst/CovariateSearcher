@@ -338,18 +338,27 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
 
   log_function(paste("Covariate:", cova, "Parameter:", param, "Reference:", ref))
 
-  # Get max THETA number
-  thetas <- modelcode[grepl('THETA\\(\\d+\\)', modelcode)] %>%
-    gsub(pattern = '.*THETA\\(', replacement = '') %>%
-    gsub(pattern = '\\).*', replacement = '') %>%
-    as.double()
+  # Next THETA number: one past both the $THETA entries and every THETA(n) the
+  # code references. Every reference on a line counts (taking only the last per
+  # line bound a covariate to an existing THETA written first, e.g. the additive
+  # SD in SQRT(THETA(5)**2 + THETA(4)**2*IPRED**2)); comments are stripped, and
+  # $THETA record lines are left out so a glued "$THETA(3)" is not a reference.
+  # A count below the highest reference would collide; a count above it
+  # (unreferenced entries) is legitimate, hence the larger of the two.
+  n_theta_entries <- nrow(.parse_theta_records(modelcode))
+  ref_code <- sub(";.*$", "", modelcode)
+  ref_code[.record_starts(ref_code, "THETA")] <- ""
+  theta_refs <- as.integer(unlist(regmatches(
+    ref_code, gregexpr("(?<=THETA\\()\\s*\\d+(?=\\s*\\))", ref_code, perl = TRUE)
+  )))
+  max_theta <- max(c(0L, n_theta_entries, theta_refs))
 
-  if (length(thetas) == 0) {
+  if (max_theta == 0) {
     newtheta <- 1
     log_function("No existing THETAs found, starting at THETA(1)")
   } else {
-    newtheta <- max(thetas) + 1
-    log_function(paste("Current max THETA:", max(thetas), "New THETA number:", newtheta))
+    newtheta <- max_theta + 1
+    log_function(paste("Current max THETA:", max_theta, "New THETA number:", newtheta))
   }
 
   temp_cov <- dplyr::filter(covariate_search, cov_to_test == cov_on_param)
@@ -1228,62 +1237,41 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
   # THETAs consecutively across every $THETA record, so all records are walked
   # in file order. Covariate THETAs are inserted before $OMEGA, i.e. at the end
   # of the LAST record, which a scan of the first record alone never reaches.
-  # (?![A-Za-z]) leaves out the $PRIOR records $THETAP / $THETAPV, whose values
+  # .record_starts leaves out the $PRIOR records $THETAP / $THETAPV, whose values
   # are priors on existing THETAs, not THETAs of their own.
   theta_starts <- .record_starts(modelcode, "THETA")
   if (length(theta_starts) == 0) {
     stop("No $THETA section found in model file for ", model_to_modify)
   }
-  section_starts <- which(.is_record_line(modelcode))
-
-  theta_numbers_to_remove <- c()
-  theta_lines_to_remove <- c()
 
   is_covariate_theta <- function(line) {
     grepl(paste0("\\b", covariate_to_remove, "\\b"), line) ||
       grepl(paste0("\\b", covariate_to_remove, "_[^\\s;]+"), line)
   }
 
-  theta_count <- 0
-  for (theta_start in theta_starts) {
-    theta_end <- section_starts[section_starts > theta_start][1] - 1
-    if (is.na(theta_end)) theta_end <- length(modelcode)
-
-    # A value on the record line itself ("$THETA 0.5 ; CL") takes the next
-    # THETA number. Deleting that line would delete the record header with it,
-    # so a covariate THETA found there is refused rather than removed.
-    header_rest <- sub("^\\s*\\$THETA\\s*", "", modelcode[theta_start], ignore.case = TRUE)
-    if (grepl("^[^;]*[0-9]", header_rest)) {
-      theta_count <- theta_count + 1
-      if (is_covariate_theta(header_rest)) {
-        stop("THETA ", theta_count, " for covariate '", covariate_to_remove,
-             "' is written on the $THETA record line itself (line ", theta_start,
-             "). Move it onto its own line so it can be removed.")
-      }
+  # THETA numbers come from the shared parser: every value counts, including
+  # several on one line ("(0,2.5) (0,30)") and one on the record line itself.
+  theta_rows <- .parse_theta_records(modelcode)
+  hits <- theta_rows[vapply(modelcode[theta_rows$line], is_covariate_theta,
+                            logical(1), USE.NAMES = FALSE), , drop = FALSE]
+  for (h in seq_len(nrow(hits))) {
+    # Deleting the line would delete the record header (a value on the record
+    # line) or the other THETAs sharing it, so either is refused, not removed.
+    if (hits$on_record_line[h]) {
+      stop("THETA ", hits$index[h], " for covariate '", covariate_to_remove,
+           "' is written on the $THETA record line itself (line ", hits$line[h],
+           "). Move it onto its own line so it can be removed.")
     }
-
-    if (theta_end <= theta_start) next
-
-    # Count actual THETA parameters (skip empty lines and comments)
-    for (i in (theta_start + 1):theta_end) {
-      line <- modelcode[i]
-
-      # Skip empty lines and comment-only lines
-      if (grepl("^\\s*$", line) || grepl("^\\s*;", line)) {
-        next
-      }
-
-      # This is an actual THETA parameter line
-      theta_count <- theta_count + 1
-
-      # Check if this THETA contains our covariate
-      if (is_covariate_theta(line)) {
-        theta_numbers_to_remove <- c(theta_numbers_to_remove, theta_count)
-        theta_lines_to_remove <- c(theta_lines_to_remove, i)
-        log_msg(paste("Found THETA", theta_count, "at line", i, ":", trimws(line)))
-      }
+    if (hits$n_on_line[h] > 1) {
+      stop("THETA ", hits$index[h], " for covariate '", covariate_to_remove,
+           "' shares line ", hits$line[h], " with ", hits$n_on_line[h] - 1,
+           " other THETA value(s). Put it on its own line so it can be removed.")
     }
+    log_msg(paste("Found THETA", hits$index[h], "at line", hits$line[h], ":",
+                  trimws(modelcode[hits$line[h]])))
   }
+  theta_numbers_to_remove <- hits$index
+  theta_lines_to_remove <- hits$line
 
   if (length(theta_numbers_to_remove) == 0) {
     stop("No THETA parameters found for covariate: ", covariate_to_remove)

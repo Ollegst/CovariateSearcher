@@ -806,14 +806,7 @@ simulate_scenario_profiles <- function(param_sets,
     as.integer(gsub("\\D", "", m[1]))
   }
 
-  theta_names <- character(0)
-  for (ln in get_block("THETA")) {
-    # A value on the record line itself ("$THETA 0.5 ; CL") is a THETA too.
-    if (grepl("^\\s*\\$", ln)) ln <- sub("^\\s*\\$[A-Za-z]+\\s*", "", ln)
-    parts <- strsplit(ln, ";")[[1]]
-    if (!grepl("[0-9]", parts[1])) next
-    theta_names <- c(theta_names, if (length(parts) >= 2) trimws(parts[2]) else "")
-  }
+  theta_names <- .parse_theta_records(lines)$name
   if (length(theta_names) == 0) return(character(0))
   structural_idx <- which(!grepl("^beta_", theta_names))
 

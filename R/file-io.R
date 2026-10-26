@@ -88,6 +88,70 @@ find_model_file <- function(base_path, extensions = c(".ctl", ".mod")) {
 }
 
 
+# Number of THETA values in the value part of one $THETA line (the text before
+# the first ";"). Each parenthesised group - "(0, 2.5)", "(0, 2.5, 100) FIX" -
+# is one value; outside groups each bare number is one; FIX/FIXED is not a
+# value. "(0,2.5) (0,30)" is 2, "2.5 30" is 2, "0.75 FIX" is 1.
+#' @keywords internal
+#' @noRd
+.count_theta_values <- function(value_text) {
+  group_pat <- "\\([^)]*\\)"
+  n_groups <- sum(gregexpr(group_pat, value_text)[[1]] > 0)
+  rest <- gsub(group_pat, " ", value_text)
+  rest <- gsub("\\bFIX(ED)?\\b", " ", rest, ignore.case = TRUE, perl = TRUE)
+  tokens <- strsplit(trimws(rest), "[[:space:],]+")[[1]]
+  number <- "^[-+]?(\\d+\\.?\\d*|\\.\\d+)([eEdD][-+]?\\d+)?$"
+  n_groups + sum(grepl(number, tokens))
+}
+
+
+# Every THETA in the control stream, one row per value, in NONMEM's numbering:
+# all $THETA records in file order ($THETAP / $THETAPV excluded), a value on
+# the record line itself included, blank and comment-only lines skipped, and
+# several values on one line counted separately. This is the one place THETA
+# numbers are derived from $THETA records; the writer, the remover and the
+# simulation readers all use it.
+#
+# Columns: index (THETA number), line (line in `lines`), on_record_line,
+# n_on_line (values sharing that line), and the annotation fields of the line
+# ("value ; name ; unit ; transform"): name, unit, trans (upper-cased). A line
+# holding several values gives its annotation to the first of them only.
+#' @keywords internal
+#' @noRd
+.parse_theta_records <- function(lines) {
+  empty <- data.frame(index = integer(), line = integer(), on_record_line = logical(),
+                      n_on_line = integer(), name = character(), unit = character(),
+                      trans = character(), stringsAsFactors = FALSE)
+  starts <- .record_starts(lines, "THETA")
+  record_lines <- which(.is_record_line(lines))
+  rows <- list()
+  for (s in starts) {
+    e <- record_lines[record_lines > s][1]
+    e <- if (is.na(e)) length(lines) else e - 1L
+    for (i in s:e) {
+      text <- lines[i]
+      if (i == s) text <- sub("^\\s*\\$THETA\\s*", "", text, ignore.case = TRUE)
+      if (!grepl("\\S", text) || grepl("^\\s*;", text)) next
+      fields <- strsplit(text, ";", fixed = TRUE)[[1]]
+      n <- .count_theta_values(fields[1])
+      if (n == 0L) next
+      ann <- trimws(c(fields[-1], "", "", "")[1:3])
+      rows[[length(rows) + 1L]] <- data.frame(
+        line = i, on_record_line = i == s, n_on_line = n,
+        name = c(ann[1], rep("", n - 1L)),
+        unit = c(ann[2], rep("", n - 1L)),
+        trans = c(toupper(ann[3]), rep("", n - 1L)),
+        stringsAsFactors = FALSE
+      )
+    }
+  }
+  if (length(rows) == 0L) return(empty)
+  out <- do.call(rbind, rows)
+  out$index <- seq_len(nrow(out))
+  out[, names(empty)]
+}
+
+
 # Read a NONMEM control stream (.ctl/.mod), repairing non-UTF-8 lines. warn =
 # FALSE because a file saved without a final newline is common and harmless,
 # and model_report() drops a model on any warning.

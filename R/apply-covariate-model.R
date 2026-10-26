@@ -131,16 +131,7 @@ apply_covariate_model <- function(model_name,
   }
 
   # ---- $THETA order: name of THETA(n) is the nth record's 2nd `;` field ------
-  theta_block <- get_block("THETA")
-  theta_names <- character(0)
-  for (ln in theta_block) {
-    # A value on the record line itself ("$THETA 0.5 ; CL") is a THETA too.
-    if (grepl("^\\s*\\$", ln)) ln <- sub("^\\s*\\$[A-Za-z]+\\s*", "", ln)
-    parts <- strsplit(ln, ";")[[1]]
-    if (!grepl("[0-9]", parts[1])) next
-    theta_names <- c(theta_names,
-                     if (length(parts) >= 2) trimws(parts[2]) else "")
-  }
+  theta_names <- .parse_theta_records(lines)$name
   if (length(theta_names) == 0) {
     stop("Could not parse any $THETA records from model '", model_name, "'.")
   }
