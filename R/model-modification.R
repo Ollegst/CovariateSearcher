@@ -152,8 +152,8 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag,
         "- Data mismatch in tapply() call (arguments must have same length)"
       )
       
-      log_filename <<- file.path(search_state$models_folder,
-                                 paste0(new_model_name, "_add_", covariate_name, "_error_log.txt"))
+      log_filename <- file.path(search_state$models_folder,
+                                paste0(new_model_name, "_add_", covariate_name, "_error_log.txt"))
       writeLines(error_log_content, log_filename)
       cat(sprintf("  📝 Error log saved: %s\n", basename(log_filename)))
       
@@ -225,7 +225,7 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag,
       step_number = final_step_number,
       search_state = search_state,
       technical_log = technical_log,
-      log_file = if(exists("log_filename")) log_filename else NULL
+      log_file = log_filename
     ))
 
   }, error = function(e) {
