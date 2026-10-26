@@ -212,7 +212,7 @@ independent Opus pass (`D:\R\tmp\verify-scm\`). Verdicts below are the checker's
 - **Evidence:** `get_fixed_covariates` reads `FIX_STATUS`, which nothing writes; `INIT = "… FIX"`
   gives df 0. The verdict is unaffected (threshold 0), only runs are wasted.
 - **Proposed fix:** also treat `calculate_covariate_df(...) == 0` as fixed.
-- **Status:** open — known limitation
+- **Status:** fixed in f0dd2bc (2026-10-26)
 
 #### SCM-10 — `get_covariate_tag_from_name`'s constructed fallback is dead in practice
 - **Location:** R/scm-backward.R:554-567
@@ -736,7 +736,7 @@ Reviewed by Fable (`D:\R\tmp\review-UTL\`), re-checked by Opus (`D:\R\tmp\verify
   `cov_to_test == tag` (as `model_add_cov` does), then COVARIATE + PARAMETER (needed for per-level tags
   like `beta_RACE_CL_2`), then COVARIATE alone (test fixtures; discovery's non-tag values). Pass the tag
   from both callers; SCM-09's fix must pass it too.
-- **Status:** open
+- **Status:** fixed in f0dd2bc (2026-10-26)
 
 #### UTL-03 — The dataset is read without treating "." as missing
 - **Location:** R/utilities.R:124; data call sites R/initialization.R:80, R/model-modification.R:872

@@ -212,7 +212,7 @@ Mark items here as they land (`done <commit>`), and the register entry as `fixed
 | 0 | not started |
 | 1 | done — 10 items, commits 24eade5..c13da8f (2026-10-26) |
 | 2 | done — 2.1 G13 (a08a8cb), 2.2 G2 (54e55ae; SIM-09 → 6.x), 2.3 G1 (fd22066; REP-12 → 5.x), 2.4 G3 (bef931c) |
-| 3 | not started |
+| 3 | in progress — 3.1 UTL-01 + SCM-09 (f0dd2bc) |
 | 4 | not started |
 | 5 | not started |
 | 6 | not started |
