@@ -6,6 +6,20 @@
 # =============================================================================
 
 
+# Does the dataset the user passed match the file named on the model's $DATA
+# line? File names only, case-insensitive. An .rds is the same dataset saved by
+# R, so for one its name is compared without the extension; any other mismatch
+# in extension (data.dat vs data.csv) is still a different file.
+.same_data_file <- function(model_data_file, user_data_file) {
+  model_name <- tolower(basename(model_data_file))
+  user_name  <- tolower(basename(user_data_file))
+  if (identical(tools::file_ext(user_name), "rds")) {
+    model_name <- tools::file_path_sans_ext(model_name)
+    user_name  <- tools::file_path_sans_ext(user_name)
+  }
+  identical(model_name, user_name)
+}
+
 
 #' Initialize Covariate Search
 #'
@@ -145,7 +159,7 @@ initialize_covariate_search <- function(base_model_path,
       user_filename <- basename(data_file_path)
       
       # Compare file names only, case-insensitive
-      if (!identical(tolower(model_data_basename), tolower(user_filename))) {
+      if (!.same_data_file(model_data_basename, user_filename)) {
         stop(
           sprintf("⚠️  DATA FILE MISMATCH!\n"),
           sprintf("  Model '%s' references: %s\n", base_model_path, data_filename),
