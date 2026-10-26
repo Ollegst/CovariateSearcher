@@ -563,18 +563,13 @@ get_covariate_tag_from_name <- function(search_state, covariate_name) {
     }
   }
 
-  # If not found, try to construct it (fallback)
-  # This assumes a pattern like "WT_CL" → "cov_cl_wt"
-  parts <- strsplit(covariate_name, "_")[[1]]
-  if (length(parts) == 2) {
-    # Try both possible patterns
-    constructed_tag1 <- paste0("beta_", tolower(parts[2]), "_", tolower(parts[1]))
-    constructed_tag2 <- paste0("beta_", tolower(parts[1]), "_", tolower(parts[2]))
-
-    if (constructed_tag1 %in% names(search_state$tags)) {
-      return(constructed_tag1)
-    } else if (constructed_tag2 %in% names(search_state$tags)) {
-      return(constructed_tag2)
+  # Tags keep their original case, so the only near miss is a case difference
+  # (SCM-10: a lower-case tag-name construction used to stand here, and only
+  # ever fired on such a mismatch, for two-part names).
+  for (tag_name in names(search_state$tags)) {
+    tag_value <- search_state$tags[[tag_name]]
+    if (!is.null(tag_value) && identical(toupper(tag_value), toupper(covariate_name))) {
+      return(tag_name)
     }
   }
 

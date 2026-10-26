@@ -422,14 +422,9 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   # rendered per the parameter's transformation: multiplicative for a normal-scale
   # parameter (PARAM = TV*EXP(ETA)), additive for a log-scale one
   # (PARAM = EXP(TV+ETA)) so the effect is not multiplied into a log value.
-  max_levels <- max(tapply(data_file[[cova]], data_file[[id_var]],
-                           function(x) length(unique(x))), na.rm = TRUE)
-  if (is.infinite(max_levels)) {
-    log_function("WARNING: Could not determine time-varying status - defaulting to non-time-varying")
-    max_levels <- 1
-  }
-  time_varying <- max_levels > 1
-  log_function(paste("Time-varying check:", time_varying, "(max levels:", max_levels, ")"))
+  # Missing records (NA or ".") are not a second value (STA-05).
+  time_varying <- .covariate_is_time_varying(data_file, cova, id_var)
+  log_function(paste("Time-varying check:", time_varying))
 
   if (time_varying) {
     op_mode <- "mult"                          # individual level -> multiplicative
@@ -519,7 +514,15 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
       dplyr::arrange(desc(n)) %>%
       dplyr::pull(!!rlang::parse_expr(cova))
 
+    # A missing record is not a level: no THETA for NA or "." (MOD-05).
+    uniqueval_with_freq <- uniqueval_with_freq[!is.na(uniqueval_with_freq) &
+                                                 trimws(as.character(uniqueval_with_freq)) != "."]
     uniqueval <- uniqueval_with_freq[uniqueval_with_freq != temp_cov$REFERENCE]
+    # No non-reference level would leave beta_<COV>_<PARAM> with no THETA (MOD-07).
+    if (length(uniqueval) == 0) {
+      stop("Categorical covariate '", cova, "' has no observed level other than REFERENCE (",
+           temp_cov$REFERENCE, "): there is no effect to estimate.", call. = FALSE)
+    }
 
     thetanmulti <- tibble(
       covx = uniqueval,
@@ -883,7 +886,7 @@ prepare_search_base_model <- function(base_model_path,
   # Step 2: Load data needed for model editing
   # ---------------------------------------------------------------------------
   # Each argument may be a path (loaded here) OR an already-in-memory data.frame.
-  data_file <- .load_if_path(data_file_path, "data_file_path")
+  data_file <- .load_if_path(data_file_path, "data_file_path", na = c("", "NA", "."))
   covariate_search <- .load_if_path(covariate_search_path, "covariate_search_path")
 
   if (!"cov_to_test" %in% names(covariate_search)) {
@@ -1375,6 +1378,24 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
       log_msg(paste("Removing THETA line:", trimws(modelcode[line_idx])))
       modelcode <- modelcode[-line_idx]
     }
+  }
+
+  # Step 7b: Every reference to a removed THETA must be gone by now. One that
+  # survives (a hand-edited model reusing the covariate THETA in another
+  # equation, e.g. Q = (WT/70)**THETA(5) * THETA(3)) would be renumbered onto
+  # a different parameter. Checked here, not after Step 5, because additive
+  # categorical IF lines still hold the THETA until Step 6 (MOD-04).
+  code_only <- sub(";.*$", "", modelcode)
+  still_used <- theta_numbers_to_remove[vapply(theta_numbers_to_remove, function(n)
+    any(grepl(paste0("\\bTHETA\\(\\s*", n, "\\s*\\)"), code_only)), logical(1))]
+  if (length(still_used) > 0) {
+    stop(
+      "THETA(", paste(still_used, collapse = ", "), ") of covariate '", covariate_to_remove,
+      "' is still referenced after its effect was removed: ",
+      paste(trimws(modelcode[grepl(paste0("\\bTHETA\\(\\s*(", paste(still_used, collapse = "|"),
+                                          ")\\s*\\)"), code_only)]), collapse = " | "),
+      ". Renumbering would rebind it to a different parameter. Edit the model by hand."
+    )
   }
 
   # Step 8: Apply THETA renumbering

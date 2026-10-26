@@ -124,7 +124,7 @@ The result is one row per parameter-covariate pair:
 | `FORMULA` | continuous: `linear`, `power`, `exponential`; categorical: `linear` (one theta per non-reference level) or `power` (covariates whose levels are numeric, e.g. dose); or a custom expression |
 | `LEVELS` | `;`-separated **observed level values** for categorical covariates (`0;1`), `NA` for continuous |
 | `REFERENCE` | value the effect is normalised to: median (continuous) or most frequent level (categorical) |
-| `TIME_DEPENDENT` | `Yes`/`No`, computed from the data; decides whether the effect is placed at individual or population level |
+| `TIME_DEPENDENT` | `Yes`/`No`, computed from the data, for information only. Placement (individual or population level) is recomputed from the data when the covariate is added; editing this column does not change it. Missing records (`NA` or `.`) do not count as a change |
 | `INIT` | *optional* initial `$THETA` value - see below |
 
 `cov_to_test` (`beta_WT_CL`, ...) is generated for you; you never write it.

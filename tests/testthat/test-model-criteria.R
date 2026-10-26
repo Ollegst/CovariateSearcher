@@ -363,7 +363,8 @@ test_that("a backward row cannot win the forward pick even with the best OFV", {
 
 
 test_that("every forward candidate pool in the file carries the phase filter", {
-  # Four pools feed .best_acceptable_model inside run_scm_selective_forward.
+  # Three pools feed .best_acceptable_model inside run_scm_selective_forward
+  # (a fourth, the fallback-base pool, was removed as unreachable - SCM-05).
   # Guarding some but not all is the failure mode this test exists to catch:
   # each unguarded one is the same misread in a different place.
   # Reads the source, so it only runs against a source tree. Under R CMD check
@@ -375,8 +376,7 @@ test_that("every forward candidate pool in the file carries the phase filter", {
   skip_if_not(file.exists(src_file), "package sources not available")
   src <- readLines(src_file, warn = FALSE)
 
-  pools <- c("all_previous_models <- ", "all_main_models <- ",
-             "all_models_so_far <- ", "all_completed_candidates <- ")
+  pools <- c("all_main_models <- ", "all_models_so_far <- ", "all_completed_candidates <- ")
 
   for (pool in pools) {
     start <- grep(pool, src, fixed = TRUE)

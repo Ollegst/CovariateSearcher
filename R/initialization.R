@@ -139,7 +139,8 @@ initialize_covariate_search <- function(base_model_path,
   # Load data files. Each argument may be given as a path (loaded here) OR as an
   # already-in-memory data.frame (used as-is) -- see .load_if_path().
   cat("Loading data files...\n")
-  search_state$data_file <- .load_if_path(data_file_path, "data_file_path")
+  search_state$data_file <- .load_if_path(data_file_path, "data_file_path",
+                                           na = c("", "NA", "."))
   search_state$covariate_search <- .load_if_path(covariate_search_path, "covariate_search_path")
 
   # VALIDATION: Check that the ID column exists in the data
@@ -529,10 +530,9 @@ build_covariate_reference_table <- function(data, id, time,
   }
 
   # ---- Step 5: TIME_DEPENDENT from FULL data -----------------------------
+  # The same rule model_add_cov uses for placement.
   compute_time_dependent <- function(cov) {
-    df <- data[!is.na(data[[cov]]), c(id, cov)]
-    n_distinct_per_id <- tapply(df[[cov]], df[[id]], function(v) length(unique(v)))
-    if (any(n_distinct_per_id > 1)) "Yes" else "No"
+    if (.covariate_is_time_varying(data, cov, id)) "Yes" else "No"
   }
 
   time_dep <- setNames(vapply(unique_covs, compute_time_dependent, character(1)), unique_covs)
@@ -753,6 +753,25 @@ validate_covariate_search_table <- function(covariate_search, data_file) {
         )
       }
 
+      # The other direction (MOD-07): THETAs are written for observed levels but
+      # df is counted from LEVELS, so an unobserved declared level made the test
+      # too strict. With LEVELS == observed, REFERENCE in LEVELS also means a
+      # second observed level is a real non-reference level to estimate.
+      unobserved <- setdiff(declared_levels_num, observed_levels_num)
+      if (length(unobserved) > 0) {
+        stop(
+          "Covariate '", cov_name, "' declares LEVELS never observed in the dataset: ",
+          paste(unobserved, collapse = ", "),
+          ". Remove them from LEVELS (degrees of freedom are counted from LEVELS)."
+        )
+      }
+      if (length(observed_levels_num) < 2) {
+        stop(
+          "Categorical covariate '", cov_name, "' has only one observed level (",
+          paste(observed_levels_num, collapse = ", "), "): there is no effect to estimate."
+        )
+      }
+
       # Check REFERENCE is within declared LEVELS
       ref_values <- unique(as.character(cov_rows$REFERENCE))
       ref_values <- ref_values[!is.na(ref_values) & trimws(ref_values) != ""]
@@ -946,13 +965,8 @@ validate_param_transformations <- function(covariate_search, data_file, id_col,
 
   # A covariate is placed at population level (and thus needs a classifiable
   # transform) when it is time-CONSTANT: at most one distinct value per subject.
-  # Mirror the data-based check model_add_cov uses.
-  is_time_varying <- function(cov) {
-    if (!cov %in% names(data_file) || !id_col %in% names(data_file)) return(FALSE)
-    lv <- tapply(data_file[[cov]], data_file[[id_col]],
-                 function(x) length(unique(x[!is.na(x)])))
-    isTRUE(max(lv, na.rm = TRUE) > 1)
-  }
+  # The same data-based check model_add_cov uses.
+  is_time_varying <- function(cov) .covariate_is_time_varying(data_file, cov, id_col)
 
   pop_params <- character(0)
   for (i in seq_len(nrow(covariate_search))) {

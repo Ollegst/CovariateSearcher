@@ -352,48 +352,16 @@ run_scm_selective_forward <- function(search_state,
       current_best_model <- prev_step$best_model
 
       if (is.null(current_best_model) || is.na(current_best_model)) {
-        # Fallback: best ACCEPTABLE model among completed previous ones. Picking
-        # on fit alone here would let a model that failed the search's own
-        # criteria become the base every later step builds on. Backward rows are
-        # excluded for the reason given at the overall pick below: their
-        # delta_ofv carries the opposite sign convention, and "previous steps"
-        # includes the initial backward phase when the search began with one.
-        all_previous_models <- search_state$search_database[
-          !is.na(search_state$search_database$step_number) &
-            search_state$search_database$step_number < current_step &
-            search_state$search_database$status == "completed" &
-            !.scm_backward_rows(search_state) &
-            !is.na(search_state$search_database$delta_ofv), ]
-
-        if (nrow(all_previous_models) == 0) {
-          cat(sprintf("❌ No completed models found from previous steps\n"))
-          forward_selection_active <- FALSE
-          break
-        }
-
-        pick <- .best_acceptable_model(search_state, all_previous_models$model_name,
-                                       p_value = forward_p_value,
-                                       rse_threshold = rse_threshold)
-        .report_rse_rejections(pick$rejected, "fallback base selection")
-
-        if (is.null(pick$model)) {
-          # Nothing among the earlier steps qualifies. Carry on from the step's
-          # own parent - the search always has a base, and the "no significant
-          # models" check below is what decides whether to keep going.
-          current_best_model <- if (!is.na(prev_step$base_model)) {
-            prev_step$base_model
-          } else {
-            base_model_id
-          }
-          cat(sprintf("📍 No earlier model meets the criteria - using %s as base\n",
-                      current_best_model))
+        # No winner means no significant model, and the check below stops the
+        # loop. Only a direct resume of such a step gets here; carry on from the
+        # step's own parent (SCM-05 - an earlier-steps search used to run here).
+        current_best_model <- if (!is.na(prev_step$base_model)) {
+          prev_step$base_model
         } else {
-          current_best_model <- pick$model
-          cat(sprintf("📍 Using best acceptable model as base: %s (from Step %d)\n",
-                      current_best_model,
-                      all_previous_models$step_number[
-                        match(current_best_model, all_previous_models$model_name)]))
+          base_model_id
         }
+        cat(sprintf("📍 No Step %d winner - using its base %s\n",
+                    current_step - 1, current_best_model))
       } else {
         cat(sprintf("📍 Using Step %d winner as base: %s\n", current_step - 1, current_best_model))
       }

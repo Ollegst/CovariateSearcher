@@ -35,7 +35,9 @@
 #' @param auto_submit Logical. Whether to automatically submit models to cluster (default: TRUE)
 #' @param auto_retry Logical. Whether to enable automatic retry for failed models (default: TRUE)
 #' @param save_checkpoints Logical. Whether to save state after each major step (default: TRUE)
-#' @param final_testing Logical. Whether to test excluded covariates on final model (default: TRUE)
+#' @param final_testing Logical. No longer has an effect: the final testing of
+#'   excluded covariates was retired (it could never run). Kept so existing calls
+#'   still work.
 #' @return List containing comprehensive SCM results
 #' @export
 run_automated_scm_testing <- function(search_state,
@@ -147,7 +149,6 @@ run_automated_scm_testing <- function(search_state,
   cat(sprintf("Require covariance step: %s\n", require_cov_step))
   cat(sprintf("Auto-retry enabled: %s\n", auto_retry))
   cat(sprintf("Checkpoints enabled: %s\n", save_checkpoints))
-  cat(sprintf("Final testing enabled: %s\n", final_testing))
   cat(paste(rep("=", 80), collapse=""), "\n")
 
   # Initialize tracking
@@ -387,13 +388,14 @@ run_automated_scm_testing <- function(search_state,
     character(0)
   })
 
-  # Get excluded covariates and keep only forward-phase failures
+  # Get excluded covariates and keep only forward-selection failures (SCM-07:
+  # the filter used to read "forward", a phase never written, so this was empty)
   excluded_covariates <- tryCatch({
     excluded_all <- get_excluded_covariates(search_state)
 
     forward_excluded <- search_state$search_database[
       which(search_state$search_database$excluded_from_step == TRUE &
-              search_state$search_database$phase == "forward"),
+              search_state$search_database$phase == "forward_selection"),
       , drop = FALSE
     ]
 
@@ -406,117 +408,6 @@ run_automated_scm_testing <- function(search_state,
     cat(sprintf("Warning: Could not get excluded covariates: %s\n", e$message))
     character(0)
   })
-
-  # ===================================================================
-  # FINAL TESTING OF EXCLUDED COVARIATES (only for forward-ending workflows)
-  # ===================================================================
-
-  # Only do final testing if enabled, we ran forward selection, and not doing full SCM
-  if (final_testing && run_forward && !run_final_backward) {
-    if (length(excluded_covariates) > 0) {
-      cat("\n🔬 FINAL TESTING OF EXCLUDED COVARIATES\n")
-      cat(paste(rep("-", 50), collapse=""), "\n")
-
-      cat(sprintf("Testing %d excluded covariates on final model %s\n",
-                  length(excluded_covariates), final_model))
-      cat(sprintf("Excluded covariates: %s\n", paste(excluded_covariates, collapse = ", ")))
-
-      # Covariate names back to tags
-      excluded_tags <- character(0)
-      for (cov_name in excluded_covariates) {
-        tryCatch({
-          matching_tags <- names(search_state$tags)[sapply(search_state$tags, function(x) x == cov_name)]
-          if (length(matching_tags) > 0) {
-            excluded_tags <- c(excluded_tags, matching_tags[1])
-          }
-        }, error = function(e) {
-          cat(sprintf("Warning: Could not convert covariate %s to tag: %s\n", cov_name, e$message))
-        })
-      }
-
-      if (length(excluded_tags) > 0) {
-        final_testing_result <- tryCatch({
-          run_univariate_step(
-            search_state = search_state,
-            base_model_id = final_model,
-            covariates_to_test = excluded_tags,
-            step_name = "Final Testing: Excluded Covariates",
-            include_excluded = TRUE
-          )
-        }, error = function(e) {
-          cat(sprintf("❌ Final testing failed: %s\n", e$message))
-          NULL
-        })
-
-        if (!is.null(final_testing_result) && final_testing_result$status == "models_created") {
-          search_state <- final_testing_result$search_state
-
-          # Submit and wait for final testing models
-          final_submission <- tryCatch({
-            submit_and_wait_for_step(
-              search_state = search_state,
-              model_names = final_testing_result$models_created,
-              step_name = "Final Testing Models",
-              auto_submit = auto_submit,
-              auto_retry = auto_retry
-            )
-          }, error = function(e) {
-            cat(sprintf("❌ Final testing submission failed: %s\n", e$message))
-            NULL
-          })
-
-          if (!is.null(final_submission)) {
-            search_state <- final_submission$search_state
-
-            # Check if any final testing models are better
-            if (length(final_submission$completed_models) > 0) {
-              final_evaluation <- tryCatch({
-                select_best_model(
-                  search_state = search_state,
-                  model_names = final_submission$completed_models,
-                  p_value = forward_p_value,
-                  rse_threshold = rse_threshold
-                )
-              }, error = function(e) {
-                cat(sprintf("❌ Final evaluation failed: %s\n", e$message))
-                NULL
-              })
-
-              # select_best_model() returns 'best_model'
-              if (!is.null(final_evaluation) && !is.null(final_evaluation$best_model)) {
-                search_state <- final_evaluation$search_state
-                cat(sprintf("🎉 Final testing found better model: %s\n", final_evaluation$best_model))
-                final_model <- final_evaluation$best_model
-
-                # Update final covariates
-                final_covariates <- tryCatch({
-                  get_model_covariates_from_db(search_state, final_model)
-                }, error = function(e) {
-                  character(0)
-                })
-              } else {
-                cat("✅ Final testing complete - no significant improvements found\n")
-              }
-            }
-          }
-        } else {
-          cat("⚠️ Final testing model creation failed\n")
-        }
-      } else {
-        cat("⚠️ Could not convert excluded covariate names to tags\n")
-      }
-    } else {
-      cat("\n✅ PHASE 3: No excluded covariates to test\n")
-    }
-  } else {
-    if (!final_testing) {
-      cat("\n⏭️ PHASE 3: Final testing disabled\n")
-    } else if (run_final_backward) {
-      # Final testing is intentionally skipped when final backward elimination runs.
-    } else {
-      cat("\n⏭️ PHASE 3: No forward selection performed\n")
-    }
-  }
 
   # ===================================================================
   # FINAL SUMMARY AND REPORTING

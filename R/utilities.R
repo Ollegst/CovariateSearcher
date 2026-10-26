@@ -110,10 +110,13 @@ extract_covariate_name_from_tag <- function(tag) {
 #'   referenced by name against \code{models_folder}.
 #' @param x The object, or a length-1 character path to a \code{.csv}/\code{.rds}.
 #' @param what Character label for this input, used in error messages.
+#' @param na Character vector of CSV cells read as missing. The NONMEM dataset
+#'   is read with `c("", "NA", ".")`, since "." is NONMEM's missing marker;
+#'   other tables keep the readr default.
 #' @return The in-memory object (loaded if a path was given).
 #' @keywords internal
 #' @noRd
-.load_if_path <- function(x, what = "input") {
+.load_if_path <- function(x, what = "input", na = c("", "NA")) {
   if (!is.character(x) || length(x) != 1L) return(x)   # already an object
   if (!file.exists(x)) {
     stop(sprintf("`%s` is a path but the file does not exist: %s", what, x),
@@ -121,11 +124,28 @@ extract_covariate_name_from_tag <- function(tag) {
   }
   ext <- tolower(tools::file_ext(x))
   switch(ext,
-    csv = readr::read_csv(x, show_col_types = FALSE),
+    csv = readr::read_csv(x, na = na, show_col_types = FALSE),
     rds = readRDS(x),
     stop(sprintf("`%s`: cannot load a '.%s' file (supported: .csv, .rds): %s",
                  what, ext, x), call. = FALSE)
   )
+}
+
+
+# Does `cov` take more than one value within any subject? A missing value (NA,
+# or NONMEM's "." in a column read as text) is not a value, so a time-constant
+# covariate with a missing record is not time-varying. The one rule for the
+# effect's placement (model_add_cov), the transform check
+# (validate_param_transformations) and the table's TIME_DEPENDENT column.
+#' @keywords internal
+#' @noRd
+.covariate_is_time_varying <- function(data, cov, id) {
+  if (!cov %in% names(data) || !id %in% names(data)) return(FALSE)
+  x <- data[[cov]]
+  keep <- !is.na(x) & trimws(as.character(x)) != "."
+  if (!any(keep)) return(FALSE)
+  n_values <- tapply(x[keep], data[[id]][keep], function(v) length(unique(v)))
+  isTRUE(max(n_values, na.rm = TRUE) > 1)
 }
 
 

@@ -63,7 +63,9 @@ this run.}
 
 \item{save_checkpoints}{Logical. Whether to save state after each major step (default: TRUE)}
 
-\item{final_testing}{Logical. Whether to test excluded covariates on final model (default: TRUE)}
+\item{final_testing}{Logical. No longer has an effect: the final testing of
+excluded covariates was retired (it could never run). Kept so existing calls
+still work.}
 }
 \value{
 List containing comprehensive SCM results
