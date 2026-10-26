@@ -63,13 +63,9 @@ theme_pps_table <- function(x) {
 #' @keywords internal
 extract_params <- function(lines, block_tag, remove_prefix = FALSE) {
 
-  # Find all indices where the block starts
-  block_starts <- which(stringr::str_detect(
-    lines,
-    # (?![A-Za-z]): $THETA but not the $PRIOR records $THETAP / $THETAPV
-    # (likewise $OMEGAP / $OMEGAPD, $SIGMAP / $SIGMAPD).
-    stringr::regex(paste0("^\\$", block_tag, "(?![A-Za-z])"), ignore_case = TRUE)
-  ))
+  # Find all indices where the block starts (leading blanks and any case
+  # allowed; not the $PRIOR records $THETAP / $THETAPV, $OMEGAP / ...)
+  block_starts <- .record_starts(lines, block_tag)
 
   # Process each block header found
   params <- purrr::map_dfr(block_starts, function(start_idx) {
@@ -77,7 +73,7 @@ extract_params <- function(lines, block_tag, remove_prefix = FALSE) {
     # Extract the remainder of the header line (after the $TAG token)
     header_remainder <- stringr::str_remove(
       lines[start_idx],
-      stringr::regex(paste0("^\\$", block_tag, "\\s*"), ignore_case = TRUE)
+      stringr::regex(paste0("^\\s*\\$", block_tag, "\\s*"), ignore_case = TRUE)
     )
 
     # Get the lines after the header
@@ -87,12 +83,10 @@ extract_params <- function(lines, block_tag, remove_prefix = FALSE) {
       character(0)
     }
 
-    # The block ends when the next line starting with "$" is encountered
-    end_idx <- dplyr::if_else(
-      any(stringr::str_detect(sub_lines, "^\\$")),
-      min(which(stringr::str_detect(sub_lines, "^\\$"))) - 1,
-      length(sub_lines)
-    )
+    # The block ends at the next record (a line whose first non-blank
+    # character is "$")
+    next_record <- which(.is_record_line(sub_lines))
+    end_idx <- if (length(next_record)) next_record[1] - 1 else length(sub_lines)
 
     block_lines <- if (length(sub_lines) > 0 && end_idx > 0) {
       sub_lines[1:end_idx]

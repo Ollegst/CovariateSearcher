@@ -113,9 +113,8 @@ apply_covariate_model <- function(model_name,
 
   # Return the lines of a $BLOCK (header + body, up to the next $ record).
   get_block <- function(tag) {
-    # (?![A-Za-z]): $THETA but not the $PRIOR records $THETAP / $THETAPV.
-    starts <- grep(paste0("^\\s*\\$", tag, "(?![A-Za-z])"), lines,
-                   ignore.case = TRUE, perl = TRUE)
+    # (?![A-Za-z]) in .record_starts: $THETA but not $THETAP / $THETAPV.
+    starts <- .record_starts(lines, tag)
     if (length(starts) == 0) return(character(0))
     out <- character(0)
     for (s in starts) {

@@ -545,7 +545,12 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
                          "using THETA(", theta_num, ")"))
     }
     ifelcode <- paste0(ifelcode, 'ENDIF\n')
-    modelcode[grep('^\\$PK', modelcode)] <- paste0(modelcode[grep('^\\$PK', modelcode)], '\n\n', ifelcode)
+    # $PK, or $PRED for a model that has no $PK record.
+    pk_idx <- .record_starts(modelcode, "(?:PK|PRED)")[1]
+    if (is.na(pk_idx)) {
+      stop("Model file has no $PK or $PRED record - cannot insert the categorical block for ", cova)
+    }
+    modelcode[pk_idx] <- paste0(modelcode[pk_idx], '\n\n', ifelcode)
     #}
   }
 
@@ -643,7 +648,7 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
 
   log_function(paste("New THETA line to add:", newthetaline))
 
-  lineomeg <- grep('^\\s*\\$OMEGA(?![A-Za-z])', modelcode, perl = TRUE)[1]
+  lineomeg <- .record_starts(modelcode, "OMEGA")[1]
   if (is.na(lineomeg)) {
     log_function("ERROR: No $OMEGA section found in model file")
     stop("Model file missing $OMEGA section - cannot insert THETA line")
@@ -653,9 +658,9 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   # that follows it. In the usual layout that is the $OMEGA line, but "before
   # $OMEGA" lands inside another record when one sits in between -- e.g.
   # $THETAP/$THETAPV priors, where the new THETA would become a prior value.
-  theta_starts <- grep("^\\s*\\$THETA(?![A-Za-z])", modelcode, perl = TRUE)
+  theta_starts <- .record_starts(modelcode, "THETA")
   if (length(theta_starts) > 0) {
-    record_starts <- grep("^\\s*\\$", modelcode)
+    record_starts <- which(.is_record_line(modelcode))
     insert_at <- record_starts[record_starts > max(theta_starts)][1]
     if (is.na(insert_at)) insert_at <- length(modelcode) + 1
     log_function(paste("Inserting THETA line at the end of the last $THETA record, before line:",
@@ -1225,11 +1230,11 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
   # of the LAST record, which a scan of the first record alone never reaches.
   # (?![A-Za-z]) leaves out the $PRIOR records $THETAP / $THETAPV, whose values
   # are priors on existing THETAs, not THETAs of their own.
-  theta_starts <- grep("^\\$THETA(?![A-Za-z])", modelcode, perl = TRUE)
+  theta_starts <- .record_starts(modelcode, "THETA")
   if (length(theta_starts) == 0) {
     stop("No $THETA section found in model file for ", model_to_modify)
   }
-  section_starts <- grep("^\\$", modelcode)
+  section_starts <- which(.is_record_line(modelcode))
 
   theta_numbers_to_remove <- c()
   theta_lines_to_remove <- c()
@@ -1247,7 +1252,7 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
     # A value on the record line itself ("$THETA 0.5 ; CL") takes the next
     # THETA number. Deleting that line would delete the record header with it,
     # so a covariate THETA found there is refused rather than removed.
-    header_rest <- sub("^\\$THETA\\s*", "", modelcode[theta_start])
+    header_rest <- sub("^\\s*\\$THETA\\s*", "", modelcode[theta_start], ignore.case = TRUE)
     if (grepl("^[^;]*[0-9]", header_rest)) {
       theta_count <- theta_count + 1
       if (is_covariate_theta(header_rest)) {
@@ -1329,9 +1334,9 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
 
   # Step 6: Remove IF-THEN-ELSE blocks for categorical covariates
   if (cov_info$STATUS == "cat") {
-    pk_start <- grep("^\\$PK", modelcode)
+    pk_start <- .record_starts(modelcode, "(?:PK|PRED)")
     if (length(pk_start) > 0) {
-      pk_end <- grep("^\\$", modelcode)
+      pk_end <- which(.is_record_line(modelcode))
       pk_end <- pk_end[pk_end > pk_start[1]][1] - 1
       if (is.na(pk_end)) pk_end <- length(modelcode)
 

@@ -789,9 +789,8 @@ simulate_scenario_profiles <- function(param_sets,
   lines <- .read_control_stream(ctl_path[1])
 
   get_block <- function(tag) {
-    # (?![A-Za-z]): $THETA but not the $PRIOR records $THETAP / $THETAPV.
-    starts <- grep(paste0("^\\s*\\$", tag, "(?![A-Za-z])"), lines,
-                   ignore.case = TRUE, perl = TRUE)
+    # (?![A-Za-z]) in .record_starts: $THETA but not $THETAP / $THETAPV.
+    starts <- .record_starts(lines, tag)
     if (length(starts) == 0) return(character(0))
     out <- character(0)
     for (s in starts) {

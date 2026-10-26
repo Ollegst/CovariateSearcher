@@ -67,6 +67,27 @@ find_model_file <- function(base_path, extensions = c(".ctl", ".mod")) {
 }
 
 
+# Line indices where a `$<tag>` record starts. NM-TRAN accepts leading blanks
+# and any case, so both are allowed; the name must not continue with a letter,
+# so "THETA" matches $THETA and $THETA(0,1) but not the $PRIOR records $THETAP /
+# $THETAPV. `tag` is a regex fragment, e.g. "(?:PK|PRED)".
+#' @keywords internal
+#' @noRd
+.record_starts <- function(lines, tag) {
+  grep(paste0("^\\s*\\$", tag, "(?![A-Za-z])"), lines,
+       ignore.case = TRUE, perl = TRUE)
+}
+
+
+# TRUE for every line that starts a record (a `$` as first non-blank character);
+# a record runs until the next such line.
+#' @keywords internal
+#' @noRd
+.is_record_line <- function(lines) {
+  grepl("^\\s*\\$", lines)
+}
+
+
 # Read a NONMEM control stream (.ctl/.mod), repairing non-UTF-8 lines. warn =
 # FALSE because a file saved without a final newline is common and harmless,
 # and model_report() drops a model on any warning.
