@@ -326,7 +326,7 @@ Reviewed by Fable (`D:\R\tmp\review-STA\`), re-checked by Opus (`D:\R\tmp\verify
   require a built-in for that STATUS or an expression using `cov` — the rule `build_covariate_reference_table`
   already applies. Lower-case STATUS first (it is compared case-sensitively there).
 - **Must keep:** user expressions in `cov`/`ref`/theta names; `cat.linear`/`cat.power`; case-insensitive matching.
-- **Status:** open
+- **Status:** fixed in f16b579 (2026-10-26)
 
 #### STA-02 — Duplicate of NIO-02 (run-success readers disagree on "finished"); confirmed again independently.
 
@@ -493,13 +493,13 @@ by the checker — the corrected versions are the ones below.
   Reading the table from CSV makes it numeric (the vignette path works). `add_covariates_to_search`
   also coerces the column to character.
 - **Proposed fix:** `as.numeric(ref)`; stop on NA only when the expression uses `ref`.
-- **Status:** open
+- **Status:** fixed in f16b579 (2026-10-26)
 
 #### MOD-09 — STATUS case handled inconsistently ("CAT" leaves a dead IF block after removal)
 - **Location:** R/model-modification.R:1331; R/initialization.R:615, 376
 - **Type:** inconsistency · **Severity:** cosmetic · **Verified:** confirmed (both)
 - **Proposed fix:** normalise STATUS in validation; removal dispatches on the registry's `categorical` flag.
-- **Status:** open — low priority
+- **Status:** fixed in f16b579 (2026-10-26)
 
 #### MOD-10 — The remover fails on an indented ` $THETA` record that the writer accepts
 - **Location:** R/model-modification.R:1228, 1232, 1332
@@ -968,7 +968,7 @@ Reviewed by Fable (`D:\R\tmp\review-XAR\`), re-checked by Sonnet (`D:\R\tmp\veri
 - **Evidence:** tags.yaml gets the prefix, the table does not; `add_covariate_to_model` stops at the first
   add ("No matching covariate definition found"). The docs say this column is generated, not written.
 - **Proposed fix:** add the prefix in `validate_covariate_search_table`.
-- **Status:** open (groups G6, G8) — low priority
+- **Status:** fixed in f16b579 (2026-10-26)
 
 #### XAR-08 — Categorical THETAs named from a lookup decode (`beta_SEX_CL_MALE`) are labelled as multi-theta effects
 - **Location:** R/model-modification.R:524-531 vs R/model-output-tables.R:706-722, ~750

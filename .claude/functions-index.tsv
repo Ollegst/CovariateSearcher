@@ -74,7 +74,7 @@ initialization.R	initialize_search_config	initialize_search_config(search_state,
 initialization.R	load_tags	load_tags(search_state)	yes	e057693866516a84841e05ce636412b8
 initialization.R	update_tags_yaml	update_tags_yaml(search_state=NULL, covariate_search=NULL, tags_yaml_path="data/spec/tags.yaml", verbose=TRUE)	yes	87f0d19608394848b2ba022e21d59594
 initialization.R	validate_base_model_for_search	validate_base_model_for_search(base_model_path, models_folder="models", require_cov_step=TRUE)	yes	ba4845f9292ba28fdb3abca8335e524c
-initialization.R	validate_covariate_search_table	validate_covariate_search_table(covariate_search, data_file)	yes	fb1dc9c900e7dc43d8b56660ca8c100d
+initialization.R	validate_covariate_search_table	validate_covariate_search_table(covariate_search, data_file)	yes	b20222916c6978f2d8352dc8f5be4ae9
 initialization.R	validate_param_transformations	validate_param_transformations(covariate_search, data_file, id_col, model_name, models_folder="models")	yes	970b28543f233eb762b7399a78ded312
 initialization.R	validate_setup	validate_setup(search_state)	yes	c83bca450680e40b67d32275f9086b3d
 model-discovery.R	discover_existing_models	discover_existing_models(search_state)	yes	a6bcb9bcb7e6cf54d6f219fc7c543f3a
