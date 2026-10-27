@@ -378,6 +378,10 @@ apply_covariate_model <- function(model_name,
         outer <- is_active()
         c_ok  <- outer & as_mask(eval_cond(m[2]))
         do_assign(m[3], mask = c_ok)
+      } else {
+        # Unbalanced parentheses: the condition cannot be read, so it is
+        # reported with the other unevaluable conditions.
+        bad_conditions <- c(bad_conditions, ln)
       }
       next
     }

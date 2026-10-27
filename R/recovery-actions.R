@@ -545,7 +545,7 @@ adjust_theta_for_covariate <- function(search_state, model_name, covariate_tag,
     # Write through write_model_file so a Windows-1252 file stays Windows-1252
     # (.read_control_stream repaired its lines to UTF-8).
     attr(modelcode, "file_path") <- model_file_path
-    invisible(capture.output(write_model_file(search_state, modelcode)))
+    invisible(utils::capture.output(write_model_file(search_state, modelcode)))
 
     cat(sprintf("    ✓ Modified %d THETA lines for covariate %s\n",
                 theta_lines_modified, covariate_value))

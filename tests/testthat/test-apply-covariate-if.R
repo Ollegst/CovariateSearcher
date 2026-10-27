@@ -43,3 +43,12 @@ test_that(".split_single_line_if keeps nested parentheses in the condition", {
   expect_length(.split_single_line_if("IF (A.EQ.1 X = 1"), 0)
   expect_length(.split_single_line_if("IF ("), 0)
 })
+
+test_that("a single-line IF with unbalanced parentheses is reported", {
+  md <- write_if_model("IF (SEX.EQ.2 TV_CL = TV_CL + 0.5")
+  expect_warning(
+    out <- apply_covariate_model("run1", cs, data.frame(THETA1 = 1), c(WT = 70, SEX = 2),
+                                 models_folder = md),
+    "could not be evaluated", fixed = TRUE)
+  expect_equal(out$THETA1, 1.0, tolerance = 1e-8)
+})

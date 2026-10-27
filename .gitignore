@@ -32,3 +32,6 @@ inst/doc
 # The pkgdown site is built by the pkgdown workflow and published from the
 # gh-pages branch, so local build output stays out of the repository.
 docs/
+
+# Machine-specific R environment (library and Rtools on D:)
+.Renviron

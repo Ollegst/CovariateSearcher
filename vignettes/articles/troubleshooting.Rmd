@@ -101,7 +101,7 @@ initialization. The message names the row or line.
 | initial estimate of 0 that is not FIXED | use a non-zero `INIT`, or `0 FIX` |
 | `EXP(... + ETA)` parameter without a `TV_<param>` typical value | write `TV_P = THETA(n)`, `MU_k = LOG(TV_P)`, `P = EXP(MU_k + ETA(k))` |
 | categorical covariate with no `LEVELS` or no `REFERENCE` | fill both columns in the covariate search table |
-| covariate with no baseline value | give every subject a covariate value at baseline |
+| covariate with no baseline value (raised when the covariate table is built) | give every subject a covariate value at baseline |
 
 See [Covariate Formulas](covariate-formulas.html) for the rules behind each.
 

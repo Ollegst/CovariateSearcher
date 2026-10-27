@@ -403,9 +403,10 @@ abs_exp <- readRDS(file.path(plot_dir, paste0(runno, "-exposure-table-absolute.r
 rel_exp <- readRDS(file.path(plot_dir, paste0(runno, "-exposure-table-relative.rds")))
 ```
 
-Every quantity must have a label, so the metric/parameter column names have to
-match the spec keys - a missing one stops the call rather than silently
-producing an unlabelled column.
+Every parameter in a parameter table must have a label, so its column name has
+to match a spec key - a missing one stops the call rather than silently
+producing an unlabelled column. Exposure tables include only the metrics that
+have a label and leave the others out.
 
 ---
 

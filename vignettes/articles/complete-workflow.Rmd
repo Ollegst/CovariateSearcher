@@ -323,7 +323,8 @@ subset(ss$search_database, step_number == 7,
 
 The `phase` column holds `base`, `forward_selection`, `redemption` or
 `backward_elimination` (`manual` for models already in the folder when the search starts); `action` holds
-`add_covariate`, `remove_covariate` or `retry`.
+what was done to the model, mainly `add_covariate`, `remove_covariate` or `retry`
+(`base_model` for the base model).
 
 ### Results
 
