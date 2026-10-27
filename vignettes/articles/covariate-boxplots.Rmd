@@ -206,6 +206,13 @@ create_covariate_boxplots(
 annotations without touching the axis and strip text, which changing
 `base_size` would also rescale. The counts are printed in bold.
 
+The `n =` count is the number of distinct subjects, read from the column named by
+`id_col` (default `"ID"`); when the data has no such column, rows are counted.
+
+When tied quantiles leave fewer than four bins, the boxes are labelled by their
+interval alone, without the `Q1:`... prefix. The jittered points use a fixed seed,
+so a re-run draws them in the same places.
+
 `percent_change` compares each box with the **first level of the same panel**:
 
 | box | median | label |
@@ -261,6 +268,7 @@ Every entry of `type` must have a label there, or the call stops.
 | `prefix` | `NULL` | prepended to every output file name |
 | `base_size` | `10` | ggplot base font size; also scales the median label and the `n =` text unless `label_size` / `n_size` are given |
 | `show_median`, `show_n` | `TRUE` | median label on each box; bold `n = <count>` under it |
+| `id_col` | `"ID"` | subject ID column used for the `n =` count (distinct subjects; rows when the column is absent) |
 | `percent_change` | `FALSE` | add the change from the panel's first level to the median label |
 | `label_size`, `n_size` | `NULL` | size of the median label and of the `n =` text, independently of `base_size` |
 | `footnote` | `NULL` | your own caption text, one line per element |

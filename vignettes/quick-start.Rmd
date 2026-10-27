@@ -76,6 +76,8 @@ how to rewrite, if a parameter you are testing covariates on is written as:
 | `V = EXP(THETA(2) + ETA(2))` | no separate `TV_V` line, so the covariate term would land outside the `EXP` |
 | `TV_V = EXP(THETA(2))` with `V = TV_V*EXP(ETA(2))` | log scale disguised as normal - the covariate would be placed multiplicatively on a log value |
 | `V = EXP(TV_V + EXP(ETA(2))` | unbalanced parentheses - the transform cannot be detected |
+| `END IF` in `$PK` | NM-TRAN knows only `ENDIF` |
+| an `EXP(... + ETA)` parameter whose typical value does not come through `TV_<param>` (`MU_k = LOG(TV_P)` form) | forest plots and scenario simulations read the typical value through `TV_<param>` |
 
 Only parameters that actually receive a covariate are checked.
 
@@ -199,7 +201,9 @@ results <- run_automated_scm_testing(ss, "run20",
 ```
 
 With `full_scm = TRUE` and `starting_phase = "backward"` you get the full SCM+
-sequence: backward, then forward, then backward again.
+sequence: backward, then forward, then backward again. When the starting model
+already has covariates and no initial backward ran, the final backward also runs
+after a forward search that left the model unchanged.
 
 ### Faster: selective SCM
 
@@ -210,6 +214,17 @@ step 1 into later steps, instead of retesting all of them:
 results <- run_automated_scm_testing(ss, "run1", scm_type = "selective",
                                      starting_phase = "forward", full_scm = TRUE)
 ```
+
+In selective forward, redemption starts from the best model with every covariate
+not yet tested on it, then continues with the significant ones on each new
+winner.
+
+### Failed covariates
+
+`retest_failed = TRUE` (the default) decides whether covariates excluded after a
+failed model and a failed retry are tested again: at every step of standard SCM,
+at the first selective step (including the SCM+ forward phase) and in
+redemption. Set it to `FALSE` to leave them out.
 
 ### Thresholds
 
