@@ -816,7 +816,7 @@ mrgsolve could not compile on this machine, so `simulate_scenario_profiles` was 
   hop to an existing name (do not recurse into `K = CL/V`), ignore non-identifier left sides. In
   `.structural_param_names` use a syntactic test (no evaluation environment there). Checked on 10 shapes:
   TV_CL, TVCL, IF-reassigned TV, categorical, multi-theta and plain forms stay byte-identical.
-- **Status:** open
+- **Status:** open — decided 2026-10-27: option 1 instead of the reader fix: validation at initialisation requires, for every parameter (not only covariate targets), that P = EXP(MU_k + ETA) has MU_k = LOG(TV_P) with a TV_P line, and that any other variable inside EXP(... + ETA) is named TV_P; inline P = EXP(THETA(n) + ETA) stays accepted
 
 #### SIM-03 — A single-line `IF` with nested parentheses is silently skipped
 - **Location:** R/apply-covariate-model.R:374-382
@@ -849,13 +849,13 @@ mrgsolve could not compile on this machine, so `simulate_scenario_profiles` was 
   writes `ENDIF`, so only hand-written blocks are affected. The removal-side pattern is a different issue
   (only package-written blocks), but if hit it would delete the rest of `$PK`.
 - **Proposed fix:** `^END\s*IF\b` (harmless either way; matches the existing `ELSE IF` acceptance).
-- **Status:** open — decided 2026-10-27: accept both `ENDIF` and `END IF`
+- **Status:** open — decided 2026-10-27: only ENDIF is NM-TRAN syntax (NONMEM docs list ENDIF only): validation rejects END IF in the base model; readers stay ENDIF-only
 
 #### SIM-06 — A categorical covariate without LEVELS silently gets no forest scenario
 - **Location:** R/forest-plots.R:515-527 · **Type:** bug · **Severity:** result (unlikely) · **Verified:** confirmed
 - **Evidence:** validation normally stops on missing LEVELS, so only hand-built tables or a "CAT" STATUS (MOD-09) reach it.
 - **Proposed fix:** warn, or fall back to the observed levels.
-- **Status:** open — low priority
+- **Status:** open — decided 2026-10-27: a categorical covariate without LEVELS is an error: validation already stops; the forest-plot path stops with the same error instead of skipping
 
 #### SIM-09 — Lower-case `$pk` falls back to raw draws with no warning
 - **Location:** R/apply-covariate-model.R:241-247, 401, 409 · **Type:** bug · **Severity:** result (rare input) · **Verified:** confirmed (both)

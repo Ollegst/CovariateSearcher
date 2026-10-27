@@ -175,10 +175,10 @@ and 7 are closed here. **Order matters:** each step uses the one before.
 
 | # | Finding(s) | Change | Size | Needs |
 |---|---|---|---|---|
-| 6.1 | **SIM-01** | follow the defining variable to the parameter (`MU_k`, `TVV → V2`); syntactic version in `.structural_param_names` | M | G1 |
+| 6.1 | **SIM-01** | validation: every MU-referenced parameter goes through a TV_<param> line; any variable inside EXP(... + ETA) is TV_<param> (inline THETA allowed) | M | decided 2026-10-27 |
 | 6.2 | **SIM-03** | depth-counted single-line `IF`; warn on conditions that cannot be evaluated (state the behaviour change) | S | — |
-| 6.3 | SIM-02 | accept `END IF` in the interpreter and the remover | S | decided 2026-10-27 |
-| 6.4 | SIM-06 | warn (or use observed levels) when a categorical covariate has no LEVELS | S | — |
+| 6.3 | SIM-02 | validation rejects END IF (only ENDIF is NM-TRAN syntax) | S | decided 2026-10-27 |
+| 6.4 | SIM-06 | forest-plot path stops on a categorical covariate with no LEVELS (validation already does) | S | decided 2026-10-27 |
 | 6.5 | SIM-05, SIM-10, SIM-11 | percentile labels; subject counts and bin labels in boxplots; cap/seed the jitter layer | S each | — |
 | 6.6 | SIM-07 | tabulate only labelled columns | S | decided 2026-10-27 |
 
