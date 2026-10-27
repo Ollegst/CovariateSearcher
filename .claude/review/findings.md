@@ -816,7 +816,7 @@ mrgsolve could not compile on this machine, so `simulate_scenario_profiles` was 
   hop to an existing name (do not recurse into `K = CL/V`), ignore non-identifier left sides. In
   `.structural_param_names` use a syntactic test (no evaluation environment there). Checked on 10 shapes:
   TV_CL, TVCL, IF-reassigned TV, categorical, multi-theta and plain forms stay byte-identical.
-- **Status:** open — decided 2026-10-27: option 1 instead of the reader fix: validation at initialisation requires, for every parameter (not only covariate targets), that P = EXP(MU_k + ETA) has MU_k = LOG(TV_P) with a TV_P line, and that any other variable inside EXP(... + ETA) is named TV_P; inline P = EXP(THETA(n) + ETA) stays accepted
+- **Status:** fixed in ba07a7a (2026-10-26)
 
 #### SIM-03 — A single-line `IF` with nested parentheses is silently skipped
 - **Location:** R/apply-covariate-model.R:374-382
@@ -826,7 +826,7 @@ mrgsolve could not compile on this machine, so `simulate_scenario_profiles` was 
 - **Proposed fix:** find the matching parenthesis by depth for the single-line form, and give failing
   conditions their own warning (adding them to `skipped` would show nothing). Note: an IF on a covariate
   missing from the search table (silently FALSE today) would then warn too — a stated behaviour change.
-- **Status:** open
+- **Status:** fixed in ba07a7a (2026-10-26)
 
 #### SIM-04 — `plot_parameter_forests` ignores `reference` in the plot while the tables use it
 - **Location:** R/forest-plots.R:1361, 1477-1489; roxygen ~1333
@@ -849,13 +849,13 @@ mrgsolve could not compile on this machine, so `simulate_scenario_profiles` was 
   writes `ENDIF`, so only hand-written blocks are affected. The removal-side pattern is a different issue
   (only package-written blocks), but if hit it would delete the rest of `$PK`.
 - **Proposed fix:** `^END\s*IF\b` (harmless either way; matches the existing `ELSE IF` acceptance).
-- **Status:** open — decided 2026-10-27: only ENDIF is NM-TRAN syntax (NONMEM docs list ENDIF only): validation rejects END IF in the base model; readers stay ENDIF-only
+- **Status:** fixed in ba07a7a (2026-10-26)
 
 #### SIM-06 — A categorical covariate without LEVELS silently gets no forest scenario
 - **Location:** R/forest-plots.R:515-527 · **Type:** bug · **Severity:** result (unlikely) · **Verified:** confirmed
 - **Evidence:** validation normally stops on missing LEVELS, so only hand-built tables or a "CAT" STATUS (MOD-09) reach it.
 - **Proposed fix:** warn, or fall back to the observed levels.
-- **Status:** open — decided 2026-10-27: a categorical covariate without LEVELS is an error: validation already stops; the forest-plot path stops with the same error instead of skipping
+- **Status:** fixed in ba07a7a (2026-10-26)
 
 #### SIM-09 — Lower-case `$pk` falls back to raw draws with no warning
 - **Location:** R/apply-covariate-model.R:241-247, 401, 409 · **Type:** bug · **Severity:** result (rare input) · **Verified:** confirmed (both)
@@ -864,20 +864,20 @@ mrgsolve could not compile on this machine, so `simulate_scenario_profiles` was 
 #### SIM-07 — Exposure tables require a label for every numeric column
 - **Location:** R/forest-plots.R:1230-1231 · **Type:** usability · **Severity:** cosmetic · **Verified:** confirmed; close to the recorded design ("every tabulated quantity must be labelled")
 - **Proposed fix:** tabulate only labelled columns, if the owner agrees.
-- **Status:** open — decided 2026-10-27: tabulate only labelled columns
+- **Status:** fixed in ba07a7a (2026-10-26)
 
 #### SIM-05 — Percentile labels round 2.5 to "2nd" and 97.5 to "98th"
 - **Location:** R/forest-plots.R:464-478 · **Type:** bug · **Severity:** cosmetic · **Verified:** confirmed (both)
-- **Status:** open — low priority
+- **Status:** fixed in ba07a7a (2026-10-26)
 
 #### SIM-10 — Boxplot `n =` counts rows, not subjects; tied quartile bins keep "Qk" labels
 - **Location:** R/covariate-boxplots.R:303-349 · **Type:** inconsistency · **Severity:** cosmetic · **Verified:** confirmed (both)
-- **Status:** open — low priority
+- **Status:** fixed in ba07a7a (2026-10-26)
 
 #### SIM-11 — Boxplots draw every raw point several times; jitter is unseeded
 - **Location:** R/covariate-boxplots.R:330-334, 385, 449-498 · **Type:** optimisation · **Severity:** cosmetic · **Verified:** plausible
 - **Evidence:** mostly the documented Total panel plus one render per format; file size at 1e5 subjects; emf/png/pdf differ slightly.
-- **Status:** open — low priority
+- **Status:** fixed in ba07a7a (2026-10-26)
 
 
 ## Fix groups — findings that share a root cause

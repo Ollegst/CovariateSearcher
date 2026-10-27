@@ -215,5 +215,5 @@ Mark items here as they land (`done <commit>`), and the register entry as `fixed
 | 3 | in progress — 3.1 UTL-01 + SCM-09 (f0dd2bc), 3.4 MOD-02 (6c8365b), 3.5 G8 (f16b579), 3.6 G7, 3.7 MOD-04, 3.8 MOD-07, 3.10 SCM-05/07/10 (2bcf8c9); Phase 3 audit (Sonnet) follow-ups f670f39; 3.2 SCM-01 + 3.3 REC-04/SCM-06 + retest_failed (d6cdce4); 3.9 SCM-02 (4c591ad). **Phase 3 complete.** |
 | 4 | **complete** — 4.3 G10 SCM-04 + REC-07, 4.4 G5 XAR-05 + SCM-08, 4.7 UTL-06 (043bec2), 4.5 G9 STA-07 + REC-06 (01e3094), 4.1 REC-01 + 4.2 REC-03/SCM-03 + phase vocabulary (d791a20), 4.6 NIO-02 (304a56a), 4.8 batch (6df29b2) |
 | 5 | **complete** — 5.1–5.8 (6cfd760) |
-| 6 | not started |
+| 6 | **complete** — 6.1–6.6 (ba07a7a) |
 | 7 | not started |
