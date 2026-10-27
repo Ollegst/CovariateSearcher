@@ -30,7 +30,8 @@ create_covariate_boxplots(
   footnote = NULL,
   source_note = TRUE,
   footnote_size = NULL,
-  ss = TRUE
+  ss = TRUE,
+  id_col = "ID"
 )
 }
 \arguments{
@@ -147,6 +148,9 @@ saved file name, so steady-state and single-dose runs of the same drug do
 not overwrite each other. Nothing is appended where the label or file stem
 already ends in "ss", which is common when the labels come from a spec
 holding \code{AUCss}. Matches the \code{ss} argument of \code{\link[=plot_exposure_forest]{plot_exposure_forest()}}.}
+
+\item{id_col}{Character. Subject ID column. When \code{data} has it, "n = \if{html}{\out{<count>}}"
+counts distinct subjects; otherwise it counts rows. Default "ID".}
 }
 \value{
 A nested list: results[\link{type}][\link{covariate}] = the faceted ggplot

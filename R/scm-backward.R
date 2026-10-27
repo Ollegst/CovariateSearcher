@@ -28,6 +28,7 @@ run_backward_elimination <- function(search_state,
   if (is.null(backward_p_value)) {
     backward_p_value <- search_state$search_config$backward_p_value %||% 0.001
   }
+  .check_rse_threshold(rse_threshold)
   rse_threshold <- .resolve_rse_threshold(search_state, rse_threshold)
 
   # Calculate display threshold (df=1 for typical case)
@@ -38,7 +39,7 @@ run_backward_elimination <- function(search_state,
   cat(sprintf("Starting model: %s\n", starting_model))
   cat(sprintf("ΔOFV threshold: %.2f (for keeping covariate)\n", ofv_threshold_display))
   cat(sprintf("RSE threshold: %g%% (unreadable RSE %s)\n", rse_threshold,
-              if (isTRUE(search_state$search_config$require_cov_step %||% TRUE)) {
+              if (.require_cov_step(search_state)) {
                 "rejected - a covariance step is required"
               } else {
                 "accepted - no covariance step required"
@@ -154,7 +155,6 @@ run_backward_elimination <- function(search_state,
         db_idx <- which(search_state$search_database$model_name == new_model_name)
         if (length(db_idx) > 0) {
           search_state$search_database$step_number[db_idx] <- current_step
-          search_state$search_database$phase[db_idx] <- "backward_elimination"
           search_state$search_database$action[db_idx] <- "remove_covariate"
           search_state$search_database$step_description[db_idx] <-
             sprintf("Remove %s", covariate_name)
@@ -347,6 +347,7 @@ evaluate_removal_impacts <- function(search_state, base_model, removal_models,
                                      completed_models, backward_p_value,
                                      rse_threshold = NULL) {
 
+  .check_rse_threshold(rse_threshold)
   rse_threshold <- .resolve_rse_threshold(search_state, rse_threshold)
 
   # Get base model OFV
@@ -524,9 +525,21 @@ get_fixed_covariates <- function(search_state, covariate_names) {
     }
   }
 
-  # TODO: Also check model file for THETA FIX parameters
-  # This would require parsing the model file to identify which THETAs
-  # are associated with which covariates and have FIX status
+  # A covariate whose every THETA is FIX in the table's INIT adds no estimated
+  # parameter (df 0): it is a fixed effect the user chose, not a candidate for
+  # removal. covariate_names are tag values ("WT_CL"), so the tag is rebuilt
+  # to pick the covariate-parameter row (WT may be FIX on CL but estimated on V).
+  for (cov_value in covariate_names) {
+    cov_name <- strsplit(cov_value, "_", fixed = TRUE)[[1]][1]
+    cov_df <- suppressWarnings(tryCatch(
+      calculate_covariate_df(cov_name, search_state$covariate_search,
+                             tag = paste0("beta_", cov_value)),
+      error = function(e) NA_integer_
+    ))
+    if (identical(as.integer(cov_df), 0L)) {
+      fixed_covariates <- c(fixed_covariates, cov_value)
+    }
+  }
 
   return(unique(fixed_covariates))
 }
@@ -551,18 +564,11 @@ get_covariate_tag_from_name <- function(search_state, covariate_name) {
     }
   }
 
-  # If not found, try to construct it (fallback)
-  # This assumes a pattern like "WT_CL" → "cov_cl_wt"
-  parts <- strsplit(covariate_name, "_")[[1]]
-  if (length(parts) == 2) {
-    # Try both possible patterns
-    constructed_tag1 <- paste0("beta_", tolower(parts[2]), "_", tolower(parts[1]))
-    constructed_tag2 <- paste0("beta_", tolower(parts[1]), "_", tolower(parts[2]))
-
-    if (constructed_tag1 %in% names(search_state$tags)) {
-      return(constructed_tag1)
-    } else if (constructed_tag2 %in% names(search_state$tags)) {
-      return(constructed_tag2)
+  # Tags keep their original case, so the only near miss is a case difference.
+  for (tag_name in names(search_state$tags)) {
+    tag_value <- search_state$tags[[tag_name]]
+    if (!is.null(tag_value) && identical(toupper(tag_value), toupper(covariate_name))) {
+      return(tag_name)
     }
   }
 

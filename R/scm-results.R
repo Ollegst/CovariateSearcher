@@ -83,7 +83,7 @@ create_scm_results_table <- function(search_state) {
   }
 
   # Helper function to determine selection status and comment
-  get_selection_info <- function(row, step_models, threshold_ofv, threshold_rse, phase) {
+  get_selection_info <- function(row, step_models, threshold_rse, is_backward) {
     delta_ofv <- row$delta_ofv
     rse_max <- row$rse_max
 
@@ -100,7 +100,6 @@ create_scm_results_table <- function(search_state) {
     # The verdict comes from the same evaluator the search itself used, so this
     # table reports the decision that was taken rather than a second opinion on
     # it. Only the label vocabulary (KEPT / REMOVED / BEST / YES / NO) is local.
-    is_backward <- grepl("backward|remove", phase, ignore.case = TRUE)
     ev <- .evaluate_model_criteria(
       search_state  = search_state,
       model_names   = row$model_name,
@@ -187,6 +186,8 @@ create_scm_results_table <- function(search_state) {
     return(list(selected = "NO", comment = "Unknown"))
   }
 
+  backward_rows <- .scm_backward_rows(search_state)
+
   # Process each unique step
   unique_steps <- unique(db$step_number)
   unique_steps <- unique_steps[!is.na(unique_steps)]
@@ -196,17 +197,15 @@ create_scm_results_table <- function(search_state) {
 
     if (nrow(step_models) == 0) next
 
-    # Determine phase and threshold
-    phase <- unique(step_models$phase)[1]
-    is_backward <- grepl("backward", phase, ignore.case = TRUE)
-    threshold_ofv <- if (is_backward) backward_threshold else forward_threshold
+    # Direction from the shared backward-row test (phase or action)
+    is_backward <- any(backward_rows[!is.na(db$step_number) & db$step_number == step])
 
     # Process each model in the step
     for (i in 1:nrow(step_models)) {
       row <- step_models[i, ]
 
       # Get selection info
-      selection_info <- get_selection_info(row, step_models, threshold_ofv, rse_threshold, phase)
+      selection_info <- get_selection_info(row, step_models, rse_threshold, is_backward)
 
       # Determine phase/step display
       if (row$action == "base_model") {
@@ -221,8 +220,14 @@ create_scm_results_table <- function(search_state) {
       covariates_str <- get_model_covariates_display(row$model_name)
 
       # Determine status display
-      status_display <- ifelse(row$status == "completed", "Successful",
-                               ifelse(row$status == "failed", "Failed", "In Progress"))
+      # Every status the search writes; "estimation_error" and "error" only in
+      # databases saved by older versions.
+      status_display <- switch(as.character(row$status %||% NA),
+        completed = "Successful",
+        failed = , estimation_error = , error = "Failed",
+        created = , not_run = "Not run",
+        in_progress = , incomplete = "In Progress",
+        if (is.na(row$status)) "Unknown" else as.character(row$status))
 
       # Get description
       description <- row$step_description %||%
@@ -409,25 +414,31 @@ print_scm_results_table <- function(search_state, show_rse = TRUE, truncate_cova
   # Summary
   cat("\n================== SUMMARY ==================\n")
 
-  # Find final selected model (last BEST from forward selection)
-  forward_best <- results[results$Selected == "BEST" & grepl("^Forward", results$Phase_Step), ]
-  backward_removed <- results[results$Selected == "REMOVED" & grepl("^Backward", results$Phase_Step), ]
+  # A backward step removes only one covariate: of the acceptable removals
+  # (all labelled REMOVED), the one with the smallest ΔOFV.
+  chosen_removal <- function(step_rows) {
+    removed <- step_rows[step_rows$Selected == "REMOVED", , drop = FALSE]
+    if (nrow(removed) == 0) return(removed)
+    removed[which.min(abs(removed$Delta_OFV)), , drop = FALSE]
+  }
 
-  if (nrow(forward_best) > 0) {
-    # Get the last BEST model from forward selection
-    final_forward <- forward_best[nrow(forward_best), ]
+  # The final model comes from the latest step that changed the model: a
+  # forward step's BEST, or a backward step's chosen removal. Ordering by step
+  # number keeps an initial backward phase (SCM+) before the forward steps.
+  step_of <- suppressWarnings(as.integer(sub("^.*Step", "", results$Phase_Step)))
+  changing <- lapply(sort(unique(step_of[!is.na(step_of)])), function(s) {
+    rows <- results[!is.na(step_of) & step_of == s, , drop = FALSE]
+    if (grepl("^Backward", rows$Phase_Step[1])) chosen_removal(rows)
+    else rows[rows$Selected == "BEST", , drop = FALSE][1, , drop = FALSE]
+  })
+  changing <- Filter(function(r) nrow(r) > 0 && !is.na(r$Model[1]), changing)
 
-    # Check if backward elimination happened and covariates were removed
-    if (nrow(backward_removed) > 0) {
-      cat("Forward selection completed, backward elimination removed some covariates.\n")
-      # The final model is the one after backward removal
-      final_model <- backward_removed[nrow(backward_removed), ]
-    } else if (nrow(results[grepl("^Backward", results$Phase_Step), ]) > 0) {
-      # Backward elimination happened but covariates were kept
+  if (length(changing) > 0) {
+    final_model <- changing[[length(changing)]]
+    if (grepl("^Backward", final_model$Phase_Step)) {
+      cat("The final model comes from a backward-elimination removal.\n")
+    } else if (any(grepl("^Backward", results$Phase_Step))) {
       cat("Forward selection completed, backward elimination tested but covariates were kept.\n")
-      final_model <- final_forward
-    } else {
-      final_model <- final_forward
     }
 
     base_model <- results[results$Phase_Step == "Base", ]
@@ -462,7 +473,7 @@ print_scm_results_table <- function(search_state, show_rse = TRUE, truncate_cova
 
       # For backward elimination, check for REMOVED (successful removal)
       if (grepl("^Backward", step)) {
-        removed_in_step <- step_data[step_data$Selected == "REMOVED", ]
+        removed_in_step <- chosen_removal(step_data)
         kept_in_step <- step_data[step_data$Selected == "KEPT", ]
 
         if (nrow(removed_in_step) > 0) {

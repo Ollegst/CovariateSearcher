@@ -119,12 +119,12 @@ ss <- initialize_covariate_search(
 | `timecol`, `idcol` | `"TIME"`, `"ID"` | dataset columns |
 | `threads` | `60` | passed to bbi on submission |
 | `require_base_run` | `TRUE` | base model must have a finished run with an OFV. `FALSE` only to build/inspect control streams - a search cannot run without a base OFV |
-| `lookup_file` | `NULL` | decodes categorical levels in THETA names |
+| `lookup_file` | `NULL` | stored in the search config; it does not change THETA names (categorical THETAs are named by numeric level, e.g. `beta_SEX_CL_2`) |
 | `starting_model_number` | `NULL` | sets the model counter: `10` means the next model created is `run11`. Default continues from the models already discovered in `models_folder` |
 
 The base model is validated here: parameters that will receive a population
 covariate must be classifiable as normal (`P = TV*EXP(ETA)`) or log
-(`P = EXP(TV + ETA)`), and a log-scale one needs its own `TV_` line.
+(`P = EXP(TV + ETA)`), and a log-scale one needs its own `TV_` line. A log-normal parameter written `P = EXP(... + ETA)` must reach its typical value through `TV_<param>` (the `MU_k = LOG(TV_P)` form). Only `ENDIF` is accepted in `$PK` (`END IF` stops validation), and a covariate initial estimate of 0 must be `FIX`.
 
 ---
 
@@ -199,7 +199,8 @@ res <- run_automated_scm_testing(
   require_cov_step = TRUE,            # require a successful $COVARIANCE step
   auto_submit      = TRUE,            # FALSE = create the models, submit them yourself
   auto_retry       = TRUE,            # retry a failed model from a different init
-  save_checkpoints = TRUE             # write scm_rds/NN_phase_event.rds each step
+  retest_failed    = TRUE,            # test again covariates excluded after a failed retry
+  save_checkpoints = TRUE            # write scm_rds/NN_phase_event.rds each step
 )
 
 res$final_model
@@ -221,10 +222,17 @@ view_comprehensive_table(res$search_state)
 | `require_cov_step` | `TRUE` | a model counts as completed only with a successful `$COVARIANCE` step |
 | `auto_submit` | `TRUE` | `FALSE` creates the models without submitting them |
 | `auto_retry` | `TRUE` | on an estimation failure, create `run<N>001` from a different initial estimate and submit it |
+| `retest_failed` | `TRUE` | whether covariates excluded after a failed model and a failed retry are tested again: at every step of standard SCM, at the first selective step (including the SCM+ forward phase) and in redemption |
 | `save_checkpoints` | `TRUE` | write `<models_folder>/scm_rds/NN_phase_event.rds` after each step |
 
 The p-value and RSE arguments fall back to `search_state$search_config`, so set
 them once at initialization or per call here.
+
+In selective forward, redemption starts from the best model with every covariate
+not yet tested on it, then continues with the significant ones on each new
+winner. When the starting model already has covariates and no initial backward
+ran, the final backward runs after a forward search that left the model
+unchanged.
 
 ---
 
@@ -233,7 +241,7 @@ them once at initialization or per call here.
 This is usually a new session, so load the state back first. Checkpoints are
 written to `<models_folder>/scm_rds/` as `NN_phase_event.rds`: `NN` is the step,
 `phase` is `forward`, `backward`, `redemption` or `final`, and `event` is
-`created`, `done`, `complete`, `running` or `error`. The step number leads and
+`created`, `done`, `complete` or `error`. The step number leads and
 is zero-padded, so the folder sorts chronologically and the last name is the
 most recent:
 
@@ -312,6 +320,11 @@ table(ss$search_database$step_number, ss$search_database$phase)
 subset(ss$search_database, step_number == 7,
        c("model_name", "covariate_tested", "status", "ofv", "delta_ofv"))
 ```
+
+The `phase` column holds `base`, `forward_selection`, `redemption` or
+`backward_elimination` (`manual` for models already in the folder when the search starts); `action` holds
+what was done to the model, mainly `add_covariate`, `remove_covariate` or `retry`
+(`base_model` for the base model).
 
 ### Results
 

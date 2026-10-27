@@ -35,7 +35,16 @@
 #' @param auto_submit Logical. Whether to automatically submit models to cluster (default: TRUE)
 #' @param auto_retry Logical. Whether to enable automatic retry for failed models (default: TRUE)
 #' @param save_checkpoints Logical. Whether to save state after each major step (default: TRUE)
-#' @param final_testing Logical. Whether to test excluded covariates on final model (default: TRUE)
+#' @param final_testing Logical. Has no effect; kept so existing calls still
+#'   work. Use \code{retest_failed} to choose whether failed covariates are
+#'   tested again.
+#' @param retest_failed Logical. Whether a covariate excluded after its model
+#'   and its retry both failed is tested again (default: TRUE). With TRUE it is
+#'   offered again at every step of standard SCM, in the first step of
+#'   selective forward (including the forward phase of SCM+) and in every
+#'   redemption step; with FALSE it is not tested again in this search. Stored
+#'   in \code{search_config}, so \code{continue_search()} keeps it; when not
+#'   supplied, the stored value (default TRUE) is used.
 #' @return List containing comprehensive SCM results
 #' @export
 run_automated_scm_testing <- function(search_state,
@@ -50,7 +59,8 @@ run_automated_scm_testing <- function(search_state,
                                       auto_submit = TRUE,
                                       auto_retry = TRUE,
                                       save_checkpoints = TRUE,
-                                      final_testing = TRUE) {
+                                      final_testing = TRUE,
+                                      retest_failed = TRUE) {
 
   if (is.null(search_state) || !is.list(search_state)) {
     stop("search_state must be a valid list")
@@ -96,12 +106,11 @@ run_automated_scm_testing <- function(search_state,
   if (!is.null(backward_p_value) && (backward_p_value <= 0 || backward_p_value >= 1)) {
     stop("backward_p_value must be between 0 and 1")
   }
-  if (!is.null(rse_threshold) && (rse_threshold <= 0 || rse_threshold > 100)) {
+  .check_rse_threshold(rse_threshold)
+  if (!is.null(rse_threshold) && rse_threshold > 100) {
     stop("rse_threshold must be between 0 and 100")
   }
-  if (!is.logical(require_cov_step)) {
-    stop("require_cov_step must be TRUE or FALSE")
-  }
+  if (!missing(require_cov_step)) .check_require_cov_step(require_cov_step)
 
   # Set defaults with proper null coalescing
   if (is.null(forward_p_value)) {
@@ -120,9 +129,14 @@ run_automated_scm_testing <- function(search_state,
   # so a FALSE chosen at initialize_covariate_search() is not reset by this
   # argument's default.
   if (missing(require_cov_step)) {
-    require_cov_step <- search_state$search_config$require_cov_step %||% TRUE
+    require_cov_step <- .require_cov_step(search_state)
   }
   search_state$search_config$require_cov_step <- require_cov_step
+  # Same rule for retest_failed: a value stored earlier survives the default.
+  if (!missing(retest_failed)) {
+    .check_retest_failed(retest_failed)
+    search_state$search_config$retest_failed <- retest_failed
+  }
 
   # Calculate ΔOFV thresholds for display (df=1 for typical single parameter)
   forward_ofv_threshold_display <- pvalue_to_threshold(forward_p_value, df = 1)
@@ -147,7 +161,7 @@ run_automated_scm_testing <- function(search_state,
   cat(sprintf("Require covariance step: %s\n", require_cov_step))
   cat(sprintf("Auto-retry enabled: %s\n", auto_retry))
   cat(sprintf("Checkpoints enabled: %s\n", save_checkpoints))
-  cat(sprintf("Final testing enabled: %s\n", final_testing))
+  cat(sprintf("Retest failed covariates: %s\n", .retest_failed(search_state)))
   cat(paste(rep("=", 80), collapse=""), "\n")
 
   # Initialize tracking
@@ -193,11 +207,40 @@ run_automated_scm_testing <- function(search_state,
       current_model <- initial_backward_results$final_model
       cat(sprintf("✅ Initial backward complete. Final model: %s\n", current_model))
     } else {
-      cat("⚠️ Continuing with current model due to error\n")
+      # Stop like a forward failure. The state here predates the phase,
+      # so its model_counter misses the removal models already written; going
+      # on into forward would reuse their run numbers and overwrite them.
+      # continue_search() re-registers them from disk.
+      if (save_checkpoints) {
+        error_file <- .scm_checkpoint_name(
+          suppressWarnings(max(search_state$search_database$step_number, na.rm = TRUE)),
+          "backward", "error")
+        save_search_state(search_state, error_file)
+        checkpoint_files <- c(checkpoint_files, error_file)
+      }
+      total_time <- as.numeric(difftime(Sys.time(), scm_start_time, units = "mins"))
+      return(list(
+        search_state = search_state,
+        status = "failed",
+        scm_type = scm_type,
+        starting_phase = starting_phase,
+        full_scm = full_scm,
+        error_phase = "initial_backward",
+        error_message = initial_backward_error,
+        final_model = current_model,
+        base_model = base_model_id,
+        forward_results = NULL,
+        initial_backward_results = initial_backward_results,
+        final_backward_results = NULL,
+        final_covariates = character(0),
+        excluded_covariates = get_excluded_covariates(search_state),
+        total_models_created = nrow(search_state$search_database) - 1,
+        total_time_minutes = total_time,
+        checkpoint_files = checkpoint_files,
+        final_summary = sprintf("SCM failed during initial backward elimination after %.1f minutes",
+                                total_time)
+      ))
     }
-
-    # For now, no change to current_model since backward not implemented
-    # current_model would be updated to the result of backward elimination
 
     if (save_checkpoints) {
       checkpoint_file <- .scm_checkpoint_name(
@@ -312,17 +355,31 @@ run_automated_scm_testing <- function(search_state,
   # ===================================================================
 
   if (run_final_backward) {
-    # Check if model changed during forward selection (only if forward was run)
-    if (run_forward && exists("model_before_forward") &&
-        !is.null(model_before_forward) && model_before_forward == current_model) {
+    # When forward changed nothing, final backward is skipped if it has nothing
+    # new to test: the initial backward already tested this model, or the model
+    # has no covariates. A starting model that already carries covariates and
+    # had no initial backward is still tested for removal.
+    forward_unchanged <- run_forward && exists("model_before_forward") &&
+      !is.null(model_before_forward) && model_before_forward == current_model
+    model_covariates <- if (forward_unchanged && !run_initial_backward) {
+      tryCatch(get_model_covariates_from_db(search_state, current_model),
+               error = function(e) character(0))
+    } else {
+      character(0)
+    }
+    if (forward_unchanged && (run_initial_backward || length(model_covariates) == 0)) {
       cat("\n*** SKIPPING FINAL BACKWARD ELIMINATION\n")
       cat(paste(rep("-", 50), collapse=""), "\n")
       cat(sprintf("Model unchanged after forward selection (%s)\n", current_model))
-      cat("Final backward elimination would be identical to initial backward - skipping\n")
+      if (run_initial_backward) {
+        cat("Final backward elimination would be identical to initial backward - skipping\n")
+      } else {
+        cat("The model has no covariates to test for removal - skipping\n")
+      }
     } else {
       # Proceed with final backward elimination
       phase_num <- if (run_initial_backward) "FINAL" else ""
-      cat(sprintf("\nðŸ“‰ %s BACKWARD ELIMINATION PHASE\n", phase_num))
+      cat(sprintf("\n📉 %s BACKWARD ELIMINATION PHASE\n", phase_num))
       cat(paste(rep("-", 50), collapse=""), "\n")
 
     cat(sprintf("Starting final backward elimination from: %s\n", current_model))
@@ -387,13 +444,14 @@ run_automated_scm_testing <- function(search_state,
     character(0)
   })
 
-  # Get excluded covariates and keep only forward-phase failures
+  # Excluded covariates, keeping only those excluded during forward selection or
+  # redemption (backward removals are never retried, so never excluded).
   excluded_covariates <- tryCatch({
     excluded_all <- get_excluded_covariates(search_state)
 
     forward_excluded <- search_state$search_database[
       which(search_state$search_database$excluded_from_step == TRUE &
-              search_state$search_database$phase == "forward"),
+              search_state$search_database$phase %in% c("forward_selection", "redemption")),
       , drop = FALSE
     ]
 
@@ -406,117 +464,6 @@ run_automated_scm_testing <- function(search_state,
     cat(sprintf("Warning: Could not get excluded covariates: %s\n", e$message))
     character(0)
   })
-
-  # ===================================================================
-  # FINAL TESTING OF EXCLUDED COVARIATES (only for forward-ending workflows)
-  # ===================================================================
-
-  # Only do final testing if enabled, we ran forward selection, and not doing full SCM
-  if (final_testing && run_forward && !run_final_backward) {
-    if (length(excluded_covariates) > 0) {
-      cat("\n🔬 FINAL TESTING OF EXCLUDED COVARIATES\n")
-      cat(paste(rep("-", 50), collapse=""), "\n")
-
-      cat(sprintf("Testing %d excluded covariates on final model %s\n",
-                  length(excluded_covariates), final_model))
-      cat(sprintf("Excluded covariates: %s\n", paste(excluded_covariates, collapse = ", ")))
-
-      # Covariate names back to tags
-      excluded_tags <- character(0)
-      for (cov_name in excluded_covariates) {
-        tryCatch({
-          matching_tags <- names(search_state$tags)[sapply(search_state$tags, function(x) x == cov_name)]
-          if (length(matching_tags) > 0) {
-            excluded_tags <- c(excluded_tags, matching_tags[1])
-          }
-        }, error = function(e) {
-          cat(sprintf("Warning: Could not convert covariate %s to tag: %s\n", cov_name, e$message))
-        })
-      }
-
-      if (length(excluded_tags) > 0) {
-        final_testing_result <- tryCatch({
-          run_univariate_step(
-            search_state = search_state,
-            base_model_id = final_model,
-            covariates_to_test = excluded_tags,
-            step_name = "Final Testing: Excluded Covariates",
-            include_excluded = TRUE
-          )
-        }, error = function(e) {
-          cat(sprintf("❌ Final testing failed: %s\n", e$message))
-          NULL
-        })
-
-        if (!is.null(final_testing_result) && final_testing_result$status == "models_created") {
-          search_state <- final_testing_result$search_state
-
-          # Submit and wait for final testing models
-          final_submission <- tryCatch({
-            submit_and_wait_for_step(
-              search_state = search_state,
-              model_names = final_testing_result$models_created,
-              step_name = "Final Testing Models",
-              auto_submit = auto_submit,
-              auto_retry = auto_retry
-            )
-          }, error = function(e) {
-            cat(sprintf("❌ Final testing submission failed: %s\n", e$message))
-            NULL
-          })
-
-          if (!is.null(final_submission)) {
-            search_state <- final_submission$search_state
-
-            # Check if any final testing models are better
-            if (length(final_submission$completed_models) > 0) {
-              final_evaluation <- tryCatch({
-                select_best_model(
-                  search_state = search_state,
-                  model_names = final_submission$completed_models,
-                  p_value = forward_p_value,
-                  rse_threshold = rse_threshold
-                )
-              }, error = function(e) {
-                cat(sprintf("❌ Final evaluation failed: %s\n", e$message))
-                NULL
-              })
-
-              # select_best_model() returns 'best_model'
-              if (!is.null(final_evaluation) && !is.null(final_evaluation$best_model)) {
-                search_state <- final_evaluation$search_state
-                cat(sprintf("🎉 Final testing found better model: %s\n", final_evaluation$best_model))
-                final_model <- final_evaluation$best_model
-
-                # Update final covariates
-                final_covariates <- tryCatch({
-                  get_model_covariates_from_db(search_state, final_model)
-                }, error = function(e) {
-                  character(0)
-                })
-              } else {
-                cat("✅ Final testing complete - no significant improvements found\n")
-              }
-            }
-          }
-        } else {
-          cat("⚠️ Final testing model creation failed\n")
-        }
-      } else {
-        cat("⚠️ Could not convert excluded covariate names to tags\n")
-      }
-    } else {
-      cat("\n✅ PHASE 3: No excluded covariates to test\n")
-    }
-  } else {
-    if (!final_testing) {
-      cat("\n⏭️ PHASE 3: Final testing disabled\n")
-    } else if (run_final_backward) {
-      # Final testing is intentionally skipped when final backward elimination runs.
-    } else {
-      cat("\n⏭️ PHASE 3: No forward selection performed\n")
-    }
-  }
 
   # ===================================================================
   # FINAL SUMMARY AND REPORTING

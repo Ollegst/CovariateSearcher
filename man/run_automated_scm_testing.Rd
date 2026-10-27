@@ -17,7 +17,8 @@ run_automated_scm_testing(
   auto_submit = TRUE,
   auto_retry = TRUE,
   save_checkpoints = TRUE,
-  final_testing = TRUE
+  final_testing = TRUE,
+  retest_failed = TRUE
 )
 }
 \arguments{
@@ -63,7 +64,17 @@ this run.}
 
 \item{save_checkpoints}{Logical. Whether to save state after each major step (default: TRUE)}
 
-\item{final_testing}{Logical. Whether to test excluded covariates on final model (default: TRUE)}
+\item{final_testing}{Logical. Has no effect; kept so existing calls still
+work. Use \code{retest_failed} to choose whether failed covariates are
+tested again.}
+
+\item{retest_failed}{Logical. Whether a covariate excluded after its model
+and its retry both failed is tested again (default: TRUE). With TRUE it is
+offered again at every step of standard SCM, in the first step of
+selective forward (including the forward phase of SCM+) and in every
+redemption step; with FALSE it is not tested again in this search. Stored
+in \code{search_config}, so \code{continue_search()} keeps it; when not
+supplied, the stored value (default TRUE) is used.}
 }
 \value{
 List containing comprehensive SCM results

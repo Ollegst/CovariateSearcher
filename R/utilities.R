@@ -87,7 +87,8 @@ extract_covariate_name_from_tag <- function(tag) {
 #'   chronologically and the highest \code{NN} is the latest checkpoint.
 #'   \code{phase} is "forward"/"backward"/"redemption"/"final"; \code{event} is
 #'   "created" (models made, pre-submit), "done" (step evaluated), "complete"
-#'   (phase/run end), "running" (mid-step snapshot) or "error".
+#'   (phase/run end) or "error". Nothing is saved while a step waits for
+#'   NONMEM; \code{continue_search()} rebuilds that state from the run files.
 #' @param step Step number (coerced to a zero-padded integer; NA/non-finite → 00).
 #' @param phase,event Character labels (see description).
 #' @return A filename string like \code{"02_forward_done.rds"}.
@@ -110,10 +111,13 @@ extract_covariate_name_from_tag <- function(tag) {
 #'   referenced by name against \code{models_folder}.
 #' @param x The object, or a length-1 character path to a \code{.csv}/\code{.rds}.
 #' @param what Character label for this input, used in error messages.
+#' @param na Character vector of CSV cells read as missing. The NONMEM dataset
+#'   is read with `c("", "NA", ".")`, since "." is NONMEM's missing marker;
+#'   other tables keep the readr default.
 #' @return The in-memory object (loaded if a path was given).
 #' @keywords internal
 #' @noRd
-.load_if_path <- function(x, what = "input") {
+.load_if_path <- function(x, what = "input", na = c("", "NA")) {
   if (!is.character(x) || length(x) != 1L) return(x)   # already an object
   if (!file.exists(x)) {
     stop(sprintf("`%s` is a path but the file does not exist: %s", what, x),
@@ -121,11 +125,33 @@ extract_covariate_name_from_tag <- function(tag) {
   }
   ext <- tolower(tools::file_ext(x))
   switch(ext,
-    csv = readr::read_csv(x, show_col_types = FALSE),
+    csv = readr::read_csv(x, na = na, show_col_types = FALSE),
     rds = readRDS(x),
     stop(sprintf("`%s`: cannot load a '.%s' file (supported: .csv, .rds): %s",
                  what, ext, x), call. = FALSE)
   )
+}
+
+
+# Does `cov` take more than one value within any subject? A missing value (NA,
+# or NONMEM's "." in a column read as text) is not a value, so a time-constant
+# covariate with a missing record is not time-varying. The one rule for the
+# effect's placement (model_add_cov), the transform check
+# (validate_param_transformations) and the table's TIME_DEPENDENT column. A
+# covariate or ID column absent from the dataset is an error.
+#' @keywords internal
+#' @noRd
+.covariate_is_time_varying <- function(data, cov, id) {
+  missing_cols <- setdiff(c(cov, id), names(data))
+  if (length(missing_cols) > 0) {
+    stop("Column(s) not found in the dataset: ", paste(missing_cols, collapse = ", "),
+         call. = FALSE)
+  }
+  x <- data[[cov]]
+  keep <- !is.na(x) & trimws(as.character(x)) != "."
+  if (!any(keep)) return(FALSE)
+  n_values <- tapply(x[keep], data[[id]][keep], function(v) length(unique(v)))
+  isTRUE(max(n_values, na.rm = TRUE) > 1)
 }
 
 
@@ -275,8 +301,9 @@ extract_covariate_name_from_tag <- function(tag) {
 #'
 #' @description Reads the direction of a step off its database row, resolving
 #'   retry rows to the model they retry. \code{create_retry_model()} records
-#'   \code{action = "retry"} and \code{phase = "retry"}, so a retry row carries no
-#'   direction of its own - only the \code{original_model} it points at does. Two
+#'   \code{action = "retry"} (and older databases \code{phase = "retry"}), so a
+#'   retry row's action carries no direction of its own - only the
+#'   \code{original_model} it points at does. Two
 #'   things depend on getting this right: the sign convention for \code{delta_ofv}
 #'   (removals are child minus parent, additions are parent minus child), and
 #'   whether a failed model is eligible for a retry at all.
@@ -310,10 +337,18 @@ extract_covariate_name_from_tag <- function(tag) {
     rep(NA_character_, length(idx))
   }
 
-  is_retry <- !is.na(action) & action == "retry"
-  if (any(is_retry) && "original_model" %in% names(db)) {
-    origin_idx <- match(db$original_model[idx[is_retry]], db$model_name)
-    action[is_retry] <- db$action[origin_idx]
+  # Follow a retry back to the model it retries, also through a retry of a
+  # retry; the bound stops a malformed self-referencing chain. The phase used
+  # below is that of the row the chain ends on.
+  row_idx <- idx
+  if ("original_model" %in% names(db)) {
+    for (step in seq_len(5)) {
+      is_retry <- !is.na(action) & action == "retry"
+      if (!any(is_retry)) break
+      origin_idx <- match(db$original_model[row_idx[is_retry]], db$model_name)
+      row_idx[is_retry] <- origin_idx
+      action[is_retry] <- db$action[origin_idx]
+    }
   }
 
   # Fall back to the phase only where the action could not answer, so the sign a
@@ -321,7 +356,7 @@ extract_covariate_name_from_tag <- function(tag) {
   unresolved <- is.na(action)
   if (any(unresolved) && "phase" %in% names(db)) {
     action[unresolved] <- ifelse(
-      .scm_phase_is_backward(db$phase[idx][unresolved]),
+      .scm_phase_is_backward(db$phase[row_idx][unresolved]),
       "remove_covariate", action[unresolved]
     )
   }
@@ -454,6 +489,53 @@ extract_covariate_name_from_tag <- function(tag) {
 }
 
 
+# Entry-point check for a user-supplied rse_threshold: NULL (use the configured
+# value) or one positive number. .resolve_rse_threshold() quietly falls back to
+# the default for anything else, so a typo such as "30" must stop here.
+.check_rse_threshold <- function(rse_threshold) {
+  if (is.null(rse_threshold)) return(invisible(NULL))
+  if (!is.numeric(rse_threshold) || length(rse_threshold) != 1L ||
+      is.na(rse_threshold) || rse_threshold <= 0) {
+    stop("rse_threshold must be NULL or a single positive number (a percentage), not ",
+         deparse(rse_threshold), call. = FALSE)
+  }
+  invisible(rse_threshold)
+}
+
+
+# The search's require_cov_step setting, read one way everywhere: only
+# an explicit FALSE relaxes it. NA, a string or a vector reads as TRUE, the
+# evaluator's fail-closed rule, so no reader can switch the criterion off by
+# accident. Entry points reject such values outright via
+# .check_require_cov_step().
+.require_cov_step <- function(search_state) {
+  !identical(search_state$search_config$require_cov_step %||% TRUE, FALSE)
+}
+
+# Whether covariates excluded after a failed model and failed retry are tested
+# again: at every step of standard SCM, in the first step of selective forward
+# (a new search, including the forward phase of SCM+) and in every redemption step.
+# Read from search_config; anything but an explicit FALSE is TRUE.
+.retest_failed <- function(search_state) {
+  !identical(search_state$search_config$retest_failed %||% TRUE, FALSE)
+}
+
+.check_retest_failed <- function(retest_failed) {
+  if (!isTRUE(retest_failed) && !identical(retest_failed, FALSE)) {
+    stop("retest_failed must be TRUE or FALSE, not ", deparse(retest_failed), call. = FALSE)
+  }
+  invisible(retest_failed)
+}
+
+.check_require_cov_step <- function(require_cov_step) {
+  if (!isTRUE(require_cov_step) && !identical(require_cov_step, FALSE)) {
+    stop("require_cov_step must be TRUE or FALSE, not ", deparse(require_cov_step),
+         call. = FALSE)
+  }
+  invisible(require_cov_step)
+}
+
+
 #' Convert P-Value to Chi-Square ΔOFV Threshold
 #'
 #' @title Calculate ΔOFV threshold from p-value for likelihood ratio test
@@ -484,13 +566,13 @@ extract_covariate_name_from_tag <- function(tag) {
 pvalue_to_threshold <- function(p_value, df = 1) {
 
   # Input validation
-  if (!is.numeric(p_value) || length(p_value) != 1) {
+  if (!is.numeric(p_value) || length(p_value) != 1 || is.na(p_value)) {
     stop("p_value must be a single numeric value")
   }
   if (p_value <= 0 || p_value >= 1) {
     stop("p_value must be between 0 and 1")
   }
-  if (!is.numeric(df) || length(df) != 1 || df < 0) {
+  if (!is.numeric(df) || length(df) != 1 || is.na(df) || df < 0) {
     stop("df must be a non-negative integer")
   }
 
@@ -525,17 +607,49 @@ pvalue_to_threshold <- function(p_value, df = 1) {
 #'   a threshold of 0, so it is kept whenever the model improves (any ΔOFV > 0).
 #' @param covariate_name Character. Name of the covariate
 #' @param covariate_search Data frame. Covariate search configuration
+#' @param tag Character or NULL. The covariate's tag as written to the model
+#'   (e.g. "beta_WT_V", or "beta_RACE_CL_2" for one level). INIT, FORMULA and
+#'   LEVELS belong to one covariate-parameter row, so when the covariate is
+#'   tested on more than one parameter the tag picks the row: the one whose
+#'   `cov_to_test` equals it, else the one whose PARAMETER the tag names. NULL
+#'   (default), or a covariate with a single row, uses the first row.
 #' @return Integer. Degrees of freedom (0 for a fully-FIX covariate).
 #' @export
-calculate_covariate_df <- function(covariate_name, covariate_search) {
+calculate_covariate_df <- function(covariate_name, covariate_search, tag = NULL) {
+  # A factor reads as its level text; anything but one name is a caller error.
+  covariate_name <- as.character(covariate_name)
+  if (length(covariate_name) != 1 || is.na(covariate_name)) {
+    stop("covariate_name must be a single covariate name", call. = FALSE)
+  }
+  if (!is.null(tag)) {
+    tag <- as.character(tag)
+    if (length(tag) != 1) stop("tag must be NULL or a single tag name", call. = FALSE)
+  }
 
   # Find covariate in search table
-  cov_row <- covariate_search[covariate_search$COVARIATE == covariate_name, ]
+  cov_row <- covariate_search[covariate_search$COVARIATE == covariate_name, , drop = FALSE]
 
   if (nrow(cov_row) == 0) {
     warning(sprintf("Covariate %s not found in covariate_search, defaulting to df=1",
                     covariate_name))
     return(1L)
+  }
+
+  # One covariate on several parameters: WT fixed on CL and estimated on V are
+  # different tests, so the tag decides which row's INIT/FORMULA/LEVELS apply.
+  if (nrow(cov_row) > 1 && !is.null(tag) && length(tag) == 1 && !is.na(tag)) {
+    by_tag <- if ("cov_to_test" %in% names(cov_row)) {
+      cov_row[cov_row$cov_to_test %in% tag, , drop = FALSE]
+    } else {
+      cov_row[0, , drop = FALSE]
+    }
+    if (nrow(by_tag) == 0 && "PARAMETER" %in% names(cov_row)) {
+      # Covariate names hold no "_", so beta_<COV>_<PARAM>[_<suffix>] has the
+      # parameter third - also for per-level tags such as beta_RACE_CL_2.
+      tag_param <- strsplit(tag, "_", fixed = TRUE)[[1]][3]
+      by_tag <- cov_row[cov_row$PARAMETER %in% tag_param, , drop = FALSE]
+    }
+    if (nrow(by_tag) > 0) cov_row <- by_tag
   }
 
   # Get first matching row (in case of multiple parameters)

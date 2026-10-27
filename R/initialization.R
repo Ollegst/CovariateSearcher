@@ -6,6 +6,68 @@
 # =============================================================================
 
 
+# Does the dataset the user passed match the file named on the model's $DATA
+# line? File names only, case-insensitive. An .rds is the same dataset saved by
+# R, so for one its name is compared without the extension; any other mismatch
+# in extension (data.dat vs data.csv) is still a different file.
+.same_data_file <- function(model_data_file, user_data_file) {
+  model_name <- tolower(basename(model_data_file))
+  user_name  <- tolower(basename(user_data_file))
+  if (identical(tools::file_ext(user_name), "rds")) {
+    model_name <- tools::file_path_sans_ext(model_name)
+    user_name  <- tools::file_path_sans_ext(user_name)
+  }
+  identical(model_name, user_name)
+}
+
+
+# Manual override of the model counter (initialize_covariate_search's
+# starting_model_number). Called after update_model_counter(), so
+# search_state$model_counter is the highest model already in the folder. A
+# lower override would make the next models reuse existing run numbers, and
+# copy_model_from(.overwrite = TRUE) would replace those models' files.
+.apply_starting_model_number <- function(search_state, starting_model_number,
+                                         base_model_path) {
+  if (is.null(starting_model_number)) return(search_state)
+
+  if (!is.numeric(starting_model_number) ||
+      length(starting_model_number) != 1 ||
+      is.na(starting_model_number)) {
+    stop("starting_model_number must be a single non-missing numeric value")
+  }
+
+  starting_model_number <- as.integer(starting_model_number)
+
+  if (starting_model_number < 1) {
+    stop("starting_model_number must be >= 1")
+  }
+
+  base_model_number <- suppressWarnings(
+    as.integer(gsub("^run", "", base_model_path))
+  )
+
+  if (!is.na(base_model_number) && starting_model_number < base_model_number) {
+    stop(
+      "starting_model_number (", starting_model_number,
+      ") cannot be lower than base model number (", base_model_number, ")"
+    )
+  }
+
+  highest_existing <- search_state$model_counter %||% 0L
+  if (!is.na(highest_existing) && starting_model_number < highest_existing) {
+    stop(
+      "starting_model_number (", starting_model_number,
+      ") is lower than the highest model already in the models folder (run",
+      highest_existing, "); new models would overwrite existing ones"
+    )
+  }
+
+  search_state$model_counter <- starting_model_number
+
+  cat("Model counter manually set to: run", search_state$model_counter, "\n", sep = "")
+  search_state
+}
+
 
 #' Initialize Covariate Search
 #'
@@ -55,6 +117,7 @@ initialize_covariate_search <- function(base_model_path,
                                         require_cov_step = TRUE,
                                         lookup_file = NULL,
                                         starting_model_number = NULL) {
+  .check_require_cov_step(require_cov_step)
 
   cat("Initializing CovariateSearcher (Core Module)...\n")
 
@@ -77,7 +140,8 @@ initialize_covariate_search <- function(base_model_path,
   # Load data files. Each argument may be given as a path (loaded here) OR as an
   # already-in-memory data.frame (used as-is) -- see .load_if_path().
   cat("Loading data files...\n")
-  search_state$data_file <- .load_if_path(data_file_path, "data_file_path")
+  search_state$data_file <- .load_if_path(data_file_path, "data_file_path",
+                                           na = c("", "NA", "."))
   search_state$covariate_search <- .load_if_path(covariate_search_path, "covariate_search_path")
 
   # VALIDATION: Check that the ID column exists in the data
@@ -130,7 +194,7 @@ initialize_covariate_search <- function(base_model_path,
   # (there is a filename to compare); skip it when an in-memory data.frame was
   # passed for data_file_path.
   if (!is.null(ctl_file) && is.character(data_file_path)) {
-    modelcode <- readLines(ctl_file)
+    modelcode <- .read_control_stream(ctl_file)
     # Find DATA line (case-insensitive, may have spaces)
     data_line <- grep("^\\s*\\$DATA", modelcode, ignore.case = TRUE, value = TRUE)
     if (length(data_line) > 0) {
@@ -145,7 +209,7 @@ initialize_covariate_search <- function(base_model_path,
       user_filename <- basename(data_file_path)
       
       # Compare file names only, case-insensitive
-      if (!identical(tolower(model_data_basename), tolower(user_filename))) {
+      if (!.same_data_file(model_data_basename, user_filename)) {
         stop(
           sprintf("⚠️  DATA FILE MISMATCH!\n"),
           sprintf("  Model '%s' references: %s\n", base_model_path, data_filename),
@@ -227,35 +291,8 @@ initialize_covariate_search <- function(base_model_path,
   # Set model counter based on existing models
   search_state <- update_model_counter(search_state)
   # Optional manual override for model numbering
-  if (!is.null(starting_model_number)) {
-
-    if (!is.numeric(starting_model_number) ||
-        length(starting_model_number) != 1 ||
-        is.na(starting_model_number)) {
-      stop("starting_model_number must be a single non-missing numeric value")
-    }
-
-    starting_model_number <- as.integer(starting_model_number)
-
-    if (starting_model_number < 1) {
-      stop("starting_model_number must be >= 1")
-    }
-
-    base_model_number <- suppressWarnings(
-      as.integer(gsub("^run", "", base_model_path))
-    )
-
-    if (!is.na(base_model_number) && starting_model_number < base_model_number) {
-      stop(
-        "starting_model_number (", starting_model_number,
-        ") cannot be lower than base model number (", base_model_number, ")"
-      )
-    }
-
-    search_state$model_counter <- starting_model_number
-
-    cat("Model counter manually set to: run", search_state$model_counter, "\n", sep = "")
-  }
+  search_state <- .apply_starting_model_number(search_state, starting_model_number,
+                                               base_model_path)
 
   scm_rds_dir <- file.path(search_state$models_folder, "scm_rds")
   if (!dir.exists(scm_rds_dir)) {
@@ -282,10 +319,10 @@ initialize_covariate_search <- function(base_model_path,
 #' @title Load covariate tags from YAML configuration
 #' @description Loads the tags.yaml file containing covariate mappings
 #' @param search_state List containing search state
+#' @param tags_file Path to the tags file (default: "data/spec/tags.yaml")
 #' @return Updated search_state with tags loaded
 #' @export
-load_tags <- function(search_state) {
-  tags_file <- file.path("data", "spec", "tags.yaml")
+load_tags <- function(search_state, tags_file = file.path("data", "spec", "tags.yaml")) {
   if (file.exists(tags_file)) {
     search_state$tags <- yaml::read_yaml(tags_file)
     cat("Tags loaded from:", tags_file, "\n")
@@ -442,6 +479,12 @@ build_covariate_reference_table <- function(data, id, time,
     status <- cov_status[[cov]]
     x_baseline <- baseline[[cov]]
     x_baseline <- x_baseline[!is.na(x_baseline)]
+    if (length(x_baseline) == 0) {
+      stop("Covariate '", cov, "' has no non-missing value at ", time, " == 0, so its ",
+           "REFERENCE (the baseline median, or the most common baseline level) ",
+           "cannot be computed. Check the dataset, or supply REFERENCE yourself.",
+           call. = FALSE)
+    }
 
     if (status == "con") {
       list(reference = as.character(round(median(x_baseline), 2)), levels = NA_character_)
@@ -494,10 +537,9 @@ build_covariate_reference_table <- function(data, id, time,
   }
 
   # ---- Step 5: TIME_DEPENDENT from FULL data -----------------------------
+  # The same rule model_add_cov uses for placement.
   compute_time_dependent <- function(cov) {
-    df <- data[!is.na(data[[cov]]), c(id, cov)]
-    n_distinct_per_id <- tapply(df[[cov]], df[[id]], function(v) length(unique(v)))
-    if (any(n_distinct_per_id > 1)) "Yes" else "No"
+    if (.covariate_is_time_varying(data, cov, id)) "Yes" else "No"
   }
 
   time_dep <- setNames(vapply(unique_covs, compute_time_dependent, character(1)), unique_covs)
@@ -563,6 +605,83 @@ validate_covariate_search_table <- function(covariate_search, data_file) {
   if (any(is.na(covariate_search$PARAMETER) |
           trimws(as.character(covariate_search$PARAMETER)) == "")) {
     stop("covariate_search contains missing or empty values in PARAMETER")
+  }
+
+  # ---- Normalise once, so every later reader sees one form -------------------
+  # STATUS in lower case: the formula registry and df lower-case it, while the
+  # categorical checks below and the remover compare "cat" exactly.
+  covariate_search$STATUS <- tolower(trimws(as.character(covariate_search$STATUS)))
+  bad_status <- setdiff(unique(covariate_search$STATUS), c("con", "cat"))
+  if (length(bad_status) > 0) {
+    stop("STATUS must be 'con' or 'cat'. Found: ", paste(bad_status, collapse = ", "))
+  }
+
+  # FORMULA: a built-in form for the row's STATUS, or an expression that uses
+  # `cov`. Anything else (a typo, "exponential" on a categorical) would be
+  # parsed as an expression of bare parameter symbols and written into $PK as a
+  # factor with no covariate in it.
+  covariate_search$FORMULA <- as.character(covariate_search$FORMULA)
+  # Whether each row's formula uses the reference: every built-in does; an
+  # expression only when it contains `ref` (e.g. not "EMAX*cov/(EC50+cov)").
+  uses_ref <- logical(nrow(covariate_search))
+  for (i in seq_len(nrow(covariate_search))) {
+    status_i  <- covariate_search$STATUS[i]
+    formula_i <- trimws(covariate_search$FORMULA[i])
+    builtin   <- exists(paste(status_i, tolower(formula_i), sep = "."),
+                        envir = .covariate_formula_registry, inherits = FALSE)
+    # Built-in names are stored lower case, the form the registry uses.
+    if (builtin) covariate_search$FORMULA[i] <- tolower(formula_i)
+    expr_def  <- if (builtin) NULL else parse_covariate_expression(formula_i)
+    if (!builtin && (is.null(expr_def) || !"cov" %in% all.vars(expr_def$expr))) {
+      stop(
+        "Row ", i, ": FORMULA '", formula_i, "' for covariate '",
+        covariate_search$COVARIATE[i], "' on parameter '", covariate_search$PARAMETER[i],
+        "' is neither a built-in form for STATUS '", status_i, "' (",
+        paste(sub("^[^.]+\\.", "", grep(paste0("^", status_i, "\\."),
+                                        ls(.covariate_formula_registry), value = TRUE)),
+              collapse = ", "),
+        ") nor an expression in `cov` (e.g. \"EMAX*cov/(EC50+cov)\")."
+      )
+    }
+    uses_ref[i] <- builtin || "ref" %in% all.vars(expr_def$expr)
+  }
+
+  # REFERENCE as a number: it is written into $PK, and a character value is
+  # rendered quoted in user expressions (WT/"70") and compared as text with
+  # categorical levels ("1.0" != 1). Empty cells stay NA.
+  ref_chr <- trimws(as.character(covariate_search$REFERENCE))
+  ref_num <- suppressWarnings(as.numeric(ref_chr))
+  bad_ref <- !is.na(ref_chr) & ref_chr != "" & toupper(ref_chr) != "NA" & is.na(ref_num)
+  if (any(bad_ref)) {
+    stop("REFERENCE must be numeric. Non-numeric value(s) in row(s) ",
+         paste(which(bad_ref), collapse = ", "), ": ",
+         paste(unique(ref_chr[bad_ref]), collapse = ", "))
+  }
+  covariate_search$REFERENCE <- ref_num
+  # A categorical effect is written as IF(<COV>.EQ.<REFERENCE>): an empty
+  # REFERENCE would give IF(SEX.EQ.NA) and a THETA for every level.
+  no_ref <- covariate_search$STATUS == "cat" & is.na(ref_num)
+  if (any(no_ref)) {
+    stop("Categorical covariate(s) with no REFERENCE in row(s) ",
+         paste(which(no_ref), collapse = ", "), ": ",
+         paste(unique(covariate_search$COVARIATE[no_ref]), collapse = ", "))
+  }
+  # A continuous formula that uses the reference would be written as (WT/NA).
+  no_ref_con <- covariate_search$STATUS == "con" & uses_ref & is.na(ref_num)
+  if (any(no_ref_con)) {
+    stop("Continuous covariate(s) whose FORMULA uses the reference but have no REFERENCE in row(s) ",
+         paste(which(no_ref_con), collapse = ", "), ": ",
+         paste(unique(covariate_search$COVARIATE[no_ref_con]), collapse = ", "))
+  }
+
+  # cov_to_test carries the beta_ prefix the tags and the model file use; a
+  # prefix in another case ("Beta_") is corrected, not doubled.
+  if ("cov_to_test" %in% names(covariate_search)) {
+    tag <- trimws(as.character(covariate_search$cov_to_test))
+    tag <- sub("^beta_", "beta_", tag, ignore.case = TRUE)
+    no_prefix <- !is.na(tag) & tag != "" & !startsWith(tag, "beta_")
+    tag[no_prefix] <- paste0("beta_", tag[no_prefix])
+    covariate_search$cov_to_test <- tag
   }
 
   # Single-token COVARIATE / PARAMETER: the beta_<COV>_<PARAM>[_<theta|level>] tag
@@ -666,6 +785,25 @@ validate_covariate_search_table <- function(covariate_search, data_file) {
         )
       }
 
+      # The other direction: THETAs are written for observed levels but df is
+      # counted from LEVELS, so an unobserved declared level would make the test
+      # too strict. With LEVELS == observed, REFERENCE in LEVELS also means a
+      # second observed level is a real non-reference level to estimate.
+      unobserved <- setdiff(declared_levels_num, observed_levels_num)
+      if (length(unobserved) > 0) {
+        stop(
+          "Covariate '", cov_name, "' declares LEVELS never observed in the dataset: ",
+          paste(unobserved, collapse = ", "),
+          ". Remove them from LEVELS (degrees of freedom are counted from LEVELS)."
+        )
+      }
+      if (length(observed_levels_num) < 2) {
+        stop(
+          "Categorical covariate '", cov_name, "' has only one observed level (",
+          paste(observed_levels_num, collapse = ", "), "): there is no effect to estimate."
+        )
+      }
+
       # Check REFERENCE is within declared LEVELS
       ref_values <- unique(as.character(cov_rows$REFERENCE))
       ref_values <- ref_values[!is.na(ref_values) & trimws(ref_values) != ""]
@@ -744,6 +882,20 @@ validate_covariate_search_table <- function(covariate_search, data_file) {
             "  Valid names: ", paste(theta_names, collapse = ", "), "."
           )
         }
+      }
+
+      # Each initial estimate may be 0 only when FIXED.
+      specs <- if (named) {
+        trimws(sub("^[^=]*=", "", trimws(strsplit(init_val, ";", fixed = TRUE)[[1]])))
+      } else {
+        init_val
+      }
+      if (any(vapply(specs[nzchar(specs)], .theta_init_is_unfixed_zero, logical(1)))) {
+        stop(
+          "Row ", i, ": INIT for covariate '", cov_i, "' on parameter '", param_i,
+          "' has an initial estimate of 0 that is not FIXED: '", init_val, "'.\n",
+          "  Use a non-zero start, or FIX it (e.g. \"0 FIX\")."
+        )
       }
     }
   }
@@ -855,17 +1007,12 @@ validate_param_transformations <- function(covariate_search, data_file, id_col,
     NULL
   }
   if (is.null(ctl)) return(invisible(TRUE))   # base-model existence checked elsewhere
-  modelcode <- readLines(ctl, warn = FALSE)
+  modelcode <- .read_control_stream(ctl)
 
   # A covariate is placed at population level (and thus needs a classifiable
   # transform) when it is time-CONSTANT: at most one distinct value per subject.
-  # Mirror the data-based check model_add_cov uses.
-  is_time_varying <- function(cov) {
-    if (!cov %in% names(data_file) || !id_col %in% names(data_file)) return(FALSE)
-    lv <- tapply(data_file[[cov]], data_file[[id_col]],
-                 function(x) length(unique(x[!is.na(x)])))
-    isTRUE(max(lv, na.rm = TRUE) > 1)
-  }
+  # The same data-based check model_add_cov uses.
+  is_time_varying <- function(cov) .covariate_is_time_varying(data_file, cov, id_col)
 
   pop_params <- character(0)
   for (i in seq_len(nrow(covariate_search))) {
@@ -974,7 +1121,77 @@ validate_param_transformations <- function(covariate_search, data_file, id_col,
     )
   }
 
+  # Every parameter, not only covariate targets: forest plots and scenario
+  # simulations read the typical value through TV_<param>, so a log/MU form
+  # must go through it; and NM-TRAN only knows ENDIF.
+  form_issues <- c(.typical_value_form_issues(modelcode), .endif_spelling_issues(modelcode))
+  if (length(form_issues) > 0) {
+    stop("The base model's $PK does not follow the required forms:\n",
+         paste0("  - ", form_issues, collapse = "\n"), call. = FALSE)
+  }
+
   invisible(TRUE)
+}
+
+
+# Log-normal parameters written P = EXP(<terms> + ETA): the forest plots and
+# scenario simulations read the typical value through TV_<param>. Among the
+# additive terms inside the EXP that are $PK variables (not data items, not
+# ETA-based terms such as IOV), at least one must be TV_P (or TVP) or be
+# defined as <name> = LOG(TV_P) with a TV_P line (the MU form). Inline THETA
+# expressions (P = EXP(THETA(n) + ETA)) need nothing; other right-hand sides
+# (TV_P * EXP(ETA), TVCL * EXP(ETA * SC), logit forms) are not this shape and
+# are left alone. Returns one message per problem.
+#' @keywords internal
+#' @noRd
+.typical_value_form_issues <- function(modelcode) {
+  code <- sub(";.*$", "", modelcode)
+  assign_re <- "^\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*=\\s*(.*)$"
+  is_assign <- grepl(assign_re, code) & !.is_record_line(code)
+  defs <- function(sym) code[is_assign & grepl(paste0("^\\s*", sym, "\\s*="), code, ignore.case = TRUE)]
+  squash <- function(s) toupper(gsub("\\s", "", s))
+  issues <- character(0)
+
+  for (ln in code[is_assign & grepl("\\bETA\\(", code, ignore.case = TRUE)]) {
+    p <- sub(assign_re, "\\1", ln)
+    rhs <- trimws(sub(assign_re, "\\2", ln))
+    inner <- .exp_inner_containing_eta(rhs)
+    if (is.na(inner) || squash(rhs) != squash(paste0("EXP(", inner, ")"))) next
+
+    terms <- .split_depth0(inner, c("+", "-"))
+    terms <- terms[!grepl("\\bETA\\(", terms, ignore.case = TRUE)]
+    vars <- terms[grepl("^[A-Za-z_][A-Za-z0-9_]*$", terms)]
+    vars <- vars[vapply(vars, function(v) {
+      d <- defs(v)
+      length(d) > 0 && !any(grepl("\\bETA\\(", d, ignore.case = TRUE))
+    }, logical(1))]
+    if (length(vars) == 0) next
+
+    has_tv_line <- length(defs(paste0("TV_?", p))) > 0
+    passes <- vapply(vars, function(v) {
+      grepl(paste0("^TV_?", p, "$"), v, ignore.case = TRUE) ||
+        (has_tv_line && any(grepl(paste0("^\\s*", v, "\\s*=\\s*LOG\\(\\s*TV_?", p, "\\s*\\)\\s*$"),
+                                  defs(v), ignore.case = TRUE)))
+    }, logical(1))
+    if (!any(passes)) {
+      v <- vars[1]
+      issues <- c(issues, sprintf(
+        "%s = EXP(%s + ETA): name the typical value TV_%s, or define %s = LOG(TV_%s) with a TV_%s line",
+        p, v, p, v, p, p))
+    }
+  }
+  unique(issues)
+}
+
+
+# NM-TRAN abbreviated code knows ENDIF only; "END IF" is not NM-TRAN syntax.
+#' @keywords internal
+#' @noRd
+.endif_spelling_issues <- function(modelcode) {
+  code <- sub(";.*$", "", modelcode)
+  hit <- which(grepl("^\\s*END\\s+IF\\b", code, ignore.case = TRUE))
+  if (length(hit) == 0) return(character(0))
+  sprintf("line %d: 'END IF' is not NM-TRAN syntax - write ENDIF", hit)
 }
 
 #' Validate base model readiness for covariate search
@@ -1000,6 +1217,7 @@ validate_param_transformations <- function(covariate_search, data_file, id_col,
 validate_base_model_for_search <- function(base_model_path,
                                            models_folder = "models",
                                            require_cov_step = TRUE) {
+  .check_require_cov_step(require_cov_step)
 
   model_path <- file.path(models_folder, base_model_path)
 
@@ -1092,6 +1310,7 @@ validate_base_model_for_search <- function(base_model_path,
 #' @export
 initialize_search_config <- function(search_state, lookup_file = NULL,
                                      require_cov_step = TRUE) {
+  .check_require_cov_step(require_cov_step)
   resolved_lookup_file <- if (!is.null(lookup_file)) {
     lookup_file
   } else {
@@ -1122,7 +1341,7 @@ initialize_search_config <- function(search_state, lookup_file = NULL,
 #' based on the covariate search table. Preserves existing content and only
 #' updates the covariates section.
 #'
-#' @param covariate_search Either a data frame or path to the covariate search CSV file
+#' @param covariate_search A data frame, or the path to a .csv or .rds file holding it
 #' @param tags_yaml_path Path to tags.yaml file (default: "data/spec/tags.yaml")
 #' @param verbose Logical. Print progress messages (default: TRUE)
 #' @return Logical. TRUE if successful, FALSE otherwise
@@ -1133,23 +1352,11 @@ generate_tags_from_covariate_search <- function(covariate_search,
 
   if (verbose) cat("📝 Generating tags.yaml from covariate search table...\n")
 
-  # Handle both data frame and file path inputs
-  if (is.character(covariate_search)) {
-    # It's a file path
-    if (!file.exists(covariate_search)) {
-      stop(sprintf("Covariate search file not found: %s", covariate_search))
-    }
-
-    covariate_search_df <- tryCatch({
-      readr::read_csv(covariate_search, show_col_types = FALSE)
-    }, error = function(e) {
-      stop(sprintf("Failed to read covariate search file: %s", e$message))
-    })
-  } else if (is.data.frame(covariate_search)) {
-    # It's already a data frame
-    covariate_search_df <- covariate_search
-  } else {
-    stop("covariate_search must be either a data frame or a file path")
+  # A data frame, or a path to a .csv or .rds file, loaded the same way as every
+  # other table argument in the package.
+  covariate_search_df <- .load_if_path(covariate_search, "covariate_search")
+  if (!is.data.frame(covariate_search_df)) {
+    stop("covariate_search must be a data frame or a path to a .csv or .rds file")
   }
 
   if (verbose) cat(sprintf("  Found %d covariates in search table\n", nrow(covariate_search_df)))
@@ -1491,7 +1698,7 @@ add_covariates_to_search <- function(search_state, additions,
   )
 
   search_state$covariate_search <- merged
-  search_state <- load_tags(search_state)
+  search_state <- load_tags(search_state, tags_yaml_path)
 
   missing_tags <- setdiff(new_tags, names(search_state$tags))
   if (length(missing_tags) > 0) {

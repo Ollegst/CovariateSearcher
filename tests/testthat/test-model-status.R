@@ -291,3 +291,151 @@ test_that("a removal is judged at the backward p-value, not the forward one", {
   # covariate is droppable and there is nothing significant to announce.
   expect_false(any(grepl("^   run4 ", out)))
 })
+
+
+test_that("a listing with cp1252 bytes is read without a warning storm", {
+  # NIO-03: readLines() returned the invalid lines without error, so the old
+  # latin1 fallback never ran and every regex pass over them warned.
+  models_dir <- setup_finished_run()
+  lst <- file.path(models_dir, "run1", "run1.lst")
+  con <- file(lst, open = "ab")
+  writeBin(c(charToRaw(" conc in "), as.raw(0xB5), charToRaw("g/L\n")), con)
+  close(con)
+
+  expect_true(all(validUTF8(.read_listing_lines(lst))))
+  expect_no_warning(probe <- read_nonmem_lst(file.path(models_dir, "run1")))
+  expect_equal(probe$status, "completed")
+})
+
+
+test_that("a run is finished only once its listing has Stop Time", {
+  # NIO-02: a listing with MINIMIZATION SUCCESSFUL but no Stop Time (still in
+  # $COV, or between $EST steps) was "completed"/"failed" for one reader and
+  # "in progress" for the other.
+  models_dir <- setup_finished_run()
+  lst <- file.path(models_dir, "run1", "run1.lst")
+  lines <- readLines(lst)
+  writeLines(c(lines[!grepl("^Stop Time:", lines)][1:4], "1NONMEM EXECUTION"), lst)
+  expect_equal(read_nonmem_lst(file.path(models_dir, "run1"))$status, "incomplete")
+  expect_equal(get_model_status_from_files(file.path(models_dir, "run1"),
+                                           require_cov_step = FALSE), "incomplete")
+  expect_equal(get_model_status_from_files(file.path(models_dir, "run1"),
+                                           require_cov_step = TRUE), "incomplete")
+  st <- list(models_folder = models_dir, search_config = list(),
+             search_database = data.frame(model_name = "run1", status = "in_progress",
+                                          stringsAsFactors = FALSE))
+  invisible(capture.output(st <- update_model_status_from_files(st, "run1", force = TRUE)))
+  expect_equal(st$search_database$status, "in_progress")
+
+  # A termination line from an earlier $EST step does not end the run either.
+  writeLines(c(" #TERM:", "0MINIMIZATION TERMINATED", "1NONMEM EXECUTION"), lst)
+  expect_equal(read_nonmem_lst(file.path(models_dir, "run1"))$status, "incomplete")
+})
+
+test_that("an NM-TRAN error is a failure with or without Stop Time", {
+  models_dir <- setup_finished_run()
+  unlink(file.path(models_dir, "run1", c("run1.ext", "run1.cov")))
+  lst <- file.path(models_dir, "run1", "run1.lst")
+  for (with_stop in c(FALSE, TRUE)) {
+    writeLines(c(" AN ERROR WAS FOUND IN THE CONTROL STATEMENTS.",
+                 " (DATA ERROR) RECORD 1, DATA ITEM 3: NON-NUMERIC",
+                 if (with_stop) c("Stop Time:", "Sat 25 Jul 2026 06:50:30 AM EDT")), lst)
+    expect_equal(read_nonmem_lst(file.path(models_dir, "run1"))$status, "failed")
+    expect_equal(get_model_status_from_files(file.path(models_dir, "run1")), "failed")
+    st <- list(models_folder = models_dir, search_config = list(),
+               search_database = data.frame(model_name = "run1", status = "in_progress",
+                                            stringsAsFactors = FALSE))
+    invisible(capture.output(st <- update_model_status_from_files(st, "run1", force = TRUE)))
+    expect_equal(st$search_database$status, "failed")
+  }
+})
+
+test_that("a finished run that ended on rounding errors still counts on OFV and .cov", {
+  models_dir <- setup_finished_run()
+  lst <- file.path(models_dir, "run1", "run1.lst")
+  writeLines(c(" #TERM:", "0MINIMIZATION TERMINATED", " DUE TO ROUNDING ERRORS (ERROR=134)",
+               "Stop Time:", "Sat 25 Jul 2026 06:50:30 AM EDT"), lst)
+  expect_equal(get_model_status_from_files(file.path(models_dir, "run1")), "completed")
+})
+
+test_that("an NM-TRAN error is not overridden by result files from an earlier run", {
+  # diff-auditor: a stale run1.ext and run1.cov made the rejected rerun read
+  # as completed with the old OFV.
+  models_dir <- setup_finished_run()
+  lst <- file.path(models_dir, "run1", "run1.lst")
+  writeLines(c(" AN ERROR WAS FOUND IN THE CONTROL STATEMENTS.",
+               "Stop Time:", "Sat 25 Jul 2026 06:50:30 AM EDT"), lst)
+  expect_equal(get_model_status_from_files(file.path(models_dir, "run1")), "failed")
+  st <- list(models_folder = models_dir, search_config = list(),
+             search_database = data.frame(model_name = "run1", status = "in_progress",
+                                          stringsAsFactors = FALSE))
+  invisible(capture.output(st <- update_model_status_from_files(st, "run1", force = TRUE)))
+  expect_equal(st$search_database$status, "failed")
+})
+
+test_that("an unfinished run keeps its last termination line as the reason", {
+  models_dir <- setup_finished_run()
+  lst <- file.path(models_dir, "run1", "run1.lst")
+  writeLines(c(" #TERM:", "0MINIMIZATION TERMINATED", " DUE TO ROUNDING ERRORS (ERROR=134)"), lst)
+  probe <- read_nonmem_lst(file.path(models_dir, "run1"))
+  expect_equal(probe$status, "incomplete")
+  expect_match(probe$error_message, "ROUNDING ERRORS")
+})
+
+test_that("one status check reads the listing once", {
+  # NIO-05: a check read the same .lst several times (find it, Stop Time,
+  # timestamps).
+  models_dir <- setup_finished_run()
+  reads <- 0L
+  real_reader <- .read_listing_lines
+  local_mocked_bindings(.read_listing_lines = function(...) {
+    reads <<- reads + 1L
+    real_reader(...)
+  })
+  st <- list(models_folder = models_dir, search_config = list(require_cov_step = TRUE),
+             search_database = data.frame(model_name = "run1", status = "in_progress",
+                                          stringsAsFactors = FALSE))
+  invisible(capture.output(st <- update_model_status_from_files(st, "run1", force = TRUE)))
+  expect_equal(st$search_database$status, "completed")
+  expect_equal(reads, 1L)
+})
+
+test_that("timestamps with a numeric time zone parse", {
+  # NIO-07: "+03" / "-0500" left both times NA.
+  for (z in c("+03", "-0500")) {
+    md <- setup_finished_run(start_line = sprintf("Wed Jul 29 14:30:08 %s 2026", z),
+                             stop_line  = sprintf("Sat 25 Jul 2026 06:50:30 AM %s", z))
+    ts <- extract_nonmem_timestamps("run1", md)
+    expect_false(is.na(ts$start_time))
+    expect_false(is.na(ts$stop_time))
+  }
+})
+
+test_that("self-heal adds missing columns with their real types", {
+  # STA-08: a healed completion_time became character and step_number double.
+  models_dir <- setup_finished_run()
+  st <- list(models_folder = models_dir, search_config = list(),
+             search_database = data.frame(model_name = "run1", status = "in_progress",
+                                          stringsAsFactors = FALSE))
+  invisible(capture.output(st <- update_model_status_from_files(st, "run1", force = TRUE)))
+  db <- st$search_database
+  expect_s3_class(db$submission_time, "POSIXct")
+  expect_s3_class(db$completion_time, "POSIXct")
+  expect_type(db$step_number, "integer")
+  expect_type(db$ofv, "double")
+  expect_identical(db$excluded_from_step, FALSE)
+})
+
+test_that("a finished model gets NONMEM's own start time from the status check", {
+  # diff-auditor (4.8): the monitoring loop skips a model once its stop time
+  # is set, so a model that finished between two checks kept the R-side
+  # submission time. The status check now records the start time with the stop.
+  models_dir <- setup_finished_run(start_line = "Wed Jul 29 14:30:08 EDT 2026")
+  st <- list(models_folder = models_dir, search_config = list(),
+             search_database = data.frame(model_name = "run1", status = "in_progress",
+                                          submission_time = as.POSIXct("2000-01-01 00:00:00"),
+                                          stringsAsFactors = FALSE))
+  invisible(capture.output(st <- update_model_status_from_files(st, "run1", force = TRUE)))
+  expect_equal(format(st$search_database$submission_time, "%Y-%m-%d %H:%M"), "2026-07-29 14:30")
+  expect_false(is.na(st$search_database$completion_time))
+})

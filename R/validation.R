@@ -38,19 +38,17 @@ update_model_status_from_files <- function(search_state, model_name, force = FAL
 
   missing_cols <- setdiff(required_cols, names(search_state$search_database))
   if (length(missing_cols) > 0) {
-    # Add missing columns with a default of the column's own type. `col` is a
-    # single name, so this is a scalar choice: case_when() cannot express it,
-    # because it requires every branch to share one type and these are numeric,
-    # logical and character.
+    # Add each missing column with the type the canonical schema gives it
+    # (POSIXct times, integer step numbers), NA throughout; an exclusion flag
+    # defaults to FALSE.
+    schema <- .empty_search_database()
+    n <- nrow(search_state$search_database)
     for (col in missing_cols) {
-      search_state$search_database[[col]] <-
-        if (col %in% c("ofv", "delta_ofv", "rse_max", "step_number")) {
-          NA_real_
-        } else if (col == "excluded_from_step") {
-          FALSE
-        } else {
-          NA_character_
-        }
+      search_state$search_database[[col]] <- if (col == "excluded_from_step") {
+        rep(FALSE, n)
+      } else {
+        schema[[col]][rep(NA_integer_, n)]
+      }
     }
   }
 
@@ -84,7 +82,8 @@ update_model_status_from_files <- function(search_state, model_name, force = FAL
       ofv = NA_real_,
       rse_max = NA_real_,
       error_message = NA_character_,
-      completion_time = NA
+      completion_time = NA,
+      start_time = NA
     )
 
     # read_nonmem_lst() is the one resolver for where a model's output can be:
@@ -133,41 +132,38 @@ update_model_status_from_files <- function(search_state, model_name, force = FAL
     }
 
 
-    # Read LST file - only check Stop Time
-    lst_info <- tryCatch({
-      lst_content <- .read_listing_lines(lst_file)
+    # The listing was read once, by read_nonmem_lst(); its lines and Stop Time
+    # flag are reused here and for the timestamps below.
+    lst_info <- list(
+      status = if (isTRUE(lst_probe$has_stop_time)) "stopped" else "in_progress",
+      lst_content = lst_probe$lines  # Kept for #TERM extraction on failure
+    )
 
-      # ONLY check if run has finished (Stop Time is standard NONMEM output)
-      has_stop_time <- any(grepl("Stop Time:", lst_content))
+    # NM-TRAN rejected the control stream, so NONMEM did not run: failed with or
+    # without "Stop Time:", and before any .ext from an earlier run is read.
+    if (isTRUE(lst_probe$nmtran_error)) {
+      results$status <- "failed"
+      results$error_message <- lst_probe$error_message %||% "NM-TRAN error"
+      return(results)
+    }
 
-      list(
-        status = if (has_stop_time) "stopped" else "in_progress",
-        lst_content = lst_content  # Keep for potential #TERM extraction
-      )
-    }, error = function(e) {
-      list(status = "read_error", lst_content = NULL)
-    })
-
-    # If still running, return early
+    # Without "Stop Time:" the run is still going.
     if (lst_info$status == "in_progress") {
       results$status <- "in_progress"
       return(results)
     }
 
-    # If LST read error, return early
-    if (lst_info$status == "read_error") {
-      results$status <- "failed"
-      results$error_message <- "Cannot read LST file"
-      return(results)
-    }
-
     # Extract completion time (only if stopped)
     timestamps <- tryCatch({
-      extract_nonmem_timestamps(model_name, search_state$models_folder)
+      extract_nonmem_timestamps(model_name, search_state$models_folder,
+                                lst_lines = lst_probe$lines)
     }, error = function(e) {
-      list(stop_time = NA)
+      list(start_time = NA, stop_time = NA)
     })
     results$completion_time <- timestamps$stop_time
+    # NONMEM's own start time, recorded here because the monitoring loop does
+    # not read the listing of a model once its stop time is set.
+    results$start_time <- timestamps$start_time
 
     # Extract OFV from EXT file - THIS DETERMINES FINAL STATUS
     # read_nonmem_ext() searches the same locations as read_nonmem_lst(), so the
@@ -189,62 +185,55 @@ update_model_status_from_files <- function(search_state, model_name, force = FAL
     } else {
       ext_results <- ext_probe
 
-      if (!ext_results$found) {
-        # EXT file exists but couldn't be read
-        results$status <- "failed"
-        results$error_message <- ext_results$error
-        results$ofv <- NA_real_
-      } else {
-        # Successfully read OFV
-        ofv_value <- ext_results$ofv
-        results$ofv <- ofv_value
+      # Successfully read OFV
+      ofv_value <- ext_results$ofv
+      results$ofv <- ofv_value
 
-        # SIMPLE STATUS DETERMINATION: Valid OFV = success, Invalid OFV = failed
-        is_valid_ofv <- !is.na(ofv_value) && is.finite(ofv_value) && abs(ofv_value) <= 1e10
+      # SIMPLE STATUS DETERMINATION: Valid OFV = success, Invalid OFV = failed
+      is_valid_ofv <- !is.na(ofv_value) && is.finite(ofv_value) && abs(ofv_value) <= 1e10
 
-        # Check for parameters at boundary limits
-        if (is_valid_ofv && !is.null(ext_results$parameters)) {
-          # Check if any parameter is at boundary (±8.99990E+05)
-          boundary_limit <- 8.99990e5
-          param_values <- ext_results$parameters
+      # Check for parameters at boundary limits
+      if (is_valid_ofv && !is.null(ext_results$parameters)) {
+        # Check if any parameter is at boundary (±8.99990E+05)
+        boundary_limit <- 8.99990e5
+        param_values <- ext_results$parameters
 
-          if (any(abs(param_values) >= boundary_limit, na.rm = TRUE)) {
-            is_valid_ofv <- FALSE
+        if (any(abs(param_values) >= boundary_limit, na.rm = TRUE)) {
+          is_valid_ofv <- FALSE
 
-            # Find which parameters are at boundary
-            problem_indices <- which(abs(param_values) >= boundary_limit)
-            if (length(problem_indices) > 0) {
-              results$error_message <- paste("Parameters at boundary limits (positions:",
-                                             paste(problem_indices, collapse = ", "), ")")
-            } else {
-              results$error_message <- "Parameters at boundary limits"
-            }
+          # Find which parameters are at boundary
+          problem_indices <- which(abs(param_values) >= boundary_limit)
+          if (length(problem_indices) > 0) {
+            results$error_message <- paste("Parameters at boundary limits (positions:",
+                                           paste(problem_indices, collapse = ", "), ")")
+          } else {
+            results$error_message <- "Parameters at boundary limits"
           }
         }
+      }
 
-        results$status <- if (is_valid_ofv) "completed" else "failed"
+      results$status <- if (is_valid_ofv) "completed" else "failed"
 
-        # Set error message for failed runs
-        if (!is_valid_ofv) {
-          results$error_message <- dplyr::case_when(
-            is.na(ofv_value) ~ "No OFV found in EXT file",
-            is.infinite(ofv_value) ~ "Infinite OFV",
-            is.nan(ofv_value) ~ "NaN OFV",
-            abs(ofv_value) > 1e10 ~ sprintf("OFV > 10^10: %.2e", ofv_value),
-            TRUE ~ "Invalid OFV"
-          )
-        }
+      # Set error message for failed runs
+      if (!is_valid_ofv) {
+        results$error_message <- dplyr::case_when(
+          is.na(ofv_value) ~ "No OFV found in EXT file",
+          is.infinite(ofv_value) ~ "Infinite OFV",
+          is.nan(ofv_value) ~ "NaN OFV",
+          abs(ofv_value) > 1e10 ~ sprintf("OFV > 10^10: %.2e", ofv_value),
+          TRUE ~ "Invalid OFV"
+        )
+      }
 
-        # Check covariance step: .cov file is only written when covariance succeeds
-        require_cov_step <- search_state$search_config$require_cov_step %||% TRUE
-        if (require_cov_step && results$status == "completed") {
-          # The .cov sits with the rest of the run's output, so anchor it to the
-          # directory the .lst was actually found in rather than assuming one.
-          cov_file <- file.path(dirname(lst_file), paste0(model_name, ".cov"))
-          if (!file.exists(cov_file)) {
-            results$status <- "failed"
-            results$error_message <- "Covariance step failed (no .cov file)"
-          }
+      # Check covariance step: .cov file is only written when covariance succeeds
+      require_cov_step <- .require_cov_step(search_state)
+      if (require_cov_step && results$status == "completed") {
+        # The .cov sits with the rest of the run's output, so anchor it to the
+        # directory the .lst was actually found in rather than assuming one.
+        cov_file <- file.path(dirname(lst_file), paste0(model_name, ".cov"))
+        if (!file.exists(cov_file)) {
+          results$status <- "failed"
+          results$error_message <- "Covariance step failed (no .cov file)"
         }
       }
     }
@@ -313,6 +302,9 @@ update_model_status_from_files <- function(search_state, model_name, force = FAL
 
     if (!is.na(file_results$completion_time)) {
       search_state$search_database$completion_time[db_idx] <- file_results$completion_time
+    }
+    if (!is.na(file_results$start_time)) {
+      search_state$search_database$submission_time[db_idx] <- file_results$start_time
     }
   }
 
@@ -645,7 +637,8 @@ update_all_model_statuses <- function(search_state, show_progress = TRUE) {
                 )
                 if (!is.na(cov_name)) {
                   cov_df <- tryCatch(
-                    calculate_covariate_df(cov_name, search_state$covariate_search),
+                    calculate_covariate_df(cov_name, search_state$covariate_search,
+                                           tag = cov_tag),
                     error = function(e) 1L
                   )
                 }
@@ -800,7 +793,7 @@ validate_parameter_blocks <- function(model_file,
   }
 
   model_lines <- tryCatch({
-    readLines(model_file, warn = FALSE)
+    .read_control_stream(model_file)
   }, error = function(e) {
     return(NULL)
   })
@@ -821,11 +814,11 @@ validate_parameter_blocks <- function(model_file,
   warnings <- character(0)
 
   # Find all parameter block starts
-  # (?![A-Za-z]) leaves out the $PRIOR records ($THETAP, $THETAPV, $OMEGAP,
+  # .record_starts leaves out the $PRIOR records ($THETAP, $THETAPV, $OMEGAP,
   # $OMEGAPD, $SIGMAP, $SIGMAPD), which hold priors rather than parameters.
-  theta_lines <- grep("^\\s*\\$THETA(?![A-Za-z])", model_lines, ignore.case = TRUE, perl = TRUE)
-  omega_lines <- grep("^\\s*\\$OMEGA(?![A-Za-z])", model_lines, ignore.case = TRUE, perl = TRUE)
-  sigma_lines <- grep("^\\s*\\$SIGMA(?![A-Za-z])", model_lines, ignore.case = TRUE, perl = TRUE)
+  theta_lines <- .record_starts(model_lines, "THETA")
+  omega_lines <- .record_starts(model_lines, "OMEGA")
+  sigma_lines <- .record_starts(model_lines, "SIGMA")
 
   all_blocks <- list(
     THETA = theta_lines,
@@ -868,6 +861,21 @@ validate_parameter_blocks <- function(model_file,
         end_line <- length(model_lines)
       }
 
+      # A value may sit on the $THETA record line itself ("$THETA 0.5 ; CL"),
+      # which the line checks below skip. One is allowed; more than one breaks
+      # the one-value-per-line layout every THETA reader relies on.
+      if (block_type == "THETA") {
+        header_rest <- sub("^\\s*\\$THETA\\s*", "", block_header, ignore.case = TRUE)
+        header_value <- strsplit(header_rest, ";", fixed = TRUE)[[1]]
+        n_header <- if (length(header_value)) .count_theta_values(header_value[1]) else 0
+        if (n_header > 1) {
+          issues <- c(issues, sprintf(
+            "Line %d (THETA record line): Multiple values (%d) on one line - should have ONE value per line",
+            start_line, n_header
+          ))
+        }
+      }
+
       # Get block content (skip header)
       block_lines <- model_lines[(start_line + 1):end_line]
 
@@ -876,6 +884,32 @@ validate_parameter_blocks <- function(model_file,
       valid_idx <- !grepl("^\\s*$", block_lines) & !grepl("^\\s*;", block_lines)
       block_lines <- block_lines[valid_idx]
       block_line_numbers <- block_lines_idx[valid_idx]
+
+      # A THETA may start at 0 only when it is FIXED: NONMEM cannot estimate a
+      # parameter from an initial value of 0.
+      if (block_type == "THETA") {
+        theta_values <- c(if (length(header_value)) header_value[1],
+                          vapply(strsplit(block_lines, ";", fixed = TRUE),
+                                 function(p) p[1], character(1)))
+        theta_lines <- c(if (length(header_value)) start_line,
+                         block_line_numbers)
+        zero <- vapply(theta_values, .theta_init_is_unfixed_zero, logical(1))
+        for (k in which(zero)) {
+          issues <- c(issues, sprintf(
+            "Line %d (THETA): initial estimate is 0 but not FIXED - use a non-zero start or FIX it",
+            theta_lines[k]))
+        }
+        # A bounded value written across lines ("(0," then "2.5)") breaks the
+        # one-value-per-line layout the THETA numbering relies on.
+        unbalanced <- vapply(theta_values, function(v) {
+          lengths(regmatches(v, gregexpr("\\(", v))) != lengths(regmatches(v, gregexpr("\\)", v)))
+        }, logical(1))
+        for (k in which(unbalanced)) {
+          issues <- c(issues, sprintf(
+            "Line %d (THETA): a bounded value must be written on one line, e.g. (0, 2.5, 100)",
+            theta_lines[k]))
+        }
+      }
 
       if (length(block_lines) == 0) next
 
@@ -990,11 +1024,9 @@ validate_parameter_blocks <- function(model_file,
 
           # Check 5: For THETA and SIGMA, should not have multiple values per line
           if (block_type %in% c("THETA", "SIGMA")) {
-            value_part_clean <- gsub("FIX", "", value_part, ignore.case = TRUE)
-            # Remove bounds syntax like (0, x, 100)
-            value_part_clean <- gsub("\\([^)]+\\)", "", value_part_clean)
-            numbers <- gregexpr("-?\\d+\\.?\\d*([eE][+-]?\\d+)?", value_part_clean)
-            num_values <- length(unlist(regmatches(value_part_clean, numbers)))
+            # Each bounded group "(0, x, 100)" is one value, as is each bare
+            # number, so "(0,2.5) (0,30)" counts as two
+            num_values <- .count_theta_values(value_part)
 
             if (num_values > 1) {
               issues <- c(issues, sprintf(
@@ -1241,7 +1273,7 @@ validate_covariate_parameter_mapping <- function(covariate_search,
     stop("Model file not found for mapping validation: ", file.path(models_folder, model_name))
   }
 
-  modelcode <- readLines(model_file, warn = FALSE)
+  modelcode <- .read_control_stream(model_file)
   code_lines <- modelcode[!grepl("^\\s*;", modelcode)]
 
   has_parameter_assignment <- function(param_name) {

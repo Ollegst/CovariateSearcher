@@ -19,7 +19,7 @@ read_model_file <- function(search_state, run_name, extensions = c(".ctl", ".mod
   for (ext in extensions) {
     file_path <- paste0(base_path, ext)
     if (file.exists(file_path)) {
-      lines <- readLines(file_path, warn = FALSE)
+      lines <- .read_control_stream(file_path)
       attr(lines, "file_path") <- file_path
       return(lines)
     }
@@ -48,26 +48,167 @@ find_model_file <- function(base_path, extensions = c(".ctl", ".mod")) {
 }
 
 
-# Read a NONMEM listing as text. Listings are not guaranteed to be valid UTF-8 -
-# a run that wrote PRDERR output can carry stray control bytes, and readLines()
-# then throws "invalid multibyte string" under a UTF-8 locale.
+# Lines that are not valid UTF-8 re-read as Windows-1252, the encoding a Windows
+# editor saving "ANSI" writes. readLines() does not fail on such bytes: under a
+# UTF-8 locale the line comes back invalid, and grepl() silently returns FALSE
+# on it - a comment-only line carrying a cp1252 "µ" would not match "^\\s*;"
+# and would be counted as a THETA. CP1252 rather than latin1 because latin1
+# turns cp1252's quotes, dashes and euro sign (0x80-0x9F) into control
+# characters. Valid UTF-8 lines are returned untouched; a byte cp1252 leaves
+# undefined becomes "?".
+#' @keywords internal
+#' @noRd
+.repair_encoding <- function(lines) {
+  bad <- !validUTF8(lines)
+  if (any(bad)) {
+    lines[bad] <- iconv(lines[bad], from = "CP1252", to = "UTF-8", sub = "?")
+  }
+  lines
+}
+
+
+# Line indices where a `$<tag>` record starts. NM-TRAN accepts leading blanks
+# and any case, so both are allowed; the name must not continue with a letter,
+# so "THETA" matches $THETA and $THETA(0,1) but not the $PRIOR records $THETAP /
+# $THETAPV. `tag` is a regex fragment, e.g. "(?:PK|PRED)".
+#' @keywords internal
+#' @noRd
+.record_starts <- function(lines, tag) {
+  grep(paste0("^\\s*\\$", tag, "(?![A-Za-z])"), lines,
+       ignore.case = TRUE, perl = TRUE)
+}
+
+
+# TRUE for every line that starts a record (a `$` as first non-blank character);
+# a record runs until the next such line.
+#' @keywords internal
+#' @noRd
+.is_record_line <- function(lines) {
+  grepl("^\\s*\\$", lines)
+}
+
+
+# Number of THETA values in the value part of one $THETA line (the text before
+# the first ";"). Each parenthesised group - "(0, 2.5)", "(0, 2.5, 100) FIX" -
+# is one value; outside groups each bare number is one; FIX/FIXED is not a
+# value, also when written against the number. "(0,2.5) (0,30)" is 2, "2.5 30"
+# is 2, "0.75 FIX" and "0.75FIX" are 1.
+#' @keywords internal
+#' @noRd
+.count_theta_values <- function(value_text) {
+  group_pat <- "\\([^)]*\\)"
+  n_groups <- sum(gregexpr(group_pat, value_text)[[1]] > 0)
+  rest <- gsub(group_pat, " ", value_text)
+  rest <- gsub("FIX(ED)?", " ", rest, ignore.case = TRUE)
+  tokens <- strsplit(trimws(rest), "[[:space:],]+")[[1]]
+  number <- "^[-+]?(\\d+\\.?\\d*|\\.\\d+)([eEdD][-+]?\\d+)?$"
+  n_groups + sum(grepl(number, tokens))
+}
+
+
+# Is this one THETA value an initial estimate of 0 that is not FIXED? NONMEM
+# cannot start estimating a parameter from 0, so such a value is only valid
+# fixed. `value_text` is one value: "0", "(0, 0, 1)", "(0)", "0 FIX".
+#' @keywords internal
+#' @noRd
+.theta_init_is_unfixed_zero <- function(value_text) {
+  value_text <- trimws(value_text)
+  if (grepl("\\bFIX(ED)?\\b|[0-9.]FIX", value_text, ignore.case = TRUE)) return(FALSE)
+  init <- if (grepl("^\\(", value_text)) {
+    parts <- trimws(strsplit(sub("^\\(([^)]*)\\).*$", "\\1", value_text), ",")[[1]])
+    if (length(parts) == 1L) parts[1] else parts[2]
+  } else {
+    regmatches(value_text, regexpr("^[-+]?(\\d+\\.?\\d*|\\.\\d+)([eEdD][-+]?\\d+)?", value_text))
+  }
+  if (length(init) == 0L) return(FALSE)
+  isTRUE(suppressWarnings(as.numeric(sub("[dD]", "e", init))) == 0)
+}
+
+
+# The annotation of a $THETA / $OMEGA / $SIGMA line, "value ; name ; unit ;
+# transform": fields split on ";" with empty ones kept, so a blank unit
+# ("; CL ; ; RATIO") does not shift the transform into its place, and anything
+# after the 4th field (a trailing comment) ignored. The transform is
+# upper-cased: NM-TRAN and validation accept "log" as well as "LOG".
+#' @keywords internal
+#' @noRd
+.parse_annotation <- function(line) {
+  fields <- trimws(strsplit(paste0(line, ";"), ";", fixed = TRUE)[[1]])
+  fields <- c(fields, "", "", "", "")
+  list(value = fields[1], name = fields[2], unit = fields[3],
+       trans = toupper(fields[4]))
+}
+
+
+# Every THETA in the control stream, one row per value, in NONMEM's numbering:
+# all $THETA records in file order ($THETAP / $THETAPV excluded), a value on
+# the record line itself included, blank and comment-only lines skipped, and
+# several values on one line counted separately. This is the one place THETA
+# numbers are derived from $THETA records; the writer, the remover and the
+# simulation readers all use it.
 #
-# Try the session's own encoding first, so a listing that is valid UTF-8 keeps
-# its characters in the diagnostic text callers quote verbatim (error_excerpt,
-# the #TERM block). Only when that fails fall back to latin1, which maps every
-# byte to something and so cannot throw: the status markers are all ASCII and
-# stay greppable whatever else the run emitted. A path that cannot be opened at
-# all fails in both attempts and signals, which is what marks a run as failed.
+# Columns: index (THETA number), line (line in `lines`), on_record_line,
+# n_on_line (values sharing that line), and the annotation fields of the line
+# ("value ; name ; unit ; transform"): name, unit, trans (upper-cased). A line
+# holding several values gives its annotation to the first of them only.
+#' @keywords internal
+#' @noRd
+.parse_theta_records <- function(lines) {
+  empty <- data.frame(index = integer(), line = integer(), on_record_line = logical(),
+                      n_on_line = integer(), name = character(), unit = character(),
+                      trans = character(), stringsAsFactors = FALSE)
+  starts <- .record_starts(lines, "THETA")
+  record_lines <- which(.is_record_line(lines))
+  rows <- list()
+  for (s in starts) {
+    e <- record_lines[record_lines > s][1]
+    e <- if (is.na(e)) length(lines) else e - 1L
+    for (i in s:e) {
+      text <- lines[i]
+      if (i == s) text <- sub("^\\s*\\$THETA\\s*", "", text, ignore.case = TRUE)
+      if (!grepl("\\S", text) || grepl("^\\s*;", text)) next
+      ann <- .parse_annotation(text)
+      n <- .count_theta_values(ann$value)
+      if (n == 0L) next
+      rows[[length(rows) + 1L]] <- data.frame(
+        line = i, on_record_line = i == s, n_on_line = n,
+        name = c(ann$name, rep("", n - 1L)),
+        unit = c(ann$unit, rep("", n - 1L)),
+        trans = c(ann$trans, rep("", n - 1L)),
+        stringsAsFactors = FALSE
+      )
+    }
+  }
+  if (length(rows) == 0L) return(empty)
+  out <- do.call(rbind, rows)
+  out$index <- seq_len(nrow(out))
+  out[, names(empty)]
+}
+
+
+# Read a NONMEM control stream (.ctl/.mod), repairing non-UTF-8 lines. warn =
+# FALSE because a file saved without a final newline is common and harmless,
+# and model_report() drops a model on any warning.
+#' @keywords internal
+#' @noRd
+.read_control_stream <- function(path) {
+  .repair_encoding(readLines(path, warn = FALSE))
+}
+
+
+# Read a NONMEM listing as text. Listings are not guaranteed to be valid UTF-8 -
+# a run that wrote PRDERR output can carry stray bytes. readLines() returns such
+# lines without error, so they are repaired afterwards (.repair_encoding): the
+# status markers are all ASCII and stay greppable whatever else the run
+# emitted, and the diagnostic text callers quote (error_excerpt, the #TERM
+# block) stays readable. A path that cannot be opened signals, which is what
+# marks a run as failed.
 #' @keywords internal
 #' @noRd
 .read_listing_lines <- function(path) {
-  read_with <- function(...) {
-    con <- file(path, open = "r", ...)
-    on.exit(close(con), add = TRUE)
-    readLines(con, warn = FALSE, skipNul = TRUE)
-  }
-
-  tryCatch(read_with(), error = function(e) read_with(encoding = "latin1"))
+  con <- file(path, open = "r")
+  on.exit(close(con), add = TRUE)
+  .repair_encoding(readLines(con, warn = FALSE, skipNul = TRUE))
 }
 
 
@@ -84,7 +225,14 @@ write_model_file <- function(search_state, lines) {
   if (is.null(file_path)) {
     stop("No file path found. Make sure the lines were read using read_model_file()")
   }
-  writeLines(lines, file_path)
+  # A file stored as Windows-1252 is read with its lines repaired to UTF-8
+  # (.read_control_stream); it is written back in Windows-1252 so saving a model
+  # does not change the encoding of the user's file.
+  if (file.exists(file_path) &&
+      !all(validUTF8(readLines(file_path, warn = FALSE)))) {
+    lines <- iconv(lines, from = "UTF-8", to = "CP1252", sub = "?")
+  }
+  writeLines(lines, file_path, useBytes = TRUE)
   cat("File saved to:", basename(file_path), "\n")
   return(search_state)
 }
@@ -296,7 +444,10 @@ read_nonmem_lst <- function(model_path) {
       status = "unknown",
       error_message = "",
       error_excerpt = "",
-      has_issues = FALSE
+      has_issues = FALSE,
+      nmtran_error = FALSE,
+      has_stop_time = FALSE,
+      lines = lst_content   # returned so callers need not read the listing again
     )
 
     # Generalized status markers for better portability across NONMEM versions.
@@ -325,6 +476,9 @@ read_nonmem_lst <- function(model_path) {
       "ABORTING"
     )
     soft_end_patterns <- c("PROBLEM ENDED")
+    # NM-TRAN rejected the control stream: NONMEM never runs, so the run has
+    # failed whether or not nmfe went on to write "Stop Time:".
+    nmtran_error_patterns <- c("AN ERROR WAS FOUND IN THE CONTROL STATEMENTS")
 
     pattern_hit <- function(patterns) {
       idx <- which(grepl(paste(patterns, collapse = "|"), lst_content, ignore.case = TRUE))
@@ -338,12 +492,40 @@ read_nonmem_lst <- function(model_path) {
     runtime_error_hit <- pattern_hit(runtime_error_patterns)
     soft_end_hit <- pattern_hit(soft_end_patterns)
 
+    nmtran_error_hit <- pattern_hit(nmtran_error_patterns)
+
     has_successful <- success_hit$found
     has_hard_failure <- hard_failure_hit$found
     has_stop_time <- stop_hit$found
+    result$has_stop_time <- has_stop_time
 
-    # Check for completion/failure with precedence to explicit hard failures.
-    if (has_hard_failure) {
+    # A run has finished only when nmfe has written "Stop Time:". Before that a
+    # success or termination line may belong to an earlier $EST step, or the
+    # run may still be in $COV, so neither decides the status yet. The one
+    # exception is an NM-TRAN error, after which NONMEM cannot run at all.
+    if (nmtran_error_hit$found) {
+      result$status <- "failed"
+      result$nmtran_error <- TRUE
+      result$has_issues <- TRUE
+      result$error_message <- trimws(lst_content[nmtran_error_hit$idx[1]])
+      result$error_excerpt <- result$error_message
+
+    } else if (!has_stop_time) {
+      has_execution <- any(grepl("NONMEM EXECUTION", lst_content, ignore.case = FALSE))
+      result$status <- "incomplete"
+      result$has_issues <- !has_execution
+      result$error_message <- if (has_execution) "Model still running" else "Model run incomplete"
+      # Keep the last termination or error line seen so far as a diagnostic: it
+      # does not decide the status, but it explains a run that never finished.
+      marker_idx <- c(hard_failure_hit$idx, runtime_error_hit$idx)
+      if (length(marker_idx) > 0) {
+        result$error_excerpt <- trimws(lst_content[max(marker_idx)])
+        result$error_message <- sprintf("%s (last marker: %s)", result$error_message,
+                                        result$error_excerpt)
+      }
+
+    # Finished: explicit hard failures take precedence.
+    } else if (has_hard_failure) {
       result$status <- "failed"
       result$has_issues <- TRUE
       result$error_message <- trimws(lst_content[hard_failure_hit$idx[1]])
@@ -353,8 +535,8 @@ read_nonmem_lst <- function(model_path) {
       result$status <- "completed"
       result$has_issues <- FALSE
 
-    } else if (has_stop_time) {
-      # Stop Time with no hard failure usually means the run finished.
+    } else {
+      # Finished with no hard failure and no success line.
       if (runtime_error_hit$found) {
         result$status <- "failed"
         result$has_issues <- TRUE
@@ -374,26 +556,6 @@ read_nonmem_lst <- function(model_path) {
           }
         }
       }
-
-    } else {
-      # Distinguish an incomplete run from one still going
-      has_execution <- any(grepl("NONMEM EXECUTION", lst_content, ignore.case = FALSE))
-
-      if (has_execution) {
-        result$status <- "incomplete"
-        result$has_issues <- FALSE  # Running is not an "issue"
-        result$error_message <- "Model still running"
-      } else {
-        result$status <- "incomplete"
-        result$has_issues <- TRUE
-        result$error_message <- "Model run incomplete"
-      }
-    }
-    # ADDITIONAL CHECK: If status is still unknown but Stop Time exists
-    if (result$status == "unknown" && has_stop_time) {
-      result$status <- "completed"
-      result$error_message <- "Run finished with unknown status"
-      result$has_issues <- TRUE
     }
 
 
@@ -454,6 +616,12 @@ get_model_status_from_files <- function(model_path, require_cov_step = TRUE) {
   # and not a success. Nothing in it can be trusted to describe the estimation,
   # so it must not fall through to the OFV test below and be called completed.
   if (identical(lst_info$status, "read_error")) {
+    return("failed")
+  }
+
+  # NM-TRAN rejected the control stream, so NONMEM did not run: any .ext or
+  # .cov in the folder is from an earlier run and must not make this a success.
+  if (isTRUE(lst_info$nmtran_error)) {
     return("failed")
   }
 
@@ -539,24 +707,36 @@ get_model_covariates_from_files <- function(search_state, model_name) {
 #'   and stop time (line after "Stop Time:") when available.
 #' @param model_name Character. Model name (e.g., "run1")
 #' @param models_folder Character. Path to models folder (default: "models")
+#' @param lst_lines Character vector or NULL. The listing's lines when the caller
+#'   has already read them; NULL (default) reads the listing here.
 #' @return List with start_time and stop_time (POSIXct or NA)
 #' @export
-extract_nonmem_timestamps <- function(model_name, models_folder = "models") {
+extract_nonmem_timestamps <- function(model_name, models_folder = "models", lst_lines = NULL) {
 
-  # read_nonmem_lst() is the one resolver for where a model's output can be:
-  # inside the run directory, or beside the control stream.
-  lst_file_path <- read_nonmem_lst(file.path(models_folder, model_name))$file
-
-  if (is.null(lst_file_path) || !file.exists(lst_file_path)) {
-    return(list(
-      start_time = NA,
-      stop_time = NA,
-      error = "LST file not found"
-    ))
+  if (is.null(lst_lines)) {
+    # read_nonmem_lst() is the one resolver for where a model's output can be:
+    # inside the run directory, or beside the control stream. It has read the
+    # listing already, so its lines are reused.
+    lst_probe <- read_nonmem_lst(file.path(models_folder, model_name))
+    if (is.null(lst_probe$file) || !file.exists(lst_probe$file)) {
+      return(list(
+        start_time = NA,
+        stop_time = NA,
+        error = "LST file not found"
+      ))
+    }
+    if (identical(lst_probe$status, "read_error")) {
+      return(list(
+        start_time = NA,
+        stop_time = NA,
+        error = lst_probe$error_message %||% "Cannot read LST file"
+      ))
+    }
+    lst_lines <- lst_probe$lines
   }
 
   tryCatch({
-    lst_lines <- .read_listing_lines(lst_file_path)
+    if (is.null(lst_lines)) lst_lines <- character(0)
 
     if (length(lst_lines) == 0) {
       return(list(
@@ -583,9 +763,11 @@ extract_nonmem_timestamps <- function(model_name, models_folder = "models") {
     parse_nonmem_time <- function(line) {
       if (length(line) != 1L || is.na(line) || !nzchar(line)) return(NA)
 
+      # The zone is a name ("EDT") or a numeric offset ("+03", "-0500").
+      zone <- "([A-Z]{3,4}|[+-][0-9]{2,4})"
       candidates <- c(
-        trimws(gsub(" [A-Z]{3,4} ", " ", line)),      # zone sits mid-string
-        trimws(sub("\\s+[A-Z]{3,4}\\s*$", "", line))  # zone sits at the end
+        trimws(gsub(paste0(" ", zone, " "), " ", line)),            # zone mid-string
+        trimws(sub(paste0("\\s+", zone, "\\s*$"), "", line))         # zone at the end
       )
       formats <- c(
         "%a %b %d %H:%M:%S %Y",     # Wed Jul 29 14:30:08 2026

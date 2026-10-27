@@ -30,9 +30,9 @@ model_add_cov(
 
 \item{capture_log}{Function. Logging function (optional)}
 
-\item{lookup_file}{Character or NULL. Optional path to lookup YAML for
-categorical labels. If NULL, uses search_state$search_config$lookup_file
-then defaults to data/spec/lookup.yaml.}
+\item{lookup_file}{Character or NULL. Accepted for compatibility; categorical
+THETA names keep the numeric level (beta_SEX_CL_2) and reports decode it
+through the lookup, so this does not change the model.}
 }
 \value{
 Updated search_state

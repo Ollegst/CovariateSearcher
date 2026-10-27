@@ -363,7 +363,8 @@ test_that("a backward row cannot win the forward pick even with the best OFV", {
 
 
 test_that("every forward candidate pool in the file carries the phase filter", {
-  # Four pools feed .best_acceptable_model inside run_scm_selective_forward.
+  # Three pools feed .best_acceptable_model inside run_scm_selective_forward
+  # (a fourth, the fallback-base pool, was removed as unreachable - SCM-05).
   # Guarding some but not all is the failure mode this test exists to catch:
   # each unguarded one is the same misread in a different place.
   # Reads the source, so it only runs against a source tree. Under R CMD check
@@ -375,8 +376,7 @@ test_that("every forward candidate pool in the file carries the phase filter", {
   skip_if_not(file.exists(src_file), "package sources not available")
   src <- readLines(src_file, warn = FALSE)
 
-  pools <- c("all_previous_models <- ", "all_main_models <- ",
-             "all_models_so_far <- ", "all_completed_candidates <- ")
+  pools <- c("all_main_models <- ", "all_models_so_far <- ", "all_completed_candidates <- ")
 
   for (pool in pools) {
     start <- grep(pool, src, fixed = TRUE)
@@ -692,4 +692,97 @@ test_that(".resolve_rse_threshold prefers the argument, then config, then the de
   st$search_config$max_rse_threshold <- 33.3
   expect_equal(.resolve_rse_threshold(st), 33.3)
   expect_equal(sprintf("%g%%", .resolve_rse_threshold(st)), "33.3%")
+})
+
+
+# WT fixed on CL (allometric 0.75) and estimated on V: two different tests.
+mixed_fix_covariates <- function() {
+  data.frame(
+    COVARIATE   = c("WT", "WT", "RACE", "RACE"),
+    PARAMETER   = c("CL", "V", "CL", "V"),
+    STATUS      = c("con", "con", "cat", "cat"),
+    FORMULA     = c("power", "power", "power", "linear"),
+    LEVELS      = c(NA, NA, "1;2;3", "1;2;3"),
+    INIT        = c("0.75 FIX", "0.1", NA, NA),
+    cov_to_test = c("beta_WT_CL", "beta_WT_V", "beta_RACE_CL", "beta_RACE_V"),
+    stringsAsFactors = FALSE
+  )
+}
+
+test_that("df is taken from the covariate-parameter row the tag names", {
+  # UTL-01: the first WT row (FIX on CL) gave df 0 to the estimated WT on V too.
+  cs <- mixed_fix_covariates()
+  expect_equal(calculate_covariate_df("WT", cs, tag = "beta_WT_CL"), 0L)
+  expect_equal(calculate_covariate_df("WT", cs, tag = "beta_WT_V"), 1L)
+  expect_equal(calculate_covariate_df("RACE", cs, tag = "beta_RACE_CL"), 1L)   # power
+  expect_equal(calculate_covariate_df("RACE", cs, tag = "beta_RACE_V"), 2L)    # 3 levels
+  expect_equal(calculate_covariate_df("RACE", cs, tag = "beta_RACE_V_2"), 2L)  # per-level tag
+  # Without a tag the first row is used, as before.
+  expect_equal(calculate_covariate_df("WT", cs), 0L)
+})
+
+test_that("an estimated WT on V is judged at its own threshold, not WT on CL's", {
+  st <- list(
+    search_config = list(forward_p_value = 0.05, backward_p_value = 0.001,
+                         max_rse_threshold = 50),
+    covariate_search = mixed_fix_covariates(),
+    search_database = data.frame(
+      model_name = c("run2", "run3"), parent_model = "run1",
+      covariate_tested = c("beta_WT_CL", "beta_WT_V"), step_number = 1L,
+      status = "completed", ofv = c(990, 999), delta_ofv = c(10, 1),
+      rse_max = 10, stringsAsFactors = FALSE
+    )
+  )
+  ev <- .evaluate_model_criteria(st, c("run2", "run3"), phase = "forward")
+
+  expect_equal(ev$covariate_df, c(0L, 1L))
+  expect_equal(ev$meets_threshold, c(TRUE, FALSE))   # dOFV 1 < 3.84 for WT on V
+})
+
+test_that("a covariate fixed through INIT is not offered for removal", {
+  # SCM-09: get_fixed_covariates read only an unused FIX_STATUS column.
+  st <- list(covariate_search = mixed_fix_covariates())
+  expect_equal(get_fixed_covariates(st, c("WT_CL", "WT_V", "RACE_V")), "WT_CL")
+})
+
+
+test_that("the results table reads an older database's removal rows as backward", {
+  # Databases written before the phase column was made consistent label
+  # removal models "covariate_removal"; the table must still use the backward
+  # vocabulary for them.
+  st <- backward_state()
+  st$models_folder <- tempdir()
+  st$search_database$phase[-1] <- "covariate_removal"
+  tbl <- create_scm_results_table(st)
+  labels <- tbl$Selected[tbl$Model %in% c("run20", "run21", "run22")]
+  expect_true(all(labels %in% c("KEPT", "REMOVED")))
+})
+
+
+test_that("a retry of a retry resolves to the original's direction", {
+  # UTL-02: only one level of retry was followed.
+  st <- list(search_database = data.frame(
+    model_name = c("run5", "run5001", "run5001001"),
+    action = c("remove_covariate", "retry", "retry"),
+    phase = c("backward_elimination", "backward_elimination", "backward_elimination"),
+    original_model = c(NA, "run5", "run5001"),
+    stringsAsFactors = FALSE))
+  expect_equal(.is_removal_model(st, c("run5", "run5001", "run5001001")), c(TRUE, TRUE, TRUE))
+  # With no action column the phase answers, from the row the chain ends on.
+  st$search_database$action <- NULL
+  expect_equal(.is_removal_model(st, "run5001001"), TRUE)
+})
+
+
+test_that("the summary names the removal the search made, not the last one listed", {
+  # REP-02: with two acceptable removals the engine removes the cheaper one
+  # (smallest ΔOFV), but the summary took the last REMOVED row.
+  st <- backward_state()
+  st$models_folder <- tempdir()
+  st$search_database$rse_max[st$search_database$model_name == "run22"] <- 12  # now acceptable too
+  tbl <- create_scm_results_table(st)
+  out <- capture.output(print_scm_results_table(st))
+  expect_true(all(tbl$Selected[tbl$Model %in% c("run20", "run22")] == "REMOVED"))
+  expect_true(any(grepl("^Final Model: run20$", out)))
+  expect_true(any(grepl("Covariate removed - run20", out)))
 })

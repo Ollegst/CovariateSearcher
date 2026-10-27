@@ -165,7 +165,20 @@ load_search_state <- function(filename) {
 #' @return Updated search_state with an empty search database
 #' @export
 initialize_search_database_core <- function(search_state) {
-  search_state$search_database <- data.frame(
+  search_state$search_database <- .empty_search_database()
+  cat("Simplified search database initialized\n")
+  return(search_state)
+}
+
+
+# The search database's columns and their types, with no rows. The one schema:
+# initialize_search_database_core() starts from it, and
+# update_model_status_from_files() heals a missing column from it, so a healed
+# column has its real type (POSIXct times, integer step numbers).
+#' @keywords internal
+#' @noRd
+.empty_search_database <- function() {
+  data.frame(
     model_name = character(),
     step_description = character(),
     phase = character(),
@@ -187,8 +200,6 @@ initialize_search_database_core <- function(search_state) {
     created_by_search = logical(),
     stringsAsFactors = FALSE
   )
-  cat("Simplified search database initialized\n")
-  return(search_state)
 }
 
 
@@ -303,13 +314,22 @@ update_model_counter <- function(search_state) {
     # Filter out retry models (ending with 3 digits)
     main_models <- all_model_names[!grepl("^run\\d+001$", all_model_names)]
 
-    if (length(main_models) > 0) {
-      model_numbers <- as.numeric(gsub("run", "", main_models))
-      sorted_numbers <- sort(model_numbers, na.last = TRUE)
-      search_state$model_counter <- utils::tail(sorted_numbers, 1)
+    model_numbers <- suppressWarnings(as.numeric(sub("^run", "", main_models)))
+    if (any(!is.na(model_numbers))) {
+      search_state$model_counter <- max(model_numbers, na.rm = TRUE)
 
       cat("Model counter set to:", search_state$model_counter,
           "(last in sequence, excluding retry models)\n")
+
+      # A run<N> on disk but not in the database (skipped by auto-heal, or left
+      # by an interrupted phase) must not be reused: copy_model_from() would
+      # overwrite it.
+      on_disk <- .highest_model_on_disk(search_state$models_folder)
+      if (!is.na(on_disk) && on_disk > search_state$model_counter) {
+        search_state$model_counter <- on_disk
+        cat("Model counter raised to:", on_disk,
+            "(highest run<N> in the models folder, not in the database)\n")
+      }
 
       if (length(all_model_names) > length(main_models)) {
         retry_models <- setdiff(all_model_names, main_models)
@@ -328,6 +348,18 @@ update_model_counter <- function(search_state) {
   }
 
   return(search_state)
+}
+
+
+# Highest non-retry model number in the models folder, from run<N> folders and
+# run<N>.ctl/.mod/.yaml files; NA when there is none or no folder. Retries
+# (run<N>001) are excluded, as in update_model_counter().
+.highest_model_on_disk <- function(models_folder) {
+  if (is.null(models_folder) || !dir.exists(models_folder)) return(NA_real_)
+  nm <- sub("\\.(ctl|mod|yaml)$", "", list.files(models_folder))
+  nm <- nm[grepl("^run[0-9]+$", nm) & !grepl("^run[0-9]+001$", nm)]
+  if (length(nm) == 0) return(NA_real_)
+  max(as.numeric(sub("^run", "", nm)))
 }
 
 

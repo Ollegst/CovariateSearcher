@@ -77,6 +77,11 @@ read_ext_iterations <- function(ext_file) {
     df <- utils::read.table(temp_con, header = TRUE)
     close(temp_con)
 
+    # A column header with no rows yet: the estimation step has just started.
+    if (nrow(df) == 0L) {
+      return(data.frame())
+    }
+
     # Add metadata
     df$EST.NO <- i
     df$EST.NAME <- headings[i]

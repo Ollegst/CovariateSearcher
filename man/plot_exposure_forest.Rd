@@ -103,10 +103,10 @@ EITHER a named list \code{list(label=, unit=)} per metric (e.g.
 \code{AUC = list(label="AUCss", unit="ng*h/mL")}) OR a spec supplying them - a
 yspec object, a path to a spec YAML, or a spec-shaped list (each entry's
 \code{short} becomes the label, plus its \code{unit}). When supplied (with \code{filename}
-and a \code{scenario} data.frame), two summary tables covering \strong{every} metric
-column of \code{data} are written next to the plot as
-\verb{<model>-exposure-table-absolute.rds} and \verb{…-relative.rds}. \strong{Every metric
-must have a label} or the call stops (add it to the spec/list). Absolute
+and a \code{scenario} data.frame), two summary tables covering every metric
+column of \code{data} that has a label are written next to the plot as
+\verb{<model>-exposure-table-absolute.rds} and \verb{…-relative.rds}. Unlabelled
+columns are left out; the call stops only if none is labelled. Absolute
 cell = \verb{median / [lo,hi] / geomean / (geoCV\%)}; relative = \code{ratio [lo,hi]}
 vs the \code{reference} median. Covariate columns come from \code{scenario} (decoded
 via \code{lookup}/\code{spec}); interval at \code{percentiles}; 2 dp. No \code{metric_info} ->

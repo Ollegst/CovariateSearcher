@@ -49,22 +49,15 @@ get_remaining_covariates <- function(search_state, base_model_id, include_exclud
       excluded_cov_names <- character(0)
     }
 
-    excluded_tags <- character(0)
-    if (length(excluded_cov_names) > 0) {  # Only convert if there are excluded
-      # Convert excluded names back to tags
-      for (tag in all_cov_tags) {  # Changed from names(search_state$tags) to all_cov_tags
-        tag_value <- search_state$tags[[tag]]
-        if (!is.null(tag_value) && tag_value %in% excluded_cov_names) {
-          excluded_tags <- c(excluded_tags, tag)
-        }
-      }
-    }
+    # Exclusion rows record the tested tag name (covariate_tested is the
+    # beta_<COV>_<PARAM> tag), so compare names with names.
+    excluded_tags <- intersect(all_cov_tags, excluded_cov_names)
 
-    # Remove excluded tags
     if (length(excluded_tags) > 0) {
       all_cov_tags <- setdiff(all_cov_tags, excluded_tags)
       cat(sprintf("🚫 Excluding %d covariates from testing: %s\n",
-                  length(excluded_tags), paste(excluded_cov_names, collapse = ", ")))
+                  length(excluded_tags),
+                  paste(unlist(search_state$tags[excluded_tags]), collapse = ", ")))
     }
   } else {
     cat("📋 Including previously excluded covariates for testing\n")
@@ -153,7 +146,8 @@ get_excluded_covariates <- function(search_state, return_details = FALSE, phase_
 #' @description Main orchestration function that runs the complete SCM workflow:
 #'   1. Initial univariate analysis on base model
 #'   2. Iterative forward selection steps
-#'   3. Final testing of dropped covariates
+#'   Covariates excluded after a failed retry are offered again at every step
+#'   when \code{search_config$retest_failed} is TRUE (the default).
 #'   All models within each step run in parallel.
 #' @param search_state List containing covariate search state and configuration
 #' @param base_model_id Character. Starting base model
@@ -201,7 +195,8 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id = NULL,
   # STEP 1: Initial univariate analysis on base model
   cat(sprintf("\n🎯 FORWARD SELECTION - Step %d\n", current_step_number))
 
-  remaining_covariates <- get_remaining_covariates(search_state, current_base_model)
+  remaining_covariates <- get_remaining_covariates(search_state, current_base_model,
+                                                   include_excluded = .retest_failed(search_state))
 
   if (length(remaining_covariates) == 0) {
     cat("❌ No covariates available for testing\n")
@@ -218,7 +213,8 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id = NULL,
     search_state = search_state,
     base_model_id = current_base_model,
     covariates_to_test = remaining_covariates,
-    step_name = sprintf("Forward Selection - Step %d", current_step_number)
+    step_name = sprintf("Forward Selection - Step %d", current_step_number),
+    include_excluded = .retest_failed(search_state)
   )
 
   # VALIDATION: Check that step1_creation is valid
@@ -339,7 +335,10 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id = NULL,
     cat(sprintf("\n🎯 FORWARD SELECTION - Step %d\n", current_step_number))
 
     # Get remaining covariates (not yet in current model)
-    remaining_covariates <- get_remaining_covariates(search_state, current_base_model, include_excluded = TRUE)
+    # retest_failed decides whether covariates excluded after a failed retry
+    # are offered again at this step.
+    remaining_covariates <- get_remaining_covariates(search_state, current_base_model,
+                                                     include_excluded = .retest_failed(search_state))
 
     if (length(remaining_covariates) == 0) {
       cat("✅ No more covariates to test - forward selection complete\n")
@@ -352,7 +351,7 @@ run_stepwise_covariate_modeling <- function(search_state, base_model_id = NULL,
       base_model_id = current_base_model,
       covariates_to_test = remaining_covariates,
       step_name = sprintf("Forward Selection - Step %d", current_step_number),
-      include_excluded = TRUE
+      include_excluded = .retest_failed(search_state)
     )
 
     # VALIDATION: Check step_creation result
@@ -539,7 +538,7 @@ view_exclusion_status <- function(search_state) {
       cat("\n")
     }
 
-    cat("💡 These covariates will be available for final testing before backward elimination\n")
+    cat("💡 With retest_failed = TRUE (the default) they are offered again at the next step\n")
   }
 
   cat(paste(rep("=", 60), collapse=""), "\n")

@@ -66,6 +66,8 @@ utils::globalVariables(c("y", "facet_grp", "xlev", "Freq"))
 #'   value in a small white label sitting on the median line.
 #' @param show_n logical; if TRUE (default) the number of subjects in each box
 #'   is printed in bold underneath it as "n = <count>".
+#' @param id_col Character. Subject ID column. When `data` has it, "n = <count>"
+#'   counts distinct subjects; otherwise it counts rows. Default "ID".
 #' @param label_size numeric or NULL. Text size of the median label, in the
 #'   usual ggplot `size` units. `NULL` (default) derives it from `base_size`
 #'   (`base_size/.pt * 0.65`); give a number to shrink it where the boxes are
@@ -166,7 +168,8 @@ create_covariate_boxplots <- function(data,
                                       footnote = NULL,
                                       source_note = TRUE,
                                       footnote_size = NULL,
-                                      ss = TRUE) {
+                                      ss = TRUE,
+                                      id_col = "ID") {
 
   type <- as.character(type)
   output_format <- match.arg(output_format, choices = c("emf", "png"),
@@ -309,7 +312,9 @@ create_covariate_boxplots <- function(data,
           grp <- cut(pdata[[covariate]], breaks = br,
                      include.lowest = TRUE, dig.lab = 4)
           iv  <- sub("^\\(", "[", levels(grp))        # square-bracket every bin
-          levels(grp) <- paste0("Q", seq_along(iv), ":", iv)
+          # Tied quantiles leave fewer than four bins, which are not quartiles:
+          # those keep their interval label without a "Qk:" prefix.
+          levels(grp) <- if (length(iv) == 4) paste0("Q", seq_along(iv), ":", iv) else iv
           pdata[[covariate]] <- grp
         }
       } else {
@@ -342,10 +347,18 @@ create_covariate_boxplots <- function(data,
 
       # N per (panel, box) for the "N=" labels under each box.
       valid <- alld[!is.na(alld[[covariate]]) & !is.na(alld[[t]]), , drop = FALSE]
-      cnt <- as.data.frame(
-        table(facet_grp = valid$facet_grp, xlev = valid[[covariate]]),
-        stringsAsFactors = FALSE
-      )
+      if (!is.null(id_col) && id_col %in% names(valid)) {
+        # Distinct subjects, so several rows per subject count once.
+        per_box <- unique(data.frame(facet_grp = valid$facet_grp, xlev = valid[[covariate]],
+                                     id = valid[[id_col]], stringsAsFactors = FALSE))
+        cnt <- as.data.frame(table(facet_grp = per_box$facet_grp, xlev = per_box$xlev),
+                             stringsAsFactors = FALSE)
+      } else {
+        cnt <- as.data.frame(
+          table(facet_grp = valid$facet_grp, xlev = valid[[covariate]]),
+          stringsAsFactors = FALSE
+        )
+      }
       cnt <- cnt[cnt$Freq > 0, , drop = FALSE]
       cnt$facet_grp <- factor(cnt$facet_grp, levels = panel_levels)
       cnt$xlev      <- factor(cnt$xlev, levels = c(grp_levels, "All subjects"))
@@ -382,7 +395,8 @@ create_covariate_boxplots <- function(data,
       # Boxes with all raw points jittered behind, optionally the median value in
       # a small box on the median line and N under each box; strata + REF panels.
       combined <- ggplot(alld, aes(x = .data[[covariate]], y = .data[[t]])) +
-        geom_jitter(width = 0.18, height = 0, size = 0.4, alpha = 0.3,
+        geom_jitter(position = position_jitter(width = 0.18, height = 0, seed = 1),
+                    size = 0.4, alpha = 0.3,
                     colour = "royalblue", na.rm = TRUE) +
         geom_boxplot(width = 0.6, fill = NA, colour = "grey20",
                      outlier.shape = NA, na.rm = TRUE)
@@ -431,8 +445,8 @@ create_covariate_boxplots <- function(data,
           theme(strip.background = element_blank(), strip.text = element_blank())
       }
 
-      # Computed before the footnote (not after, where it used to sit) so the
-      # saved path(s) can be reported on the figure itself.
+      # Computed before the footnote so the saved path(s) can be reported on
+      # the figure itself.
       base_name <- add_ss(paste0(pfx, drug, "-", covariate, "-", t), "_")
       fnames <- file.path(output_folder, t, paste0(base_name, ".", output_format))
 

@@ -13,10 +13,13 @@
 #' @param covariates_to_test Character vector. Covariate tags to test (optional)
 #' @param step_name Character. Description for this step
 #' @param include_excluded Logical. Whether to include excluded covariates (default: TRUE for SCM)
+#' @param phase Character. Value written to the new rows' `phase` column:
+#'   "forward_selection" (default) or "redemption" for a redemption step.
 #' @return List with created model information and updated search_state
 #' @export
 run_univariate_step <- function(search_state, base_model_id, covariates_to_test = NULL,
-                                step_name, include_excluded = TRUE) {
+                                step_name, include_excluded = TRUE,
+                                phase = "forward_selection") {
 
   # If no covariates specified, get remaining ones with exclusion filtering
   if (is.null(covariates_to_test)) {
@@ -82,10 +85,11 @@ run_univariate_step <- function(search_state, base_model_id, covariates_to_test 
 
   # Show exclusion status
   if (include_excluded) {
-    excluded_in_this_step <- intersect(covariate_names, get_excluded_covariates(search_state))
+    excluded_in_this_step <- intersect(covariates_to_test, get_excluded_covariates(search_state))
     if (length(excluded_in_this_step) > 0) {
       cat(sprintf("📋 Including %d previously excluded covariates: %s\n",
-                  length(excluded_in_this_step), paste(excluded_in_this_step, collapse = ", ")))
+                  length(excluded_in_this_step),
+                  paste(unlist(search_state$tags[excluded_in_this_step]), collapse = ", ")))
     }
   }
 
@@ -126,7 +130,8 @@ run_univariate_step <- function(search_state, base_model_id, covariates_to_test 
         search_state = search_state,
         base_model_id = base_model_id,
         covariate_tag = cov_tag,
-        step_number = step_number
+        step_number = step_number,
+        phase = phase
       )
 
       # Validate result structure
@@ -401,10 +406,13 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
     # Update all model statuses from NONMEM files
     search_state <- update_all_model_statuses(search_state)
 
-    # Update submission and completion times with actual NONMEM timestamps
+    # Update submission and completion times with actual NONMEM timestamps. A
+    # model whose stop time is recorded is finished, so its listing is not read
+    # again on later checks.
     for (model_name in active_monitoring_list) {
       db_idx <- which(search_state$search_database$model_name == model_name)
-      if (length(db_idx) > 0) {
+      if (length(db_idx) > 0 &&
+          is.na(search_state$search_database$completion_time[db_idx[1]])) {
         timestamps <- extract_nonmem_timestamps(model_name, search_state$models_folder)
 
         if (!is.na(timestamps$start_time)) {
@@ -790,20 +798,9 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
       break  # THIS BREAK IS NOW INSIDE A LOOP!
     }
 
-    # Save intermediate state periodically (rolling within-step snapshot)
-    if (update_count %% 5 == 0) {
-      cur_step  <- suppressWarnings(max(search_state$search_database$step_number, na.rm = TRUE))
-      step_phase <- search_state$search_database$phase[
-        !is.na(search_state$search_database$step_number) &
-          search_state$search_database$step_number == cur_step]
-      phase_lbl <- if (any(grepl("backward|removal", step_phase, ignore.case = TRUE))) {
-        "backward"
-      } else {
-        "forward"
-      }
-      save_search_state(search_state, .scm_checkpoint_name(cur_step, phase_lbl, "running"))
-      cat("💾 Progress saved\n")
-    }
+    # No state is saved while waiting: a step is checkpointed when its models
+    # are created and when it is done. continue_search() rebuilds everything in
+    # between from the run files, including retries made during the wait.
 
     # Wait 1 minute before next update
     cat("⏱️  Waiting 1 minute for next update...\n")

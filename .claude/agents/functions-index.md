@@ -1,7 +1,7 @@
 ---
 name: functions-index
 description: Keeps FUNCTIONS.md in sync with R/ — adds newly defined functions, removes ones that no longer exist, corrects drifted signatures, and re-verifies rows whose bodies changed. Runs a parser-backed drift report first; never guesses from names.
-model: opus
+model: sonnet
 tools: Read, Edit, Grep, Glob, PowerShell
 ---
 

@@ -87,7 +87,7 @@
                          error = function(e) NA_character_)
     if (is.na(cov_name)) return(1L)
     tryCatch(
-      as.integer(calculate_covariate_df(cov_name, search_state$covariate_search)),
+      as.integer(calculate_covariate_df(cov_name, search_state$covariate_search, tag = tg)),
       error = function(e) 1L
     )
   }, integer(1), USE.NAMES = FALSE)
@@ -112,10 +112,10 @@
   # for the absence of something it never asked for.
   # Only an explicit FALSE relaxes the rule. NA, a string, a vector - anything
   # else is a configuration fault, and a fault must not quietly switch a
-  # criterion off. initialize_search_config() writes whatever it is given, so an
-  # isTRUE() test here would send every malformed value down the lenient branch.
-  require_cov <- search_state$search_config$require_cov_step %||% TRUE
-  meets_rse <- if (identical(require_cov, FALSE)) {
+  # criterion off. .require_cov_step() applies this rule for every reader, and
+  # the entry points reject such values outright.
+  require_cov <- .require_cov_step(search_state)
+  meets_rse <- if (!require_cov) {
     is.na(rse_max) | rse_max < rse_threshold
   } else {
     !is.na(rse_max) & rse_max < rse_threshold
@@ -266,6 +266,7 @@ select_best_model <- function(search_state, model_names, p_value = NULL, rse_thr
   if (is.null(p_value)) {
     p_value <- search_state$search_config$forward_p_value %||% 0.05
   }
+  .check_rse_threshold(rse_threshold)
   rse_threshold <- .resolve_rse_threshold(search_state, rse_threshold)
 
   # Calculate display threshold for df=1 (most common case)

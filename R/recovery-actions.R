@@ -66,10 +66,10 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
         log_msg(precheck$message)
         log_msg("⏭️  Retry skipped - an identical rerun would gain nothing")
 
-        # Record the failure on the original model, as the retry path does.
+        # Record the issue on the original model, as the retry path does. Its
+        # status stays "failed", the terminal status every count recognises.
         orig_idx <- which(search_state$search_database$model_name == original_model_name)
         if (length(orig_idx) > 0) {
-          search_state$search_database$status[orig_idx] <- "error"
           search_state$search_database$estimation_issue[orig_idx] <- issue_type
         }
 
@@ -171,7 +171,7 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
       new_row$covariate_tested <- original_row$covariate_tested[1]
       new_row$action <- "retry"
       new_row$step_description <- sprintf("Retry %s", original_row$covariate_tested[1])
-      new_row$phase <- "retry"
+      new_row$phase <- original_row$phase[1]  # the retry belongs to its original's phase; action says "retry"
       new_row$ofv <- NA_real_
       new_row$delta_ofv <- NA_real_
       new_row$rse_max <- NA_real_
@@ -197,10 +197,10 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
       stop("Database insertion failed: ", db_error$message)
     })
 
-    # Update original model status
+    # Record the issue on the original model; its status stays "failed", the
+    # terminal status every count recognises.
     orig_idx <- which(search_state$search_database$model_name == original_model_name)
     if (length(orig_idx) > 0) {
-      search_state$search_database$status[orig_idx] <- "error"
       search_state$search_database$estimation_issue[orig_idx] <- issue_type
     }
 
@@ -281,6 +281,7 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
 #                  strictly inside the bounds ((0, 0.1, 3) -> (0, 1.55, 3)).
 #   * one-sided -> sign flip if it stays inside the single bound, otherwise the
 #                  midpoint of the bounded side ((0, 0.1) -> (0, 0.05)).
+#   An infinite bound, or one of 1E6 or beyond, counts as no bound.
 
 # Is this initial estimate FIXED? Reads the spec only (text before the first
 # ";"), so a "FIX" appearing in a comment cannot trigger it.
@@ -336,6 +337,13 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
   init <- suppressWarnings(as.numeric(init_str))
   if (is.na(init)) return(NA_character_)
 
+  # An infinite bound, or one at NONMEM's conventional stand-in for infinity
+  # (1E6 or beyond), is no bound: (-INF, 0.1, INF) behaves as unbounded and
+  # (0, 0.1, 1E6) as one-sided, instead of a midpoint at infinity or 500000.
+  no_bound <- function(b) is.na(b) || !is.finite(b) || abs(b) >= 1e6
+  if (no_bound(lower)) lower <- NA_real_
+  if (no_bound(upper)) upper <- NA_real_
+
   flipped <- -init
 
   new_value <- if (!is.na(lower) && !is.na(upper)) {
@@ -388,7 +396,7 @@ adjust_theta_for_covariate <- function(search_state, model_name, covariate_tag,
       return(list(success = FALSE, message = "Model file not found (.ctl or .mod)"))
     }
 
-    modelcode <- readLines(model_file_path)
+    modelcode <- .read_control_stream(model_file_path)
 
     # Find the covariate value from tags
     covariate_value <- search_state$tags[[covariate_tag]]
@@ -534,8 +542,10 @@ adjust_theta_for_covariate <- function(search_state, model_name, covariate_tag,
       }
     }
 
-    # Write the modified model file
-    writeLines(modelcode, model_file_path)
+    # Write through write_model_file so a Windows-1252 file stays Windows-1252
+    # (.read_control_stream repaired its lines to UTF-8).
+    attr(modelcode, "file_path") <- model_file_path
+    invisible(utils::capture.output(write_model_file(search_state, modelcode)))
 
     cat(sprintf("    ✓ Modified %d THETA lines for covariate %s\n",
                 theta_lines_modified, covariate_value))
@@ -721,7 +731,7 @@ handle_failed_retry <- function(search_state, retry_model_name, exclusion_reason
 
   cat(sprintf("✅ Excluded covariate '%s' from current step\n", covariate_tested))
   cat(sprintf("   Reason: %s\n", exclusion_reason))
-  cat(sprintf("   Available for final testing before backward elimination\n"))
+  cat("   Tested again later when retest_failed is TRUE (the default)\n")
 
   return(list(
     search_state = search_state,

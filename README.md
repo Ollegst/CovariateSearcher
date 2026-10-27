@@ -35,7 +35,7 @@ result <- run_automated_scm_testing(
     auto_submit = TRUE,                         # if FALSE – only model creation 
     auto_retry = TRUE,                          # Retry model in case of failure
     save_checkpoints = TRUE,                    # Save each step
-    final_testing = TRUE)                       # Test excluded covariates form failed model
+    retest_failed = TRUE)                       # Test again covariates whose model and retry failed
 
 
 # 3. Check results
@@ -99,7 +99,7 @@ result <- run_automated_scm_testing(
     auto_submit = TRUE,                         # if FALSE – only model creation 
     auto_retry = TRUE,                          # Retry model in case of failure
     save_checkpoints = TRUE,                    # Save each step
-    final_testing = TRUE)                       # Test excluded covariates from failed model
+    retest_failed = TRUE)                       # Test again covariates whose model and retry failed
 
 
 # 4. Check results
@@ -297,7 +297,7 @@ View(results$search_state$search_database)
 # Summary
 cat(results$final_summary)
 
-# Parameter table (includes OFV and Conditional number rows)
+# Parameter table (includes OFV and Condition number rows)
 ft <- model_report(model_names = "run10", models_folder = "models")
 ft
 

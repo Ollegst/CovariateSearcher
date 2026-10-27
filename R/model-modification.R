@@ -14,8 +14,9 @@
 #' @param step_number Integer. Step number this model belongs to. Required -
 #'   the automated search passes its current step; a manual add must say which
 #'   step the model belongs to.
-#' @param lookup_file Character or NULL. Optional path to lookup YAML for
-#'   categorical labels. If NULL, uses search_state configuration/default.
+#' @param lookup_file Character or NULL. Accepted for compatibility; categorical
+#'   THETA names keep the numeric level (beta_SEX_CL_2) and reports decode it
+#'   through the lookup, so this does not change the model.
 #' @param phase Character. Phase recorded in the search database. Defaults to
 #'   \code{"forward_selection"}, which is what the automated forward search
 #'   creates. Use \code{"individual_testing"} for a deliberate one-off add
@@ -152,8 +153,8 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag,
         "- Data mismatch in tapply() call (arguments must have same length)"
       )
       
-      log_filename <<- file.path(search_state$models_folder,
-                                 paste0(new_model_name, "_add_", covariate_name, "_error_log.txt"))
+      log_filename <- file.path(search_state$models_folder,
+                                paste0(new_model_name, "_add_", covariate_name, "_error_log.txt"))
       writeLines(error_log_content, log_filename)
       cat(sprintf("  📝 Error log saved: %s\n", basename(log_filename)))
       
@@ -225,7 +226,7 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag,
       step_number = final_step_number,
       search_state = search_state,
       technical_log = technical_log,
-      log_file = if(exists("log_filename")) log_filename else NULL
+      log_file = log_filename
     ))
 
   }, error = function(e) {
@@ -290,9 +291,9 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag,
 #' @param data_file Data.frame. Dataset for time-varying checks
 #' @param covariate_search Data.frame. Covariate search configuration
 #' @param capture_log Function. Logging function (optional)
-#' @param lookup_file Character or NULL. Optional path to lookup YAML for
-#'   categorical labels. If NULL, uses search_state$search_config$lookup_file
-#'   then defaults to data/spec/lookup.yaml.
+#' @param lookup_file Character or NULL. Accepted for compatibility; categorical
+#'   THETA names keep the numeric level (beta_SEX_CL_2) and reports decode it
+#'   through the lookup, so this does not change the model.
 #' @return Updated search_state
 #' @export
 model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
@@ -317,15 +318,6 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   log_function(paste("Model:", ref_model))
   log_function(paste("Covariate parameter:", cov_on_param))
 
-  resolved_lookup_file <- if (!is.null(lookup_file)) {
-    lookup_file
-  } else if (!is.null(search_state$search_config) &&
-             !is.null(search_state$search_config$lookup_file)) {
-    search_state$search_config$lookup_file
-  } else {
-    file.path("data", "spec", "lookup.yaml")
-  }
-
   modelcode <- read_model_file(search_state, ref_model)
   original_file_path <- attr(modelcode, "file_path")
   log_function(paste("Read model file:", basename(original_file_path)))
@@ -338,18 +330,27 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
 
   log_function(paste("Covariate:", cova, "Parameter:", param, "Reference:", ref))
 
-  # Get max THETA number
-  thetas <- modelcode[grepl('THETA\\(\\d+\\)', modelcode)] %>%
-    gsub(pattern = '.*THETA\\(', replacement = '') %>%
-    gsub(pattern = '\\).*', replacement = '') %>%
-    as.double()
+  # Next THETA number: one past both the $THETA entries and every THETA(n) the
+  # code references. Every reference on a line counts, so a THETA written first
+  # on its line (the additive SD in SQRT(THETA(5)**2 + THETA(4)**2*IPRED**2))
+  # is never reused for the new covariate; comments are stripped, and
+  # $THETA record lines are left out so a glued "$THETA(3)" is not a reference.
+  # A count below the highest reference would collide; a count above it
+  # (unreferenced entries) is legitimate, hence the larger of the two.
+  n_theta_entries <- nrow(.parse_theta_records(modelcode))
+  ref_code <- sub(";.*$", "", modelcode)
+  ref_code[.record_starts(ref_code, "THETA")] <- ""
+  theta_refs <- as.integer(unlist(regmatches(
+    ref_code, gregexpr("(?<=THETA\\()\\s*\\d+(?=\\s*\\))", ref_code, perl = TRUE)
+  )))
+  max_theta <- max(c(0L, n_theta_entries, theta_refs))
 
-  if (length(thetas) == 0) {
+  if (max_theta == 0) {
     newtheta <- 1
     log_function("No existing THETAs found, starting at THETA(1)")
   } else {
-    newtheta <- max(thetas) + 1
-    log_function(paste("Current max THETA:", max(thetas), "New THETA number:", newtheta))
+    newtheta <- max_theta + 1
+    log_function(paste("Current max THETA:", max_theta, "New THETA number:", newtheta))
   }
 
   temp_cov <- dplyr::filter(covariate_search, cov_to_test == cov_on_param)
@@ -413,14 +414,9 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   # rendered per the parameter's transformation: multiplicative for a normal-scale
   # parameter (PARAM = TV*EXP(ETA)), additive for a log-scale one
   # (PARAM = EXP(TV+ETA)) so the effect is not multiplied into a log value.
-  max_levels <- max(tapply(data_file[[cova]], data_file[[id_var]],
-                           function(x) length(unique(x))), na.rm = TRUE)
-  if (is.infinite(max_levels)) {
-    log_function("WARNING: Could not determine time-varying status - defaulting to non-time-varying")
-    max_levels <- 1
-  }
-  time_varying <- max_levels > 1
-  log_function(paste("Time-varying check:", time_varying, "(max levels:", max_levels, ")"))
+  # Missing records (NA or ".") are not a second value.
+  time_varying <- .covariate_is_time_varying(data_file, cova, id_var)
+  log_function(paste("Time-varying check:", time_varying))
 
   if (time_varying) {
     op_mode <- "mult"                          # individual level -> multiplicative
@@ -451,7 +447,14 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   # join operator switched to the additive form when op_mode is "add".
   thetanmulti <- tibble()
   if (!is_categorical) {
-    if (op_mode == "add" && !is.null(cov_formula_def$nonmem_log)) {
+    if (op_mode == "add") {
+      # A log-scale parameter takes the additive form; a multiplicative factor
+      # would be multiplied into a log value.
+      if (is.null(cov_formula_def$nonmem_log)) {
+        stop("FORMULA '", cov_formula, "' for '", cova, "' has no additive (log-scale) ",
+             "form, so it cannot be added to the log-scale parameter '", param, "'.",
+             call. = FALSE)
+      }
       formule <- cov_formula_def$nonmem_log(cova, ref, newtheta)
       if (!is.null(cov_formula_def$expr)) {
         log_function(paste0("WARNING: user expression added to log-scale parameter '",
@@ -473,34 +476,10 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
       cat_nonref_fn  <- function(k) paste0("1 + THETA(", k, ")")
       combine_op     <- " * "
     }
-    # Try to load lookup YAML for categorical labels (optional)
-    lookup_values <- NULL
-    if (!is.null(resolved_lookup_file) && file.exists(resolved_lookup_file)) {
-      tryCatch({
-        lookup_data <- yaml::read_yaml(resolved_lookup_file)
-        # Check if this covariate exists in lookup
-        if (cova %in% names(lookup_data)) {
-          lookup_info <- lookup_data[[cova]]
-          # Convert values and decode lists to a named list
-          if (!is.null(lookup_info$values) && !is.null(lookup_info$decode)) {
-            lookup_values <- setNames(
-              as.list(lookup_info$decode),
-              as.character(lookup_info$values)
-            )
-            log_function(paste("Found lookup values for", cova, "in", resolved_lookup_file))
-          }
-        }
-      }, error = function(e) {
-        log_function(paste("Note: Could not use lookup file:", e$message))
-      })
-    } else {
-      log_function(paste("No lookup file found at:", resolved_lookup_file, "(using numeric labels)"))
-    }
     if (!cova %in% names(data_file)) {
       stop("Covariate '", cova, "' not found in data file. Available columns: ",
            paste(head(names(data_file), 20), collapse = ", "))
     }
-    uniqueval <- unique(data_file[[cova]])
     newvari <- cov_on_param
     formule <- paste0(combine_op, newvari)
     ifelcode <- paste0('IF(', cova, '.EQ.', temp_cov$REFERENCE,')THEN\n', newvari, ' = ', cat_ref_assign, '\n' )
@@ -510,7 +489,15 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
       dplyr::arrange(desc(n)) %>%
       dplyr::pull(!!rlang::parse_expr(cova))
 
+    # A missing record is not a level: no THETA for NA or ".".
+    uniqueval_with_freq <- uniqueval_with_freq[!is.na(uniqueval_with_freq) &
+                                                 trimws(as.character(uniqueval_with_freq)) != "."]
     uniqueval <- uniqueval_with_freq[uniqueval_with_freq != temp_cov$REFERENCE]
+    # No non-reference level would leave beta_<COV>_<PARAM> with no THETA.
+    if (length(uniqueval) == 0) {
+      stop("Categorical covariate '", cova, "' has no observed level other than REFERENCE (",
+           temp_cov$REFERENCE, "): there is no effect to estimate.", call. = FALSE)
+    }
 
     thetanmulti <- tibble(
       covx = uniqueval,
@@ -520,22 +507,9 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
       current_level <- uniqueval[a]
       theta_num <- newtheta + a - 1
 
-      # Determine the label to use for this level
-      if (!is.null(lookup_values) && as.character(current_level) %in% names(lookup_values)) {
-        # Use lookup value if available
-        category_label <- lookup_values[[as.character(current_level)]]
-        # Clean the label for use in parameter names
-        category_label <- gsub("[^A-Za-z0-9]", "_", category_label)
-        category_label <- gsub("_+", "_", category_label)  # Remove multiple underscores
-        category_label <- gsub("^_|_$", "", category_label)  # Remove leading/trailing underscores
-        category_label <- toupper(category_label)  # Convert to uppercase
-        thetanmulti$label[a] <- category_label
-        log_function(paste("  Using lookup label for category", current_level, ":", category_label))
-      } else {
-        # Fall back to numeric label
-        thetanmulti$label[a] <- as.character(current_level)
-        log_function(paste("  Using numeric label for category", current_level))
-      }
+      # The THETA name keeps the numeric level (beta_SEX_CL_2); reports decode
+      # it through the lookup at display time.
+      thetanmulti$label[a] <- as.character(current_level)
 
       ifelcode <- paste0(ifelcode,
                          'ELSEIF(', cova, '.EQ.', current_level, ')THEN\n',
@@ -545,7 +519,12 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
                          "using THETA(", theta_num, ")"))
     }
     ifelcode <- paste0(ifelcode, 'ENDIF\n')
-    modelcode[grep('^\\$PK', modelcode)] <- paste0(modelcode[grep('^\\$PK', modelcode)], '\n\n', ifelcode)
+    # $PK, or $PRED for a model that has no $PK record.
+    pk_idx <- .record_starts(modelcode, "(?:PK|PRED)")[1]
+    if (is.na(pk_idx)) {
+      stop("Model file has no $PK or $PRED record - cannot insert the categorical block for ", cova)
+    }
+    modelcode[pk_idx] <- paste0(modelcode[pk_idx], '\n\n', ifelcode)
     #}
   }
 
@@ -617,7 +596,7 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   if(nrow(thetanmulti) > 0){
     # Multiple THETAs for categorical with >2 levels (excluding reference)
     newthetalines <- purrr::map_chr(1:nrow(thetanmulti), ~ {
-      # Use the label from thetanmulti which now contains lookup values or numbers
+      # The label is the category's numeric level
       paste0(initialValuethetacov, ' ; ', cov_on_param, "_", thetanmulti$label[[.x]], ';  ; RATIO')
     })
     newthetaline <- paste0(newthetalines, collapse = '\n')
@@ -643,7 +622,7 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
 
   log_function(paste("New THETA line to add:", newthetaline))
 
-  lineomeg <- grep('^\\s*\\$OMEGA(?![A-Za-z])', modelcode, perl = TRUE)[1]
+  lineomeg <- .record_starts(modelcode, "OMEGA")[1]
   if (is.na(lineomeg)) {
     log_function("ERROR: No $OMEGA section found in model file")
     stop("Model file missing $OMEGA section - cannot insert THETA line")
@@ -653,9 +632,9 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   # that follows it. In the usual layout that is the $OMEGA line, but "before
   # $OMEGA" lands inside another record when one sits in between -- e.g.
   # $THETAP/$THETAPV priors, where the new THETA would become a prior value.
-  theta_starts <- grep("^\\s*\\$THETA(?![A-Za-z])", modelcode, perl = TRUE)
+  theta_starts <- .record_starts(modelcode, "THETA")
   if (length(theta_starts) > 0) {
-    record_starts <- grep("^\\s*\\$", modelcode)
+    record_starts <- which(.is_record_line(modelcode))
     insert_at <- record_starts[record_starts > max(theta_starts)][1]
     if (is.na(insert_at)) insert_at <- length(modelcode) + 1
     log_function(paste("Inserting THETA line at the end of the last $THETA record, before line:",
@@ -829,8 +808,9 @@ fix_theta_renumbering <- function(modelcode, theta_numbers_to_remove, log_functi
 #' @param models_folder Character. Models directory
 #' @param idcol Character. ID column name
 #' @param overwrite Logical. Overwrite existing model if present
-#' @param lookup_file Character or NULL. Optional path to lookup YAML for
-#'   categorical labels. If NULL, defaults to data/spec/lookup.yaml.
+#' @param lookup_file Character or NULL. Accepted for compatibility; categorical
+#'   THETA names keep the numeric level (beta_SEX_CL_2) and reports decode it
+#'   through the lookup, so this does not change the model.
 #'
 #' @return List with status, model_name, model_path, log_file, covariates_added
 #' @export
@@ -869,7 +849,7 @@ prepare_search_base_model <- function(base_model_path,
   # Step 2: Load data needed for model editing
   # ---------------------------------------------------------------------------
   # Each argument may be a path (loaded here) OR an already-in-memory data.frame.
-  data_file <- .load_if_path(data_file_path, "data_file_path")
+  data_file <- .load_if_path(data_file_path, "data_file_path", na = c("", "NA", "."))
   covariate_search <- .load_if_path(covariate_search_path, "covariate_search_path")
 
   if (!"cov_to_test" %in% names(covariate_search)) {
@@ -1223,62 +1203,41 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
   # THETAs consecutively across every $THETA record, so all records are walked
   # in file order. Covariate THETAs are inserted before $OMEGA, i.e. at the end
   # of the LAST record, which a scan of the first record alone never reaches.
-  # (?![A-Za-z]) leaves out the $PRIOR records $THETAP / $THETAPV, whose values
+  # .record_starts leaves out the $PRIOR records $THETAP / $THETAPV, whose values
   # are priors on existing THETAs, not THETAs of their own.
-  theta_starts <- grep("^\\$THETA(?![A-Za-z])", modelcode, perl = TRUE)
+  theta_starts <- .record_starts(modelcode, "THETA")
   if (length(theta_starts) == 0) {
     stop("No $THETA section found in model file for ", model_to_modify)
   }
-  section_starts <- grep("^\\$", modelcode)
-
-  theta_numbers_to_remove <- c()
-  theta_lines_to_remove <- c()
 
   is_covariate_theta <- function(line) {
     grepl(paste0("\\b", covariate_to_remove, "\\b"), line) ||
       grepl(paste0("\\b", covariate_to_remove, "_[^\\s;]+"), line)
   }
 
-  theta_count <- 0
-  for (theta_start in theta_starts) {
-    theta_end <- section_starts[section_starts > theta_start][1] - 1
-    if (is.na(theta_end)) theta_end <- length(modelcode)
-
-    # A value on the record line itself ("$THETA 0.5 ; CL") takes the next
-    # THETA number. Deleting that line would delete the record header with it,
-    # so a covariate THETA found there is refused rather than removed.
-    header_rest <- sub("^\\$THETA\\s*", "", modelcode[theta_start])
-    if (grepl("^[^;]*[0-9]", header_rest)) {
-      theta_count <- theta_count + 1
-      if (is_covariate_theta(header_rest)) {
-        stop("THETA ", theta_count, " for covariate '", covariate_to_remove,
-             "' is written on the $THETA record line itself (line ", theta_start,
-             "). Move it onto its own line so it can be removed.")
-      }
+  # THETA numbers come from the shared parser: every value counts, including
+  # several on one line ("(0,2.5) (0,30)") and one on the record line itself.
+  theta_rows <- .parse_theta_records(modelcode)
+  hits <- theta_rows[vapply(modelcode[theta_rows$line], is_covariate_theta,
+                            logical(1), USE.NAMES = FALSE), , drop = FALSE]
+  for (h in seq_len(nrow(hits))) {
+    # Deleting the line would delete the record header (a value on the record
+    # line) or the other THETAs sharing it, so either is refused, not removed.
+    if (hits$on_record_line[h]) {
+      stop("THETA ", hits$index[h], " for covariate '", covariate_to_remove,
+           "' is written on the $THETA record line itself (line ", hits$line[h],
+           "). Move it onto its own line so it can be removed.")
     }
-
-    if (theta_end <= theta_start) next
-
-    # Count actual THETA parameters (skip empty lines and comments)
-    for (i in (theta_start + 1):theta_end) {
-      line <- modelcode[i]
-
-      # Skip empty lines and comment-only lines
-      if (grepl("^\\s*$", line) || grepl("^\\s*;", line)) {
-        next
-      }
-
-      # This is an actual THETA parameter line
-      theta_count <- theta_count + 1
-
-      # Check if this THETA contains our covariate
-      if (is_covariate_theta(line)) {
-        theta_numbers_to_remove <- c(theta_numbers_to_remove, theta_count)
-        theta_lines_to_remove <- c(theta_lines_to_remove, i)
-        log_msg(paste("Found THETA", theta_count, "at line", i, ":", trimws(line)))
-      }
+    if (hits$n_on_line[h] > 1) {
+      stop("THETA ", hits$index[h], " for covariate '", covariate_to_remove,
+           "' shares line ", hits$line[h], " with ", hits$n_on_line[h] - 1,
+           " other THETA value(s). Put it on its own line so it can be removed.")
     }
+    log_msg(paste("Found THETA", hits$index[h], "at line", hits$line[h], ":",
+                  trimws(modelcode[hits$line[h]])))
   }
+  theta_numbers_to_remove <- hits$index
+  theta_lines_to_remove <- hits$line
 
   if (length(theta_numbers_to_remove) == 0) {
     stop("No THETA parameters found for covariate: ", covariate_to_remove)
@@ -1329,9 +1288,9 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
 
   # Step 6: Remove IF-THEN-ELSE blocks for categorical covariates
   if (cov_info$STATUS == "cat") {
-    pk_start <- grep("^\\$PK", modelcode)
+    pk_start <- .record_starts(modelcode, "(?:PK|PRED)")
     if (length(pk_start) > 0) {
-      pk_end <- grep("^\\$", modelcode)
+      pk_end <- which(.is_record_line(modelcode))
       pk_end <- pk_end[pk_end > pk_start[1]][1] - 1
       if (is.na(pk_end)) pk_end <- length(modelcode)
 
@@ -1384,6 +1343,24 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
     }
   }
 
+  # Step 7b: Every reference to a removed THETA must be gone by now. One that
+  # survives (a hand-edited model reusing the covariate THETA in another
+  # equation, e.g. Q = (WT/70)**THETA(5) * THETA(3)) would be renumbered onto
+  # a different parameter. Checked here, not after Step 5, because additive
+  # categorical IF lines still hold the THETA until Step 6.
+  code_only <- sub(";.*$", "", modelcode)
+  still_used <- theta_numbers_to_remove[vapply(theta_numbers_to_remove, function(n)
+    any(grepl(paste0("\\bTHETA\\(\\s*", n, "\\s*\\)"), code_only)), logical(1))]
+  if (length(still_used) > 0) {
+    stop(
+      "THETA(", paste(still_used, collapse = ", "), ") of covariate '", covariate_to_remove,
+      "' is still referenced after its effect was removed: ",
+      paste(trimws(modelcode[grepl(paste0("\\bTHETA\\(\\s*(", paste(still_used, collapse = "|"),
+                                          ")\\s*\\)"), code_only)]), collapse = " | "),
+      ". Renumbering would rebind it to a different parameter. Edit the model by hand."
+    )
+  }
+
   # Step 8: Apply THETA renumbering
   log_msg("Starting THETA renumbering...")
   modelcode <- fix_theta_renumbering(modelcode, theta_numbers_to_remove, log_msg)
@@ -1433,7 +1410,7 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
     new_row <- data.frame(
       model_name = new_model_name,
       step_description = sprintf("Remove %s", covariate_value),
-      phase = "covariate_removal",
+      phase = "backward_elimination",
       step_number = as.integer(step_number),
       parent_model = model_name,
       covariate_tested = covariate_to_remove,

@@ -614,3 +614,16 @@ test_that("a factor covariate column uses its labels, not internal level codes",
 })
 
 
+
+
+test_that("a one-column, one-row covariates data frame keeps its covariate name", {
+  # build_scenario_parameters() passes scenarios[s, cov_cols, drop = FALSE];
+  # with a single covariate in the model that is a one-column data frame.
+  m <- setup_apply_cov_models()
+  ind <- thetas_df(3, m$theta1, m$theta2, m$theta3)
+
+  out <- apply_covariate_model("run1", cov_search, ind, data.frame(WT = 140),
+                               models_folder = m$models_dir)
+
+  expect_equal(out$THETA1, rep(0.5 * 2^0.75, 3), tolerance = 1e-6)
+})

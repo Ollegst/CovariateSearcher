@@ -91,8 +91,8 @@ Defaults to the table \code{\link[=build_scenario_parameters]{build_scenario_par
 so you normally don't pass it (only needed if you built \code{param_sets} with an
 older version, or want a different table).}
 
-\item{reference}{Character. Reference scenario for the relative table's ratio
-denominator. Default "Typical subject".}
+\item{reference}{Character. Reference scenario: the ratio denominator of both
+the forest plot and the relative table. Default "Typical subject".}
 
 \item{percentiles}{Numeric length-2. Interval for the summary tables. Default
 \code{c(0.05, 0.95)}.}
@@ -105,8 +105,7 @@ categoricals and label the covariate columns of the summary tables.}
 \item{verbose}{Logical; print progress. Default \code{TRUE}.}
 
 \item{...}{Further arguments passed to \code{\link[=plot_exposure_forest]{plot_exposure_forest()}} (e.g.
-\code{x_lim}, \code{reference}, \code{ClinicalRelevanceLow}, \code{ClinicalRelevanceHigh},
-\code{fontsize}).}
+\code{x_lim}, \code{ClinicalRelevanceLow}, \code{ClinicalRelevanceHigh}, \code{fontsize}).}
 }
 \value{
 Invisibly, a named list of the ggplot objects (one per parameter).

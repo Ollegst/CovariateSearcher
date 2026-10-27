@@ -142,6 +142,17 @@ list_covariate_formulas <- function() {
   NA_character_
 }
 
+# Split `s` at the characters in `ops` that sit outside any parentheses;
+# returns the trimmed, non-empty pieces.
+.split_depth0 <- function(s, ops) {
+  chars <- strsplit(s, "")[[1]]
+  depth <- cumsum(chars == "(") - cumsum(chars == ")") + (chars == ")")
+  cut <- chars %in% ops & depth == 0L
+  chars[cut] <- "\001"
+  parts <- trimws(strsplit(paste(chars, collapse = ""), "\001", fixed = TRUE)[[1]])
+  parts[nzchar(parts)]
+}
+
 # Exact-name lookup of the "value ; NAME ; units ; RATIO|LOG" comment tag that
 # validate_parameter_blocks requires on every $THETA/$OMEGA/$SIGMA line. Returns
 # "RATIO", "LOG", or NA if `param` has no such line.
@@ -150,12 +161,19 @@ list_covariate_formulas <- function() {
   # the parameter's tag.
   for (line in modelcode[grepl(";", modelcode, fixed = TRUE) &
                            !grepl("^\\s*;", modelcode)]) {
-    fields <- trimws(strsplit(sub("^[^;]*", "", line), ";")[[1]])
-    fields <- fields[nzchar(fields)]
-    if (length(fields) >= 2 && identical(fields[1], param)) {
+    ann <- .parse_annotation(line)
+    if (!identical(ann$name, param)) next
+    # The transform is the 4th field, as validation and the parameter table read
+    # it, so a trailing comment ("; RATIO ; typical clearance") does not hide
+    # the tag. A line without the unit field ("; CL ; RATIO") has its tag as
+    # the last field, so that is the fallback.
+    tag <- ann$trans
+    if (!(tag %in% c("RATIO", "LOG"))) {
+      fields <- trimws(strsplit(line, ";", fixed = TRUE)[[1]][-1])
+      fields <- fields[nzchar(fields)]
       tag <- toupper(fields[length(fields)])
-      if (tag %in% c("RATIO", "LOG")) return(tag)
     }
+    if (length(tag) == 1 && tag %in% c("RATIO", "LOG")) return(tag)
   }
   NA_character_
 }
@@ -172,6 +190,51 @@ detect_param_transform <- function(modelcode, param) {
   wo <- gsub("\\bETA\\(\\s*\\d+\\s*\\)", "", inner)
   wo <- gsub("[-+*/^() \t]", "", wo)
   if (!nzchar(wo)) return("normal")
+
+  # A typical value multiplying the EXP from outside ("TV_CL * EXP(ETA(1) +
+  # IOVCL)", "TV_CL * EXP(ETA(1)*THETA(9))") is the normal/proportional form,
+  # whatever else shares the EXP with the ETA (an IOV term, a scaled ETA).
+  # Only a bare top-level factor counts: a covariate factor appended earlier,
+  # "(WT/70)**THETA(3)", is not a typical value. A bare THETA(n) counts only
+  # when the EXP holds no typical-value term of its own, so
+  # "EXP(THETA(1)+ETA(1))*THETA(3)" stays log.
+  exp_text <- paste0("EXP(", inner, ")")
+  pos <- regexpr(exp_text, rhs, fixed = TRUE)
+  if (pos > 0) {
+    rest <- paste0(substr(rhs, 1, pos - 1), "@E",
+                   substr(rhs, pos + nchar(exp_text), nchar(rhs)))
+    factors <- .split_depth0(gsub("**", "^", rest, fixed = TRUE), c("*", "/"))
+    terms   <- .split_depth0(inner, c("+", "-"))
+    tv_re    <- paste0("^TV_?", param, "$")
+    theta_re <- "^THETA\\(\\s*\\d+\\s*\\)$"
+    inner_tv <- any(grepl(tv_re, terms, ignore.case = TRUE) |
+                      grepl(theta_re, terms, ignore.case = TRUE) |
+                      grepl("^MU_\\d+$", terms, ignore.case = TRUE))
+    if (any(grepl(tv_re, factors, ignore.case = TRUE)) ||
+        (any(grepl(theta_re, factors, ignore.case = TRUE)) && !inner_tv)) {
+      return("normal")
+    }
+  }
+
+  # Several symbols inside the EXP besides the ETA (e.g. TV_CL + IOVCL): log
+  # scale when one of them is the typical value (TV_<param>, a THETA, or a MU_
+  # symbol, which goes through the MU-referencing rule below); otherwise the
+  # form is not one the writer knows, and "unknown" makes validation stop
+  # rather than guess. A single symbol keeps the rule below unchanged.
+  inner_syms <- regmatches(inner, gregexpr("[A-Za-z_][A-Za-z0-9_]*", inner))[[1]]
+  inner_syms <- inner_syms[!toupper(inner_syms) %in%
+                             c("ETA", "THETA", "EXP", "LOG", "LOG10", "SQRT", "ABS")]
+  if (length(unique(inner_syms)) >= 2) {
+    mu_sym <- grep("^MU_\\d+$", inner_syms, ignore.case = TRUE, value = TRUE)
+    if (length(mu_sym) > 0) {
+      wo <- mu_sym[1]
+    } else if (any(grepl(paste0("^TV_?", param, "$"), inner_syms, ignore.case = TRUE)) ||
+               grepl("\\bTHETA\\(", inner, ignore.case = TRUE)) {
+      return("log")
+    } else {
+      return("unknown")
+    }
+  }
   # MU-referencing of a genuine TV_<param> line specifically: `wo`'s own line
   # must be "wo = LOG(TV_<param>)", not LOG() of anything else (e.g. a raw
   # THETA(n), which would mean there is no separate typical-value line at all).

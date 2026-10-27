@@ -4,12 +4,19 @@
 \alias{calculate_covariate_df}
 \title{Determine degrees of freedom for a covariate's likelihood-ratio test}
 \usage{
-calculate_covariate_df(covariate_name, covariate_search)
+calculate_covariate_df(covariate_name, covariate_search, tag = NULL)
 }
 \arguments{
 \item{covariate_name}{Character. Name of the covariate}
 
 \item{covariate_search}{Data frame. Covariate search configuration}
+
+\item{tag}{Character or NULL. The covariate's tag as written to the model
+(e.g. "beta_WT_V", or "beta_RACE_CL_2" for one level). INIT, FORMULA and
+LEVELS belong to one covariate-parameter row, so when the covariate is
+tested on more than one parameter the tag picks the row: the one whose
+\code{cov_to_test} equals it, else the one whose PARAMETER the tag names. NULL
+(default), or a covariate with a single row, uses the first row.}
 }
 \value{
 Integer. Degrees of freedom (0 for a fully-FIX covariate).

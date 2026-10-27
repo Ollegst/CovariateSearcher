@@ -86,7 +86,9 @@ apply_covariate_model <- function(model_name,
   # individual_thetas/eta_draws already do.
   if (is.data.frame(covariates)) {
     if (nrow(covariates) == 1) {
-      covariates <- unlist(covariates[1, , drop = TRUE])
+      # drop = FALSE: a one-column row would otherwise collapse to an unnamed
+      # scalar and lose its covariate name.
+      covariates <- unlist(covariates[1, , drop = FALSE])
     } else if (nrow(covariates) != N) {
       stop("`covariates` must be a single scenario (one row) or have the ",
            "same number of rows as `individual_thetas` (", N, "); got ",
@@ -107,13 +109,12 @@ apply_covariate_model <- function(model_name,
     stop("Model control file not found for '", model_name, "' under '",
          models_folder, "' (looked for .ctl / .mod).")
   }
-  lines <- readLines(ctl_path[1], warn = FALSE)
+  lines <- .read_control_stream(ctl_path[1])
 
   # Return the lines of a $BLOCK (header + body, up to the next $ record).
   get_block <- function(tag) {
-    # (?![A-Za-z]): $THETA but not the $PRIOR records $THETAP / $THETAPV.
-    starts <- grep(paste0("^\\s*\\$", tag, "(?![A-Za-z])"), lines,
-                   ignore.case = TRUE, perl = TRUE)
+    # (?![A-Za-z]) in .record_starts: $THETA but not $THETAP / $THETAPV.
+    starts <- .record_starts(lines, tag)
     if (length(starts) == 0) return(character(0))
     out <- character(0)
     for (s in starts) {
@@ -130,16 +131,7 @@ apply_covariate_model <- function(model_name,
   }
 
   # ---- $THETA order: name of THETA(n) is the nth record's 2nd `;` field ------
-  theta_block <- get_block("THETA")
-  theta_names <- character(0)
-  for (ln in theta_block) {
-    # A value on the record line itself ("$THETA 0.5 ; CL") is a THETA too.
-    if (grepl("^\\s*\\$", ln)) ln <- sub("^\\s*\\$[A-Za-z]+\\s*", "", ln)
-    parts <- strsplit(ln, ";")[[1]]
-    if (!grepl("[0-9]", parts[1])) next
-    theta_names <- c(theta_names,
-                     if (length(parts) >= 2) trimws(parts[2]) else "")
-  }
+  theta_names <- .parse_theta_records(lines)$name
   if (length(theta_names) == 0) {
     stop("Could not parse any $THETA records from model '", model_name, "'.")
   }
@@ -288,6 +280,15 @@ apply_covariate_model <- function(model_name,
   # inputs ends up with a uniformly all-TRUE or all-FALSE mask, which selects
   # (or skips) the whole vector at once, the same as an unconditional line.
   skipped       <- character(0)
+  # IF/ELSEIF conditions that could not be evaluated; they count as FALSE and
+  # are reported once, after the $PK has been run.
+  bad_conditions <- character(0)
+  eval_cond <- function(cond) {
+    tryCatch(eval_r(cond), error = function(err) {
+      bad_conditions <<- c(bad_conditions, trimws(cond))
+      FALSE
+    })
+  }
   active_stack  <- list()     # length-N logical mask per nesting level
   matched_stack <- list()     # length-N: has this row matched a branch yet?
   is_active <- function() {
@@ -344,7 +345,7 @@ apply_covariate_model <- function(model_name,
         i <- length(active_stack)
         outer <- if (i > 1) Reduce(`&`, active_stack[seq_len(i - 1)]) else rep(TRUE, N)
         already <- matched_stack[[i]]
-        c_ok <- as_mask(tryCatch(eval_r(cond), error = function(err) FALSE))
+        c_ok <- as_mask(eval_cond(cond))
         active_stack[[i]]  <- outer & !already & c_ok
         matched_stack[[i]] <- already | c_ok
       }
@@ -365,23 +366,33 @@ apply_covariate_model <- function(model_name,
       cond <- sub("(?i)^IF\\s*\\(", "", ln, perl = TRUE)
       cond <- sub("(?i)\\)\\s*THEN\\s*$", "", cond, perl = TRUE)
       outer <- is_active()
-      c_ok  <- outer & as_mask(tryCatch(eval_r(cond), error = function(err) FALSE))
+      c_ok  <- outer & as_mask(eval_cond(cond))
       active_stack  <- c(active_stack, list(c_ok))
       matched_stack <- c(matched_stack, list(c_ok))
       next
     }
     # single-line IF( ... ) LHS = RHS
     if (grepl("(?i)^IF\\s*\\(", ln, perl = TRUE)) {
-      m <- regmatches(ln, regexec("(?i)^IF\\s*\\((.*?)\\)\\s*(.*)$", ln, perl = TRUE))[[1]]
+      m <- .split_single_line_if(ln)
       if (length(m) == 3) {
         outer <- is_active()
-        c_ok  <- outer & as_mask(tryCatch(eval_r(m[2]), error = function(err) FALSE))
+        c_ok  <- outer & as_mask(eval_cond(m[2]))
         do_assign(m[3], mask = c_ok)
+      } else {
+        # Unbalanced parentheses: the condition cannot be read, so it is
+        # reported with the other unevaluable conditions.
+        bad_conditions <- c(bad_conditions, ln)
       }
       next
     }
     # plain assignment
     do_assign(ln)
+  }
+
+  if (length(bad_conditions) > 0) {
+    warning("apply_covariate_model(): IF condition(s) could not be evaluated and were ",
+            "treated as FALSE: ", paste(unique(bad_conditions), collapse = " | "),
+            call. = FALSE)
   }
 
   # ---- Map each structural THETA position to its parameter's value -----------
@@ -484,4 +495,30 @@ apply_covariate_model <- function(model_name,
   mat[cbind(i_idx, j_idx)] <- vals
   mat[cbind(j_idx, i_idx)] <- vals
   mat
+}
+
+
+# Split a single-line IF "IF (cond) LHS = RHS" into c(line, cond, assignment).
+# The condition ends at the parenthesis that closes the first one, counted by
+# depth, so "IF (SEX.EQ.2.AND.(WT.GT.50)) TVCL = ..." keeps its inner
+# parentheses. Returns character(0) when the line has no balanced condition.
+#' @keywords internal
+#' @noRd
+.split_single_line_if <- function(ln) {
+  open <- regexpr("(?i)^IF\\s*\\(", ln, perl = TRUE)
+  if (open < 0) return(character(0))
+  start <- open + attr(open, "match.length")       # first character after '('
+  chars <- strsplit(ln, "")[[1]]
+  if (start > length(chars)) return(character(0))   # nothing after "IF ("
+  depth <- 1L
+  for (j in seq.int(start, length(chars))) {
+    if (chars[j] == "(") depth <- depth + 1L
+    if (chars[j] == ")") depth <- depth - 1L
+    if (depth == 0L) {
+      cond <- substr(ln, start, j - 1L)
+      rest <- trimws(substr(ln, j + 1L, nchar(ln)))
+      return(c(ln, cond, rest))
+    }
+  }
+  character(0)
 }

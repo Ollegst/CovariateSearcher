@@ -27,6 +27,12 @@ R is not on PATH. Use the Rscript for the machine you are on — whichever of th
 & "C:\Users\kdgc151\AppData\Local\Programs\R\R-4.4.2\bin\Rscript.exe" -e "<expr>"
 ```
 
+Rtools 4.4 is at `D:\rtools44`, not the default `C:\rtools44`, and the package library is on D:. Set both before any R call that loads, compiles or checks the package:
+
+```
+$env:RTOOLS44_HOME = "D:/rtools44"; $env:R_LIBS_USER = "D:/R/win-library/4.4"
+```
+
 Do not redirect a native command's stderr with `2>&1` in Windows PowerShell — it wraps each line in an ErrorRecord and reports a false failure.
 
 ## Generated files — never hand-edit
@@ -40,7 +46,9 @@ A `PreToolUse` hook ([.claude/hooks/guard-generated-files.ps1](hooks/guard-gener
 
 [.claude/FUNCTIONS.md](FUNCTIONS.md) maps every function in `R/` — signature, purpose, side effects, and call graph — plus hand-curated sections on cross-cutting hazards, duplicate implementations, and known bugs.
 
-**Read it before writing a new helper.** This package has ~130 functions across 29 files, many internal; the most common avoidable mistake here is reimplementing something that already exists. The hazard sections exist because several functions have names that misdescribe what they read.
+**Never read `.claude/FUNCTIONS.md` whole.** Search it (Grep), or read only the lines you need.
+
+**Consult it before writing a new helper.** This package has ~130 functions across 29 files, many internal; the most common avoidable mistake here is reimplementing something that already exists. The hazard sections exist because several functions have names that misdescribe what they read.
 
 To check whether it is current:
 

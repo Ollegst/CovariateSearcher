@@ -100,9 +100,18 @@ read_ext_file <- function(search_state, model_name) {
       ))
     }
 
-    # Parse the last (most recent) data line from final table
-    last_line <- tail(final_table_data, 1)
-    values <- as.numeric(strsplit(trimws(last_line), "\\s+")[[1]])
+    # A finished table ends with NONMEM's special rows: -1000000000 is the final
+    # estimate (any method - FOCE, IMP, SAEM, BAYES), and the rows after it
+    # (-1000000001 standard errors, ...) carry 0 in the OBJ column. A run in
+    # progress, including SAEM burn-in (numbered negatively but above
+    # -1000000000), is read from its latest iteration row.
+    rows <- lapply(final_table_data, function(l) suppressWarnings(as.numeric(strsplit(trimws(l), "\\s+")[[1]])))
+    iter <- vapply(rows, function(v) if (length(v)) v[1] else NA_real_, numeric(1))
+    final_idx <- which(iter == -1000000000)
+    progress_idx <- which(!is.na(iter) & iter > -1000000000)
+    finished <- length(final_idx) > 0
+    chosen <- if (finished) final_idx[length(final_idx)] else utils::tail(progress_idx, 1)
+    values <- if (length(chosen)) rows[[chosen]] else numeric(0)
 
     # Handle potential parsing errors
     if (length(values) < 2) {
@@ -150,13 +159,20 @@ read_ext_file <- function(search_state, model_name) {
       }
     }
 
-    # Determine status based on iteration number
-    model_status <- if (current_iteration < 0) "completed" else "progressing"
+    # Completed only when the final-estimate row is present; iterations counts
+    # the estimation iterations done (burn-in rows are numbered negatively).
+    model_status <- if (finished) "completed" else "progressing"
+    n_iter <- if (finished) {
+      done <- iter[!is.na(iter) & iter >= 0]
+      if (length(done)) max(done) else 0
+    } else {
+      abs(current_iteration)
+    }
 
     return(list(
       status = model_status,
       current_ofv = current_ofv,
-      iterations = abs(current_iteration),
+      iterations = n_iter,
       last_iteration_time = file.info(ext_file)$mtime,
       has_estimation_issues = has_issues,
       issue_type = issue_type,

@@ -387,7 +387,7 @@ create_covariate_table <- function(model_name,
 
   # THETA annotations look like:  <init> ; <name> ; <unit> ; <trans>
   # The covariate-effect THETAs are named beta_<COV>_<PARAM>[_<LEVEL>].
-  ctl_lines   <- readLines(ctl_path, warn = FALSE)
+  ctl_lines   <- .read_control_stream(ctl_path)
   theta_names <- vapply(strsplit(ctl_lines, ";"), function(parts) {
     if (length(parts) >= 2) trimws(parts[2]) else NA_character_
   }, character(1))
@@ -461,8 +461,11 @@ create_covariate_table <- function(model_name,
     }
     as.character(lvl)
   }
+  # A whole percentile gets its ordinal suffix (5th, 95th); a fractional one is
+  # written as is with "th" (2.5th, 97.5th), not rounded to 2nd / 98th.
   ordinal <- function(n) {
-    n   <- round(n)
+    n <- round(n, 6)
+    if (n != round(n)) return(paste0(format(n, trim = TRUE), "th"))
     suf <- if ((n %% 100) %in% 11:13) {
       "th"
     } else {
@@ -517,6 +520,12 @@ create_covariate_table <- function(model_name,
         as.numeric(strsplit(as.character(meta$LEVELS[i]), ";")[[1]])
       )
       levels_all <- levels_all[!is.na(levels_all)]
+      # A categorical covariate always has LEVELS; validation stops without
+      # them, and so does this, rather than give the covariate no scenario.
+      if (length(levels_all) == 0) {
+        stop("Covariate '", cov, "' has STATUS == 'cat' but no LEVELS specified",
+             call. = FALSE)
+      }
       var_levels <- setdiff(levels_all, reference[[cov]])
       for (lvl in var_levels) {
         new_row        <- ref_row
@@ -786,12 +795,11 @@ simulate_scenario_profiles <- function(param_sets,
                   file.path(base_path, paste0(model_name, ".mod")))
   ctl_path <- candidates[file.exists(candidates)]
   if (length(ctl_path) == 0) return(character(0))
-  lines <- readLines(ctl_path[1], warn = FALSE)
+  lines <- .read_control_stream(ctl_path[1])
 
   get_block <- function(tag) {
-    # (?![A-Za-z]): $THETA but not the $PRIOR records $THETAP / $THETAPV.
-    starts <- grep(paste0("^\\s*\\$", tag, "(?![A-Za-z])"), lines,
-                   ignore.case = TRUE, perl = TRUE)
+    # (?![A-Za-z]) in .record_starts: $THETA but not $THETAP / $THETAPV.
+    starts <- .record_starts(lines, tag)
     if (length(starts) == 0) return(character(0))
     out <- character(0)
     for (s in starts) {
@@ -807,14 +815,7 @@ simulate_scenario_profiles <- function(param_sets,
     as.integer(gsub("\\D", "", m[1]))
   }
 
-  theta_names <- character(0)
-  for (ln in get_block("THETA")) {
-    # A value on the record line itself ("$THETA 0.5 ; CL") is a THETA too.
-    if (grepl("^\\s*\\$", ln)) ln <- sub("^\\s*\\$[A-Za-z]+\\s*", "", ln)
-    parts <- strsplit(ln, ";")[[1]]
-    if (!grepl("[0-9]", parts[1])) next
-    theta_names <- c(theta_names, if (length(parts) >= 2) trimws(parts[2]) else "")
-  }
+  theta_names <- .parse_theta_records(lines)$name
   if (length(theta_names) == 0) return(character(0))
   structural_idx <- which(!grepl("^beta_", theta_names))
 
@@ -970,10 +971,10 @@ utils::globalVariables(c("Scenario", "VALUE", "NAME", "COLOR", "MIN", "MAX",
 #'   `AUC = list(label="AUCss", unit="ng*h/mL")`) OR a spec supplying them - a
 #'   yspec object, a path to a spec YAML, or a spec-shaped list (each entry's
 #'   `short` becomes the label, plus its `unit`). When supplied (with `filename`
-#'   and a `scenario` data.frame), two summary tables covering **every** metric
-#'   column of `data` are written next to the plot as
-#'   `<model>-exposure-table-absolute.rds` and `…-relative.rds`. **Every metric
-#'   must have a label** or the call stops (add it to the spec/list). Absolute
+#'   and a `scenario` data.frame), two summary tables covering every metric
+#'   column of `data` that has a label are written next to the plot as
+#'   `<model>-exposure-table-absolute.rds` and `…-relative.rds`. Unlabelled
+#'   columns are left out; the call stops only if none is labelled. Absolute
 #'   cell = `median / [lo,hi] / geomean / (geoCV%)`; relative = `ratio [lo,hi]`
 #'   vs the `reference` median. Covariate columns come from `scenario` (decoded
 #'   via `lookup`/`spec`); interval at `percentiles`; 2 dp. No `metric_info` ->
@@ -1037,6 +1038,12 @@ plot_exposure_forest <- function(data,
   # subtitle -- OR a plain character vector of scenario names (order only). An
   # exposure metrics table built with group_by()/summarise() loses both, which
   # is why the scenario table is passed here.
+  # A single string that names a table file but does not exist is a mistyped
+  # path, not a one-scenario axis order: as an order it would drop every box.
+  if (is.character(scenario) && length(scenario) == 1L &&
+      grepl("\\.(rds|csv)$", scenario, ignore.case = TRUE) && !file.exists(scenario)) {
+    stop("`scenario` file not found: ", scenario, call. = FALSE)
+  }
   if (is.character(scenario) && length(scenario) == 1L && file.exists(scenario)) {
     scenario <- .load_if_path(scenario, "scenario")
   }
@@ -1227,8 +1234,14 @@ plot_exposure_forest <- function(data,
                               if (is.null(lookup)) list() else lookup)
     }
     qi <- .resolve_quantity_info(metric_info)             # list or spec -> label/unit
+    # Only labelled metrics are tabulated; other numeric columns are left out.
     metrics_tbl <- setdiff(names(data)[vapply(data, is.numeric, logical(1))], "ID")
-    .require_quantity_labels(qi, metrics_tbl, "metric_info")
+    metrics_tbl <- intersect(metrics_tbl, names(qi))
+    if (length(metrics_tbl) == 0) {
+      stop("No numeric column of `data` has a label in `metric_info`, so there is ",
+           "nothing to tabulate. Add an entry (label + unit) for the metrics to show.",
+           call. = FALSE)
+    }
     tdir <- dirname(stem)
     if (nzchar(tdir) && !dir.exists(tdir)) {
       dir.create(tdir, recursive = TRUE, showWarnings = FALSE)
@@ -1322,8 +1335,8 @@ plot_exposure_forest <- function(data,
 #'   Defaults to the table [build_scenario_parameters()] attaches to `param_sets`,
 #'   so you normally don't pass it (only needed if you built `param_sets` with an
 #'   older version, or want a different table).
-#' @param reference Character. Reference scenario for the relative table's ratio
-#'   denominator. Default "Typical subject".
+#' @param reference Character. Reference scenario: the ratio denominator of both
+#'   the forest plot and the relative table. Default "Typical subject".
 #' @param percentiles Numeric length-2. Interval for the summary tables. Default
 #'   `c(0.05, 0.95)`.
 #' @param lookup,spec Covariate lookup list and/or yspec object used to decode
@@ -1331,8 +1344,7 @@ plot_exposure_forest <- function(data,
 #' @param models_folder Character. Folder containing `model`. Default "models".
 #' @param verbose Logical; print progress. Default `TRUE`.
 #' @param ... Further arguments passed to [plot_exposure_forest()] (e.g.
-#'   `x_lim`, `reference`, `ClinicalRelevanceLow`, `ClinicalRelevanceHigh`,
-#'   `fontsize`).
+#'   `x_lim`, `ClinicalRelevanceLow`, `ClinicalRelevanceHigh`, `fontsize`).
 #'
 #' @return Invisibly, a named list of the ggplot objects (one per parameter).
 #' @seealso [stack_scenario_parameters()], [plot_exposure_forest()]
@@ -1485,6 +1497,7 @@ plot_parameter_forests <- function(param_sets,
       outer_range     = outer_range,
       x_breaks        = x_breaks,
       typical_subject = typical_subject,
+      reference       = reference,
       ...
     )
     if (verbose) cat(sprintf("  [%d/%d] %s (%d scenario(s))\n",
