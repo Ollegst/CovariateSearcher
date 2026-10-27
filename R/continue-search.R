@@ -24,10 +24,10 @@
 #'   A row counts as backward if EITHER its \code{phase} says so or its
 #'   \code{action} does, because neither alone is sufficient:
 #'   \itemize{
-#'     \item \code{phase} is overwritten by two paths.
-#'       \code{create_retry_model()} writes \code{"retry"} for a retry of a
-#'       failed removal, and \code{discover_existing_models()} rewrites every
-#'       row it rebuilds from disk to \code{"manual"}.
+#'     \item \code{phase} does not always name the direction.
+#'       \code{discover_existing_models()} sets every row it rebuilds from disk
+#'       to \code{"manual"}, and databases written by older versions label
+#'       retries \code{"retry"} and removals \code{"covariate_removal"}.
 #'     \item \code{action} is what \code{\link{.is_removal_model}} reads, and it
 #'       resolves a retry to the model it retries - the same resolution
 #'       \code{update_model_status_from_files()} uses to choose the sign of
@@ -246,6 +246,7 @@ continue_search <- function(search_state = NULL,
                 length(unregistered)))
     search_state <- reconstruct_step_from_disk(search_state = search_state)
   }
+  search_state <- .register_disk_retries(search_state)
 
   # ---- 3. Find the last recorded step and re-sync it from files -----------
   last_step <- suppressWarnings(max(search_state$search_database$step_number, na.rm = TRUE))
@@ -259,11 +260,69 @@ continue_search <- function(search_state = NULL,
       search_state$search_database$step_number == last_step]
 
   cat(sprintf("Last recorded step: %d (%d models)\n", last_step, length(last_step_models)))
+
+  # A search model that had not finished when the state was saved and has no
+  # run directory never reached NONMEM (the session stopped before or during
+  # submission). Its re-read says "failed", which is wrong: it is not started.
+  db <- search_state$search_database
+  pre_status <- db$status[match(last_step_models, db$model_name)]
+  not_started <- last_step_models[
+    !.is_terminal_status(pre_status) &
+      .is_search_model(search_state, last_step_models) &
+      !dir.exists(file.path(search_state$models_folder, last_step_models))]
+
   cat("🔄 Re-reading last-step model outputs from files...\n")
   for (m in last_step_models) {
     search_state <- update_model_status_from_files(search_state, m, force = TRUE)
   }
   search_state <- update_all_model_statuses(search_state)
+  search_state$search_database$status[
+    search_state$search_database$model_name %in% not_started] <- "created"
+
+  # A failed model of this step whose retry was never made gets one, as in a
+  # live run: a search model with a run directory, not a removal, not itself a
+  # retry, not excluded, and with no run<N>001 yet.
+  new_retries <- character(0)
+  if (isTRUE(auto_retry)) {
+    db <- search_state$search_database
+    rows <- db[db$model_name %in% last_step_models, , drop = FALSE]
+    eligible <- rows$model_name[
+      !is.na(rows$status) & rows$status == "failed" &
+        (is.na(rows$action) | rows$action != "retry") &
+        !(rows$excluded_from_step %in% TRUE) &
+        !paste0(rows$model_name, "001") %in% db$model_name]
+    eligible <- eligible[.is_search_model(search_state, eligible) &
+                           dir.exists(file.path(search_state$models_folder, eligible)) &
+                           !.is_removal_model(search_state, eligible)]
+    if (length(eligible) > 0) {
+      issues <- lapply(eligible, function(m) {
+        issue <- db$estimation_issue[db$model_name == m][1]
+        list(model_name = m,
+             issue_type = if (is.na(issue) || issue == "") "failed_model" else issue,
+             detection_time = Sys.time())
+      })
+      names(issues) <- eligible
+      recovery <- process_estimation_issues(search_state, issues)
+      search_state <- recovery$search_state
+      new_retries <- recovery$retry_models_created
+    }
+  }
+
+  # Run what is missing. With auto_submit = FALSE these stay "created", and the
+  # completeness check below reports them as the step's pending models.
+  to_run <- c(not_started, new_retries)
+  if (length(to_run) > 0 && isTRUE(auto_submit)) {
+    cat(sprintf("🚀 Running %d model(s) of step %d that have no result yet: %s\n",
+                length(to_run), last_step, paste(to_run, collapse = ", ")))
+    run_result <- submit_and_wait_for_step(
+      search_state = search_state,
+      model_names  = to_run,
+      step_name    = sprintf("Resumed Step %d", last_step),
+      auto_submit  = TRUE,
+      auto_retry   = auto_retry
+    )
+    search_state <- run_result$search_state
+  }
 
   # ---- 4. Require the last step to be full (nothing still running) --------
   ls_rows <- search_state$search_database[
@@ -320,7 +379,11 @@ continue_search <- function(search_state = NULL,
     cat(sprintf("Current best forward model: %s\n", current_best))
     cat(sprintf("Significant models in step %d: %d\n", last_step, length(sig_last)))
 
-    if (length(sig_last) > 0 && last_step >= 1) {
+    # A selective search always goes back into selective forward, which decides
+    # what follows: the next main step, redemption after a step with nothing
+    # significant, the next redemption step, or nothing. Standard SCM has no
+    # redemption, so a step with nothing significant means forward is done.
+    if (scm_type == "selective" || (length(sig_last) > 0 && last_step >= 1)) {
       cat("▶️  Resuming forward selection...\n")
       forward_result <- if (scm_type == "selective") {
         run_scm_selective_forward(

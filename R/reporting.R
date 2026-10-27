@@ -72,11 +72,11 @@ generate_scm_report <- function(search_state,
     # Determine step type and add description
     is_backward <- any(is_backward_by_model[step_data$model_name], na.rm = TRUE)
 
-    is_redemption <- any(grepl("redemption|final_test|retry", step_data$phase, ignore.case = TRUE))
+    is_redemption <- any(!is.na(step_data$phase) & step_data$phase == "redemption")
 
     # Add step type description
     if (is_redemption) {
-      step_type_desc <- "REDEMPTION/FINAL TESTING"
+      step_type_desc <- "REDEMPTION"
     } else if (is_backward) {
       step_type_desc <- "BACKWARD ELIMINATION"
     } else {

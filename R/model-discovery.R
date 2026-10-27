@@ -77,7 +77,7 @@ discover_existing_models <- function(search_state) {
           action <- "retry"
           covariate <- gsub("^Step \\d+ Retry \\+ ", "", notes)
           step_desc <- sprintf("Retry %s", covariate)
-          phase <- "retry"
+          phase <- "individual_testing"
         } else {
           action <- "add_single_covariate"
           covariate <- gsub("^Step \\d+ \\+ ", "", notes)
@@ -223,7 +223,7 @@ discover_existing_models <- function(search_state) {
 
   # Default all discovered models to historical/manual and non-search step
   db$step_number <- -1L
-  db$phase <- ifelse(db$phase == "retry", db$phase, "manual")
+  db$phase <- "manual"  # a discovered retry is recognised by its action
   db$action <- ifelse(db$action == "retry", db$action, "manual_modification")
   db$step_description <- ifelse(
     db$model_name == search_state$base_model,

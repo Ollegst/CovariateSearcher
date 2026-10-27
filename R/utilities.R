@@ -87,7 +87,8 @@ extract_covariate_name_from_tag <- function(tag) {
 #'   chronologically and the highest \code{NN} is the latest checkpoint.
 #'   \code{phase} is "forward"/"backward"/"redemption"/"final"; \code{event} is
 #'   "created" (models made, pre-submit), "done" (step evaluated), "complete"
-#'   (phase/run end), "running" (mid-step snapshot) or "error".
+#'   (phase/run end) or "error". Nothing is saved while a step waits for
+#'   NONMEM; \code{continue_search()} rebuilds that state from the run files.
 #' @param step Step number (coerced to a zero-padded integer; NA/non-finite → 00).
 #' @param phase,event Character labels (see description).
 #' @return A filename string like \code{"02_forward_done.rds"}.
@@ -300,8 +301,9 @@ extract_covariate_name_from_tag <- function(tag) {
 #'
 #' @description Reads the direction of a step off its database row, resolving
 #'   retry rows to the model they retry. \code{create_retry_model()} records
-#'   \code{action = "retry"} and \code{phase = "retry"}, so a retry row carries no
-#'   direction of its own - only the \code{original_model} it points at does. Two
+#'   \code{action = "retry"} (and older databases \code{phase = "retry"}), so a
+#'   retry row's action carries no direction of its own - only the
+#'   \code{original_model} it points at does. Two
 #'   things depend on getting this right: the sign convention for \code{delta_ofv}
 #'   (removals are child minus parent, additions are parent minus child), and
 #'   whether a failed model is eligible for a retry at all.

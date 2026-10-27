@@ -31,7 +31,8 @@ Main orchestration function that runs the complete SCM workflow:
 \enumerate{
 \item Initial univariate analysis on base model
 \item Iterative forward selection steps
-\item Final testing of dropped covariates
+Covariates excluded after a failed retry are offered again at every step
+when \code{search_config$retest_failed} is TRUE (the default).
 All models within each step run in parallel.
 }
 }

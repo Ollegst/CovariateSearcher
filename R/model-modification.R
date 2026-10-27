@@ -1447,7 +1447,7 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
     new_row <- data.frame(
       model_name = new_model_name,
       step_description = sprintf("Remove %s", covariate_value),
-      phase = "covariate_removal",
+      phase = "backward_elimination",
       step_number = as.integer(step_number),
       parent_model = model_name,
       covariate_tested = covariate_to_remove,

@@ -744,3 +744,16 @@ test_that("a covariate fixed through INIT is not offered for removal", {
   st <- list(covariate_search = mixed_fix_covariates())
   expect_equal(get_fixed_covariates(st, c("WT_CL", "WT_V", "RACE_V")), "WT_CL")
 })
+
+
+test_that("the results table reads an older database's removal rows as backward", {
+  # Databases written before the phase column was made consistent label
+  # removal models "covariate_removal"; the table must still use the backward
+  # vocabulary for them.
+  st <- backward_state()
+  st$models_folder <- tempdir()
+  st$search_database$phase[-1] <- "covariate_removal"
+  tbl <- create_scm_results_table(st)
+  labels <- tbl$Selected[tbl$Model %in% c("run20", "run21", "run22")]
+  expect_true(all(labels %in% c("KEPT", "REMOVED")))
+})

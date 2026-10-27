@@ -155,7 +155,6 @@ run_backward_elimination <- function(search_state,
         db_idx <- which(search_state$search_database$model_name == new_model_name)
         if (length(db_idx) > 0) {
           search_state$search_database$step_number[db_idx] <- current_step
-          search_state$search_database$phase[db_idx] <- "backward_elimination"
           search_state$search_database$action[db_idx] <- "remove_covariate"
           search_state$search_database$step_description[db_idx] <-
             sprintf("Remove %s", covariate_name)

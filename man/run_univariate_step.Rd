@@ -9,7 +9,8 @@ run_univariate_step(
   base_model_id,
   covariates_to_test = NULL,
   step_name,
-  include_excluded = TRUE
+  include_excluded = TRUE,
+  phase = "forward_selection"
 )
 }
 \arguments{
@@ -22,6 +23,9 @@ run_univariate_step(
 \item{step_name}{Character. Description for this step}
 
 \item{include_excluded}{Logical. Whether to include excluded covariates (default: TRUE for SCM)}
+
+\item{phase}{Character. Value written to the new rows' \code{phase} column:
+"forward_selection" (default) or "redemption" for a redemption step.}
 }
 \value{
 List with created model information and updated search_state

@@ -19,6 +19,7 @@ Zero-padded step number first so the \code{scm_rds/} folder sorts
 chronologically and the highest \code{NN} is the latest checkpoint.
 \code{phase} is "forward"/"backward"/"redemption"/"final"; \code{event} is
 "created" (models made, pre-submit), "done" (step evaluated), "complete"
-(phase/run end), "running" (mid-step snapshot) or "error".
+(phase/run end) or "error". Nothing is saved while a step waits for
+NONMEM; \code{continue_search()} rebuilds that state from the run files.
 }
 \keyword{internal}

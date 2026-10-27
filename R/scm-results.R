@@ -100,7 +100,7 @@ create_scm_results_table <- function(search_state) {
     # The verdict comes from the same evaluator the search itself used, so this
     # table reports the decision that was taken rather than a second opinion on
     # it. Only the label vocabulary (KEPT / REMOVED / BEST / YES / NO) is local.
-    is_backward <- grepl("backward|remove", phase, ignore.case = TRUE)
+    is_backward <- grepl("backward|remov", phase, ignore.case = TRUE)
     ev <- .evaluate_model_criteria(
       search_state  = search_state,
       model_names   = row$model_name,
@@ -198,7 +198,7 @@ create_scm_results_table <- function(search_state) {
 
     # Determine phase and threshold
     phase <- unique(step_models$phase)[1]
-    is_backward <- grepl("backward", phase, ignore.case = TRUE)
+    is_backward <- grepl("backward|remov", phase, ignore.case = TRUE)
     threshold_ofv <- if (is_backward) backward_threshold else forward_threshold
 
     # Process each model in the step

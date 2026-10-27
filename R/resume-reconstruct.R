@@ -33,6 +33,48 @@
 }
 
 
+# Register retry models found on disk but missing from the database. A retry is
+# created while a step waits for NONMEM, after that step's "created" checkpoint
+# was written, so a resume from that checkpoint can find run<N>001 on disk with
+# no row. A retry is registered only when its original run<N> is in the
+# database (it then inherits the original's step, parent, covariate and phase);
+# one whose original is unknown is left alone. Its status is read from its
+# files afterwards, like every last-step model.
+#' @keywords internal
+#' @noRd
+.register_disk_retries <- function(search_state, models_folder = NULL) {
+  mf <- models_folder %||% search_state$models_folder
+  db <- search_state$search_database
+  if (is.null(mf) || !dir.exists(mf) || is.null(db) || nrow(db) == 0) return(search_state)
+
+  found <- sub("\\.yaml$", "", list.files(mf, pattern = "^run[0-9]+001\\.yaml$"))
+  found <- setdiff(found, db$model_name)
+  originals <- sub("001$", "", found)
+  keep <- originals %in% db$model_name
+  if (!any(keep)) return(search_state)
+
+  new_rows <- lapply(which(keep), function(i) {
+    r <- db[db$model_name == originals[i], , drop = FALSE][1, , drop = FALSE]
+    r$model_name         <- found[i]
+    r$action             <- "retry"
+    r$step_description   <- sprintf("Retry %s", r$covariate_tested)
+    r$ofv <- NA_real_; r$delta_ofv <- NA_real_; r$rse_max <- NA_real_
+    r$status             <- "created"
+    r$submission_time    <- as.POSIXct(NA)
+    r$completion_time    <- as.POSIXct(NA)
+    if ("retry_attempt" %in% names(r)) r$retry_attempt <- 1L
+    if ("original_model" %in% names(r)) r$original_model <- originals[i]
+    if ("excluded_from_step" %in% names(r)) r$excluded_from_step <- FALSE
+    r$created_by_search  <- TRUE
+    r
+  })
+  search_state$search_database <- dplyr::bind_rows(db, dplyr::bind_rows(new_rows))
+  cat(sprintf("🔧 Registered %d retry model(s) found on disk: %s\n",
+              length(new_rows), paste(found[keep], collapse = ", ")))
+  search_state
+}
+
+
 #' Recorded parent (bbr \code{based_on}) of a model, read from its \code{.yaml}
 #' @keywords internal
 .scm_model_parent <- function(models_folder, model) {
@@ -214,6 +256,12 @@ reconstruct_step_from_disk <- function(search_state = NULL,
 
   if (direction == "forward") {
     action <- "add_covariate";    phase <- "forward_selection";    verb <- "Add"
+    # Recovered rows join a step the database may already hold part of; take
+    # that step's phase so a redemption step stays a redemption step. Files on
+    # disk do not record the phase, so a step with no rows yet is forward.
+    step_phase <- db$phase[!is.na(db$step_number) & db$step_number == step_number &
+                             !is.na(db$phase) & db$phase %in% c("forward_selection", "redemption")]
+    if (length(step_phase) > 0) phase <- step_phase[1]
   } else {
     action <- "remove_covariate"; phase <- "backward_elimination"; verb <- "Remove"
   }

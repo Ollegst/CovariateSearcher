@@ -146,7 +146,8 @@ get_excluded_covariates <- function(search_state, return_details = FALSE, phase_
 #' @description Main orchestration function that runs the complete SCM workflow:
 #'   1. Initial univariate analysis on base model
 #'   2. Iterative forward selection steps
-#'   3. Final testing of dropped covariates
+#'   Covariates excluded after a failed retry are offered again at every step
+#'   when \code{search_config$retest_failed} is TRUE (the default).
 #'   All models within each step run in parallel.
 #' @param search_state List containing covariate search state and configuration
 #' @param base_model_id Character. Starting base model
@@ -537,7 +538,7 @@ view_exclusion_status <- function(search_state) {
       cat("\n")
     }
 
-    cat("💡 These covariates will be available for final testing before backward elimination\n")
+    cat("💡 With retest_failed = TRUE (the default) they are offered again at the next step\n")
   }
 
   cat(paste(rep("=", 60), collapse=""), "\n")

@@ -13,10 +13,13 @@
 #' @param covariates_to_test Character vector. Covariate tags to test (optional)
 #' @param step_name Character. Description for this step
 #' @param include_excluded Logical. Whether to include excluded covariates (default: TRUE for SCM)
+#' @param phase Character. Value written to the new rows' `phase` column:
+#'   "forward_selection" (default) or "redemption" for a redemption step.
 #' @return List with created model information and updated search_state
 #' @export
 run_univariate_step <- function(search_state, base_model_id, covariates_to_test = NULL,
-                                step_name, include_excluded = TRUE) {
+                                step_name, include_excluded = TRUE,
+                                phase = "forward_selection") {
 
   # If no covariates specified, get remaining ones with exclusion filtering
   if (is.null(covariates_to_test)) {
@@ -127,7 +130,8 @@ run_univariate_step <- function(search_state, base_model_id, covariates_to_test 
         search_state = search_state,
         base_model_id = base_model_id,
         covariate_tag = cov_tag,
-        step_number = step_number
+        step_number = step_number,
+        phase = phase
       )
 
       # Validate result structure
@@ -791,20 +795,9 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
       break  # THIS BREAK IS NOW INSIDE A LOOP!
     }
 
-    # Save intermediate state periodically (rolling within-step snapshot)
-    if (update_count %% 5 == 0) {
-      cur_step  <- suppressWarnings(max(search_state$search_database$step_number, na.rm = TRUE))
-      step_phase <- search_state$search_database$phase[
-        !is.na(search_state$search_database$step_number) &
-          search_state$search_database$step_number == cur_step]
-      phase_lbl <- if (any(grepl("backward|removal", step_phase, ignore.case = TRUE))) {
-        "backward"
-      } else {
-        "forward"
-      }
-      save_search_state(search_state, .scm_checkpoint_name(cur_step, phase_lbl, "running"))
-      cat("💾 Progress saved\n")
-    }
+    # No state is saved while waiting: a step is checkpointed when its models
+    # are created and when it is done. continue_search() rebuilds everything in
+    # between from the run files, including retries made during the wait.
 
     # Wait 1 minute before next update
     cat("⏱️  Waiting 1 minute for next update...\n")

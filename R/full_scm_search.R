@@ -444,14 +444,14 @@ run_automated_scm_testing <- function(search_state,
     character(0)
   })
 
-  # Excluded covariates, keeping only those excluded during forward selection
-  # (phase "forward_selection"; retry rows carry phase "retry").
+  # Excluded covariates, keeping only those excluded during forward selection or
+  # redemption (backward removals are never retried, so never excluded).
   excluded_covariates <- tryCatch({
     excluded_all <- get_excluded_covariates(search_state)
 
     forward_excluded <- search_state$search_database[
       which(search_state$search_database$excluded_from_step == TRUE &
-              search_state$search_database$phase == "forward_selection"),
+              search_state$search_database$phase %in% c("forward_selection", "redemption")),
       , drop = FALSE
     ]
 

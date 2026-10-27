@@ -247,6 +247,28 @@ get_covariates_from_models <- function(search_state, model_names) {
 }
 
 
+# Number of redemption steps at the end of the database: the consecutive steps,
+# counting back from the last one, whose models (retries excluded, since older
+# databases label them "retry") carry phase "redemption". 0 when the last step
+# is a main or backward step, or for databases written before the phase existed.
+#' @keywords internal
+#' @noRd
+.trailing_redemption_steps <- function(search_state) {
+  db <- search_state$search_database
+  if (is.null(db) || !all(c("step_number", "phase") %in% names(db))) return(0L)
+  not_retry <- if ("action" %in% names(db)) is.na(db$action) | db$action != "retry" else TRUE
+  rows <- db[!is.na(db$step_number) & not_retry, , drop = FALSE]
+  steps <- sort(unique(rows$step_number), decreasing = TRUE)
+  n <- 0L
+  for (s in steps) {
+    if (!any(!is.na(rows$phase[rows$step_number == s]) &
+             rows$phase[rows$step_number == s] == "redemption")) break
+    n <- n + 1L
+  }
+  n
+}
+
+
 #' @title Execute proper stepwise forward selection with cumulative model building
 #' @description Runs true forward selection where each step builds from the best model
 #'   of the previous step, testing only remaining (untested) covariates. Implements
@@ -304,6 +326,16 @@ run_scm_selective_forward <- function(search_state,
   # Resume (resume = TRUE): first step continues selectively from the previous
   # step reconstructed from the database. Every later pass is a continuation.
   is_continuation <- isTRUE(resume)
+
+  # A resume inside redemption continues redemption rather than the main loop.
+  # The trailing run of steps whose models carry phase "redemption" are the
+  # redemption steps already done (retries share their original's phase).
+  resumed_redemption_steps <- if (isTRUE(resume)) .trailing_redemption_steps(search_state) else 0L
+  if (resumed_redemption_steps > 0) {
+    cat(sprintf("Resuming redemption after %d completed redemption step(s)\n",
+                resumed_redemption_steps))
+    forward_selection_active <- FALSE
+  }
 
   # Main selective forward selection loop
   while (forward_selection_active) {
@@ -613,6 +645,8 @@ run_scm_selective_forward <- function(search_state,
   # significant models. Redemption steps are numbered after it.
   last_main_step <- suppressWarnings(max(search_state$search_database$step_number, na.rm = TRUE))
   if (!is.finite(last_main_step)) last_main_step <- current_step - 1
+  # On a resume inside redemption, the trailing redemption steps are not main steps.
+  last_main_step <- last_main_step - resumed_redemption_steps
 
   # ===================================================================
   # REDEMPTION PHASE - Test remaining covariates
@@ -685,24 +719,30 @@ run_scm_selective_forward <- function(search_state,
                   final_best_model, final_best_step, final_best_ofv))
       cat(sprintf("Last completed step: %d\n", last_main_step))
 
-      # Determine redemption strategy based on where best model came from
-      redemption_covariates <- .redemption_candidates(search_state, final_best_model)
-      cat(sprintf("Covariates to test: not in %s and not already tested on it\n",
-                  final_best_model))
-      redemption_needed <- length(redemption_covariates) > 0
+      if (resumed_redemption_steps > 0) {
+        # Redemption was under way: continue with its next step, which takes the
+        # covariates of the previous redemption step's significant models.
+        redemption_covariates <- character(0)
+        redemption_needed <- TRUE
+      } else {
+        redemption_covariates <- .redemption_candidates(search_state, final_best_model)
+        cat(sprintf("Covariates to test: not in %s and not already tested on it\n",
+                    final_best_model))
+        redemption_needed <- length(redemption_covariates) > 0
+      }
 
       if (redemption_needed) {
         cat(sprintf("\n🎯 STARTING REDEMPTION TESTING\n"))
+      if (length(redemption_covariates) > 0) {
         cat(sprintf("Found %d covariates for redemption testing\n", length(redemption_covariates)))
-
-      # Convert to names for display
-      redemption_names <- sapply(redemption_covariates, function(tag) {
-        if (tag %in% names(search_state$tags)) search_state$tags[[tag]] else tag
-      })
-      cat("Covariates:", paste(redemption_names, collapse = ", "), "\n")
+        redemption_names <- sapply(redemption_covariates, function(tag) {
+          if (tag %in% names(search_state$tags)) search_state$tags[[tag]] else tag
+        })
+        cat("Covariates:", paste(redemption_names, collapse = ", "), "\n")
+      }
 
       redemption_active <- TRUE
-      redemption_step <- 1
+      redemption_step <- resumed_redemption_steps + 1
       current_redemption_base <- final_best_model  # Track current base for redemption
 
       while (redemption_active) {
@@ -810,7 +850,8 @@ run_scm_selective_forward <- function(search_state,
           base_model_id = current_redemption_base,  # Use updated base
           covariates_to_test = covariates_to_test,
           step_name = sprintf("Step %d: Redemption Testing", current_step_number),
-          include_excluded = .retest_failed(search_state)
+          include_excluded = .retest_failed(search_state),
+          phase = "redemption"
         )
 
         search_state <- redemption_result$search_state

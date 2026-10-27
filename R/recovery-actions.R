@@ -171,7 +171,7 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
       new_row$covariate_tested <- original_row$covariate_tested[1]
       new_row$action <- "retry"
       new_row$step_description <- sprintf("Retry %s", original_row$covariate_tested[1])
-      new_row$phase <- "retry"
+      new_row$phase <- original_row$phase[1]  # the retry belongs to its original's phase; action says "retry"
       new_row$ofv <- NA_real_
       new_row$delta_ofv <- NA_real_
       new_row$rse_max <- NA_real_
@@ -723,7 +723,7 @@ handle_failed_retry <- function(search_state, retry_model_name, exclusion_reason
 
   cat(sprintf("✅ Excluded covariate '%s' from current step\n", covariate_tested))
   cat(sprintf("   Reason: %s\n", exclusion_reason))
-  cat(sprintf("   Available for final testing before backward elimination\n"))
+  cat("   Tested again later when retest_failed is TRUE (the default)\n")
 
   return(list(
     search_state = search_state,
