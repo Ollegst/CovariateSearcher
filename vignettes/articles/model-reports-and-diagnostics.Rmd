@@ -92,7 +92,7 @@ result. A file path is not accepted. The
 belongs in that file.
 
 Two rows are appended below the parameter sections: `OFV`, and
-`Conditional number` computed from the run's `.cor` (or `.cov`) output.
+`Condition number` (NONMEM's: the largest over the smallest eigenvalue of the correlation matrix) computed from the run's `.cor` (or `.cov`) output.
 
 ### Sections
 

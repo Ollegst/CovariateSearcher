@@ -294,7 +294,7 @@ View(results$search_state$search_database)
 # Summary
 cat(results$final_summary)
 
-# Parameter table (includes OFV and Conditional number rows)
+# Parameter table (includes OFV and Condition number rows)
 ft <- model_report(model_names = "run10", models_folder = "models")
 ft
 

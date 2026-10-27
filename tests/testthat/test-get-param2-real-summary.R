@@ -126,3 +126,66 @@ test_that("a lowercase log tag gives the same row as LOG", {
   expect_false(is.na(row(lower)$Parameter))
   expect_equal(row(lower), row(upper))
 })
+
+
+test_that("a small estimate keeps 3 significant figures", {
+  # REP-03: estimates were rounded to 2 decimals, so 0.0045 printed as 0.
+  out <- param2_with(function(p) {
+    p$estimate[p$parameter_names == "THETA1"] <- 0.0045123
+    p
+  })
+  expect_equal(as.numeric(out$Parameter[out$parameter_names == "KA"]), 0.00451)
+  expect_equal(as.numeric(out$Parameter[out$parameter_names == "RUVp"]), -0.082)
+  # The condition number matches the one NONMEM printed for this model.
+  expect_equal(as.numeric(out$Parameter[out$parameter_names == "Condition number"]), 605.5)
+})
+
+test_that("without spec_pk the rows still get their section from NONMEM's names", {
+  # REP-08: sections were guessed from the labels (KA, CL), which never start
+  # with THETA, so no row had a section.
+  out <- param2_with()
+  sec <- stats::setNames(as.character(out$comment), out$parameter_names)
+  expect_equal(unname(sec[c("KA", "CL")]), rep("Typical parameters", 2))
+  expect_equal(unname(sec["IIV_CL"]), "Inter-individual variability")
+  expect_equal(unname(sec["RUVp"]), "Typical parameters")   # RUV terms are THETAs in this model
+  expect_false("nonmem_name" %in% names(out))               # still dropped without include_ci
+})
+
+test_that("shrinkage reads only the requested fields", {
+  # REP-11: every field was evaluated, so a summary without the EBV fields
+  # failed even when eta shrinkage was asked for.
+  s <- real_summary()
+  sd <- s$shrinkage_details
+  last <- length(sd)
+  sd[[last]][[1]]$ebv_sd <- NULL
+  sd[[last]][[1]]$ebv_vr <- NULL
+  s$shrinkage_details <- sd
+  models_dir <- write_basic_model(FALSE, "RATIO")
+  out <- testthat::with_mocked_bindings(
+    read_model = function(path) list(path = path),
+    model_summary = function(mod) s,
+    param_estimates = function(x, ...) bbr:::param_estimates.bbi_nonmem_summary(s),
+    .package = "bbr",
+    as.data.frame(get_param2("b1", 1, models_folder = models_dir, shrinkage = "etasd"))
+  )
+  expect_false(is.na(out$SHRINKAGE[out$parameter_names == "IIV_CL"]))
+})
+
+test_that("the report says how variances are shown", {
+  # REP-05 (owner decision): every OMEGA/SIGMA diagonal is shown as lognormal
+  # CV%, and the table now states the formula.
+  s <- real_summary()
+  models_dir <- write_basic_model()
+  ft <- NULL
+  invisible(capture.output(
+    ft <- testthat::with_mocked_bindings(
+      read_model = function(path) list(path = path),
+      model_summary = function(mod) s,
+      param_estimates = function(x, ...) bbr:::param_estimates.bbi_nonmem_summary(s),
+      .package = "bbr",
+      model_report("b1", models_folder = models_dir)
+    )
+  ))
+  footer <- paste(unlist(ft$footer$dataset), collapse = " ")
+  expect_match(footer, "CV% = 100*sqrt(exp(variance) - 1)", fixed = TRUE)
+})

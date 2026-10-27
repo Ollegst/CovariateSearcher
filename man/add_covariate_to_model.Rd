@@ -24,8 +24,9 @@ add_covariate_to_model(
 the automated search passes its current step; a manual add must say which
 step the model belongs to.}
 
-\item{lookup_file}{Character or NULL. Optional path to lookup YAML for
-categorical labels. If NULL, uses search_state configuration/default.}
+\item{lookup_file}{Character or NULL. Accepted for compatibility; categorical
+THETA names keep the numeric level (beta_SEX_CL_2) and reports decode it
+through the lookup, so this does not change the model.}
 
 \item{phase}{Character. Phase recorded in the search database. Defaults to
 \code{"forward_selection"}, which is what the automated forward search

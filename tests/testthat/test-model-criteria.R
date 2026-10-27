@@ -772,3 +772,17 @@ test_that("a retry of a retry resolves to the original's direction", {
   st$search_database$action <- NULL
   expect_equal(.is_removal_model(st, "run5001001"), TRUE)
 })
+
+
+test_that("the summary names the removal the search made, not the last one listed", {
+  # REP-02: with two acceptable removals the engine removes the cheaper one
+  # (smallest ΔOFV), but the summary took the last REMOVED row.
+  st <- backward_state()
+  st$models_folder <- tempdir()
+  st$search_database$rse_max[st$search_database$model_name == "run22"] <- 12  # now acceptable too
+  tbl <- create_scm_results_table(st)
+  out <- capture.output(print_scm_results_table(st))
+  expect_true(all(tbl$Selected[tbl$Model %in% c("run20", "run22")] == "REMOVED"))
+  expect_true(any(grepl("^Final Model: run20$", out)))
+  expect_true(any(grepl("Covariate removed - run20", out)))
+})

@@ -36,8 +36,9 @@ in-memory \code{data.frame} OR a character path to a \code{.csv}/\code{.rds} fil
 
 \item{overwrite}{Logical. Overwrite existing model if present}
 
-\item{lookup_file}{Character or NULL. Optional path to lookup YAML for
-categorical labels. If NULL, defaults to data/spec/lookup.yaml.}
+\item{lookup_file}{Character or NULL. Accepted for compatibility; categorical
+THETA names keep the numeric level (beta_SEX_CL_2) and reports decode it
+through the lookup, so this does not change the model.}
 }
 \value{
 List with status, model_name, model_path, log_file, covariates_added

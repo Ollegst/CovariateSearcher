@@ -273,6 +273,19 @@ calculate_condition_number<- function(model_number,
   matrix_obj <- matrix_obj[keep_idx, keep_idx, drop = FALSE]
   matrix_obj <- (matrix_obj + t(matrix_obj)) / 2
 
+  # NONMEM's condition number is that of the correlation matrix. Its .cor file
+  # holds the standard errors on the diagonal, so the diagonal is reset to 1;
+  # a .cov fallback is scaled to correlations, which also removes the
+  # dependence on the parameters' units.
+  if (grepl("\\.cor$", matrix_file)) {
+    diag(matrix_obj) <- 1
+  } else {
+    if (any(!is.finite(diag(matrix_obj)) | diag(matrix_obj) <= 0)) {
+      return(NA_real_)
+    }
+    matrix_obj <- stats::cov2cor(matrix_obj)
+  }
+
   eig_values <- tryCatch(
     eigen(matrix_obj, symmetric = TRUE, only.values = TRUE)$values,
     error = function(e) NULL
@@ -287,18 +300,15 @@ calculate_condition_number<- function(model_number,
     return(NA_real_)
   }
 
-  eig_nonneg <- eig_values[eig_values >= -tolerance]
-  if (length(eig_nonneg) == 0) {
-    return(NA_real_)
-  }
-
-  max_ev <- max(eig_nonneg)
-  min_ev <- min(eig_nonneg)
+  max_ev <- max(eig_values)
+  min_ev <- min(eig_values)
 
   if (max_ev <= tolerance) {
     return(NA_real_)
   }
 
+  # A zero or negative eigenvalue means the correlation matrix is singular or
+  # not positive definite: the condition number is unbounded.
   if (min_ev <= tolerance) {
     return(Inf)
   }
@@ -325,6 +335,21 @@ decode_cov_level <- function(cov_name, level, lookup) {
   idx <- match(as.character(level), as.character(unlist(entry$values)))
   if (is.na(idx) || idx > length(entry$decode)) return(NA_character_)
   as.character(entry$decode[[idx]])
+}
+
+
+# The numeric level behind a THETA-name suffix that older versions built from
+# the lookup decode ("MALE" from "Male"; "BLACK_OR_AFRICAN" from "Black or
+# African"): the decode is cleaned the same way and matched. NA when nothing matches.
+#' @keywords internal
+#' @noRd
+.level_from_decoded_name <- function(cov_name, suffix_tokens, lookup) {
+  if (is.null(lookup) || is.null(lookup[[cov_name]])) return(NA_character_)
+  entry <- lookup[[cov_name]]
+  if (is.null(entry$values) || is.null(entry$decode)) return(NA_character_)
+  clean <- function(s) toupper(gsub("^_|_$", "", gsub("_+", "_", gsub("[^A-Za-z0-9]", "_", s))))
+  idx <- match(paste(suffix_tokens, collapse = "_"), clean(as.character(unlist(entry$decode))))
+  if (is.na(idx)) NA_character_ else as.character(unlist(entry$values))[idx]
 }
 
 
@@ -428,14 +453,14 @@ decode_cov_level <- function(cov_name, level, lookup) {
 #'   cannot itself match a separating hyphen, so the split is unambiguous.
 #'   A string that does not parse is passed through untouched rather than dropped.
 #' @param x Character vector of intervals, hyphen- or comma-separated, with or
-#'   without enclosing brackets.
+#'   without enclosing square or round brackets.
 #' @return Character vector of `"[low, high]"` strings.
 #' @keywords internal
 #' @noRd
 .reformat_boot_ci <- function(x) {
   x <- trimws(as.character(x))
   num <- "-?[0-9]*\\.?[0-9]+(?:[eE][+-]?[0-9]+)?"
-  pattern <- paste0("^\\[?\\s*(", num, ")\\s*[,-]\\s*(", num, ")\\s*\\]?$")
+  pattern <- paste0("^[[(]?\\s*(", num, ")\\s*[,-]\\s*(", num, ")\\s*[])]?$")
   matched <- regmatches(x, regexec(pattern, x))
 
   vapply(seq_along(x), function(i) {
@@ -457,8 +482,9 @@ decode_cov_level <- function(cov_name, level, lookup) {
 #' @param boot_results Data frame of bootstrap summaries. Column names are
 #'   matched case-insensitively: the parameter name from
 #'   `parameter_names`/`parameter`/`param`, the central value from
-#'   `median`/`estimate`/`value`, and the interval from the first column whose
-#'   name contains "CI".
+#'   `median`/`estimate`/`value`, and the interval from the first column named
+#'   with "CI" as a word (not a lower/upper bound column), else from a
+#'   lower/upper pair. A CI column with no value readable as an interval stops.
 #' @return `param_est` with `boot_median` and `boot_ci` columns added.
 #' @keywords internal
 #' @noRd
@@ -472,13 +498,27 @@ decode_cov_level <- function(cov_name, level, lookup) {
   }
   name_col <- pick(c("parameter_names", "parameter_name", "parameter", "param"))
   med_col <- pick(c("median", "estimate", "value"))
-  ci_hits <- grep("ci", nm, ignore.case = TRUE, value = TRUE)
+  # "CI" as a word of its own ("95% CI-bootstrap", "ci"), so a column such as
+  # "precision" is not taken for the interval.
+  ci_hits <- grep("(^|[^a-z])ci([^a-z]|$)", nm, ignore.case = TRUE, value = TRUE)
+  # A bound of the interval ("ci_lower", "upper_ci") is not the interval itself.
+  ci_hits <- ci_hits[!grepl("lower|upper", ci_hits, ignore.case = TRUE)]
   ci_col <- if (length(ci_hits) > 0) ci_hits[1] else NA_character_
+  # Without a CI column, the interval can come from a lower/upper pair.
+  lo_col <- pick(c("lower", "lo", "ci_lower", "lower_ci", "2.5%", "p2.5"))
+  hi_col <- pick(c("upper", "hi", "ci_upper", "upper_ci", "97.5%", "p97.5"))
+  if (is.na(ci_col) && !is.na(lo_col) && !is.na(hi_col)) {
+    lo <- trimws(as.character(boot[[lo_col]]))
+    hi <- trimws(as.character(boot[[hi_col]]))
+    boot$.ci_from_pair <- ifelse(is.na(lo) | is.na(hi), NA_character_,
+                                 paste0("[", lo, ", ", hi, "]"))
+    ci_col <- ".ci_from_pair"
+  }
 
   missing_cols <- c(
     if (is.na(name_col)) "parameter name (parameter_names/parameter/param)",
     if (is.na(med_col)) "central value (median/estimate/value)",
-    if (is.na(ci_col)) "confidence interval (a column whose name contains 'CI')"
+    if (is.na(ci_col)) "confidence interval (a 'CI' column, or a lower/upper pair)"
   )
   if (length(missing_cols) > 0) {
     stop(sprintf(
@@ -497,10 +537,20 @@ decode_cov_level <- function(cov_name, level, lookup) {
 
   boot_tbl <- data.frame(
     nonmem_name = keys,
-    boot_median = round(suppressWarnings(as.numeric(boot[[med_col]])), 2),
+    boot_median = signif(suppressWarnings(as.numeric(boot[[med_col]])), 3),
     boot_ci = .reformat_boot_ci(boot[[ci_col]]),
     stringsAsFactors = FALSE
   )
+
+  # A column that holds no interval at all (none of its values reads as
+  # "[low, high]") is the wrong column, not a table of missing intervals.
+  given <- !is.na(boot_tbl$boot_ci) & nzchar(boot_tbl$boot_ci)
+  if (any(given) && !any(grepl("^\\[.*,.*\\]$", boot_tbl$boot_ci[given]))) {
+    stop(sprintf(
+      "`boot_results` column '%s' holds no confidence interval in the form low, high (e.g. '[0.1, 0.5]'). Values seen: %s",
+      ci_col, paste(utils::head(unique(boot_tbl$boot_ci[given]), 3), collapse = ", ")
+    ), call. = FALSE)
+  }
 
   unmatched <- setdiff(keys, stats::na.omit(param_est$nonmem_name))
   if (length(unmatched) > 0) {
@@ -548,23 +598,16 @@ get_param2 <- function(model_number,
   model_stats <- bbr::model_summary(model_obj)
 
   # Extract shrinkage values based on type
-  shrinkage_value <- dplyr::case_when(
-    shrinkage == "etasd" ~ c(
-      tail(model_stats$shrinkage_details, 1)[[1]][[1]]$eta_sd,
-      tail(model_stats$shrinkage_details, 1)[[1]][[1]]$eps_sd
-    ),
-    shrinkage == "etavr" ~ c(
-      tail(model_stats$shrinkage_details, 1)[[1]][[1]]$eta_vr,
-      tail(model_stats$shrinkage_details, 1)[[1]][[1]]$eps_vr
-    ),
-    shrinkage == "ebvsd" ~ c(
-      tail(model_stats$shrinkage_details, 1)[[1]][[1]]$ebv_sd,
-      tail(model_stats$shrinkage_details, 1)[[1]][[1]]$eps_sd
-    ),
-    shrinkage == "ebvvr" ~ c(
-      tail(model_stats$shrinkage_details, 1)[[1]][[1]]$ebv_vr,
-      tail(model_stats$shrinkage_details, 1)[[1]][[1]]$eps_vr
-    )
+  # Only the requested pair of fields is read, so a summary that lacks one of
+  # the others still works.
+  shrink <- tail(model_stats$shrinkage_details, 1)[[1]][[1]]
+  shrinkage_value <- switch(shrinkage,
+    etasd = c(shrink$eta_sd, shrink$eps_sd),
+    etavr = c(shrink$eta_vr, shrink$eps_vr),
+    ebvsd = c(shrink$ebv_sd, shrink$eps_sd),
+    ebvvr = c(shrink$ebv_vr, shrink$eps_vr),
+    stop("shrinkage must be one of 'etasd', 'etavr', 'ebvsd', 'ebvvr', not '",
+         shrinkage, "'", call. = FALSE)
   )
 
   # Extract OFV
@@ -575,7 +618,7 @@ get_param2 <- function(model_number,
 
   # Extract condition number from NONMEM matrix files (.cor preferred, .cov fallback)
   COND_NUM <- data.table::data.table(
-    parameter_names = "Conditional number",
+    parameter_names = "Condition number",
     Parameter = calculate_condition_number(
       model_number = model_number,
       models_folder = models_folder,
@@ -656,8 +699,8 @@ get_param2 <- function(model_number,
     # absence is a bug, not something to carry on past. The optional two exist
     # either way and are selected only when asked for.
     dplyr::select(
-      dplyr::all_of(c("parameter_names", "Parameter", "RSE", "fixed")),
-      dplyr::all_of(if (include_ci) c("nonmem_name", "CI") else character(0))
+      dplyr::all_of(c("parameter_names", "Parameter", "RSE", "fixed", "nonmem_name")),
+      dplyr::all_of(if (include_ci) "CI" else character(0))
     ) %>%
     dplyr::left_join(shrinkage_df, by = "parameter_names") %>%
     dplyr::bind_rows(OFV, COND_NUM) %>%
@@ -670,7 +713,7 @@ get_param2 <- function(model_number,
   # Add labels and comments if spec_pk is provided
   if (!is.null(spec_pk)) {
     non_beta_params <- param_est$parameter_names[!grepl("^beta_", param_est$parameter_names) &
-                                                   !param_est$parameter_names %in% c("OFV", "Conditional number")]
+                                                   !param_est$parameter_names %in% c("OFV", "Condition number")]
     missing_from_spec <- non_beta_params[!non_beta_params %in% names(spec_pk)]
 
     if (length(missing_from_spec) > 0) {
@@ -682,7 +725,7 @@ get_param2 <- function(model_number,
     param_est <- param_est %>%
       dplyr::mutate(
         comment = dplyr::case_when(
-          parameter_names %in% c("OFV", "Conditional number") ~ NA_character_,
+          parameter_names %in% c("OFV", "Condition number") ~ NA_character_,
           parameter_names %in% names(spec_pk) ~ sapply(parameter_names, function(p) {
             val <- spec_pk[[p]]$comment
             if (!is.null(val)) val else NA_character_
@@ -705,6 +748,11 @@ get_param2 <- function(model_number,
               extra       <- if (length(parts) >= 4) parts[4:length(parts)] else character(0)
               last_part   <- if (length(extra) > 0) extra[length(extra)] else NA_character_
               is_level    <- !is.na(last_part) && !is.na(suppressWarnings(as.numeric(last_part)))
+              # Older versions named a level by its decode (beta_SEX_CL_MALE).
+              if (!is_level && length(extra) > 0) {
+                old_level <- .level_from_decoded_name(cov_name, extra, lookup)
+                if (!is.na(old_level)) { is_level <- TRUE; last_part <- old_level }
+              }
               param_label <- if (param_name %in% names(spec_pk)) spec_pk[[param_name]]$label else param_name
               # The tag's own COV token stays the lookup key; only what is
               # printed becomes the name the spec gives it.
@@ -748,6 +796,11 @@ get_param2 <- function(model_number,
               extra       <- if (length(parts) >= 4) parts[4:length(parts)] else character(0)
               last_part   <- if (length(extra) > 0) extra[length(extra)] else NA_character_
               is_level    <- !is.na(last_part) && !is.na(suppressWarnings(as.numeric(last_part)))
+              # Older versions named a level by its decode (beta_SEX_CL_MALE).
+              if (!is_level && length(extra) > 0) {
+                old_level <- .level_from_decoded_name(cov_name, extra, lookup)
+                if (!is.na(old_level)) { is_level <- TRUE; last_part <- old_level }
+              }
               param_short <- if (param_name %in% names(spec_pk)) spec_pk[[param_name]]$short else param_name
               cov_display <- .cov_display_name(cov_name, lookup, spec_pk)
 
@@ -785,15 +838,17 @@ get_param2 <- function(model_number,
       ) %>%
       dplyr::relocate(label, .after = parameter_names)
   } else {
-    # Default labels if no spec provided
+    # Default labels if no spec provided. The section comes from NONMEM's own
+    # name (THETA1, OMEGA(1,1), SIGMA(1,1)); the label the control stream gives
+    # a parameter (KA, CL) says nothing about which block it is in.
     param_est <- param_est %>%
       dplyr::mutate(
         comment = dplyr::case_when(
           grepl("^beta_", parameter_names) ~ "Parameter-Covariate relationships",
-          grepl("^THETA", parameter_names) ~ "Typical parameters",
-          grepl("^OMEGA", parameter_names) ~ "Inter-individual variability",
-          grepl("^SIGMA", parameter_names) ~ "Residual variability",
-          parameter_names == "OFV" ~ NA_character_,
+          grepl("^THETA", nonmem_name) ~ "Typical parameters",
+          grepl("^OMEGA\\(([0-9]+),\\1\\)", nonmem_name) ~ "Inter-individual variability",
+          grepl("^OMEGA", nonmem_name) ~ "Correlation of random effects",
+          grepl("^SIGMA", nonmem_name) ~ "Residual variability",
           TRUE ~ NA_character_
         ),
         label = parameter_names
@@ -814,7 +869,17 @@ get_param2 <- function(model_number,
       ))
     ) %>%
     dplyr::arrange(comment) %>%
-    dplyr::mutate(dplyr::across(where(is.numeric), ~ round(.x, 2)))
+    # Estimates keep 3 significant figures, so a THETA of 0.0045 does not print
+    # as 0; OFV keeps 2 decimals and the condition number 1. RSE and shrinkage
+    # stay at 2 decimals.
+    dplyr::mutate(
+      Parameter = dplyr::case_when(
+        parameter_names == "OFV" ~ round(Parameter, 2),
+        parameter_names == "Condition number" ~ round(Parameter, 1),
+        TRUE ~ signif(Parameter, 3)
+      ),
+      dplyr::across(where(is.numeric) & !dplyr::any_of("Parameter"), ~ round(.x, 2))
+    )
 
   # Format output based on number of models
   if (count_model > 1) {
@@ -823,7 +888,7 @@ get_param2 <- function(model_number,
       dplyr::mutate(
         model = dplyr::case_when(
           fixed == TRUE ~ paste(Parameter, "FIX"),
-          parameter_names %in% c("OFV", "Conditional number") ~ as.character(Parameter),
+          parameter_names %in% c("OFV", "Condition number") ~ as.character(Parameter),
           !is.na(Parameter) & !is.na(RSE) & is_omega & !is.na(SHRINKAGE) ~
             paste0(Parameter, " (", RSE, "%)", " [", SHRINKAGE, "%]"),
           !is.na(Parameter) & !is.na(RSE) & is_omega & is.na(SHRINKAGE) ~
@@ -857,7 +922,7 @@ get_param2 <- function(model_number,
     # is_omega tells a missing shrinkage apart from one that was never expected,
     # which only the merged bootstrap column needs.
     if (!include_ci) {
-      param_est <- dplyr::select(param_est, -is_omega)
+      param_est <- dplyr::select(param_est, -is_omega, -nonmem_name)
     }
   }
 
@@ -1033,7 +1098,7 @@ model_report <- function(model_names,
   if (count_model == 1 && bootstrap) {
     # Estimate keeps its own column; RSE and shrinkage merge into one the way the
     # multi-model columns merge them. Section header rows carry no numbers, and
-    # neither do OFV, the conditional number, or a parameter held at a FIX value.
+    # neither do OFV, the condition number, or a parameter held at a FIX value.
     for (needed in c("RSE", "SHRINKAGE", "CI", "is_omega")) {
       if (!needed %in% names(grouped_table)) grouped_table[[needed]] <- NA
     }
@@ -1129,6 +1194,14 @@ model_report <- function(model_names,
       values = footer_text
     )
   }
+
+  # Every OMEGA/SIGMA diagonal is reported on the lognormal CV% scale, which is
+  # not meaningful for an additive (SD-type) residual error; say how it is
+  # computed so the reader can judge.
+  flextable_object <- flextable::add_footer_lines(
+    flextable_object,
+    values = "Variance estimates (OMEGA/SIGMA diagonals) are shown as CV% = 100*sqrt(exp(variance) - 1)."
+  )
 
   return(flextable_object)
 }

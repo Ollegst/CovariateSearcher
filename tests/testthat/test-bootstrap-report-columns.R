@@ -76,7 +76,7 @@ test_that(".join_bootstrap_results matches on NONMEM names, not on row order", {
   out <- .join_bootstrap_results(report_fixture(), boot_fixture())
 
   # THETA10 precedes THETA2 in the bootstrap table and must not steal its row.
-  expect_equal(out$boot_median[out$nonmem_name %in% "THETA2"], 209.24)
+  expect_equal(out$boot_median[out$nonmem_name %in% "THETA2"], 209)  # 3 significant figures
   expect_equal(out$boot_ci[out$nonmem_name %in% "THETA10"], "[-0.23, -0.15]")
   expect_equal(out$boot_ci[out$nonmem_name %in% "OMEGA(1,1)"], "[65.2, 81.1]")
 })
@@ -121,4 +121,38 @@ test_that("model_report rejects a bootstrap request it cannot honour", {
                             boot_results = boot_fixture()),
                "one model against its bootstrap")
   expect_error(model_report("run100", bootstrap = TRUE), "requires `boot_results`")
+})
+
+test_that("the interval column is 'CI' as a word, not any name containing 'ci'", {
+  # REP-07: a "precision" column was taken as the interval.
+  b <- boot_fixture()
+  b$precision <- 0.1
+  b <- b[, c("parameter_names", "n", "median", "precision", "95% CI-bootstrap")]
+  out <- .join_bootstrap_results(report_fixture(), b)
+  expect_equal(out$boot_ci[out$nonmem_name %in% "THETA1"], "[3.14, 3.71]")
+})
+
+test_that("an interval can come from a lower/upper pair, and a non-interval column stops", {
+  b <- boot_fixture()
+  b[["95% CI-bootstrap"]] <- NULL
+  b$lower <- c(65.2, 1, 3.14, -0.23, 197.46)
+  b$upper <- c(81.1, 1, 3.71, -0.15, 219.06)
+  out <- .join_bootstrap_results(report_fixture(), b)
+  expect_equal(out$boot_ci[out$nonmem_name %in% "THETA1"], "[3.14, 3.71]")
+
+  b <- boot_fixture()
+  b[["95% CI-bootstrap"]] <- "high"
+  expect_error(.join_bootstrap_results(report_fixture(), b), "holds no confidence interval")
+})
+
+test_that("ci_lower / ci_upper columns form the interval, and round brackets parse", {
+  # diff-auditor (Phase 5): "ci_lower" matched the CI-word pattern, so the pair
+  # was never used and the join stopped.
+  b <- boot_fixture()
+  b[["95% CI-bootstrap"]] <- NULL
+  b$ci_lower <- c(65.2, 1, 3.14, -0.23, 197.46)
+  b$ci_upper <- c(81.1, 1, 3.71, -0.15, 219.06)
+  out <- .join_bootstrap_results(report_fixture(), b)
+  expect_equal(out$boot_ci[out$nonmem_name %in% "THETA1"], "[3.14, 3.71]")
+  expect_equal(.reformat_boot_ci("(0.1, 0.5)"), "[0.1, 0.5]")
 })

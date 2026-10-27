@@ -14,8 +14,9 @@
 #' @param step_number Integer. Step number this model belongs to. Required -
 #'   the automated search passes its current step; a manual add must say which
 #'   step the model belongs to.
-#' @param lookup_file Character or NULL. Optional path to lookup YAML for
-#'   categorical labels. If NULL, uses search_state configuration/default.
+#' @param lookup_file Character or NULL. Accepted for compatibility; categorical
+#'   THETA names keep the numeric level (beta_SEX_CL_2) and reports decode it
+#'   through the lookup, so this does not change the model.
 #' @param phase Character. Phase recorded in the search database. Defaults to
 #'   \code{"forward_selection"}, which is what the automated forward search
 #'   creates. Use \code{"individual_testing"} for a deliberate one-off add
@@ -290,9 +291,9 @@ add_covariate_to_model <- function(search_state, base_model_id, covariate_tag,
 #' @param data_file Data.frame. Dataset for time-varying checks
 #' @param covariate_search Data.frame. Covariate search configuration
 #' @param capture_log Function. Logging function (optional)
-#' @param lookup_file Character or NULL. Optional path to lookup YAML for
-#'   categorical labels. If NULL, uses search_state$search_config$lookup_file
-#'   then defaults to data/spec/lookup.yaml.
+#' @param lookup_file Character or NULL. Accepted for compatibility; categorical
+#'   THETA names keep the numeric level (beta_SEX_CL_2) and reports decode it
+#'   through the lookup, so this does not change the model.
 #' @return Updated search_state
 #' @export
 model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
@@ -316,15 +317,6 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   log_function(paste("=== Adding Covariate to Model File ==="))
   log_function(paste("Model:", ref_model))
   log_function(paste("Covariate parameter:", cov_on_param))
-
-  resolved_lookup_file <- if (!is.null(lookup_file)) {
-    lookup_file
-  } else if (!is.null(search_state$search_config) &&
-             !is.null(search_state$search_config$lookup_file)) {
-    search_state$search_config$lookup_file
-  } else {
-    file.path("data", "spec", "lookup.yaml")
-  }
 
   modelcode <- read_model_file(search_state, ref_model)
   original_file_path <- attr(modelcode, "file_path")
@@ -477,29 +469,6 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
       cat_nonref_fn  <- function(k) paste0("1 + THETA(", k, ")")
       combine_op     <- " * "
     }
-    # Try to load lookup YAML for categorical labels (optional)
-    lookup_values <- NULL
-    if (!is.null(resolved_lookup_file) && file.exists(resolved_lookup_file)) {
-      tryCatch({
-        lookup_data <- yaml::read_yaml(resolved_lookup_file)
-        # Check if this covariate exists in lookup
-        if (cova %in% names(lookup_data)) {
-          lookup_info <- lookup_data[[cova]]
-          # Convert values and decode lists to a named list
-          if (!is.null(lookup_info$values) && !is.null(lookup_info$decode)) {
-            lookup_values <- setNames(
-              as.list(lookup_info$decode),
-              as.character(lookup_info$values)
-            )
-            log_function(paste("Found lookup values for", cova, "in", resolved_lookup_file))
-          }
-        }
-      }, error = function(e) {
-        log_function(paste("Note: Could not use lookup file:", e$message))
-      })
-    } else {
-      log_function(paste("No lookup file found at:", resolved_lookup_file, "(using numeric labels)"))
-    }
     if (!cova %in% names(data_file)) {
       stop("Covariate '", cova, "' not found in data file. Available columns: ",
            paste(head(names(data_file), 20), collapse = ", "))
@@ -532,22 +501,9 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
       current_level <- uniqueval[a]
       theta_num <- newtheta + a - 1
 
-      # Determine the label to use for this level
-      if (!is.null(lookup_values) && as.character(current_level) %in% names(lookup_values)) {
-        # Use lookup value if available
-        category_label <- lookup_values[[as.character(current_level)]]
-        # Clean the label for use in parameter names
-        category_label <- gsub("[^A-Za-z0-9]", "_", category_label)
-        category_label <- gsub("_+", "_", category_label)  # Remove multiple underscores
-        category_label <- gsub("^_|_$", "", category_label)  # Remove leading/trailing underscores
-        category_label <- toupper(category_label)  # Convert to uppercase
-        thetanmulti$label[a] <- category_label
-        log_function(paste("  Using lookup label for category", current_level, ":", category_label))
-      } else {
-        # Fall back to numeric label
-        thetanmulti$label[a] <- as.character(current_level)
-        log_function(paste("  Using numeric label for category", current_level))
-      }
+      # The THETA name keeps the numeric level (beta_SEX_CL_2); reports decode
+      # it through the lookup at display time.
+      thetanmulti$label[a] <- as.character(current_level)
 
       ifelcode <- paste0(ifelcode,
                          'ELSEIF(', cova, '.EQ.', current_level, ')THEN\n',
@@ -634,7 +590,7 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   if(nrow(thetanmulti) > 0){
     # Multiple THETAs for categorical with >2 levels (excluding reference)
     newthetalines <- purrr::map_chr(1:nrow(thetanmulti), ~ {
-      # Use the label from thetanmulti which now contains lookup values or numbers
+      # The label is the category's numeric level
       paste0(initialValuethetacov, ' ; ', cov_on_param, "_", thetanmulti$label[[.x]], ';  ; RATIO')
     })
     newthetaline <- paste0(newthetalines, collapse = '\n')
@@ -846,8 +802,9 @@ fix_theta_renumbering <- function(modelcode, theta_numbers_to_remove, log_functi
 #' @param models_folder Character. Models directory
 #' @param idcol Character. ID column name
 #' @param overwrite Logical. Overwrite existing model if present
-#' @param lookup_file Character or NULL. Optional path to lookup YAML for
-#'   categorical labels. If NULL, defaults to data/spec/lookup.yaml.
+#' @param lookup_file Character or NULL. Accepted for compatibility; categorical
+#'   THETA names keep the numeric level (beta_SEX_CL_2) and reports decode it
+#'   through the lookup, so this does not change the model.
 #'
 #' @return List with status, model_name, model_path, log_file, covariates_added
 #' @export
