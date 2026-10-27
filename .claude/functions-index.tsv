@@ -64,7 +64,7 @@ forest-plots.R	sample_individual_thetas	sample_individual_thetas(model, models_f
 forest-plots.R	simulate_scenario_profiles	simulate_scenario_profiles(param_sets, mod, dose, start=0, end=24, delta=0.1, verbose=TRUE)	yes	31630a0d753dcd881de914a0e7da8ec4
 forest-plots.R	stack_scenario_parameters	stack_scenario_parameters(param_sets, model=NULL, models_folder="models")	yes	da26f92b4e4ccc205a18c4c785794280
 forest-plots.R	theme_forest	theme_forest(base_size=12, base_family="")	yes	68e701b8b48021705855ea61571806f8
-full_scm_search.R	run_automated_scm_testing	run_automated_scm_testing(search_state, base_model_id=NULL, scm_type=c("standard", "selective"), starting_phase=c("forward", "backward"), full_scm=TRUE, forward_p_value=NULL, backward_p_value=NULL, rse_threshold=NULL, require_cov_step=TRUE, auto_submit=TRUE, auto_retry=TRUE, save_checkpoints=TRUE, final_testing=TRUE)	yes	2f92d9ecbce106fe64c2f1010e577e1d
+full_scm_search.R	run_automated_scm_testing	run_automated_scm_testing(search_state, base_model_id=NULL, scm_type=c("standard", "selective"), starting_phase=c("forward", "backward"), full_scm=TRUE, forward_p_value=NULL, backward_p_value=NULL, rse_threshold=NULL, require_cov_step=TRUE, auto_submit=TRUE, auto_retry=TRUE, save_checkpoints=TRUE, final_testing=TRUE)	yes	490c7adf17a1dd4ad6449049fd26a68d
 imports.R	%||%	%||%(x, y)	yes	b959f458d556f37040e6dbaec85cd11b
 initialization.R	.apply_starting_model_number	.apply_starting_model_number(search_state, starting_model_number, base_model_path)	no	ae475e51b80eca5f2b97fbf5d51710ee
 initialization.R	.same_data_file	.same_data_file(model_data_file, user_data_file)	no	8eff347576b3c7e22ae3161ecb5347de
@@ -114,7 +114,7 @@ plot_nonmem_iterations.R	read_ext_iterations	read_ext_iterations(ext_file)	yes	9
 recovery-actions.R	.format_theta_init_value	.format_theta_init_value(value, template)	no	da7201b7d4911a0b8e65d2beaa55f90c
 recovery-actions.R	.perturb_theta_init	.perturb_theta_init(spec)	no	bc8e6901462b7953537dde6a8af278f7
 recovery-actions.R	.theta_init_is_fixed	.theta_init_is_fixed(spec)	no	71d66c79f64e0008942b19a14640fbe7
-recovery-actions.R	adjust_theta_for_covariate	adjust_theta_for_covariate(search_state, model_name, covariate_tag, dry_run=FALSE)	yes	2cd983540f6a5ed16329822782303b26
+recovery-actions.R	adjust_theta_for_covariate	adjust_theta_for_covariate(search_state, model_name, covariate_tag, dry_run=FALSE)	yes	68b1fd419b9eb3e39e2df6d1c5479f72
 recovery-actions.R	create_retry_model	create_retry_model(search_state, original_model_name, issue_type="estimation_error")	yes	bbfb3b91c296fbb191308ca7bff01376
 recovery-actions.R	handle_failed_retry	handle_failed_retry(search_state, retry_model_name, exclusion_reason="retry_failed")	yes	2b49eb1205204959fab965569ebb2482
 recovery-actions.R	process_estimation_issues	process_estimation_issues(search_state, models_with_issues)	yes	290a1d9c65aafe0d7ad94d31380765f3
