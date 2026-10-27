@@ -294,7 +294,7 @@ R >= 4.2 on Windows and on Linux/Metworx).
 - **Type:** optimisation · **Severity:** cosmetic · **Verified:** confirmed (trace count; checker by reading)
 - **Proposed fix:** return the lines / `has_stop_time` from `read_nonmem_lst` and reuse them; let
   `extract_nonmem_timestamps` take pre-read lines; drop the second timestamp pass. Overlaps STA-10.
-- **Status:** open — low priority
+- **Status:** fixed in 6df29b2 (2026-10-26)
 
 #### NIO-06 — `read_ext_file` reports a finished run's OFV as 0 and SAEM burn-in as completed
 - **Location:** R/monitoring-files.R:104-122, 154
@@ -307,7 +307,7 @@ R >= 4.2 on Windows and on Linux/Metworx).
 - **Location:** R/file-io.R:586-589
 - **Type:** bug · **Severity:** cosmetic (`submission_time`/`completion_time` only) · **Verified:** confirmed (both)
 - **Proposed fix:** also strip `\s+[+-]\d{2,4}`.
-- **Status:** open — low priority
+- **Status:** fixed in 6df29b2 (2026-10-26)
 
 ### Area 3 — Search setup and state
 Reviewed by Fable (`D:\R\tmp\review-STA\`), re-checked by Opus (`D:\R\tmp\verify-STA\`).
@@ -369,7 +369,7 @@ Reviewed by Fable (`D:\R\tmp\review-STA\`), re-checked by Opus (`D:\R\tmp\verify
   empty. Require a non-NA REFERENCE only for built-in formulas or expressions that use `ref` — not for
   expressions like `EMAX*cov/(EC50+cov)` (checker).
 - **Must keep:** baseline-only REFERENCE for time-dependent covariates.
-- **Status:** open
+- **Status:** fixed in 6df29b2 (2026-10-26)
 
 #### STA-07 — `create_retry_model` writes status "error", which nothing treats as terminal
 - **Location:** R/recovery-actions.R:72, 203; R/utilities.R:197-199
@@ -389,20 +389,20 @@ Reviewed by Fable (`D:\R\tmp\review-STA\`), re-checked by Opus (`D:\R\tmp\verify
   each column gets a default of its own type). The missing action/phase/created_by_search columns are
   already recorded (FUNCTIONS.md:44).
 - **Proposed fix:** heal from the canonical empty schema.
-- **Status:** open — low priority
+- **Status:** fixed in 6df29b2 (2026-10-26)
 
 #### STA-09 — `add_covariates_to_search(tags_yaml_path = …)` writes one file and re-reads another
 - **Location:** R/initialization.R:287-296, 1487-1500
 - **Type:** bug · **Severity:** cosmetic (fails loudly) · **Verified:** confirmed by reading
 - **Proposed fix:** `load_tags` takes the path; pass `tags_yaml_path` through. (The hardcoded path is listed in FUNCTIONS.md:81.)
-- **Status:** open — low priority
+- **Status:** fixed in 6df29b2 (2026-10-26)
 
 #### STA-10 — `read_all_model_files` re-reads the listing and carries dead branches
 - **Location:** R/validation.R:92-170
 - **Type:** simplification · **Severity:** cosmetic · **Verified:** confirmed by reading
 - **Evidence:** second listing read; its `read_error` branch only fires on a race; an inner
   `if (!ext_results$found)` is unreachable. Fold together with NIO-05.
-- **Status:** open — low priority
+- **Status:** fixed in 6df29b2 (2026-10-26)
 
 ### Area 2 — Model editing
 Reviewed by Fable (`D:\R\tmp\review-MOD\`), re-checked by Opus (`D:\R\tmp\verify-MOD\`); the real
@@ -591,7 +591,7 @@ Reviewed by Fable (`D:\R\tmp\review-REC\`), re-checked by Opus (`D:\R\tmp\verify
 - **Proposed fix:** treat infinite (and very large) bounds as absent so the one-sided/unbounded rules
   apply; move a 0 init to a small value inside the bounds.
 - **Must keep:** the four documented rules and test-theta-init-perturbation.R.
-- **Status:** open — low priority
+- **Status:** fixed in 6df29b2 (2026-10-26)
 
 #### REC-06 — `detect_estimation_problems` and `generate_recovery_report` use states the search never writes
 - **Location:** R/recovery-detection.R:44-48, 92; R/monitoring-files.R:144-154
@@ -765,7 +765,7 @@ Reviewed by Fable (`D:\R\tmp\review-UTL\`), re-checked by Opus (`D:\R\tmp\verify
   one; `create_retry_model` would fail first) or a retry of a retry (only via a direct
   `create_retry_model` call). Removal retries are already suppressed.
 - **Proposed fix:** resolve retries in a bounded loop; fall back to the original's phase.
-- **Status:** open — low priority
+- **Status:** fixed in 6df29b2 (2026-10-26)
 
 #### UTL-04 — `globalVariables` is out of sync (R CMD check NOTEs)
 - **Location:** R/CovariateSearchr.R:46-76; R/covariate-boxplots.R:394-424; R/forest-plots.R:1095-1196
@@ -778,13 +778,13 @@ Reviewed by Fable (`D:\R\tmp\review-UTL\`), re-checked by Opus (`D:\R\tmp\verify
 - **Location:** R/utilities.R:65, 493 · **Type:** bug · **Severity:** cosmetic · **Verified:** confirmed (both)
 - **Evidence:** a length-2 tag errors; a factor tag returns NA; NA p or df → "missing value where
   TRUE/FALSE needed". Package callers catch these and fall back to df 1.
-- **Status:** open — low priority
+- **Status:** fixed in 6df29b2 (2026-10-26)
 
 #### UTL-07 — `generate_tags_from_covariate_search` has its own CSV-only loader
 - **Location:** R/initialization.R:1137-1153 · **Type:** simplification · **Severity:** cosmetic · **Verified:** confirmed (checker)
 - **Evidence:** an `.rds` table errors with "Missing required columns". Switching to `.load_if_path`
   would reject extensions other than .csv/.rds, which the current loader accepts as CSV — mention it.
-- **Status:** open — low priority
+- **Status:** fixed in 6df29b2 (2026-10-26)
 
 ### Area 7 — Simulation and exposure plots
 Reviewed by Fable (`D:\R\tmp\review-SIM\`), re-checked by Opus (`D:\R\tmp\verify-SIM\`); no mocks.
