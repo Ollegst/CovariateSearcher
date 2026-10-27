@@ -149,7 +149,7 @@ independent Opus pass (`D:\R\tmp\verify-scm\`). Verdicts below are the checker's
   `run_scm_selective_forward(resume = TRUE)` and let it decide. Telling redemption rows apart
   needs a new `phase` value — a vocabulary change touching the display registry; flag, not do.
 - **Must keep:** standard-SCM resume (converged → backward); the backward resume path.
-- **Status:** open
+- **Status:** fixed in d791a20 (2026-10-26)
 
 #### SCM-04 — After an initial-backward error the search continues on a stale model counter
 - **Location:** R/full_scm_search.R:176-197; R/model-modification.R:90-95
@@ -542,7 +542,7 @@ Reviewed by Fable (`D:\R\tmp\review-REC\`), re-checked by Opus (`D:\R\tmp\verify
   (it would block forever).
 - **Must keep:** a model whose run directory exists and failed stays failed; a submitted job with a
   run directory but no output already reads `in_progress` and blocks.
-- **Status:** open
+- **Status:** fixed in d791a20 (2026-10-26)
 
 #### REC-02 — One stray `run<N>` folder without a `.yaml` makes every resume crash
 - **Location:** R/resume-reconstruct.R:20-23, 155
@@ -563,7 +563,7 @@ Reviewed by Fable (`D:\R\tmp\review-REC\`), re-checked by Opus (`D:\R\tmp\verify
 - **Proposed fix:** register `run<N>001` folders whose `run<N>` is in the database (never one whose
   original is missing); when `auto_retry`, retry eligible failed last-step rows before evaluating.
 - **Must keep:** retries out of the model counter; removal models never retried.
-- **Status:** open
+- **Status:** fixed in d791a20 (2026-10-26)
 
 #### REC-04 — Excluding a covariate after a failed retry never takes effect (tag names compared with tag values)
 - **Location:** R/scm-algorithm.R:45-61, 142-144; R/scm-execution.R:85; producer R/recovery-actions.R:709-720
