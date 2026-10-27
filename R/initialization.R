@@ -1121,7 +1121,77 @@ validate_param_transformations <- function(covariate_search, data_file, id_col,
     )
   }
 
+  # Every parameter, not only covariate targets: forest plots and scenario
+  # simulations read the typical value through TV_<param>, so a log/MU form
+  # must go through it; and NM-TRAN only knows ENDIF.
+  form_issues <- c(.typical_value_form_issues(modelcode), .endif_spelling_issues(modelcode))
+  if (length(form_issues) > 0) {
+    stop("The base model's $PK does not follow the required forms:\n",
+         paste0("  - ", form_issues, collapse = "\n"), call. = FALSE)
+  }
+
   invisible(TRUE)
+}
+
+
+# Log-normal parameters written P = EXP(<terms> + ETA): the forest plots and
+# scenario simulations read the typical value through TV_<param>. Among the
+# additive terms inside the EXP that are $PK variables (not data items, not
+# ETA-based terms such as IOV), at least one must be TV_P (or TVP) or be
+# defined as <name> = LOG(TV_P) with a TV_P line (the MU form). Inline THETA
+# expressions (P = EXP(THETA(n) + ETA)) need nothing; other right-hand sides
+# (TV_P * EXP(ETA), TVCL * EXP(ETA * SC), logit forms) are not this shape and
+# are left alone. Returns one message per problem.
+#' @keywords internal
+#' @noRd
+.typical_value_form_issues <- function(modelcode) {
+  code <- sub(";.*$", "", modelcode)
+  assign_re <- "^\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*=\\s*(.*)$"
+  is_assign <- grepl(assign_re, code) & !.is_record_line(code)
+  defs <- function(sym) code[is_assign & grepl(paste0("^\\s*", sym, "\\s*="), code, ignore.case = TRUE)]
+  squash <- function(s) toupper(gsub("\\s", "", s))
+  issues <- character(0)
+
+  for (ln in code[is_assign & grepl("\\bETA\\(", code, ignore.case = TRUE)]) {
+    p <- sub(assign_re, "\\1", ln)
+    rhs <- trimws(sub(assign_re, "\\2", ln))
+    inner <- .exp_inner_containing_eta(rhs)
+    if (is.na(inner) || squash(rhs) != squash(paste0("EXP(", inner, ")"))) next
+
+    terms <- .split_depth0(inner, c("+", "-"))
+    terms <- terms[!grepl("\\bETA\\(", terms, ignore.case = TRUE)]
+    vars <- terms[grepl("^[A-Za-z_][A-Za-z0-9_]*$", terms)]
+    vars <- vars[vapply(vars, function(v) {
+      d <- defs(v)
+      length(d) > 0 && !any(grepl("\\bETA\\(", d, ignore.case = TRUE))
+    }, logical(1))]
+    if (length(vars) == 0) next
+
+    has_tv_line <- length(defs(paste0("TV_?", p))) > 0
+    passes <- vapply(vars, function(v) {
+      grepl(paste0("^TV_?", p, "$"), v, ignore.case = TRUE) ||
+        (has_tv_line && any(grepl(paste0("^\\s*", v, "\\s*=\\s*LOG\\(\\s*TV_?", p, "\\s*\\)\\s*$"),
+                                  defs(v), ignore.case = TRUE)))
+    }, logical(1))
+    if (!any(passes)) {
+      v <- vars[1]
+      issues <- c(issues, sprintf(
+        "%s = EXP(%s + ETA): name the typical value TV_%s, or define %s = LOG(TV_%s) with a TV_%s line",
+        p, v, p, v, p, p))
+    }
+  }
+  unique(issues)
+}
+
+
+# NM-TRAN abbreviated code knows ENDIF only; "END IF" is not NM-TRAN syntax.
+#' @keywords internal
+#' @noRd
+.endif_spelling_issues <- function(modelcode) {
+  code <- sub(";.*$", "", modelcode)
+  hit <- which(grepl("^\\s*END\\s+IF\\b", code, ignore.case = TRUE))
+  if (length(hit) == 0) return(character(0))
+  sprintf("line %d: 'END IF' is not NM-TRAN syntax - write ENDIF", hit)
 }
 
 #' Validate base model readiness for covariate search
