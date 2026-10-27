@@ -7,8 +7,10 @@ CovariateSearcher Package
 
 ``` r
 # Install from GitHub
-remotes::install_github("Ollegst/CovariateSearcher",
-                        ref = "feature/package-rebuild", dependencies = TRUE)
+# bbr and yspec are not on CRAN; install them from MPN first
+install.packages(c("bbr", "yspec"),
+                 repos = "https://mpn.metworx.com/snapshots/stable/2026-08-24")
+remotes::install_github("Ollegst/CovariateSearcher", dependencies = TRUE)
 
 library(CovariateSearcher)
 
