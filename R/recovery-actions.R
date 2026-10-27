@@ -281,6 +281,7 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
 #                  strictly inside the bounds ((0, 0.1, 3) -> (0, 1.55, 3)).
 #   * one-sided -> sign flip if it stays inside the single bound, otherwise the
 #                  midpoint of the bounded side ((0, 0.1) -> (0, 0.05)).
+#   An infinite bound, or one of 1E6 or beyond, counts as no bound.
 
 # Is this initial estimate FIXED? Reads the spec only (text before the first
 # ";"), so a "FIX" appearing in a comment cannot trigger it.
@@ -335,6 +336,13 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
 
   init <- suppressWarnings(as.numeric(init_str))
   if (is.na(init)) return(NA_character_)
+
+  # An infinite bound, or one at NONMEM's conventional stand-in for infinity
+  # (1E6 or beyond), is no bound: (-INF, 0.1, INF) behaves as unbounded and
+  # (0, 0.1, 1E6) as one-sided, instead of a midpoint at infinity or 500000.
+  no_bound <- function(b) is.na(b) || !is.finite(b) || abs(b) >= 1e6
+  if (no_bound(lower)) lower <- NA_real_
+  if (no_bound(upper)) upper <- NA_real_
 
   flipped <- -init
 

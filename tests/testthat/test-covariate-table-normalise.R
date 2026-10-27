@@ -46,7 +46,8 @@ test_that("REFERENCE is stored as a number", {
   expect_true(is.numeric(out$REFERENCE))
   expect_equal(out$REFERENCE, c(75, 1))
   expect_error(validate(base_table(REFERENCE = c("seventy", "1"))), "REFERENCE must be numeric")
-  expect_true(is.na(validate(base_table(REFERENCE = c(NA, "1")))$REFERENCE[1]))
+  expect_true(is.na(validate(base_table(REFERENCE = c(NA, "1"),
+                                        FORMULA = c("EMAX*cov/(EC50+cov)", "linear")))$REFERENCE[1]))
 })
 
 test_that("a user expression using ref is written with a numeric reference", {
@@ -89,4 +90,39 @@ test_that("a categorical row with no REFERENCE stops", {
   # Phase 3 audit: it became NA and was written as IF(SEX.EQ.NA).
   expect_error(validate(base_table(REFERENCE = c("75", NA))), "no REFERENCE.*SEX")
   expect_error(validate(base_table(REFERENCE = c("75", ""))), "no REFERENCE.*SEX")
+})
+
+test_that("a covariate INIT of 0 must be FIXED", {
+  t <- base_table()
+  t$INIT <- c("0", NA)
+  expect_error(validate(t), "initial estimate of 0 that is not FIXED")
+  t$INIT <- c("(-1, 0, 1)", NA)
+  expect_error(validate(t), "initial estimate of 0 that is not FIXED")
+  t$INIT <- c("0 FIX", NA)
+  expect_equal(nrow(validate(t)), 2)
+  t$INIT <- c("0.01", NA)
+  expect_equal(nrow(validate(t)), 2)
+})
+
+test_that("a continuous formula that uses the reference needs one", {
+  # STA-06: a blank REFERENCE was written into the model as (WT/NA).
+  expect_error(validate(base_table(REFERENCE = c(NA, "1"))), "uses the reference but have no REFERENCE")
+  expect_error(validate(base_table(REFERENCE = c(NA, "1"),
+                                   FORMULA = c("1 + SLOPE*log(cov/ref)", "linear"))),
+               "uses the reference")
+})
+
+test_that("a covariate with no baseline record stops with a clear message", {
+  # STA-06: no TIME == 0 rows gave REFERENCE NA (continuous) or an opaque
+  # "values must be length 1" error (categorical).
+  d <- data.frame(ID = c(1, 1, 2, 2), TIME = c(0.5, 1, 0.5, 1),
+                  WT = c(70, 70, 80, 80), SEX = c(1, 1, 2, 2))
+  for (cov in c("WT", "SEX")) {
+    expect_error(
+      suppressWarnings(build_covariate_reference_table(
+        d, id = "ID", time = "TIME", Parameter = "CL", Covariate = cov,
+        Category = if (cov == "WT") "con" else "cat",
+        Formula = if (cov == "WT") "power" else "linear", yaml_data = list())),
+      "no non-missing value at TIME == 0")
+  }
 })

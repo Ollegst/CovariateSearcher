@@ -11,7 +11,7 @@ generate_tags_from_covariate_search(
 )
 }
 \arguments{
-\item{covariate_search}{Either a data frame or path to the covariate search CSV file}
+\item{covariate_search}{A data frame, or the path to a .csv or .rds file holding it}
 
 \item{tags_yaml_path}{Path to tags.yaml file (default: "data/spec/tags.yaml")}
 

@@ -48,3 +48,12 @@ test_that("the new value is rendered without losing precision", {
   expect_equal(.format_theta_init_value(0.05, "0.1"), "0.05")
   expect_equal(.format_theta_init_value(1.55, "0.1"), "1.55")
 })
+
+test_that("infinite and 1E6-sized bounds count as no bound", {
+  # REC-05: (-INF, 0.1, INF) gave no change (an identical retry) and
+  # (0, 0.1, 1E6) jumped to 500000.
+  expect_equal(.perturb_theta_init("(-INF, 0.1, INF)"), "(-INF, -0.1, INF)")
+  expect_equal(.perturb_theta_init("(0, 0.1, INF)"), "(0, 0.05, INF)")
+  expect_equal(.perturb_theta_init("(0, 0.1, 1E6)"), "(0, 0.05, 1E6)")
+  expect_equal(.perturb_theta_init("(-1000000, 0.5, 3)"), "(-1000000, -0.5, 3)")
+})

@@ -337,10 +337,18 @@ extract_covariate_name_from_tag <- function(tag) {
     rep(NA_character_, length(idx))
   }
 
-  is_retry <- !is.na(action) & action == "retry"
-  if (any(is_retry) && "original_model" %in% names(db)) {
-    origin_idx <- match(db$original_model[idx[is_retry]], db$model_name)
-    action[is_retry] <- db$action[origin_idx]
+  # Follow a retry back to the model it retries, also through a retry of a
+  # retry; the bound stops a malformed self-referencing chain. The phase used
+  # below is that of the row the chain ends on.
+  row_idx <- idx
+  if ("original_model" %in% names(db)) {
+    for (step in seq_len(5)) {
+      is_retry <- !is.na(action) & action == "retry"
+      if (!any(is_retry)) break
+      origin_idx <- match(db$original_model[row_idx[is_retry]], db$model_name)
+      row_idx[is_retry] <- origin_idx
+      action[is_retry] <- db$action[origin_idx]
+    }
   }
 
   # Fall back to the phase only where the action could not answer, so the sign a
@@ -348,7 +356,7 @@ extract_covariate_name_from_tag <- function(tag) {
   unresolved <- is.na(action)
   if (any(unresolved) && "phase" %in% names(db)) {
     action[unresolved] <- ifelse(
-      .scm_phase_is_backward(db$phase[idx][unresolved]),
+      .scm_phase_is_backward(db$phase[row_idx][unresolved]),
       "remove_covariate", action[unresolved]
     )
   }
@@ -558,13 +566,13 @@ extract_covariate_name_from_tag <- function(tag) {
 pvalue_to_threshold <- function(p_value, df = 1) {
 
   # Input validation
-  if (!is.numeric(p_value) || length(p_value) != 1) {
+  if (!is.numeric(p_value) || length(p_value) != 1 || is.na(p_value)) {
     stop("p_value must be a single numeric value")
   }
   if (p_value <= 0 || p_value >= 1) {
     stop("p_value must be between 0 and 1")
   }
-  if (!is.numeric(df) || length(df) != 1 || df < 0) {
+  if (!is.numeric(df) || length(df) != 1 || is.na(df) || df < 0) {
     stop("df must be a non-negative integer")
   }
 
@@ -608,6 +616,15 @@ pvalue_to_threshold <- function(p_value, df = 1) {
 #' @return Integer. Degrees of freedom (0 for a fully-FIX covariate).
 #' @export
 calculate_covariate_df <- function(covariate_name, covariate_search, tag = NULL) {
+  # A factor reads as its level text; anything but one name is a caller error.
+  covariate_name <- as.character(covariate_name)
+  if (length(covariate_name) != 1 || is.na(covariate_name)) {
+    stop("covariate_name must be a single covariate name", call. = FALSE)
+  }
+  if (!is.null(tag)) {
+    tag <- as.character(tag)
+    if (length(tag) != 1) stop("tag must be NULL or a single tag name", call. = FALSE)
+  }
 
   # Find covariate in search table
   cov_row <- covariate_search[covariate_search$COVARIATE == covariate_name, , drop = FALSE]

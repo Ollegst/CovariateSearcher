@@ -319,10 +319,10 @@ initialize_covariate_search <- function(base_model_path,
 #' @title Load covariate tags from YAML configuration
 #' @description Loads the tags.yaml file containing covariate mappings
 #' @param search_state List containing search state
+#' @param tags_file Path to the tags file (default: "data/spec/tags.yaml")
 #' @return Updated search_state with tags loaded
 #' @export
-load_tags <- function(search_state) {
-  tags_file <- file.path("data", "spec", "tags.yaml")
+load_tags <- function(search_state, tags_file = file.path("data", "spec", "tags.yaml")) {
   if (file.exists(tags_file)) {
     search_state$tags <- yaml::read_yaml(tags_file)
     cat("Tags loaded from:", tags_file, "\n")
@@ -479,6 +479,12 @@ build_covariate_reference_table <- function(data, id, time,
     status <- cov_status[[cov]]
     x_baseline <- baseline[[cov]]
     x_baseline <- x_baseline[!is.na(x_baseline)]
+    if (length(x_baseline) == 0) {
+      stop("Covariate '", cov, "' has no non-missing value at ", time, " == 0, so its ",
+           "REFERENCE (the baseline median, or the most common baseline level) ",
+           "cannot be computed. Check the dataset, or supply REFERENCE yourself.",
+           call. = FALSE)
+    }
 
     if (status == "con") {
       list(reference = as.character(round(median(x_baseline), 2)), levels = NA_character_)
@@ -615,6 +621,9 @@ validate_covariate_search_table <- function(covariate_search, data_file) {
   # parsed as an expression of bare parameter symbols and written into $PK as a
   # factor with no covariate in it.
   covariate_search$FORMULA <- as.character(covariate_search$FORMULA)
+  # Whether each row's formula uses the reference: every built-in does; an
+  # expression only when it contains `ref` (e.g. not "EMAX*cov/(EC50+cov)").
+  uses_ref <- logical(nrow(covariate_search))
   for (i in seq_len(nrow(covariate_search))) {
     status_i  <- covariate_search$STATUS[i]
     formula_i <- trimws(covariate_search$FORMULA[i])
@@ -634,6 +643,7 @@ validate_covariate_search_table <- function(covariate_search, data_file) {
         ") nor an expression in `cov` (e.g. \"EMAX*cov/(EC50+cov)\")."
       )
     }
+    uses_ref[i] <- builtin || "ref" %in% all.vars(expr_def$expr)
   }
 
   # REFERENCE as a number: it is written into $PK, and a character value is
@@ -655,6 +665,13 @@ validate_covariate_search_table <- function(covariate_search, data_file) {
     stop("Categorical covariate(s) with no REFERENCE in row(s) ",
          paste(which(no_ref), collapse = ", "), ": ",
          paste(unique(covariate_search$COVARIATE[no_ref]), collapse = ", "))
+  }
+  # A continuous formula that uses the reference would be written as (WT/NA).
+  no_ref_con <- covariate_search$STATUS == "con" & uses_ref & is.na(ref_num)
+  if (any(no_ref_con)) {
+    stop("Continuous covariate(s) whose FORMULA uses the reference but have no REFERENCE in row(s) ",
+         paste(which(no_ref_con), collapse = ", "), ": ",
+         paste(unique(covariate_search$COVARIATE[no_ref_con]), collapse = ", "))
   }
 
   # cov_to_test carries the beta_ prefix the tags and the model file use; a
@@ -865,6 +882,20 @@ validate_covariate_search_table <- function(covariate_search, data_file) {
             "  Valid names: ", paste(theta_names, collapse = ", "), "."
           )
         }
+      }
+
+      # Each initial estimate may be 0 only when FIXED.
+      specs <- if (named) {
+        trimws(sub("^[^=]*=", "", trimws(strsplit(init_val, ";", fixed = TRUE)[[1]])))
+      } else {
+        init_val
+      }
+      if (any(vapply(specs[nzchar(specs)], .theta_init_is_unfixed_zero, logical(1)))) {
+        stop(
+          "Row ", i, ": INIT for covariate '", cov_i, "' on parameter '", param_i,
+          "' has an initial estimate of 0 that is not FIXED: '", init_val, "'.\n",
+          "  Use a non-zero start, or FIX it (e.g. \"0 FIX\")."
+        )
       }
     }
   }
@@ -1240,7 +1271,7 @@ initialize_search_config <- function(search_state, lookup_file = NULL,
 #' based on the covariate search table. Preserves existing content and only
 #' updates the covariates section.
 #'
-#' @param covariate_search Either a data frame or path to the covariate search CSV file
+#' @param covariate_search A data frame, or the path to a .csv or .rds file holding it
 #' @param tags_yaml_path Path to tags.yaml file (default: "data/spec/tags.yaml")
 #' @param verbose Logical. Print progress messages (default: TRUE)
 #' @return Logical. TRUE if successful, FALSE otherwise
@@ -1251,23 +1282,11 @@ generate_tags_from_covariate_search <- function(covariate_search,
 
   if (verbose) cat("📝 Generating tags.yaml from covariate search table...\n")
 
-  # Handle both data frame and file path inputs
-  if (is.character(covariate_search)) {
-    # It's a file path
-    if (!file.exists(covariate_search)) {
-      stop(sprintf("Covariate search file not found: %s", covariate_search))
-    }
-
-    covariate_search_df <- tryCatch({
-      readr::read_csv(covariate_search, show_col_types = FALSE)
-    }, error = function(e) {
-      stop(sprintf("Failed to read covariate search file: %s", e$message))
-    })
-  } else if (is.data.frame(covariate_search)) {
-    # It's already a data frame
-    covariate_search_df <- covariate_search
-  } else {
-    stop("covariate_search must be either a data frame or a file path")
+  # A data frame, or a path to a .csv or .rds file, loaded the same way as every
+  # other table argument in the package.
+  covariate_search_df <- .load_if_path(covariate_search, "covariate_search")
+  if (!is.data.frame(covariate_search_df)) {
+    stop("covariate_search must be a data frame or a path to a .csv or .rds file")
   }
 
   if (verbose) cat(sprintf("  Found %d covariates in search table\n", nrow(covariate_search_df)))
@@ -1609,7 +1628,7 @@ add_covariates_to_search <- function(search_state, additions,
   )
 
   search_state$covariate_search <- merged
-  search_state <- load_tags(search_state)
+  search_state <- load_tags(search_state, tags_yaml_path)
 
   missing_tags <- setdiff(new_tags, names(search_state$tags))
   if (length(missing_tags) > 0) {

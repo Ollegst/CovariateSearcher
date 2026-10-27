@@ -4,10 +4,12 @@
 \alias{load_tags}
 \title{Load covariate tags from YAML configuration}
 \usage{
-load_tags(search_state)
+load_tags(search_state, tags_file = file.path("data", "spec", "tags.yaml"))
 }
 \arguments{
 \item{search_state}{List containing search state}
+
+\item{tags_file}{Path to the tags file (default: "data/spec/tags.yaml")}
 }
 \value{
 Updated search_state with tags loaded

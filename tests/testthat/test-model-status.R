@@ -381,3 +381,61 @@ test_that("an unfinished run keeps its last termination line as the reason", {
   expect_equal(probe$status, "incomplete")
   expect_match(probe$error_message, "ROUNDING ERRORS")
 })
+
+test_that("one status check reads the listing once", {
+  # NIO-05: a check read the same .lst several times (find it, Stop Time,
+  # timestamps).
+  models_dir <- setup_finished_run()
+  reads <- 0L
+  real_reader <- .read_listing_lines
+  local_mocked_bindings(.read_listing_lines = function(...) {
+    reads <<- reads + 1L
+    real_reader(...)
+  })
+  st <- list(models_folder = models_dir, search_config = list(require_cov_step = TRUE),
+             search_database = data.frame(model_name = "run1", status = "in_progress",
+                                          stringsAsFactors = FALSE))
+  invisible(capture.output(st <- update_model_status_from_files(st, "run1", force = TRUE)))
+  expect_equal(st$search_database$status, "completed")
+  expect_equal(reads, 1L)
+})
+
+test_that("timestamps with a numeric time zone parse", {
+  # NIO-07: "+03" / "-0500" left both times NA.
+  for (z in c("+03", "-0500")) {
+    md <- setup_finished_run(start_line = sprintf("Wed Jul 29 14:30:08 %s 2026", z),
+                             stop_line  = sprintf("Sat 25 Jul 2026 06:50:30 AM %s", z))
+    ts <- extract_nonmem_timestamps("run1", md)
+    expect_false(is.na(ts$start_time))
+    expect_false(is.na(ts$stop_time))
+  }
+})
+
+test_that("self-heal adds missing columns with their real types", {
+  # STA-08: a healed completion_time became character and step_number double.
+  models_dir <- setup_finished_run()
+  st <- list(models_folder = models_dir, search_config = list(),
+             search_database = data.frame(model_name = "run1", status = "in_progress",
+                                          stringsAsFactors = FALSE))
+  invisible(capture.output(st <- update_model_status_from_files(st, "run1", force = TRUE)))
+  db <- st$search_database
+  expect_s3_class(db$submission_time, "POSIXct")
+  expect_s3_class(db$completion_time, "POSIXct")
+  expect_type(db$step_number, "integer")
+  expect_type(db$ofv, "double")
+  expect_identical(db$excluded_from_step, FALSE)
+})
+
+test_that("a finished model gets NONMEM's own start time from the status check", {
+  # diff-auditor (4.8): the monitoring loop skips a model once its stop time
+  # is set, so a model that finished between two checks kept the R-side
+  # submission time. The status check now records the start time with the stop.
+  models_dir <- setup_finished_run(start_line = "Wed Jul 29 14:30:08 EDT 2026")
+  st <- list(models_folder = models_dir, search_config = list(),
+             search_database = data.frame(model_name = "run1", status = "in_progress",
+                                          submission_time = as.POSIXct("2000-01-01 00:00:00"),
+                                          stringsAsFactors = FALSE))
+  invisible(capture.output(st <- update_model_status_from_files(st, "run1", force = TRUE)))
+  expect_equal(format(st$search_database$submission_time, "%Y-%m-%d %H:%M"), "2026-07-29 14:30")
+  expect_false(is.na(st$search_database$completion_time))
+})

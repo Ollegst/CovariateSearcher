@@ -4,12 +4,19 @@
 \alias{extract_nonmem_timestamps}
 \title{Parse LST file to extract actual NONMEM execution timestamps}
 \usage{
-extract_nonmem_timestamps(model_name, models_folder = "models")
+extract_nonmem_timestamps(
+  model_name,
+  models_folder = "models",
+  lst_lines = NULL
+)
 }
 \arguments{
 \item{model_name}{Character. Model name (e.g., "run1")}
 
 \item{models_folder}{Character. Path to models folder (default: "models")}
+
+\item{lst_lines}{Character vector or NULL. The listing's lines when the caller
+has already read them; NULL (default) reads the listing here.}
 }
 \value{
 List with start_time and stop_time (POSIXct or NA)

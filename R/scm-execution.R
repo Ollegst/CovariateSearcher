@@ -406,10 +406,13 @@ submit_and_wait_for_step <- function(search_state, model_names, step_name,
     # Update all model statuses from NONMEM files
     search_state <- update_all_model_statuses(search_state)
 
-    # Update submission and completion times with actual NONMEM timestamps
+    # Update submission and completion times with actual NONMEM timestamps. A
+    # model whose stop time is recorded is finished, so its listing is not read
+    # again on later checks.
     for (model_name in active_monitoring_list) {
       db_idx <- which(search_state$search_database$model_name == model_name)
-      if (length(db_idx) > 0) {
+      if (length(db_idx) > 0 &&
+          is.na(search_state$search_database$completion_time[db_idx[1]])) {
         timestamps <- extract_nonmem_timestamps(model_name, search_state$models_folder)
 
         if (!is.na(timestamps$start_time)) {

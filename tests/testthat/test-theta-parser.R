@@ -140,3 +140,22 @@ test_that("apply_covariate_model keeps every THETA when a line holds several", {
   expect_named(out, c("ID", "THETA1", "THETA2"))
   expect_equal(out$THETA2, 30)
 })
+
+
+test_that("a THETA may start at 0 only when FIXED", {
+  # Owner rule (2026-10-27): NONMEM cannot estimate from an initial value of 0.
+  check <- function(theta_lines) {
+    f <- tempfile(fileext = ".ctl")
+    writeLines(c("$PROBLEM v", theta_lines, "$OMEGA", "0.1 ; IIV ; ; RATIO"), f)
+    validate_parameter_blocks(f)$valid
+  }
+  expect_false(check(c("$THETA", "0 ; SLOPE ; ; RATIO")))
+  expect_false(check(c("$THETA", "(-1, 0, 1) ; SLOPE ; ; RATIO")))
+  expect_false(check(c("$THETA 0.0 ; SLOPE ; ; RATIO")))
+  expect_true(check(c("$THETA", "0 FIX ; SLOPE ; ; RATIO")))
+  expect_true(check(c("$THETA", "(0, 0.1, 1) ; SLOPE ; ; RATIO")))   # lower bound 0 is fine
+  expect_true(check(c("$THETA", "(-1, 0, 1) FIX ; SLOPE ; ; RATIO")))
+  expect_true(.theta_init_is_unfixed_zero("0"))
+  expect_false(.theta_init_is_unfixed_zero("0FIX"))
+  expect_false(.theta_init_is_unfixed_zero("0.01"))
+})

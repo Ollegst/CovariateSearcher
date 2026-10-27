@@ -106,6 +106,25 @@ find_model_file <- function(base_path, extensions = c(".ctl", ".mod")) {
 }
 
 
+# Is this one THETA value an initial estimate of 0 that is not FIXED? NONMEM
+# cannot start estimating a parameter from 0, so such a value is only valid
+# fixed. `value_text` is one value: "0", "(0, 0, 1)", "(0)", "0 FIX".
+#' @keywords internal
+#' @noRd
+.theta_init_is_unfixed_zero <- function(value_text) {
+  value_text <- trimws(value_text)
+  if (grepl("\\bFIX(ED)?\\b|[0-9.]FIX", value_text, ignore.case = TRUE)) return(FALSE)
+  init <- if (grepl("^\\(", value_text)) {
+    parts <- trimws(strsplit(sub("^\\(([^)]*)\\).*$", "\\1", value_text), ",")[[1]])
+    if (length(parts) == 1L) parts[1] else parts[2]
+  } else {
+    regmatches(value_text, regexpr("^[-+]?(\\d+\\.?\\d*|\\.\\d+)([eEdD][-+]?\\d+)?", value_text))
+  }
+  if (length(init) == 0L) return(FALSE)
+  isTRUE(suppressWarnings(as.numeric(sub("[dD]", "e", init))) == 0)
+}
+
+
 # The annotation of a $THETA / $OMEGA / $SIGMA line, "value ; name ; unit ;
 # transform": fields split on ";" with empty ones kept, so a blank unit
 # ("; CL ; ; RATIO") does not shift the transform into its place, and anything
@@ -426,7 +445,9 @@ read_nonmem_lst <- function(model_path) {
       error_message = "",
       error_excerpt = "",
       has_issues = FALSE,
-      nmtran_error = FALSE
+      nmtran_error = FALSE,
+      has_stop_time = FALSE,
+      lines = lst_content   # returned so callers need not read the listing again
     )
 
     # Generalized status markers for better portability across NONMEM versions.
@@ -476,6 +497,7 @@ read_nonmem_lst <- function(model_path) {
     has_successful <- success_hit$found
     has_hard_failure <- hard_failure_hit$found
     has_stop_time <- stop_hit$found
+    result$has_stop_time <- has_stop_time
 
     # A run has finished only when nmfe has written "Stop Time:". Before that a
     # success or termination line may belong to an earlier $EST step, or the
@@ -685,24 +707,36 @@ get_model_covariates_from_files <- function(search_state, model_name) {
 #'   and stop time (line after "Stop Time:") when available.
 #' @param model_name Character. Model name (e.g., "run1")
 #' @param models_folder Character. Path to models folder (default: "models")
+#' @param lst_lines Character vector or NULL. The listing's lines when the caller
+#'   has already read them; NULL (default) reads the listing here.
 #' @return List with start_time and stop_time (POSIXct or NA)
 #' @export
-extract_nonmem_timestamps <- function(model_name, models_folder = "models") {
+extract_nonmem_timestamps <- function(model_name, models_folder = "models", lst_lines = NULL) {
 
-  # read_nonmem_lst() is the one resolver for where a model's output can be:
-  # inside the run directory, or beside the control stream.
-  lst_file_path <- read_nonmem_lst(file.path(models_folder, model_name))$file
-
-  if (is.null(lst_file_path) || !file.exists(lst_file_path)) {
-    return(list(
-      start_time = NA,
-      stop_time = NA,
-      error = "LST file not found"
-    ))
+  if (is.null(lst_lines)) {
+    # read_nonmem_lst() is the one resolver for where a model's output can be:
+    # inside the run directory, or beside the control stream. It has read the
+    # listing already, so its lines are reused.
+    lst_probe <- read_nonmem_lst(file.path(models_folder, model_name))
+    if (is.null(lst_probe$file) || !file.exists(lst_probe$file)) {
+      return(list(
+        start_time = NA,
+        stop_time = NA,
+        error = "LST file not found"
+      ))
+    }
+    if (identical(lst_probe$status, "read_error")) {
+      return(list(
+        start_time = NA,
+        stop_time = NA,
+        error = lst_probe$error_message %||% "Cannot read LST file"
+      ))
+    }
+    lst_lines <- lst_probe$lines
   }
 
   tryCatch({
-    lst_lines <- .read_listing_lines(lst_file_path)
+    if (is.null(lst_lines)) lst_lines <- character(0)
 
     if (length(lst_lines) == 0) {
       return(list(
@@ -729,9 +763,11 @@ extract_nonmem_timestamps <- function(model_name, models_folder = "models") {
     parse_nonmem_time <- function(line) {
       if (length(line) != 1L || is.na(line) || !nzchar(line)) return(NA)
 
+      # The zone is a name ("EDT") or a numeric offset ("+03", "-0500").
+      zone <- "([A-Z]{3,4}|[+-][0-9]{2,4})"
       candidates <- c(
-        trimws(gsub(" [A-Z]{3,4} ", " ", line)),      # zone sits mid-string
-        trimws(sub("\\s+[A-Z]{3,4}\\s*$", "", line))  # zone sits at the end
+        trimws(gsub(paste0(" ", zone, " "), " ", line)),            # zone mid-string
+        trimws(sub(paste0("\\s+", zone, "\\s*$"), "", line))         # zone at the end
       )
       formats <- c(
         "%a %b %d %H:%M:%S %Y",     # Wed Jul 29 14:30:08 2026

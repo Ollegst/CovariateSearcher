@@ -757,3 +757,18 @@ test_that("the results table reads an older database's removal rows as backward"
   labels <- tbl$Selected[tbl$Model %in% c("run20", "run21", "run22")]
   expect_true(all(labels %in% c("KEPT", "REMOVED")))
 })
+
+
+test_that("a retry of a retry resolves to the original's direction", {
+  # UTL-02: only one level of retry was followed.
+  st <- list(search_database = data.frame(
+    model_name = c("run5", "run5001", "run5001001"),
+    action = c("remove_covariate", "retry", "retry"),
+    phase = c("backward_elimination", "backward_elimination", "backward_elimination"),
+    original_model = c(NA, "run5", "run5001"),
+    stringsAsFactors = FALSE))
+  expect_equal(.is_removal_model(st, c("run5", "run5001", "run5001001")), c(TRUE, TRUE, TRUE))
+  # With no action column the phase answers, from the row the chain ends on.
+  st$search_database$action <- NULL
+  expect_equal(.is_removal_model(st, "run5001001"), TRUE)
+})

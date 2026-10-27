@@ -32,3 +32,15 @@ test_that("a non-numeric rse_threshold stops instead of becoming 50", {
   expect_silent(.check_rse_threshold(NULL))
   expect_silent(.check_rse_threshold(30))
 })
+
+test_that("exported helpers reject off-contract input with a clear message", {
+  # UTL-05: NA p or df gave "missing value where TRUE/FALSE needed"; a
+  # length-2 or factor covariate name failed or returned NA.
+  expect_error(pvalue_to_threshold(NA_real_), "single numeric value")
+  expect_error(pvalue_to_threshold(0.05, df = NA_real_), "non-negative integer")
+  cs <- data.frame(COVARIATE = "WT", PARAMETER = "CL", STATUS = "con", FORMULA = "power",
+                   LEVELS = NA, INIT = NA, cov_to_test = "beta_WT_CL", stringsAsFactors = FALSE)
+  expect_error(calculate_covariate_df(c("WT", "AGE"), cs), "single covariate name")
+  expect_error(calculate_covariate_df("WT", cs, tag = c("a", "b")), "single tag name")
+  expect_equal(calculate_covariate_df(factor("WT"), cs), 1L)
+})

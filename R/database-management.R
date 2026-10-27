@@ -165,7 +165,20 @@ load_search_state <- function(filename) {
 #' @return Updated search_state with an empty search database
 #' @export
 initialize_search_database_core <- function(search_state) {
-  search_state$search_database <- data.frame(
+  search_state$search_database <- .empty_search_database()
+  cat("Simplified search database initialized\n")
+  return(search_state)
+}
+
+
+# The search database's columns and their types, with no rows. The one schema:
+# initialize_search_database_core() starts from it, and
+# update_model_status_from_files() heals a missing column from it, so a healed
+# column has its real type (POSIXct times, integer step numbers).
+#' @keywords internal
+#' @noRd
+.empty_search_database <- function() {
+  data.frame(
     model_name = character(),
     step_description = character(),
     phase = character(),
@@ -187,8 +200,6 @@ initialize_search_database_core <- function(search_state) {
     created_by_search = logical(),
     stringsAsFactors = FALSE
   )
-  cat("Simplified search database initialized\n")
-  return(search_state)
 }
 
 

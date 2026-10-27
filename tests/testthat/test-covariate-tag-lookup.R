@@ -8,3 +8,25 @@ test_that("the lookup is exact first, then case-insensitive", {
   expect_equal(get_covariate_tag_from_name(st, "wt_cl"), "cov_cl_wt")
   expect_null(get_covariate_tag_from_name(st, "AGE_CL"))
 })
+
+test_that("load_tags reads the tags file it is given", {
+  # STA-09: add_covariates_to_search(tags_yaml_path = ...) wrote that file but
+  # load_tags always read data/spec/tags.yaml.
+  f <- tempfile(fileext = ".yaml")
+  writeLines('beta_WT_CL: "WT_CL"', f)
+  invisible(capture.output(st <- load_tags(list(), f)))
+  expect_equal(st$tags, list(beta_WT_CL = "WT_CL"))
+})
+
+test_that("tags can be generated from a covariate table saved as .rds", {
+  # UTL-07: the loader read every path as CSV, so an .rds table failed with
+  # "Missing required columns".
+  cs <- data.frame(cov_to_test = "beta_WT_CL", COVARIATE = "WT", PARAMETER = "CL",
+                   STATUS = "con", LEVELS = NA, FORMULA = "power", TIME_DEPENDENT = "No",
+                   stringsAsFactors = FALSE)
+  rds <- tempfile(fileext = ".rds")
+  saveRDS(cs, rds)
+  yml <- tempfile(fileext = ".yaml")
+  invisible(capture.output(generate_tags_from_covariate_search(rds, tags_yaml_path = yml, verbose = FALSE)))
+  expect_true(any(grepl('^beta_WT_CL: "WT_CL"', readLines(yml))))
+})
