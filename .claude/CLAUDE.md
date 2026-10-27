@@ -40,7 +40,9 @@ A `PreToolUse` hook ([.claude/hooks/guard-generated-files.ps1](hooks/guard-gener
 
 [.claude/FUNCTIONS.md](FUNCTIONS.md) maps every function in `R/` — signature, purpose, side effects, and call graph — plus hand-curated sections on cross-cutting hazards, duplicate implementations, and known bugs.
 
-**Read it before writing a new helper.** This package has ~130 functions across 29 files, many internal; the most common avoidable mistake here is reimplementing something that already exists. The hazard sections exist because several functions have names that misdescribe what they read.
+**Never read `.claude/FUNCTIONS.md` whole.** Search it (Grep), or read only the lines you need.
+
+**Consult it before writing a new helper.** This package has ~130 functions across 29 files, many internal; the most common avoidable mistake here is reimplementing something that already exists. The hazard sections exist because several functions have names that misdescribe what they read.
 
 To check whether it is current:
 

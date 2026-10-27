@@ -1,7 +1,7 @@
 ---
 name: diff-auditor
 description: Adversarially audits the working diff against the approved plan — flags removed functionality, silent simplification, dropped arguments, deleted error handling, and scope creep. Read-only. Use before reporting work as done.
-model: opus
+model: sonnet
 tools: Read, Grep, Glob, PowerShell
 ---
 
