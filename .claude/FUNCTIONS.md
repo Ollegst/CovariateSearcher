@@ -1,6 +1,6 @@
 # CovariateSearcher — Function Reference
 
-**What this is:** an agent-facing map of *every* function in `R/`, so future sessions don't have to re-read the whole codebase. Originally generated from a full read of the pre-refactor code (v0.1.30). **Last audited 2026-10-27 against v0.4.7: 30 files in `R/`, 186 top-level functions, 91 exports in NAMESPACE** (rows for every function whose body differs from `main` re-verified against source; other rows not re-read) — every defined function appears below. Keep it in sync as the modular reorg lands.
+**What this is:** an agent-facing map of *every* function in `R/`, so future sessions don't have to re-read the whole codebase. Originally generated from a full read of the pre-refactor code (v0.1.30). **Last audited 2026-10-27 against v0.5.0: 30 files in `R/`, 186 top-level functions, 91 exports in NAMESPACE** (rows for every function whose body differs from `main` re-verified against source; other rows not re-read) — every defined function appears below. Keep it in sync as the modular reorg lands.
 
 **Legend:** `Exp` ✓ = exported (`@export`), · = internal/documented-internal. *Side effects* flag file writes, `bbr::` calls, `<<-`, `stop()`, hardcoded paths. *Nested* = a closure defined inside another function (not top-level).
 
