@@ -85,9 +85,9 @@ by severity. Each fix: a failing test first, the old-vs-new comparison, `r-pkg-q
 
 | ID | Question |
 |---|---|
-| SCM-01 | Accept the fix? And on the "step k created models but none completed" exit, should redemption retry step k's failed covariates (today's Scenario A) or exclude them (Scenario B)? |
+| SCM-01 | Accept the fix? And on the "step k created models but none completed" exit, should redemption retry step k's failed covariates (today's Scenario A) or exclude them (Scenario B)? **Decided 2026-10-27:** redemption is a new selective search from the best model. Step 1 tests every covariate not in the best model and without a COMPLETED model on that base (failed ones are tested again, as redemption already uses `include_excluded = TRUE`); step 2+ tests only covariates significant in the previous step, on the new winner; continue while a step finds something significant. Implement by the parent-model rule rather than Scenario A/B step arithmetic. |
 | SCM-02 | Is a base that already carries covariates, run with `starting_phase = "forward"`, supported? If yes, final backward must not be skipped. |
-| SCM-06 + REC-04 | Should a covariate whose retry failed be excluded until redemption? Today exclusion never takes effect (REC-04), so SCM-06's fix alone would change nothing. |
+| SCM-06 + REC-04 | Should a covariate whose retry failed be excluded until redemption? Today exclusion never takes effect (REC-04), so SCM-06's fix alone would change nothing. **Decided 2026-10-27:** standard SCM keeps testing failed/excluded covariates at every step (`include_excluded = TRUE`, current behaviour — record in FUNCTIONS.md). Selective main steps keep `FALSE`. Redemption and the forward phase of SCM+ are new searches: their first step includes previously excluded covariates. Fix REC-04 (names vs names) so `FALSE` works. |
 | NIO-02 | Should "finished" mean `Stop Time:` is present (what monitoring uses)? That rejects base models from tools that do not write `Stop Time:` (only `nmfe` does). Alternative: align the other way. |
 
 ## Findings
@@ -121,7 +121,7 @@ independent Opus pass (`D:\R\tmp\verify-scm\`). Verdicts below are the checker's
   decide that is right, or set `last_created_step` only once step k has completed models.
 - **Must keep:** Scenario A on the :474 exit; Scenario B's exclusion of the last step's
   covariates; the overall pick (:962); the four phase-filtered pools and their grep test.
-- **Status:** open — decision needed (see above)
+- **Status:** open — decided 2026-10-27 (see Decisions table)
 
 #### SCM-02 — Final backward is skipped after an unchanged forward even with no initial backward
 - **Location:** R/full_scm_search.R:316-321
@@ -185,7 +185,7 @@ independent Opus pass (`D:\R\tmp\verify-scm\`). Verdicts below are the checker's
   time); selective defers it to the explicitly "including excluded" redemption step. Not
   recorded in FUNCTIONS.md.
 - **Proposed fix:** if intended, record it in FUNCTIONS.md; otherwise pass `include_excluded = FALSE` in standard's later steps.
-- **Status:** open — decision needed
+- **Status:** open — decided 2026-10-27 (see Decisions table)
 
 #### SCM-07 — The returned `excluded_covariates` is always empty
 - **Location:** R/full_scm_search.R:390-408, :564, :584, :603 (vs the unfiltered :280)
@@ -580,7 +580,7 @@ Reviewed by Fable (`D:\R\tmp\review-REC\`), re-checked by Opus (`D:\R\tmp\verify
   do nothing unless REC-04 is fixed first. Once fixed, an exclusion holds in every later step until
   redemption (no step filter) — a behaviour change for standard SCM if SCM-06's fix is also applied.
 - **Proposed fix:** compare names with names (`setdiff(names, get_excluded_covariates())`) in both places.
-- **Status:** open — decide together with SCM-06
+- **Status:** open — decided 2026-10-27 (see Decisions table)
 
 #### REC-05 — A retry of a THETA with `INF` bounds (or init 0, or huge bounds) is not perturbed sensibly
 - **Location:** R/recovery-actions.R:326-351

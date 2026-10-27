@@ -129,8 +129,8 @@ and 7 are closed here. **Order matters:** each step uses the one before.
 | # | Finding(s) | Change | Size | Needs |
 |---|---|---|---|---|
 | 3.1 | **G6: UTL-01**, SCM-09 | `calculate_covariate_df(…, tag = NULL)`: select by `cov_to_test == tag`, then COVARIATE + PARAMETER, then COVARIATE; both callers pass the tag. SCM-09: treat df 0 as fixed in `get_fixed_covariates`, passing the tag | M | — |
-| 3.2 | **SCM-01** | track `last_created_step` in selective forward | S | decision |
-| 3.3 | **REC-04**, SCM-06 | compare tag names with names in `get_remaining_covariates` and `run_univariate_step`; then apply the SCM-06 decision | S | decision |
+| 3.2 | **SCM-01** | redemption as a new selective search from the best model: step 1 = covariates not in it and without a completed model on it (parent-model rule, replaces Scenario A/B); step 2+ = significant ones only; step numbers from the last created step | M | decided 2026-10-27 |
+| 3.3 | **REC-04**, SCM-06 | compare tag names with names in `get_remaining_covariates` and `run_univariate_step`; standard SCM keeps `include_excluded = TRUE` (record it); first step of redemption and of SCM+ forward includes excluded covariates | S | decided 2026-10-27 |
 | 3.4 | **MOD-02** | `detect_param_transform`: TV or THETA outside the EXP ⇒ normal; inside, log only if the residue contains TV/MU, else unknown | M | G3 |
 | 3.5 | **G8: STA-01**, MOD-08, MOD-09, XAR-07 | normalise the covariate table in `validate_covariate_search_table`: lower-case STATUS, numeric REFERENCE, `beta_` prefix, FORMULA must be built-in or use `cov` | M | — |
 | 3.6 | **G7: STA-05**, MOD-05, UTL-03, XAR-09 | one `.covariate_is_time_varying()` ignoring NA and "."; read the dataset with `na = c("", "NA", ".")` at the dataset call sites; fix the Quick Start sentence about TIME_DEPENDENT | M | — |
