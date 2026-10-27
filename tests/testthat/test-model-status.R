@@ -306,3 +306,78 @@ test_that("a listing with cp1252 bytes is read without a warning storm", {
   expect_no_warning(probe <- read_nonmem_lst(file.path(models_dir, "run1")))
   expect_equal(probe$status, "completed")
 })
+
+
+test_that("a run is finished only once its listing has Stop Time", {
+  # NIO-02: a listing with MINIMIZATION SUCCESSFUL but no Stop Time (still in
+  # $COV, or between $EST steps) was "completed"/"failed" for one reader and
+  # "in progress" for the other.
+  models_dir <- setup_finished_run()
+  lst <- file.path(models_dir, "run1", "run1.lst")
+  lines <- readLines(lst)
+  writeLines(c(lines[!grepl("^Stop Time:", lines)][1:4], "1NONMEM EXECUTION"), lst)
+  expect_equal(read_nonmem_lst(file.path(models_dir, "run1"))$status, "incomplete")
+  expect_equal(get_model_status_from_files(file.path(models_dir, "run1"),
+                                           require_cov_step = FALSE), "incomplete")
+  expect_equal(get_model_status_from_files(file.path(models_dir, "run1"),
+                                           require_cov_step = TRUE), "incomplete")
+  st <- list(models_folder = models_dir, search_config = list(),
+             search_database = data.frame(model_name = "run1", status = "in_progress",
+                                          stringsAsFactors = FALSE))
+  invisible(capture.output(st <- update_model_status_from_files(st, "run1", force = TRUE)))
+  expect_equal(st$search_database$status, "in_progress")
+
+  # A termination line from an earlier $EST step does not end the run either.
+  writeLines(c(" #TERM:", "0MINIMIZATION TERMINATED", "1NONMEM EXECUTION"), lst)
+  expect_equal(read_nonmem_lst(file.path(models_dir, "run1"))$status, "incomplete")
+})
+
+test_that("an NM-TRAN error is a failure with or without Stop Time", {
+  models_dir <- setup_finished_run()
+  unlink(file.path(models_dir, "run1", c("run1.ext", "run1.cov")))
+  lst <- file.path(models_dir, "run1", "run1.lst")
+  for (with_stop in c(FALSE, TRUE)) {
+    writeLines(c(" AN ERROR WAS FOUND IN THE CONTROL STATEMENTS.",
+                 " (DATA ERROR) RECORD 1, DATA ITEM 3: NON-NUMERIC",
+                 if (with_stop) c("Stop Time:", "Sat 25 Jul 2026 06:50:30 AM EDT")), lst)
+    expect_equal(read_nonmem_lst(file.path(models_dir, "run1"))$status, "failed")
+    expect_equal(get_model_status_from_files(file.path(models_dir, "run1")), "failed")
+    st <- list(models_folder = models_dir, search_config = list(),
+               search_database = data.frame(model_name = "run1", status = "in_progress",
+                                            stringsAsFactors = FALSE))
+    invisible(capture.output(st <- update_model_status_from_files(st, "run1", force = TRUE)))
+    expect_equal(st$search_database$status, "failed")
+  }
+})
+
+test_that("a finished run that ended on rounding errors still counts on OFV and .cov", {
+  models_dir <- setup_finished_run()
+  lst <- file.path(models_dir, "run1", "run1.lst")
+  writeLines(c(" #TERM:", "0MINIMIZATION TERMINATED", " DUE TO ROUNDING ERRORS (ERROR=134)",
+               "Stop Time:", "Sat 25 Jul 2026 06:50:30 AM EDT"), lst)
+  expect_equal(get_model_status_from_files(file.path(models_dir, "run1")), "completed")
+})
+
+test_that("an NM-TRAN error is not overridden by result files from an earlier run", {
+  # diff-auditor: a stale run1.ext and run1.cov made the rejected rerun read
+  # as completed with the old OFV.
+  models_dir <- setup_finished_run()
+  lst <- file.path(models_dir, "run1", "run1.lst")
+  writeLines(c(" AN ERROR WAS FOUND IN THE CONTROL STATEMENTS.",
+               "Stop Time:", "Sat 25 Jul 2026 06:50:30 AM EDT"), lst)
+  expect_equal(get_model_status_from_files(file.path(models_dir, "run1")), "failed")
+  st <- list(models_folder = models_dir, search_config = list(),
+             search_database = data.frame(model_name = "run1", status = "in_progress",
+                                          stringsAsFactors = FALSE))
+  invisible(capture.output(st <- update_model_status_from_files(st, "run1", force = TRUE)))
+  expect_equal(st$search_database$status, "failed")
+})
+
+test_that("an unfinished run keeps its last termination line as the reason", {
+  models_dir <- setup_finished_run()
+  lst <- file.path(models_dir, "run1", "run1.lst")
+  writeLines(c(" #TERM:", "0MINIMIZATION TERMINATED", " DUE TO ROUNDING ERRORS (ERROR=134)"), lst)
+  probe <- read_nonmem_lst(file.path(models_dir, "run1"))
+  expect_equal(probe$status, "incomplete")
+  expect_match(probe$error_message, "ROUNDING ERRORS")
+})

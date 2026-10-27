@@ -148,7 +148,15 @@ update_model_status_from_files <- function(search_state, model_name, force = FAL
       list(status = "read_error", lst_content = NULL)
     })
 
-    # If still running, return early
+    # NM-TRAN rejected the control stream, so NONMEM did not run: failed with or
+    # without "Stop Time:", and before any .ext from an earlier run is read.
+    if (isTRUE(lst_probe$nmtran_error)) {
+      results$status <- "failed"
+      results$error_message <- lst_probe$error_message %||% "NM-TRAN error"
+      return(results)
+    }
+
+    # Without "Stop Time:" the run is still going.
     if (lst_info$status == "in_progress") {
       results$status <- "in_progress"
       return(results)

@@ -425,7 +425,8 @@ read_nonmem_lst <- function(model_path) {
       status = "unknown",
       error_message = "",
       error_excerpt = "",
-      has_issues = FALSE
+      has_issues = FALSE,
+      nmtran_error = FALSE
     )
 
     # Generalized status markers for better portability across NONMEM versions.
@@ -454,6 +455,9 @@ read_nonmem_lst <- function(model_path) {
       "ABORTING"
     )
     soft_end_patterns <- c("PROBLEM ENDED")
+    # NM-TRAN rejected the control stream: NONMEM never runs, so the run has
+    # failed whether or not nmfe went on to write "Stop Time:".
+    nmtran_error_patterns <- c("AN ERROR WAS FOUND IN THE CONTROL STATEMENTS")
 
     pattern_hit <- function(patterns) {
       idx <- which(grepl(paste(patterns, collapse = "|"), lst_content, ignore.case = TRUE))
@@ -467,12 +471,39 @@ read_nonmem_lst <- function(model_path) {
     runtime_error_hit <- pattern_hit(runtime_error_patterns)
     soft_end_hit <- pattern_hit(soft_end_patterns)
 
+    nmtran_error_hit <- pattern_hit(nmtran_error_patterns)
+
     has_successful <- success_hit$found
     has_hard_failure <- hard_failure_hit$found
     has_stop_time <- stop_hit$found
 
-    # Check for completion/failure with precedence to explicit hard failures.
-    if (has_hard_failure) {
+    # A run has finished only when nmfe has written "Stop Time:". Before that a
+    # success or termination line may belong to an earlier $EST step, or the
+    # run may still be in $COV, so neither decides the status yet. The one
+    # exception is an NM-TRAN error, after which NONMEM cannot run at all.
+    if (nmtran_error_hit$found) {
+      result$status <- "failed"
+      result$nmtran_error <- TRUE
+      result$has_issues <- TRUE
+      result$error_message <- trimws(lst_content[nmtran_error_hit$idx[1]])
+      result$error_excerpt <- result$error_message
+
+    } else if (!has_stop_time) {
+      has_execution <- any(grepl("NONMEM EXECUTION", lst_content, ignore.case = FALSE))
+      result$status <- "incomplete"
+      result$has_issues <- !has_execution
+      result$error_message <- if (has_execution) "Model still running" else "Model run incomplete"
+      # Keep the last termination or error line seen so far as a diagnostic: it
+      # does not decide the status, but it explains a run that never finished.
+      marker_idx <- c(hard_failure_hit$idx, runtime_error_hit$idx)
+      if (length(marker_idx) > 0) {
+        result$error_excerpt <- trimws(lst_content[max(marker_idx)])
+        result$error_message <- sprintf("%s (last marker: %s)", result$error_message,
+                                        result$error_excerpt)
+      }
+
+    # Finished: explicit hard failures take precedence.
+    } else if (has_hard_failure) {
       result$status <- "failed"
       result$has_issues <- TRUE
       result$error_message <- trimws(lst_content[hard_failure_hit$idx[1]])
@@ -482,8 +513,8 @@ read_nonmem_lst <- function(model_path) {
       result$status <- "completed"
       result$has_issues <- FALSE
 
-    } else if (has_stop_time) {
-      # Stop Time with no hard failure usually means the run finished.
+    } else {
+      # Finished with no hard failure and no success line.
       if (runtime_error_hit$found) {
         result$status <- "failed"
         result$has_issues <- TRUE
@@ -503,26 +534,6 @@ read_nonmem_lst <- function(model_path) {
           }
         }
       }
-
-    } else {
-      # Distinguish an incomplete run from one still going
-      has_execution <- any(grepl("NONMEM EXECUTION", lst_content, ignore.case = FALSE))
-
-      if (has_execution) {
-        result$status <- "incomplete"
-        result$has_issues <- FALSE  # Running is not an "issue"
-        result$error_message <- "Model still running"
-      } else {
-        result$status <- "incomplete"
-        result$has_issues <- TRUE
-        result$error_message <- "Model run incomplete"
-      }
-    }
-    # ADDITIONAL CHECK: If status is still unknown but Stop Time exists
-    if (result$status == "unknown" && has_stop_time) {
-      result$status <- "completed"
-      result$error_message <- "Run finished with unknown status"
-      result$has_issues <- TRUE
     }
 
 
@@ -583,6 +594,12 @@ get_model_status_from_files <- function(model_path, require_cov_step = TRUE) {
   # and not a success. Nothing in it can be trusted to describe the estimation,
   # so it must not fall through to the OFV test below and be called completed.
   if (identical(lst_info$status, "read_error")) {
+    return("failed")
+  }
+
+  # NM-TRAN rejected the control stream, so NONMEM did not run: any .ext or
+  # .cov in the folder is from an earlier run and must not make this a success.
+  if (isTRUE(lst_info$nmtran_error)) {
     return("failed")
   }
 
