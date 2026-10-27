@@ -121,7 +121,7 @@ independent Opus pass (`D:\R\tmp\verify-scm\`). Verdicts below are the checker's
   decide that is right, or set `last_created_step` only once step k has completed models.
 - **Must keep:** Scenario A on the :474 exit; Scenario B's exclusion of the last step's
   covariates; the overall pick (:962); the four phase-filtered pools and their grep test.
-- **Status:** open — decided 2026-10-27 (see Decisions table)
+- **Status:** fixed in d6cdce4 (2026-10-26)
 
 #### SCM-02 — Final backward is skipped after an unchanged forward even with no initial backward
 - **Location:** R/full_scm_search.R:316-321
@@ -185,7 +185,7 @@ independent Opus pass (`D:\R\tmp\verify-scm\`). Verdicts below are the checker's
   time); selective defers it to the explicitly "including excluded" redemption step. Not
   recorded in FUNCTIONS.md.
 - **Proposed fix:** if intended, record it in FUNCTIONS.md; otherwise pass `include_excluded = FALSE` in standard's later steps.
-- **Status:** open — decided 2026-10-27 (see Decisions table)
+- **Status:** fixed in d6cdce4 (2026-10-26)
 
 #### SCM-07 — The returned `excluded_covariates` is always empty
 - **Location:** R/full_scm_search.R:390-408, :564, :584, :603 (vs the unfiltered :280)
@@ -580,7 +580,7 @@ Reviewed by Fable (`D:\R\tmp\review-REC\`), re-checked by Opus (`D:\R\tmp\verify
   do nothing unless REC-04 is fixed first. Once fixed, an exclusion holds in every later step until
   redemption (no step filter) — a behaviour change for standard SCM if SCM-06's fix is also applied.
 - **Proposed fix:** compare names with names (`setdiff(names, get_excluded_covariates())`) in both places.
-- **Status:** open — decided 2026-10-27 (see Decisions table)
+- **Status:** fixed in d6cdce4 (2026-10-26)
 
 #### REC-05 — A retry of a THETA with `INF` bounds (or init 0, or huge bounds) is not perturbed sensibly
 - **Location:** R/recovery-actions.R:326-351
