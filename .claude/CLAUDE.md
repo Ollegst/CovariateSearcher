@@ -27,6 +27,12 @@ R is not on PATH. Use the Rscript for the machine you are on — whichever of th
 & "C:\Users\kdgc151\AppData\Local\Programs\R\R-4.4.2\bin\Rscript.exe" -e "<expr>"
 ```
 
+Rtools 4.4 is at `D:\rtools44`, not the default `C:\rtools44`, and the package library is on D:. Set both before any R call that loads, compiles or checks the package:
+
+```
+$env:RTOOLS44_HOME = "D:/rtools44"; $env:R_LIBS_USER = "D:/R/win-library/4.4"
+```
+
 Do not redirect a native command's stderr with `2>&1` in Windows PowerShell — it wraps each line in an ErrorRecord and reports a false failure.
 
 ## Generated files — never hand-edit
