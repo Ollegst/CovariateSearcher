@@ -355,13 +355,27 @@ run_automated_scm_testing <- function(search_state,
   # ===================================================================
 
   if (run_final_backward) {
-    # Check if model changed during forward selection (only if forward was run)
-    if (run_forward && exists("model_before_forward") &&
-        !is.null(model_before_forward) && model_before_forward == current_model) {
+    # When forward changed nothing, final backward is skipped if it has nothing
+    # new to test: the initial backward already tested this model, or the model
+    # has no covariates. A starting model that already carries covariates and
+    # had no initial backward is still tested for removal.
+    forward_unchanged <- run_forward && exists("model_before_forward") &&
+      !is.null(model_before_forward) && model_before_forward == current_model
+    model_covariates <- if (forward_unchanged && !run_initial_backward) {
+      tryCatch(get_model_covariates_from_db(search_state, current_model),
+               error = function(e) character(0))
+    } else {
+      character(0)
+    }
+    if (forward_unchanged && (run_initial_backward || length(model_covariates) == 0)) {
       cat("\n*** SKIPPING FINAL BACKWARD ELIMINATION\n")
       cat(paste(rep("-", 50), collapse=""), "\n")
       cat(sprintf("Model unchanged after forward selection (%s)\n", current_model))
-      cat("Final backward elimination would be identical to initial backward - skipping\n")
+      if (run_initial_backward) {
+        cat("Final backward elimination would be identical to initial backward - skipping\n")
+      } else {
+        cat("The model has no covariates to test for removal - skipping\n")
+      }
     } else {
       # Proceed with final backward elimination
       phase_num <- if (run_initial_backward) "FINAL" else ""

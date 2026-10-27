@@ -45,3 +45,31 @@ test_that("an initial-backward error stops the search instead of going forward",
   expect_match(res$error_message, "boom")
   expect_false(forward_called)
 })
+
+
+test_that("final backward runs after an unchanged forward only if untested covariates remain", {
+  # SCM-02: with starting_phase = "forward", a starting model that already
+  # carries covariates was never tested for removal when forward added
+  # nothing. With no covariates there is nothing to remove, so it still skips.
+  run_with <- function(model_covs) {
+    backward_called <- FALSE
+    local_mocked_bindings(
+      run_stepwise_covariate_modeling = function(search_state, ...)
+        list(search_state = search_state, final_model = "run1"),
+      get_model_covariates_from_db = function(...) model_covs,
+      run_backward_elimination = function(search_state, ...) {
+        backward_called <<- TRUE
+        list(search_state = search_state, final_model = "run1")
+      },
+      get_excluded_covariates = function(...) character(0)
+    )
+    st <- list(base_model = "run1", models_folder = tempfile("models"), search_config = list(),
+               search_database = data.frame(model_name = "run1", step_number = 0))
+    invisible(capture.output(try(
+      run_automated_scm_testing(st, starting_phase = "forward", full_scm = TRUE,
+                                save_checkpoints = FALSE), silent = TRUE)))
+    backward_called
+  }
+  expect_true(run_with("WT_CL"))
+  expect_false(run_with(character(0)))
+})
