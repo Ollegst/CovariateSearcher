@@ -216,4 +216,4 @@ Mark items here as they land (`done <commit>`), and the register entry as `fixed
 | 4 | **complete** — 4.3 G10 SCM-04 + REC-07, 4.4 G5 XAR-05 + SCM-08, 4.7 UTL-06 (043bec2), 4.5 G9 STA-07 + REC-06 (01e3094), 4.1 REC-01 + 4.2 REC-03/SCM-03 + phase vocabulary (d791a20), 4.6 NIO-02 (304a56a), 4.8 batch (6df29b2) |
 | 5 | **complete** — 5.1–5.8 (6cfd760) |
 | 6 | **complete** — 6.1–6.6 (ba07a7a) |
-| 7 | not started |
+| 7 | **complete** — c610151 |
