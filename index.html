@@ -74,8 +74,10 @@
 </h2>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Install from GitHub</span></span>
-<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"Ollegst/CovariateSearcher"</span>,</span>
-<span>                        ref <span class="op">=</span> <span class="st">"feature/package-rebuild"</span>, dependencies <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span><span class="co"># bbr and yspec are not on CRAN; install them from MPN first</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"bbr"</span>, <span class="st">"yspec"</span><span class="op">)</span>,</span>
+<span>                 repos <span class="op">=</span> <span class="st">"https://mpn.metworx.com/snapshots/stable/2026-08-24"</span><span class="op">)</span></span>
+<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"Ollegst/CovariateSearcher"</span>, dependencies <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/Ollegst/CovariateSearcher" class="external-link">CovariateSearcher</a></span><span class="op">)</span></span>
 <span></span>
