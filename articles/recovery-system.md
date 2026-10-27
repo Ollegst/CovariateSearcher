@@ -42,6 +42,10 @@ case-insensitively so they survive differences between NONMEM versions:
 only when the covariance step succeeds. Set it to `FALSE` to accept such
 models.
 
+A run counts as finished only when its listing contains `Stop Time:`. An
+NM-TRAN error (`AN ERROR WAS FOUND IN THE CONTROL STATEMENTS`) counts as
+failed at once.
+
 A model with no output directory at all is a separate case, recorded as
 `NONMEM never started - no output directory`: the run never reached
 NONMEM.
@@ -146,7 +150,8 @@ A run writes a checkpoint to `<models_folder>/scm_rds/` at each step
 boundary, named `NN_phase_event.rds` where `NN` is the step number, so
 the highest `NN` is the most recent state. `*_created.rds` is written
 once a step’s models exist but before they are submitted; `*_done.rds`
-after the step was evaluated.
+after the step was evaluated. Nothing is saved while the search waits
+for models, so there is no mid-step snapshot.
 
 Resuming is one call, pointed at the newest checkpoint:
 
@@ -169,9 +174,13 @@ everything else is worked out from the state, including which phase was
 interrupted, the current best model, and the thresholds (which default
 to the state’s `search_config`).
 
+`retest_failed` is also accepted; `NULL` (the default) keeps the value
+stored in the state. A selective search always re-enters selective
+forward, which starts or continues redemption.
+
 Before continuing,
 [`continue_search()`](https://ollegst.github.io/CovariateSearcher/reference/continue_search.md)
-does three things worth knowing about.
+does the following.
 
 **It re-reads the last step from disk.** Every model at the highest step
 number is refreshed with `force = TRUE`, so output that appeared after
@@ -185,6 +194,14 @@ absent from the database.
 [`reconstruct_step_from_disk()`](https://ollegst.github.io/CovariateSearcher/reference/reconstruct_step_from_disk.md)
 is called automatically to add them, detecting base model, direction and
 step number from the files.
+
+**It picks up models that never started.** A model the search created
+that has no run folder is submitted when `auto_submit = TRUE`; otherwise
+[`continue_search()`](https://ollegst.github.io/CovariateSearcher/reference/continue_search.md)
+returns `incomplete_step` listing it. Retry models found on disk
+(`run<N>001` whose `run<N>` is in the database) are registered, and a
+failed model in the last step that has no retry gets one when
+`auto_retry = TRUE`.
 
 **It refuses to continue from a half-finished step.** A model counts as
 finished only when it has reached a final answer — `completed`, `failed`

@@ -19,7 +19,7 @@ memory."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">CovariateSearcher</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.7</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -43,6 +43,7 @@ memory."></head><body>
     <li><a class="dropdown-item" href="../articles/troubleshooting.html">Troubleshooting Guide</a></li>
     <li><a class="dropdown-item" href="../articles/recovery-system.html">Recovery and Resuming a Search</a></li>
   </ul></li>
+<li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="../search.json"></form></li>
 <li class="nav-item"><a class="external-link nav-link" href="https://github.com/Ollegst/CovariateSearcher/" aria-label="GitHub"><span class="fa fab fa-github fa-lg"></span></a></li>
@@ -55,7 +56,7 @@ memory."></head><body>
   <main id="main" class="col-md-9"><div class="page-header">
 
       <h1>Forest Plot of a Covariate Effect on an Exposure Metric</h1>
-      <small class="dont-index">Source: <a href="https://github.com/Ollegst/CovariateSearcher/blob/feature/package-rebuild/R/forest-plots.R" class="external-link"><code>R/forest-plots.R</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/Ollegst/CovariateSearcher/blob/main/R/forest-plots.R" class="external-link"><code>R/forest-plots.R</code></a></small>
       <div class="d-none name"><code>plot_exposure_forest.Rd</code></div>
     </div>
 
@@ -203,10 +204,10 @@ EITHER a named list <code>list(label=, unit=)</code> per metric (e.g.
 <code>AUC = list(label="AUCss", unit="ng*h/mL")</code>) OR a spec supplying them - a
 yspec object, a path to a spec YAML, or a spec-shaped list (each entry's
 <code>short</code> becomes the label, plus its <code>unit</code>). When supplied (with <code>filename</code>
-and a <code>scenario</code> data.frame), two summary tables covering <strong>every</strong> metric
-column of <code>data</code> are written next to the plot as
-<code>&lt;model&gt;-exposure-table-absolute.rds</code> and <code>…-relative.rds</code>. <strong>Every metric
-must have a label</strong> or the call stops (add it to the spec/list). Absolute
+and a <code>scenario</code> data.frame), two summary tables covering every metric
+column of <code>data</code> that has a label are written next to the plot as
+<code>&lt;model&gt;-exposure-table-absolute.rds</code> and <code>…-relative.rds</code>. Unlabelled
+columns are left out; the call stops only if none is labelled. Absolute
 cell = <code>median / [lo,hi] / geomean / (geoCV%)</code>; relative = <code>ratio [lo,hi]</code>
 vs the <code>reference</code> median. Covariate columns come from <code>scenario</code> (decoded
 via <code>lookup</code>/<code>spec</code>); interval at <code>percentiles</code>; 2 dp. No <code>metric_info</code> -&gt;

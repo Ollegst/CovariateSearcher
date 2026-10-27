@@ -10,7 +10,8 @@ run_univariate_step(
   base_model_id,
   covariates_to_test = NULL,
   step_name,
-  include_excluded = TRUE
+  include_excluded = TRUE,
+  phase = "forward_selection"
 )
 ```
 
@@ -36,6 +37,11 @@ run_univariate_step(
 
   Logical. Whether to include excluded covariates (default: TRUE for
   SCM)
+
+- phase:
+
+  Character. Value written to the new rows' `phase` column:
+  "forward_selection" (default) or "redemption" for a redemption step.
 
 ## Value
 

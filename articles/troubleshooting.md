@@ -15,7 +15,7 @@ Check:
 
 # Check if retry models were created
 retries <- search_state$search_database %>%
-  filter(phase == "retry")
+  filter(action == "retry")
 
 print(retries)
 ```
@@ -82,6 +82,25 @@ also be blocked by high RSE. If RSE is unavailable (NA), that is treated
 as acceptable.
 
 **Solution**: Use more stringent backward threshold (6.63 vs 3.84)
+
+### Validation Stops at Initialization
+
+#### Issue: Initialization stops before any model runs
+
+**Cause**: The base model or covariate table fails one of the checks run
+at initialization. The message names the row or line.
+
+| Message points to | Fix |
+|----|----|
+| `END IF` is not NM-TRAN syntax | write `ENDIF` in `$PK` |
+| initial estimate of 0 that is not FIXED | use a non-zero `INIT`, or `0 FIX` |
+| `EXP(... + ETA)` parameter without a `TV_<param>` typical value | write `TV_P = THETA(n)`, `MU_k = LOG(TV_P)`, `P = EXP(MU_k + ETA(k))` |
+| categorical covariate with no `LEVELS` or no `REFERENCE` | fill both columns in the covariate search table |
+| covariate with no baseline value (raised when the covariate table is built) | give every subject a covariate value at baseline |
+
+See [Covariate
+Formulas](https://ollegst.github.io/CovariateSearcher/articles/covariate-formulas.md)
+for the rules behind each.
 
 ### Data Issues
 

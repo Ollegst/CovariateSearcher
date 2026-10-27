@@ -154,10 +154,10 @@ plot_exposure_forest(
   them - a yspec object, a path to a spec YAML, or a spec-shaped list
   (each entry's `short` becomes the label, plus its `unit`). When
   supplied (with `filename` and a `scenario` data.frame), two summary
-  tables covering **every** metric column of `data` are written next to
-  the plot as `<model>-exposure-table-absolute.rds` and
-  `…-relative.rds`. **Every metric must have a label** or the call stops
-  (add it to the spec/list). Absolute cell =
+  tables covering every metric column of `data` that has a label are
+  written next to the plot as `<model>-exposure-table-absolute.rds` and
+  `…-relative.rds`. Unlabelled columns are left out; the call stops only
+  if none is labelled. Absolute cell =
   `median / [lo,hi] / geomean / (geoCV%)`; relative = `ratio [lo,hi]` vs
   the `reference` median. Covariate columns come from `scenario`
   (decoded via `lookup`/`spec`); interval at `percentiles`; 2 dp. No

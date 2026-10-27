@@ -11,7 +11,7 @@ Three files are involved, and only two of them are yours to write:
 
 | file | written by | read by |
 |----|----|----|
-| `lookup.yaml` | you | [`build_covariate_reference_table()`](https://ollegst.github.io/CovariateSearcher/reference/build_covariate_reference_table.md), [`model_add_cov()`](https://ollegst.github.io/CovariateSearcher/reference/model_add_cov.md), `model_report(lookup =)`, forest plots, boxplots |
+| `lookup.yaml` | you | [`build_covariate_reference_table()`](https://ollegst.github.io/CovariateSearcher/reference/build_covariate_reference_table.md), `model_report(lookup =)`, forest plots, boxplots |
 | `pk-extend.yml` | you | `model_report(spec_pk =)`, forest and exposure summary tables |
 | `tags.yaml` | the package | the search itself, to track which model carries which covariate |
 

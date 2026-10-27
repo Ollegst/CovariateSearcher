@@ -58,6 +58,8 @@ testing covariates on is written as:
 | `V = EXP(THETA(2) + ETA(2))` | no separate `TV_V` line, so the covariate term would land outside the `EXP` |
 | `TV_V = EXP(THETA(2))` with `V = TV_V*EXP(ETA(2))` | log scale disguised as normal - the covariate would be placed multiplicatively on a log value |
 | `V = EXP(TV_V + EXP(ETA(2))` | unbalanced parentheses - the transform cannot be detected |
+| `END IF` in `$PK` | NM-TRAN knows only `ENDIF` |
+| an `EXP(... + ETA)` parameter whose typical value does not come through `TV_<param>` (`MU_k = LOG(TV_P)` form) | forest plots and scenario simulations read the typical value through `TV_<param>` |
 
 Only parameters that actually receive a covariate are checked.
 
@@ -108,7 +110,7 @@ The result is one row per parameter-covariate pair:
 | `FORMULA` | continuous: `linear`, `power`, `exponential`; categorical: `linear` (one theta per non-reference level) or `power` (covariates whose levels are numeric, e.g. dose); or a custom expression |
 | `LEVELS` | `;`-separated **observed level values** for categorical covariates (`0;1`), `NA` for continuous |
 | `REFERENCE` | value the effect is normalised to: median (continuous) or most frequent level (categorical) |
-| `TIME_DEPENDENT` | `Yes`/`No`, computed from the data; decides whether the effect is placed at individual or population level |
+| `TIME_DEPENDENT` | `Yes`/`No`, computed from the data, for information only. Placement (individual or population level) is recomputed from the data when the covariate is added; editing this column does not change it. Missing records (`NA` or `.`) do not count as a change |
 | `INIT` | *optional* initial `$THETA` value - see below |
 
 `cov_to_test` (`beta_WT_CL`, …) is generated for you; you never write
@@ -192,7 +194,10 @@ results <- run_automated_scm_testing(ss, "run20",
 ```
 
 With `full_scm = TRUE` and `starting_phase = "backward"` you get the
-full SCM+ sequence: backward, then forward, then backward again.
+full SCM+ sequence: backward, then forward, then backward again. When
+the starting model already has covariates and no initial backward ran,
+the final backward also runs after a forward search that left the model
+unchanged.
 
 #### Faster: selective SCM
 
@@ -205,6 +210,17 @@ them:
 results <- run_automated_scm_testing(ss, "run1", scm_type = "selective",
                                      starting_phase = "forward", full_scm = TRUE)
 ```
+
+In selective forward, redemption starts from the best model with every
+covariate not yet tested on it, then continues with the significant ones
+on each new winner.
+
+#### Failed covariates
+
+`retest_failed = TRUE` (the default) decides whether covariates excluded
+after a failed model and a failed retry are tested again: at every step
+of standard SCM, at the first selective step (including the SCM+ forward
+phase) and in redemption. Set it to `FALSE` to leave them out.
 
 #### Thresholds
 

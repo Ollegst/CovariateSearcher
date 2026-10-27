@@ -33,6 +33,11 @@ Boxplots](https://ollegst.github.io/CovariateSearcher/articles/covariate-boxplot
 | `mrgsolve` (exposure forests only) | in `Suggests` - install it yourself |
 | `devEMF` (for `.emf` output) | in `Suggests` |
 
+The model’s `$PK` must also be one the package can evaluate: every
+log-normal parameter written `P = EXP(... + ETA)` has to reach its
+typical value through `TV_<param>` (the `MU_k = LOG(TV_P)` form);
+validation stops otherwise.
+
 #### The simulation model
 
 Every parameter draw is simulated as its own subject (`idata`) under a
@@ -227,7 +232,8 @@ scenario, the first being the typical subject (all covariates at
 
 Note `percentiles` means something different in the plot functions,
 where it is the interval used in the **summary tables** (`c(0.05, 0.95)`
-→ median `[5th, 95th]`).
+→ median `[5th, 95th]`). Fractional percentiles are labelled as written:
+`c(0.025, 0.975)` gives 2.5th and 97.5th.
 
 [`plot_parameter_forests()`](https://ollegst.github.io/CovariateSearcher/reference/plot_parameter_forests.md)
 options:
@@ -396,9 +402,10 @@ abs_exp <- readRDS(file.path(plot_dir, paste0(runno, "-exposure-table-absolute.r
 rel_exp <- readRDS(file.path(plot_dir, paste0(runno, "-exposure-table-relative.rds")))
 ```
 
-Every quantity must have a label, so the metric/parameter column names
-have to match the spec keys - a missing one stops the call rather than
-silently producing an unlabelled column.
+Every parameter in a parameter table must have a label, so its column
+name has to match a spec key - a missing one stops the call rather than
+silently producing an unlabelled column. Exposure tables include only
+the metrics that have a label and leave the others out.
 
 ------------------------------------------------------------------------
 
@@ -476,6 +483,9 @@ Rules for the per-row form:
   `ELSE` and a row’s value matches none of its conditions (say
   `SEX = 3`), the parameter it assigns comes back `NA` for that row,
   with a warning.
+- **A single-line `IF` is evaluated**, including one with nested
+  parentheses. An `IF` condition that cannot be evaluated triggers a
+  warning.
 - **`ID` in the result numbers the rows `1..N`**, in the order of
   `subjects`, not the dataset’s subject IDs.
 

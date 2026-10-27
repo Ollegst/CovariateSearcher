@@ -39,7 +39,8 @@ continue_search(
   backward_p_value = NULL,
   rse_threshold = NULL,
   auto_submit = TRUE,
-  auto_retry = TRUE
+  auto_retry = TRUE,
+  retest_failed = NULL
 )
 ```
 
@@ -82,6 +83,13 @@ continue_search(
 - auto_retry:
 
   Logical. Whether to auto-retry failed models (default TRUE).
+
+- retest_failed:
+
+  Logical or NULL. Whether covariates excluded after a failed retry are
+  tested again (see
+  [`run_automated_scm_testing()`](https://ollegst.github.io/CovariateSearcher/reference/run_automated_scm_testing.md)).
+  NULL (default) keeps the value stored in `search_config`.
 
 ## Value
 

@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">CovariateSearcher</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.7</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -49,6 +49,7 @@
     <li><a class="dropdown-item" href="../articles/recovery-system.html">Recovery and Resuming a Search</a></li>
   </ul>
 </li>
+<li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul>
 <ul class="navbar-nav">
 <li class="nav-item"><form class="form-inline" role="search">
@@ -71,7 +72,7 @@
       <h1>Quick Start Guide</h1>
             
       
-      <small class="dont-index">Source: <a href="https://github.com/Ollegst/CovariateSearcher/blob/feature/package-rebuild/vignettes/quick-start.Rmd" class="external-link"><code>vignettes/quick-start.Rmd</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/Ollegst/CovariateSearcher/blob/main/vignettes/quick-start.Rmd" class="external-link"><code>vignettes/quick-start.Rmd</code></a></small>
       <div class="d-none name"><code>quick-start.Rmd</code></div>
     </div>
 
@@ -154,6 +155,21 @@ multiplicatively on a log value</td>
 <tr class="odd">
 <td><code>V = EXP(TV_V + EXP(ETA(2))</code></td>
 <td>unbalanced parentheses - the transform cannot be detected</td>
+</tr>
+<tr class="even">
+<td>
+<code>END IF</code> in <code>$PK</code>
+</td>
+<td>NM-TRAN knows only <code>ENDIF</code>
+</td>
+</tr>
+<tr class="odd">
+<td>an <code>EXP(... + ETA)</code> parameter whose typical value does
+not come through <code>TV_&lt;param&gt;</code>
+(<code>MU_k = LOG(TV_P)</code> form)</td>
+<td>forest plots and scenario simulations read the typical value through
+<code>TV_&lt;param&gt;</code>
+</td>
 </tr>
 </tbody>
 </table>
@@ -285,8 +301,11 @@ frequent level (categorical)</td>
 <tr class="odd">
 <td><code>TIME_DEPENDENT</code></td>
 <td>
-<code>Yes</code>/<code>No</code>, computed from the data; decides
-whether the effect is placed at individual or population level</td>
+<code>Yes</code>/<code>No</code>, computed from the data, for
+information only. Placement (individual or population level) is
+recomputed from the data when the covariate is added; editing this
+column does not change it. Missing records (<code>NA</code> or
+<code>.</code>) do not count as a change</td>
 </tr>
 <tr class="even">
 <td><code>INIT</code></td>
@@ -366,7 +385,9 @@ formula.</p>
 <span>                                     full_scm <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
 <p>With <code>full_scm = TRUE</code> and
 <code>starting_phase = "backward"</code> you get the full SCM+ sequence:
-backward, then forward, then backward again.</p>
+backward, then forward, then backward again. When the starting model
+already has covariates and no initial backward ran, the final backward
+also runs after a forward search that left the model unchanged.</p>
 </div>
 <div class="section level4">
 <h4 id="faster-selective-scm">Faster: selective SCM<a class="anchor" aria-label="anchor" href="#faster-selective-scm"></a>
@@ -377,6 +398,18 @@ them:</p>
 <div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_automated_scm_testing.html">run_automated_scm_testing</a></span><span class="op">(</span><span class="va">ss</span>, <span class="st">"run1"</span>, scm_type <span class="op">=</span> <span class="st">"selective"</span>,</span>
 <span>                                     starting_phase <span class="op">=</span> <span class="st">"forward"</span>, full_scm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
+<p>In selective forward, redemption starts from the best model with
+every covariate not yet tested on it, then continues with the
+significant ones on each new winner.</p>
+</div>
+<div class="section level4">
+<h4 id="failed-covariates">Failed covariates<a class="anchor" aria-label="anchor" href="#failed-covariates"></a>
+</h4>
+<p><code>retest_failed = TRUE</code> (the default) decides whether
+covariates excluded after a failed model and a failed retry are tested
+again: at every step of standard SCM, at the first selective step
+(including the SCM+ forward phase) and in redemption. Set it to
+<code>FALSE</code> to leave them out.</p>
 </div>
 <div class="section level4">
 <h4 id="thresholds">Thresholds<a class="anchor" aria-label="anchor" href="#thresholds"></a>

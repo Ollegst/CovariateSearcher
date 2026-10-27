@@ -45,7 +45,8 @@ create_covariate_boxplots(
   footnote = NULL,
   source_note = TRUE,
   footnote_size = NULL,
-  ss = TRUE
+  ss = TRUE,
+  id_col = "ID"
 )
 ```
 
@@ -219,6 +220,11 @@ create_covariate_boxplots(
   file stem already ends in "ss", which is common when the labels come
   from a spec holding `AUCss`. Matches the `ss` argument of
   [`plot_exposure_forest()`](https://ollegst.github.io/CovariateSearcher/reference/plot_exposure_forest.md).
+
+- id_col:
+
+  Character. Subject ID column. When `data` has it, "n = " counts
+  distinct subjects; otherwise it counts rows. Default "ID".
 
 ## Value
 

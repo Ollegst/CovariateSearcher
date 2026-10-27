@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">CovariateSearcher</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.7</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -49,6 +49,7 @@
     <li><a class="dropdown-item" href="../articles/recovery-system.html">Recovery and Resuming a Search</a></li>
   </ul>
 </li>
+<li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul>
 <ul class="navbar-nav">
 <li class="nav-item"><form class="form-inline" role="search">
@@ -71,7 +72,7 @@
       <h1>Model Reports and Diagnostics</h1>
             
       
-      <small class="dont-index">Source: <a href="https://github.com/Ollegst/CovariateSearcher/blob/feature/package-rebuild/vignettes/articles/model-reports-and-diagnostics.Rmd" class="external-link"><code>vignettes/articles/model-reports-and-diagnostics.Rmd</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/Ollegst/CovariateSearcher/blob/main/vignettes/articles/model-reports-and-diagnostics.Rmd" class="external-link"><code>vignettes/articles/model-reports-and-diagnostics.Rmd</code></a></small>
       <div class="d-none name"><code>model-reports-and-diagnostics.Rmd</code></div>
     </div>
 
@@ -198,14 +199,14 @@ parameter gains a formatted name, a label and a unit:</p>
 <tr class="odd">
 <td>CL/F (L/h)</td>
 <td>Apparent clearance</td>
-<td>121.85</td>
+<td>122</td>
 <td>4.76</td>
 <td></td>
 </tr>
 <tr class="even">
 <td>Vc/F (L)</td>
 <td>Apparent central volume</td>
-<td>479.42</td>
+<td>479</td>
 <td>6.29</td>
 <td></td>
 </tr>
@@ -219,14 +220,14 @@ parameter gains a formatted name, a label and a unit:</p>
 <tr class="even">
 <td>KA CV%</td>
 <td>IIV on absorption</td>
-<td>615.49</td>
+<td>615</td>
 <td>49.21</td>
 <td>10.16</td>
 </tr>
 <tr class="odd">
 <td>CL/F CV%</td>
 <td>IIV on clearance</td>
-<td>52.22</td>
+<td>52.2</td>
 <td>4.48</td>
 <td>2.82</td>
 </tr>
@@ -254,7 +255,7 @@ parameter gains a formatted name, a label and a unit:</p>
 <tr class="odd">
 <td>prop error</td>
 <td>Proportional error</td>
-<td>34.39</td>
+<td>34.4</td>
 <td>0.51</td>
 <td>12.10</td>
 </tr>
@@ -264,8 +265,14 @@ parameter gains a formatted name, a label and a unit:</p>
 yourself and pass the result. A file path is not accepted. The <a href="yaml-specification-files.html">YAML Specification Files</a>
 article covers what belongs in that file.</p>
 <p>Two rows are appended below the parameter sections: <code>OFV</code>,
-and <code>Conditional number</code> computed from the run’s
+and <code>Condition number</code> (NONMEM’s: the largest over the
+smallest eigenvalue of the correlation matrix) computed from the run’s
 <code>.cor</code> (or <code>.cov</code>) output.</p>
+<p>Estimates are shown with 3 significant figures; the OFV has 2
+decimals, the condition number 1 decimal, and RSE and shrinkage 2
+decimals. A footer under the table reads “Variance estimates
+(OMEGA/SIGMA diagonals) are shown as CV% = 100*sqrt(exp(variance) -
+1).”</p>
 </div>
 <div class="section level4">
 <h4 id="sections">Sections<a class="anchor" aria-label="anchor" href="#sections"></a>
@@ -286,13 +293,10 @@ unsectioned and falls to the bottom of the table beside <code>OFV</code>
 — so keep them exact.</p>
 <p>Covariate effects need no entry: any <code>beta_*</code> parameter
 goes to “Parameter-Covariate relationships” automatically.</p>
-<p>With no <code>spec_pk</code> at all the function sections by name
-prefix instead — <code>beta_*</code> to covariate relationships, and
-names beginning <code>THETA</code>, <code>OMEGA</code> or
-<code>SIGMA</code> to their respective sections. Since the names are
-your control-stream annotations, that fallback only bites for
-annotations literally called <code>THETA1</code> and the like; annotate
-as <code>CL</code> and the parameter is unsectioned.</p>
+<p>With no <code>spec_pk</code> at all the rows are grouped into the
+same sections from NONMEM’s own parameter names (<code>THETA</code>,
+<code>OMEGA</code>, <code>SIGMA</code>; <code>beta_*</code> to covariate
+relationships).</p>
 </div>
 <div class="section level4">
 <h4 id="shrinkage">Shrinkage<a class="anchor" aria-label="anchor" href="#shrinkage"></a>
@@ -509,9 +513,10 @@ columns:</p>
 </tr>
 <tr class="odd">
 <td>interval</td>
-<td>any one name containing “CI”</td>
+<td>one column whose name has “CI” as a word, or a lower/upper pair</td>
 <td>
-<code>"[65.2-81.1]"</code> or <code>"[65.2, 81.1]"</code>
+<code>"[65.2-81.1]"</code>, <code>"[65.2, 81.1]"</code> or
+<code>"(65.2, 81.1)"</code>
 </td>
 </tr>
 </tbody>

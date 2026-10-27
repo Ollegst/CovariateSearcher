@@ -62,8 +62,9 @@ prepare_search_base_model(
 
 - lookup_file:
 
-  Character or NULL. Optional path to lookup YAML for categorical
-  labels. If NULL, defaults to data/spec/lookup.yaml.
+  Character or NULL. Accepted for compatibility; categorical THETA names
+  keep the numeric level (beta_SEX_CL_2) and reports decode it through
+  the lookup, so this does not change the model.
 
 ## Value
 

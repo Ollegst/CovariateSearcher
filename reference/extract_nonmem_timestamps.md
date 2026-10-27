@@ -6,7 +6,11 @@ time (line after "Stop Time:") when available.
 ## Usage
 
 ``` r
-extract_nonmem_timestamps(model_name, models_folder = "models")
+extract_nonmem_timestamps(
+  model_name,
+  models_folder = "models",
+  lst_lines = NULL
+)
 ```
 
 ## Arguments
@@ -18,6 +22,11 @@ extract_nonmem_timestamps(model_name, models_folder = "models")
 - models_folder:
 
   Character. Path to models folder (default: "models")
+
+- lst_lines:
+
+  Character vector or NULL. The listing's lines when the caller has
+  already read them; NULL (default) reads the listing here.
 
 ## Value
 

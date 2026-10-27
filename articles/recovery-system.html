@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">CovariateSearcher</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.7</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -49,6 +49,7 @@
     <li><a class="dropdown-item" href="../articles/recovery-system.html">Recovery and Resuming a Search</a></li>
   </ul>
 </li>
+<li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul>
 <ul class="navbar-nav">
 <li class="nav-item"><form class="form-inline" role="search">
@@ -71,7 +72,7 @@
       <h1>Recovery and Resuming a Search</h1>
             
       
-      <small class="dont-index">Source: <a href="https://github.com/Ollegst/CovariateSearcher/blob/feature/package-rebuild/vignettes/articles/recovery-system.Rmd" class="external-link"><code>vignettes/articles/recovery-system.Rmd</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/Ollegst/CovariateSearcher/blob/main/vignettes/articles/recovery-system.Rmd" class="external-link"><code>vignettes/articles/recovery-system.Rmd</code></a></small>
       <div class="d-none name"><code>recovery-system.Rmd</code></div>
     </div>
 
@@ -154,6 +155,10 @@ but has no <code>.cov</code> file is recorded as failed with
 <code>Covariance step failed (no .cov file)</code>, since NONMEM writes
 that file only when the covariance step succeeds. Set it to
 <code>FALSE</code> to accept such models.</p>
+<p>A run counts as finished only when its listing contains
+<code>Stop Time:</code>. An NM-TRAN error
+(<code>AN ERROR WAS FOUND IN THE CONTROL STATEMENTS</code>) counts as
+failed at once.</p>
 <p>A model with no output directory at all is a separate case, recorded
 as <code>NONMEM never started - no output directory</code>: the run
 never reached NONMEM.</p>
@@ -303,7 +308,8 @@ created and <code><a href="../reference/create_retry_model.html">create_retry_mo
 number, so the highest <code>NN</code> is the most recent state.
 <code>*_created.rds</code> is written once a step’s models exist but
 before they are submitted; <code>*_done.rds</code> after the step was
-evaluated.</p>
+evaluated. Nothing is saved while the search waits for models, so there
+is no mid-step snapshot.</p>
 <p>Resuming is one call, pointed at the newest checkpoint:</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">res</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/continue_search.html">continue_search</a></span><span class="op">(</span></span>
@@ -321,8 +327,11 @@ cannot be inferred; everything else is worked out from the state,
 including which phase was interrupted, the current best model, and the
 thresholds (which default to the state’s
 <code>search_config</code>).</p>
-<p>Before continuing, <code><a href="../reference/continue_search.html">continue_search()</a></code> does three things
-worth knowing about.</p>
+<p><code>retest_failed</code> is also accepted; <code>NULL</code> (the
+default) keeps the value stored in the state. A selective search always
+re-enters selective forward, which starts or continues redemption.</p>
+<p>Before continuing, <code><a href="../reference/continue_search.html">continue_search()</a></code> does the
+following.</p>
 <p><strong>It re-reads the last step from disk.</strong> Every model at
 the highest step number is refreshed with <code>force = TRUE</code>, so
 output that appeared after the checkpoint was written is picked up even
@@ -335,6 +344,14 @@ are on disk but absent from the database.
 <code><a href="../reference/reconstruct_step_from_disk.html">reconstruct_step_from_disk()</a></code> is called automatically to add
 them, detecting base model, direction and step number from the
 files.</p>
+<p><strong>It picks up models that never started.</strong> A model the
+search created that has no run folder is submitted when
+<code>auto_submit = TRUE</code>; otherwise
+<code><a href="../reference/continue_search.html">continue_search()</a></code> returns <code>incomplete_step</code>
+listing it. Retry models found on disk (<code>run&lt;N&gt;001</code>
+whose <code>run&lt;N&gt;</code> is in the database) are registered, and
+a failed model in the last step that has no retry gets one when
+<code>auto_retry = TRUE</code>.</p>
 <p><strong>It refuses to continue from a half-finished step.</strong> A
 model counts as finished only when it has reached a final answer —
 <code>completed</code>, <code>failed</code> or

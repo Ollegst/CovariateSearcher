@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">CovariateSearcher</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.7</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -49,6 +49,7 @@
     <li><a class="dropdown-item" href="../articles/recovery-system.html">Recovery and Resuming a Search</a></li>
   </ul>
 </li>
+<li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul>
 <ul class="navbar-nav">
 <li class="nav-item"><form class="form-inline" role="search">
@@ -71,7 +72,7 @@
       <h1>Troubleshooting Guide</h1>
             
       
-      <small class="dont-index">Source: <a href="https://github.com/Ollegst/CovariateSearcher/blob/feature/package-rebuild/vignettes/articles/troubleshooting.Rmd" class="external-link"><code>vignettes/articles/troubleshooting.Rmd</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/Ollegst/CovariateSearcher/blob/main/vignettes/articles/troubleshooting.Rmd" class="external-link"><code>vignettes/articles/troubleshooting.Rmd</code></a></small>
       <div class="d-none name"><code>troubleshooting.Rmd</code></div>
     </div>
 
@@ -92,7 +93,7 @@ automatically. Check:</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Check if retry models were created</span></span>
 <span><span class="va">retries</span> <span class="op">&lt;-</span> <span class="va">search_state</span><span class="op">$</span><span class="va">search_database</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">phase</span> <span class="op">==</span> <span class="st">"retry"</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">action</span> <span class="op">==</span> <span class="st">"retry"</span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">retries</span><span class="op">)</span></span></code></pre></div>
 <p>If retries also failed, you may need to:</p>
@@ -161,6 +162,61 @@ can also be blocked by high RSE. If RSE is unavailable (NA), that is
 treated as acceptable.</p>
 <p><strong>Solution</strong>: Use more stringent backward threshold
 (6.63 vs 3.84)</p>
+</div>
+</div>
+<div class="section level3">
+<h3 id="validation-stops-at-initialization">Validation Stops at Initialization<a class="anchor" aria-label="anchor" href="#validation-stops-at-initialization"></a>
+</h3>
+<div class="section level4">
+<h4 id="issue-initialization-stops-before-any-model-runs">Issue: Initialization stops before any model runs<a class="anchor" aria-label="anchor" href="#issue-initialization-stops-before-any-model-runs"></a>
+</h4>
+<p><strong>Cause</strong>: The base model or covariate table fails one
+of the checks run at initialization. The message names the row or
+line.</p>
+<table class="table">
+<colgroup>
+<col width="50%">
+<col width="50%">
+</colgroup>
+<thead><tr class="header">
+<th>Message points to</th>
+<th>Fix</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td>
+<code>END IF</code> is not NM-TRAN syntax</td>
+<td>write <code>ENDIF</code> in <code>$PK</code>
+</td>
+</tr>
+<tr class="even">
+<td>initial estimate of 0 that is not FIXED</td>
+<td>use a non-zero <code>INIT</code>, or <code>0 FIX</code>
+</td>
+</tr>
+<tr class="odd">
+<td>
+<code>EXP(... + ETA)</code> parameter without a
+<code>TV_&lt;param&gt;</code> typical value</td>
+<td>write <code>TV_P = THETA(n)</code>, <code>MU_k = LOG(TV_P)</code>,
+<code>P = EXP(MU_k + ETA(k))</code>
+</td>
+</tr>
+<tr class="even">
+<td>categorical covariate with no <code>LEVELS</code> or no
+<code>REFERENCE</code>
+</td>
+<td>fill both columns in the covariate search table</td>
+</tr>
+<tr class="odd">
+<td>covariate with no baseline value (raised when the covariate table is
+built)</td>
+<td>give every subject a covariate value at baseline</td>
+</tr>
+</tbody>
+</table>
+<p>See <a href="covariate-formulas.html">Covariate Formulas</a> for the
+rules behind each.</p>
 </div>
 </div>
 <div class="section level3">

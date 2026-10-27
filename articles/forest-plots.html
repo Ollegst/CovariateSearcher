@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">CovariateSearcher</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.7</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -49,6 +49,7 @@
     <li><a class="dropdown-item" href="../articles/recovery-system.html">Recovery and Resuming a Search</a></li>
   </ul>
 </li>
+<li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul>
 <ul class="navbar-nav">
 <li class="nav-item"><form class="form-inline" role="search">
@@ -71,7 +72,7 @@
       <h1>Forest Plots and Simulations</h1>
             
       
-      <small class="dont-index">Source: <a href="https://github.com/Ollegst/CovariateSearcher/blob/feature/package-rebuild/vignettes/articles/forest-plots.Rmd" class="external-link"><code>vignettes/articles/forest-plots.Rmd</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/Ollegst/CovariateSearcher/blob/main/vignettes/articles/forest-plots.Rmd" class="external-link"><code>vignettes/articles/forest-plots.Rmd</code></a></small>
       <div class="d-none name"><code>forest-plots.Rmd</code></div>
     </div>
 
@@ -144,6 +145,11 @@ the rows you pass (the function warns)</td>
 </tr>
 </tbody>
 </table>
+<p>The model’s <code>$PK</code> must also be one the package can
+evaluate: every log-normal parameter written
+<code>P = EXP(... + ETA)</code> has to reach its typical value through
+<code>TV_&lt;param&gt;</code> (the <code>MU_k = LOG(TV_P)</code> form);
+validation stops otherwise.</p>
 <div class="section level4">
 <h4 id="the-simulation-model">The simulation model<a class="anchor" aria-label="anchor" href="#the-simulation-model"></a>
 </h4>
@@ -385,7 +391,8 @@ labels</td>
 <p>Note <code>percentiles</code> means something different in the plot
 functions, where it is the interval used in the <strong>summary
 tables</strong> (<code>c(0.05, 0.95)</code> → median
-<code>[5th, 95th]</code>).</p>
+<code>[5th, 95th]</code>). Fractional percentiles are labelled as
+written: <code>c(0.025, 0.975)</code> gives 2.5th and 97.5th.</p>
 <p><code><a href="../reference/plot_parameter_forests.html">plot_parameter_forests()</a></code> options:</p>
 <table class="table">
 <colgroup>
@@ -692,9 +699,9 @@ get plots only.</p>
 <td>contents</td>
 <td>a <strong>named list, one table per parameter</strong>
 </td>
-<td>one table covering <strong>every numeric column</strong> of
-<code>data</code> except <code>ID</code>
-</td>
+<td>one table covering every numeric column of <code>data</code> that
+has a label in <code>metric_info</code> (unlabelled columns are left
+out; the call stops only if none is labelled)</td>
 </tr>
 </tbody>
 </table>
@@ -754,9 +761,10 @@ to drop into a report table.</p>
 <span></span>
 <span><span class="va">abs_exp</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">readRDS</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="va">plot_dir</span>, <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="va">runno</span>, <span class="st">"-exposure-table-absolute.rds"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="va">rel_exp</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">readRDS</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="va">plot_dir</span>, <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="va">runno</span>, <span class="st">"-exposure-table-relative.rds"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
-<p>Every quantity must have a label, so the metric/parameter column
-names have to match the spec keys - a missing one stops the call rather
-than silently producing an unlabelled column.</p>
+<p>Every parameter in a parameter table must have a label, so its column
+name has to match a spec key - a missing one stops the call rather than
+silently producing an unlabelled column. Exposure tables include only
+the metrics that have a label and leave the others out.</p>
 <hr>
 </div>
 <div class="section level3">
@@ -867,6 +875,10 @@ a gap is something to fix upstream.</li>
 row’s value matches none of its conditions (say <code>SEX = 3</code>),
 the parameter it assigns comes back <code>NA</code> for that row, with a
 warning.</li>
+<li>
+<strong>A single-line <code>IF</code> is evaluated</strong>,
+including one with nested parentheses. An <code>IF</code> condition that
+cannot be evaluated triggers a warning.</li>
 <li>
 <strong><code>ID</code> in the result numbers the rows
 <code>1..N</code></strong>, in the order of <code>subjects</code>, not

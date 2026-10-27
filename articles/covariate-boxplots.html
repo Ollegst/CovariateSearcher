@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">CovariateSearcher</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.7</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -49,6 +49,7 @@
     <li><a class="dropdown-item" href="../articles/recovery-system.html">Recovery and Resuming a Search</a></li>
   </ul>
 </li>
+<li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul>
 <ul class="navbar-nav">
 <li class="nav-item"><form class="form-inline" role="search">
@@ -71,7 +72,7 @@
       <h1>Covariate Boxplots</h1>
             
       
-      <small class="dont-index">Source: <a href="https://github.com/Ollegst/CovariateSearcher/blob/feature/package-rebuild/vignettes/articles/covariate-boxplots.Rmd" class="external-link"><code>vignettes/articles/covariate-boxplots.Rmd</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/Ollegst/CovariateSearcher/blob/main/vignettes/articles/covariate-boxplots.Rmd" class="external-link"><code>vignettes/articles/covariate-boxplots.Rmd</code></a></small>
       <div class="d-none name"><code>covariate-boxplots.Rmd</code></div>
     </div>
 
@@ -265,6 +266,14 @@ median can also show the change from the first level:</p>
 <code>size</code> units. Setting them sizes the box annotations without
 touching the axis and strip text, which changing <code>base_size</code>
 would also rescale. The counts are printed in bold.</p>
+<p>The <code>n =</code> count is the number of distinct subjects, read
+from the column named by <code>id_col</code> (default
+<code>"ID"</code>); when the data has no such column, rows are
+counted.</p>
+<p>When tied quantiles leave fewer than four bins, the boxes are
+labelled by their interval alone, without the <code>Q1:</code>… prefix.
+The jittered points use a fixed seed, so a re-run draws them in the same
+places.</p>
 <p><code>percent_change</code> compares each box with the <strong>first
 level of the same panel</strong>:</p>
 <table class="table">
@@ -414,11 +423,17 @@ the label or file stem already ends in “ss” - a spec label
 it</td>
 </tr>
 <tr class="even">
+<td><code>id_col</code></td>
+<td><code>"ID"</code></td>
+<td>subject ID column used for the <code>n =</code> count (distinct
+subjects; rows when the column is absent)</td>
+</tr>
+<tr class="odd">
 <td><code>percent_change</code></td>
 <td><code>FALSE</code></td>
 <td>add the change from the panel’s first level to the median label</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>
 <code>label_size</code>, <code>n_size</code>
 </td>
@@ -427,32 +442,32 @@ it</td>
 independently of <code>base_size</code>
 </td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>footnote</code></td>
 <td><code>NULL</code></td>
 <td>your own caption text, one line per element</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>source_note</code></td>
 <td><code>TRUE</code></td>
 <td>append a <code>Source: &lt;path&gt;</code> line naming the saved
 file</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>footnote_size</code></td>
 <td><code>NULL</code></td>
 <td>caption size in points; <code>NULL</code> is 0.8 x
 <code>base_size</code>
 </td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>
 <code>width</code>, <code>height</code>
 </td>
 <td><code>NULL</code></td>
 <td>supply <strong>both</strong> to override the automatic sizing</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>verbose</code></td>
 <td><code>TRUE</code></td>
 <td>per-covariate progress line</td>

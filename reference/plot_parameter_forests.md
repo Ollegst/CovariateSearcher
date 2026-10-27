@@ -164,8 +164,8 @@ plot_parameter_forests(
 
 - reference:
 
-  Character. Reference scenario for the relative table's ratio
-  denominator. Default "Typical subject".
+  Character. Reference scenario: the ratio denominator of both the
+  forest plot and the relative table. Default "Typical subject".
 
 - percentiles:
 
@@ -189,8 +189,8 @@ plot_parameter_forests(
 
   Further arguments passed to
   [`plot_exposure_forest()`](https://ollegst.github.io/CovariateSearcher/reference/plot_exposure_forest.md)
-  (e.g. `x_lim`, `reference`, `ClinicalRelevanceLow`,
-  `ClinicalRelevanceHigh`, `fontsize`).
+  (e.g. `x_lim`, `ClinicalRelevanceLow`, `ClinicalRelevanceHigh`,
+  `fontsize`).
 
 ## Value
 

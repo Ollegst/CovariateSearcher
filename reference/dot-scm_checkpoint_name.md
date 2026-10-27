@@ -4,7 +4,10 @@ Zero-padded step number first so the `scm_rds/` folder sorts
 chronologically and the highest `NN` is the latest checkpoint. `phase`
 is "forward"/"backward"/"redemption"/"final"; `event` is "created"
 (models made, pre-submit), "done" (step evaluated), "complete"
-(phase/run end), "running" (mid-step snapshot) or "error".
+(phase/run end) or "error". Nothing is saved while a step waits for
+NONMEM;
+[`continue_search()`](https://ollegst.github.io/CovariateSearcher/reference/continue_search.md)
+rebuilds that state from the run files.
 
 ## Usage
 

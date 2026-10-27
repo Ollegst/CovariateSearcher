@@ -4,10 +4,10 @@ Main orchestration function that runs the complete SCM workflow:
 
 1.  Initial univariate analysis on base model
 
-2.  Iterative forward selection steps
-
-3.  Final testing of dropped covariates All models within each step run
-    in parallel.
+2.  Iterative forward selection steps Covariates excluded after a failed
+    retry are offered again at every step when
+    `search_config$retest_failed` is TRUE (the default). All models
+    within each step run in parallel.
 
 ## Usage
 

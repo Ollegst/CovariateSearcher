@@ -18,7 +18,7 @@ generate_tags_from_covariate_search(
 
 - covariate_search:
 
-  Either a data frame or path to the covariate search CSV file
+  A data frame, or the path to a .csv or .rds file holding it
 
 - tags_yaml_path:
 

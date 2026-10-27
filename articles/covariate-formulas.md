@@ -91,7 +91,9 @@ For covariate `COV` with reference `ref` on THETA number `n`:
 | `linear` | `* (1 + (COV-ref) * THETA(n))` | `+ LOG(1 + (COV-ref) * THETA(n))` |
 | `exponential` | `* EXP(THETA(n) * (COV-ref))` | `+ THETA(n) * (COV-ref)` |
 
-`REFERENCE` is the value at which the effect is 1 (no effect).
+`REFERENCE` is the value at which the effect is 1 (no effect). A
+continuous formula that uses the reference needs a `REFERENCE` value;
+validation stops otherwise.
 [`build_covariate_reference_table()`](https://ollegst.github.io/CovariateSearcher/reference/build_covariate_reference_table.md)
 sets it to the median of the baseline values for a continuous covariate.
 
@@ -149,11 +151,18 @@ reference level is assigned `0` instead of `1`, non-reference levels get
 Non-reference levels are ordered by frequency, most common first, so the
 lowest-numbered THETA belongs to the best-informed level.
 
-The `$THETA` entries are named from your lookup file when one is
-available, and from the level value otherwise:
+The `$THETA` entries are always named by the numeric level, whether or
+not a lookup file exists:
 
-    0.1 ; beta_SEX_CL_FEMALE ;  ; RATIO      # lookup: 2 -> "Female"
-    0.1 ; beta_SEX_CL_2      ;  ; RATIO      # no lookup entry
+    0.1 ; beta_SEX_CL_2 ;  ; RATIO      # level 2 of SEX on CL
+
+The lookup only affects how the level is shown: reports decode it
+(“Effect of SEX (Female) on CL”). The `lookup_file` argument of
+[`model_add_cov()`](https://ollegst.github.io/CovariateSearcher/reference/model_add_cov.md)
+and
+[`add_covariate_to_model()`](https://ollegst.github.io/CovariateSearcher/reference/add_covariate_to_model.md)
+does not change the model. Models from older runs whose THETAs are named
+by the decoded label (`beta_SEX_CL_FEMALE`) are still read.
 
 #### `power` — numeric levels
 
@@ -282,6 +291,9 @@ INIT = "EC50=10"               # EMAX falls back to 0.1
 For a categorical covariate a single `INIT` value is shared by every
 level’s theta.
 
+An initial estimate of 0 must be fixed (`0 FIX`); validation stops on an
+unfixed 0.
+
 **`INIT` must match the number of THETAs the formula declares**, and the
 table check enforces it:
 
@@ -331,11 +343,11 @@ or it does not.
 
 THETA names encode what the covariate is and where it acts:
 
-| `$THETA` name        | meaning                                      |
-|----------------------|----------------------------------------------|
-| `beta_WT_CL`         | single-theta effect of WT on CL              |
-| `beta_SEX_CL_FEMALE` | categorical level “Female” of SEX on CL      |
-| `beta_AGE_CL_EMAX`   | the `EMAX` theta of a multi-theta expression |
+| `$THETA` name | meaning |
+|----|----|
+| `beta_WT_CL` | single-theta effect of WT on CL |
+| `beta_SEX_CL_2` | categorical level 2 of SEX on CL (reports show it as “Female” through the lookup) |
+| `beta_AGE_CL_EMAX` | the `EMAX` theta of a multi-theta expression |
 
 The same names appear as `cov_to_test` in the search table
 (`beta_WT_CL`) and as bbr tags on the models, which is how a model’s

@@ -3,11 +3,13 @@
 chronologically and the highest NN is the latest checkpoint.
 phase is "forward"/"backward"/"redemption"/"final"; event is
 "created" (models made, pre-submit), "done" (step evaluated), "complete"
-(phase/run end), "running" (mid-step snapshot) or "error".'><meta property="og:description" content='Zero-padded step number first so the scm_rds/ folder sorts
+(phase/run end) or "error". Nothing is saved while a step waits for
+NONMEM; continue_search() rebuilds that state from the run files.'><meta property="og:description" content='Zero-padded step number first so the scm_rds/ folder sorts
 chronologically and the highest NN is the latest checkpoint.
 phase is "forward"/"backward"/"redemption"/"final"; event is
 "created" (models made, pre-submit), "done" (step evaluated), "complete"
-(phase/run end), "running" (mid-step snapshot) or "error".'></head><body>
+(phase/run end) or "error". Nothing is saved while a step waits for
+NONMEM; continue_search() rebuilds that state from the run files.'></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -15,7 +17,7 @@ phase is "forward"/"backward"/"redemption"/"final"; event is
 
     <a class="navbar-brand me-2" href="../index.html">CovariateSearcher</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.7</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -39,6 +41,7 @@ phase is "forward"/"backward"/"redemption"/"final"; event is
     <li><a class="dropdown-item" href="../articles/troubleshooting.html">Troubleshooting Guide</a></li>
     <li><a class="dropdown-item" href="../articles/recovery-system.html">Recovery and Resuming a Search</a></li>
   </ul></li>
+<li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="../search.json"></form></li>
 <li class="nav-item"><a class="external-link nav-link" href="https://github.com/Ollegst/CovariateSearcher/" aria-label="GitHub"><span class="fa fab fa-github fa-lg"></span></a></li>
@@ -51,7 +54,7 @@ phase is "forward"/"backward"/"redemption"/"final"; event is
   <main id="main" class="col-md-9"><div class="page-header">
 
       <h1>Standardised checkpoint filename: <code>NN_phase_event.rds</code></h1>
-      <small class="dont-index">Source: <a href="https://github.com/Ollegst/CovariateSearcher/blob/feature/package-rebuild/R/utilities.R" class="external-link"><code>R/utilities.R</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/Ollegst/CovariateSearcher/blob/main/R/utilities.R" class="external-link"><code>R/utilities.R</code></a></small>
       <div class="d-none name"><code>dot-scm_checkpoint_name.Rd</code></div>
     </div>
 
@@ -60,7 +63,8 @@ phase is "forward"/"backward"/"redemption"/"final"; event is
 chronologically and the highest <code>NN</code> is the latest checkpoint.
 <code>phase</code> is "forward"/"backward"/"redemption"/"final"; <code>event</code> is
 "created" (models made, pre-submit), "done" (step evaluated), "complete"
-(phase/run end), "running" (mid-step snapshot) or "error".</p>
+(phase/run end) or "error". Nothing is saved while a step waits for
+NONMEM; <code><a href="continue_search.html">continue_search()</a></code> rebuilds that state from the run files.</p>
     </div>
 
     <div class="section level2">

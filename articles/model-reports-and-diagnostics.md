@@ -70,15 +70,15 @@ pk_res <- model_report(
 |----|----|----|----|----|
 | **Typical parameters** |  |  |  |  |
 | Ka (1/hr) | Absorption rate constant | 4.91 | 20.35 |  |
-| CL/F (L/h) | Apparent clearance | 121.85 | 4.76 |  |
-| Vc/F (L) | Apparent central volume | 479.42 | 6.29 |  |
+| CL/F (L/h) | Apparent clearance | 122 | 4.76 |  |
+| Vc/F (L) | Apparent central volume | 479 | 6.29 |  |
 | **Inter-individual variability** |  |  |  |  |
-| KA CV% | IIV on absorption | 615.49 | 49.21 | 10.16 |
-| CL/F CV% | IIV on clearance | 52.22 | 4.48 | 2.82 |
+| KA CV% | IIV on absorption | 615 | 49.21 | 10.16 |
+| CL/F CV% | IIV on clearance | 52.2 | 4.48 | 2.82 |
 | **Parameter-Covariate relationships** |  |  |  |  |
 | AGE~CL/F | Effect of AGE on clearance | -0.06 | 39.26 |  |
 | **Residual variability** |  |  |  |  |
-| prop error | Proportional error | 34.39 | 0.51 | 12.10 |
+| prop error | Proportional error | 34.4 | 0.51 | 12.10 |
 
 `spec_pk` must be an in-memory object — read the YAML yourself and pass
 the result. A file path is not accepted. The [YAML Specification
@@ -86,7 +86,14 @@ Files](https://ollegst.github.io/CovariateSearcher/articles/yaml-specification-f
 article covers what belongs in that file.
 
 Two rows are appended below the parameter sections: `OFV`, and
-`Conditional number` computed from the run’s `.cor` (or `.cov`) output.
+`Condition number` (NONMEM’s: the largest over the smallest eigenvalue
+of the correlation matrix) computed from the run’s `.cor` (or `.cov`)
+output.
+
+Estimates are shown with 3 significant figures; the OFV has 2 decimals,
+the condition number 1 decimal, and RSE and shrinkage 2 decimals. A
+footer under the table reads “Variance estimates (OMEGA/SIGMA diagonals)
+are shown as CV% = 100\*sqrt(exp(variance) - 1).”
 
 #### Sections
 
@@ -106,12 +113,9 @@ and falls to the bottom of the table beside `OFV` — so keep them exact.
 Covariate effects need no entry: any `beta_*` parameter goes to
 “Parameter-Covariate relationships” automatically.
 
-With no `spec_pk` at all the function sections by name prefix instead —
-`beta_*` to covariate relationships, and names beginning `THETA`,
-`OMEGA` or `SIGMA` to their respective sections. Since the names are
-your control-stream annotations, that fallback only bites for
-annotations literally called `THETA1` and the like; annotate as `CL` and
-the parameter is unsectioned.
+With no `spec_pk` at all the rows are grouped into the same sections
+from NONMEM’s own parameter names (`THETA`, `OMEGA`, `SIGMA`; `beta_*`
+to covariate relationships).
 
 #### Shrinkage
 
@@ -228,7 +232,7 @@ no use for are listed and skipped. It needs three columns:
 |----|----|----|
 | parameter | `parameter_names`, `parameter` or `param` | `THETA1`, `OMEGA(1,1)` |
 | central value | `median`, `estimate` or `value` | `73.4` |
-| interval | any one name containing “CI” | `"[65.2-81.1]"` or `"[65.2, 81.1]"` |
+| interval | one column whose name has “CI” as a word, or a lower/upper pair | `"[65.2-81.1]"`, `"[65.2, 81.1]"` or `"(65.2, 81.1)"` |
 
 **The values are printed as given.** They must already be on the scale
 the report shows: back-transformed THETAs, and CV% for OMEGA diagonals.

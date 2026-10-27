@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">CovariateSearcher</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.7</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -49,6 +49,7 @@
     <li><a class="dropdown-item" href="../articles/recovery-system.html">Recovery and Resuming a Search</a></li>
   </ul>
 </li>
+<li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul>
 <ul class="navbar-nav">
 <li class="nav-item"><form class="form-inline" role="search">
@@ -71,7 +72,7 @@
       <h1>Covariate Formulas</h1>
             
       
-      <small class="dont-index">Source: <a href="https://github.com/Ollegst/CovariateSearcher/blob/feature/package-rebuild/vignettes/articles/covariate-formulas.Rmd" class="external-link"><code>vignettes/articles/covariate-formulas.Rmd</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/Ollegst/CovariateSearcher/blob/main/vignettes/articles/covariate-formulas.Rmd" class="external-link"><code>vignettes/articles/covariate-formulas.Rmd</code></a></small>
       <div class="d-none name"><code>covariate-formulas.Rmd</code></div>
     </div>
 
@@ -235,8 +236,10 @@ THETA number <code>n</code>:</p>
 </tbody>
 </table>
 <p><code>REFERENCE</code> is the value at which the effect is 1 (no
-effect). <code><a href="../reference/build_covariate_reference_table.html">build_covariate_reference_table()</a></code> sets it to the
-median of the baseline values for a continuous covariate.</p>
+effect). A continuous formula that uses the reference needs a
+<code>REFERENCE</code> value; validation stops otherwise.
+<code><a href="../reference/build_covariate_reference_table.html">build_covariate_reference_table()</a></code> sets it to the median of
+the baseline values for a continuous covariate.</p>
 <p>To fix an exponent rather than estimate it — allometric scaling, for
 instance — use <code>power</code> with a fixed <code>INIT</code>:</p>
 <table class="table">
@@ -301,10 +304,15 @@ TV_V1 = THETA(2) + beta_SEX_CL
 V1    = EXP(TV_V1 + ETA(2))</code></pre>
 <p>Non-reference levels are ordered by frequency, most common first, so
 the lowest-numbered THETA belongs to the best-informed level.</p>
-<p>The <code>$THETA</code> entries are named from your lookup file when
-one is available, and from the level value otherwise:</p>
-<pre><code>0.1 ; beta_SEX_CL_FEMALE ;  ; RATIO      # lookup: 2 -&gt; "Female"
-0.1 ; beta_SEX_CL_2      ;  ; RATIO      # no lookup entry</code></pre>
+<p>The <code>$THETA</code> entries are always named by the numeric
+level, whether or not a lookup file exists:</p>
+<pre><code>0.1 ; beta_SEX_CL_2 ;  ; RATIO      # level 2 of SEX on CL</code></pre>
+<p>The lookup only affects how the level is shown: reports decode it
+(“Effect of SEX (Female) on CL”). The <code>lookup_file</code> argument
+of <code><a href="../reference/model_add_cov.html">model_add_cov()</a></code> and
+<code><a href="../reference/add_covariate_to_model.html">add_covariate_to_model()</a></code> does not change the model. Models
+from older runs whose THETAs are named by the decoded label
+(<code>beta_SEX_CL_FEMALE</code>) are still read.</p>
 </div>
 <div class="section level4">
 <h4 id="power-numeric-levels">
@@ -494,6 +502,8 @@ defaults to <code>0.1</code>:</p>
 <span><span class="va">INIT</span> <span class="op">=</span> <span class="st">"EC50=10"</span>               <span class="co"># EMAX falls back to 0.1</span></span></code></pre></div>
 <p>For a categorical covariate a single <code>INIT</code> value is
 shared by every level’s theta.</p>
+<p>An initial estimate of 0 must be fixed (<code>0 FIX</code>);
+validation stops on an unfixed 0.</p>
 <p><strong><code>INIT</code> must match the number of THETAs the formula
 declares</strong>, and the table check enforces it:</p>
 <table class="table">
@@ -588,6 +598,10 @@ the fit or it does not.</p>
 </h3>
 <p>THETA names encode what the covariate is and where it acts:</p>
 <table class="table">
+<colgroup>
+<col width="50%">
+<col width="50%">
+</colgroup>
 <thead><tr class="header">
 <th>
 <code>$THETA</code> name</th>
@@ -599,8 +613,9 @@ the fit or it does not.</p>
 <td>single-theta effect of WT on CL</td>
 </tr>
 <tr class="even">
-<td><code>beta_SEX_CL_FEMALE</code></td>
-<td>categorical level “Female” of SEX on CL</td>
+<td><code>beta_SEX_CL_2</code></td>
+<td>categorical level 2 of SEX on CL (reports show it as “Female”
+through the lookup)</td>
 </tr>
 <tr class="odd">
 <td><code>beta_AGE_CL_EMAX</code></td>

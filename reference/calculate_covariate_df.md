@@ -18,7 +18,7 @@ returns a threshold of 0, so it is kept whenever the model improves (any
 ## Usage
 
 ``` r
-calculate_covariate_df(covariate_name, covariate_search)
+calculate_covariate_df(covariate_name, covariate_search, tag = NULL)
 ```
 
 ## Arguments
@@ -30,6 +30,15 @@ calculate_covariate_df(covariate_name, covariate_search)
 - covariate_search:
 
   Data frame. Covariate search configuration
+
+- tag:
+
+  Character or NULL. The covariate's tag as written to the model (e.g.
+  "beta_WT_V", or "beta_RACE_CL_2" for one level). INIT, FORMULA and
+  LEVELS belong to one covariate-parameter row, so when the covariate is
+  tested on more than one parameter the tag picks the row: the one whose
+  `cov_to_test` equals it, else the one whose PARAMETER the tag names.
+  NULL (default), or a covariate with a single row, uses the first row.
 
 ## Value
 
