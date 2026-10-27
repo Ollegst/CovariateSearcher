@@ -422,7 +422,7 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   # rendered per the parameter's transformation: multiplicative for a normal-scale
   # parameter (PARAM = TV*EXP(ETA)), additive for a log-scale one
   # (PARAM = EXP(TV+ETA)) so the effect is not multiplied into a log value.
-  # Missing records (NA or ".") are not a second value (STA-05).
+  # Missing records (NA or ".") are not a second value.
   time_varying <- .covariate_is_time_varying(data_file, cova, id_var)
   log_function(paste("Time-varying check:", time_varying))
 
@@ -514,11 +514,11 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
       dplyr::arrange(desc(n)) %>%
       dplyr::pull(!!rlang::parse_expr(cova))
 
-    # A missing record is not a level: no THETA for NA or "." (MOD-05).
+    # A missing record is not a level: no THETA for NA or ".".
     uniqueval_with_freq <- uniqueval_with_freq[!is.na(uniqueval_with_freq) &
                                                  trimws(as.character(uniqueval_with_freq)) != "."]
     uniqueval <- uniqueval_with_freq[uniqueval_with_freq != temp_cov$REFERENCE]
-    # No non-reference level would leave beta_<COV>_<PARAM> with no THETA (MOD-07).
+    # No non-reference level would leave beta_<COV>_<PARAM> with no THETA.
     if (length(uniqueval) == 0) {
       stop("Categorical covariate '", cova, "' has no observed level other than REFERENCE (",
            temp_cov$REFERENCE, "): there is no effect to estimate.", call. = FALSE)
@@ -1384,7 +1384,7 @@ remove_covariate_from_model <- function(search_state, model_name, covariate_tag,
   # survives (a hand-edited model reusing the covariate THETA in another
   # equation, e.g. Q = (WT/70)**THETA(5) * THETA(3)) would be renumbered onto
   # a different parameter. Checked here, not after Step 5, because additive
-  # categorical IF lines still hold the THETA until Step 6 (MOD-04).
+  # categorical IF lines still hold the THETA until Step 6.
   code_only <- sub(";.*$", "", modelcode)
   still_used <- theta_numbers_to_remove[vapply(theta_numbers_to_remove, function(n)
     any(grepl(paste0("\\bTHETA\\(\\s*", n, "\\s*\\)"), code_only)), logical(1))]

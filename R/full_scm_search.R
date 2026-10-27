@@ -193,7 +193,7 @@ run_automated_scm_testing <- function(search_state,
       current_model <- initial_backward_results$final_model
       cat(sprintf("✅ Initial backward complete. Final model: %s\n", current_model))
     } else {
-      # Stop like a forward failure (SCM-04). The state here predates the phase,
+      # Stop like a forward failure. The state here predates the phase,
       # so its model_counter misses the removal models already written; going
       # on into forward would reuse their run numbers and overwrite them.
       # continue_search() re-registers them from disk.
@@ -416,8 +416,8 @@ run_automated_scm_testing <- function(search_state,
     character(0)
   })
 
-  # Get excluded covariates and keep only forward-selection failures (SCM-07:
-  # the filter used to read "forward", a phase never written, so this was empty)
+  # Excluded covariates, keeping only those excluded during forward selection
+  # (phase "forward_selection"; retry rows carry phase "retry").
   excluded_covariates <- tryCatch({
     excluded_all <- get_excluded_covariates(search_state)
 

@@ -67,7 +67,7 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
         log_msg("⏭️  Retry skipped - an identical rerun would gain nothing")
 
         # Record the issue on the original model, as the retry path does. Its
-        # status stays "failed": "error" was terminal nowhere (STA-07).
+        # status stays "failed", the terminal status every count recognises.
         orig_idx <- which(search_state$search_database$model_name == original_model_name)
         if (length(orig_idx) > 0) {
           search_state$search_database$estimation_issue[orig_idx] <- issue_type
@@ -197,8 +197,8 @@ create_retry_model <- function(search_state, original_model_name, issue_type = "
       stop("Database insertion failed: ", db_error$message)
     })
 
-    # Record the issue on the original model; its status stays "failed"
-    # ("error" was terminal nowhere, so counts showed it in progress, STA-07).
+    # Record the issue on the original model; its status stays "failed", the
+    # terminal status every count recognises.
     orig_idx <- which(search_state$search_database$model_name == original_model_name)
     if (length(orig_idx) > 0) {
       search_state$search_database$estimation_issue[orig_idx] <- issue_type

@@ -136,11 +136,16 @@ extract_covariate_name_from_tag <- function(tag) {
 # or NONMEM's "." in a column read as text) is not a value, so a time-constant
 # covariate with a missing record is not time-varying. The one rule for the
 # effect's placement (model_add_cov), the transform check
-# (validate_param_transformations) and the table's TIME_DEPENDENT column.
+# (validate_param_transformations) and the table's TIME_DEPENDENT column. A
+# covariate or ID column absent from the dataset is an error.
 #' @keywords internal
 #' @noRd
 .covariate_is_time_varying <- function(data, cov, id) {
-  if (!cov %in% names(data) || !id %in% names(data)) return(FALSE)
+  missing_cols <- setdiff(c(cov, id), names(data))
+  if (length(missing_cols) > 0) {
+    stop("Column(s) not found in the dataset: ", paste(missing_cols, collapse = ", "),
+         call. = FALSE)
+  }
   x <- data[[cov]]
   keep <- !is.na(x) & trimws(as.character(x)) != "."
   if (!any(keep)) return(FALSE)
@@ -476,7 +481,7 @@ extract_covariate_name_from_tag <- function(tag) {
 
 # Entry-point check for a user-supplied rse_threshold: NULL (use the configured
 # value) or one positive number. .resolve_rse_threshold() quietly falls back to
-# the default for anything else, so a typo such as "30" must stop here (UTL-06).
+# the default for anything else, so a typo such as "30" must stop here.
 .check_rse_threshold <- function(rse_threshold) {
   if (is.null(rse_threshold)) return(invisible(NULL))
   if (!is.numeric(rse_threshold) || length(rse_threshold) != 1L ||
@@ -488,7 +493,7 @@ extract_covariate_name_from_tag <- function(tag) {
 }
 
 
-# The search's require_cov_step setting, read one way everywhere (XAR-05): only
+# The search's require_cov_step setting, read one way everywhere: only
 # an explicit FALSE relaxes it. NA, a string or a vector reads as TRUE, the
 # evaluator's fail-closed rule, so no reader can switch the criterion off by
 # accident. Entry points reject such values outright via

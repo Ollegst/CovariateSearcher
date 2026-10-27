@@ -565,9 +565,7 @@ get_covariate_tag_from_name <- function(search_state, covariate_name) {
     }
   }
 
-  # Tags keep their original case, so the only near miss is a case difference
-  # (SCM-10: a lower-case tag-name construction used to stand here, and only
-  # ever fired on such a mismatch, for two-part names).
+  # Tags keep their original case, so the only near miss is a case difference.
   for (tag_name in names(search_state$tags)) {
     tag_value <- search_state$tags[[tag_name]]
     if (!is.null(tag_value) && identical(toupper(tag_value), toupper(covariate_name))) {

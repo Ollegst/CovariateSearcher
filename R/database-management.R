@@ -312,7 +312,7 @@ update_model_counter <- function(search_state) {
 
       # A run<N> on disk but not in the database (skipped by auto-heal, or left
       # by an interrupted phase) must not be reused: copy_model_from() would
-      # overwrite it (REC-07).
+      # overwrite it.
       on_disk <- .highest_model_on_disk(search_state$models_folder)
       if (!is.na(on_disk) && on_disk > search_state$model_counter) {
         search_state$model_counter <- on_disk

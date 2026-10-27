@@ -355,7 +355,7 @@ run_scm_selective_forward <- function(search_state,
       if (is.null(current_best_model) || is.na(current_best_model)) {
         # No winner means no significant model, and the check below stops the
         # loop. Only a direct resume of such a step gets here; carry on from the
-        # step's own parent (SCM-05 - an earlier-steps search used to run here).
+        # step's own parent.
         current_best_model <- if (!is.na(prev_step$base_model)) {
           prev_step$base_model
         } else {

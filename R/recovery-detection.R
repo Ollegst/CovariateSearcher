@@ -42,7 +42,7 @@ detect_estimation_problems <- function(search_state, model_names, check_interval
 
       # Record the issue only. The .ext may belong to a run still in progress,
       # so a terminal status here could end a run that would have finished;
-      # status comes from the run's files (REC-06).
+      # status comes from the run's files.
       db_idx <- which(search_state$search_database$model_name == model_name)
       if (length(db_idx) > 0) {
         search_state$search_database$estimation_issue[db_idx] <- ext_data$issue_type
@@ -88,7 +88,7 @@ generate_recovery_report <- function(search_state) {
   # Retry statistics
   # Retries are the rows the retry path marks action "retry" (the run<N>001
   # name is the fallback for older databases). A failed retry has status
-  # "failed"; "retry_failed" is only ever an estimation_issue (REC-06).
+  # "failed" ("retry_failed" is an estimation_issue value, not a status).
   db <- search_state$search_database
   is_retry <- if ("action" %in% names(db)) {
     !is.na(db$action) & db$action == "retry"

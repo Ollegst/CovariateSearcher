@@ -431,8 +431,8 @@ create_covariate_boxplots <- function(data,
           theme(strip.background = element_blank(), strip.text = element_blank())
       }
 
-      # Computed before the footnote (not after, where it used to sit) so the
-      # saved path(s) can be reported on the figure itself.
+      # Computed before the footnote so the saved path(s) can be reported on
+      # the figure itself.
       base_name <- add_ss(paste0(pfx, drug, "-", covariate, "-", t), "_")
       fnames <- file.path(output_folder, t, paste0(base_name, ".", output_format))
 

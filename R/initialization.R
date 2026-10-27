@@ -768,8 +768,8 @@ validate_covariate_search_table <- function(covariate_search, data_file) {
         )
       }
 
-      # The other direction (MOD-07): THETAs are written for observed levels but
-      # df is counted from LEVELS, so an unobserved declared level made the test
+      # The other direction: THETAs are written for observed levels but df is
+      # counted from LEVELS, so an unobserved declared level would make the test
       # too strict. With LEVELS == observed, REFERENCE in LEVELS also means a
       # second observed level is a real non-reference level to estimate.
       unobserved <- setdiff(declared_levels_num, observed_levels_num)

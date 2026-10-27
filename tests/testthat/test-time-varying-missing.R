@@ -33,7 +33,8 @@ test_that("NA and '.' records do not make a covariate time-varying", {
   expect_false(.covariate_is_time_varying(d, "WT", "ID"))
   d$WT <- c(70, 71, 80, 80)
   expect_true(.covariate_is_time_varying(d, "WT", "ID"))
-  expect_false(.covariate_is_time_varying(d, "MISSING", "ID"))
+  expect_error(.covariate_is_time_varying(d, "MISSING", "ID"), "not found in the dataset: MISSING")
+  expect_error(.covariate_is_time_varying(d, "WT", "SUBJ"), "not found in the dataset: SUBJ")
 })
 
 test_that("a constant covariate with a missing record goes on the TV_ line", {
