@@ -86,21 +86,22 @@ model-modification.R	.rhs_needs_paren_wrap	.rhs_needs_paren_wrap(rhs)	no	fa276e1
 model-modification.R	.wrap_rhs_in_parens	.wrap_rhs_in_parens(line)	no	83a72733c44856ce999f5f5492f42202
 model-modification.R	add_covariate_to_model	add_covariate_to_model(search_state, base_model_id, covariate_tag, step_number=NULL, lookup_file=NULL, phase="forward_selection")	yes	8efda3a34236b1333a5ef99b8f63a34f
 model-modification.R	fix_theta_renumbering	fix_theta_renumbering(modelcode, theta_numbers_to_remove, log_function)	yes	bd897df50b5b76de58c39845cf7f33a9
-model-modification.R	model_add_cov	model_add_cov(search_state, ref_model, cov_on_param, id_var="ID", data_file, covariate_search, capture_log=FALSE, lookup_file=NULL)	yes	fe31475d8d035635afaf252ff5f8419a
+model-modification.R	model_add_cov	model_add_cov(search_state, ref_model, cov_on_param, id_var="ID", data_file, covariate_search, capture_log=FALSE, lookup_file=NULL)	yes	bfd46a24cb2b3588854f929ef56320ae
 model-modification.R	prepare_search_base_model	prepare_search_base_model(base_model_path, covariate_tags, new_model_number, data_file_path, covariate_search_path, models_folder="models", idcol="ID", overwrite=TRUE, lookup_file=NULL)	yes	0afcc21b56fac4187cd24a0594108727
 model-modification.R	remove_covariate_from_model	remove_covariate_from_model(search_state, model_name, covariate_tag, save_as_new_model=TRUE, step_number=NULL)	yes	53a517d6095d7e3da75e2a8df024be03
 model-modification.R	strip_covariate_factors	strip_covariate_factors(line, theta_nums)	no	d04d0beb036cbb0af8543312dcf6db99
 model-output-tables.R	.cov_display_name	.cov_display_name(cov_name, lookup=NULL, spec_pk=NULL)	no	c5f9278422d815c9e9b1866d92acaf2d
 model-output-tables.R	.format_ci	.format_ci(low, high, digits=3)	no	d6f0b32309461c7c8c4dce43c4a339bb
-model-output-tables.R	.join_bootstrap_results	.join_bootstrap_results(param_est, boot_results)	no	4910a44aaa2bad074559c8d250fdccf6
-model-output-tables.R	.reformat_boot_ci	.reformat_boot_ci(x)	no	e543746d8c87ea37188efe851290ce2c
+model-output-tables.R	.join_bootstrap_results	.join_bootstrap_results(param_est, boot_results)	no	00539df263ec4d472c6e816e89c31f93
+model-output-tables.R	.level_from_decoded_name	.level_from_decoded_name(cov_name, suffix_tokens, lookup)	no	ad50e566d036ecc1629b4d79da200323
+model-output-tables.R	.reformat_boot_ci	.reformat_boot_ci(x)	no	112d3d9290a850ed1f3a928c8a676e75
 model-output-tables.R	.to_report_scale	.to_report_scale(value, random_effect_sd, trans, diag)	no	4475e21c3b150c11fb1a00d522214890
-model-output-tables.R	calculate_condition_number	calculate_condition_number(model_number, models_folder="models", tolerance=1e-10)	no	88434beea6444ac74ad80f5b8012e076
+model-output-tables.R	calculate_condition_number	calculate_condition_number(model_number, models_folder="models", tolerance=1e-10)	no	fad59c8717058a58635eb15ff395ace0
 model-output-tables.R	decode_cov_level	decode_cov_level(cov_name, level, lookup)	no	ce51662c1cc4f12fec395bd13e517ddd
 model-output-tables.R	extract_model_params	extract_model_params(model_name, models_folder="models")	no	9d45e14fd94298643395a236f8845f76
 model-output-tables.R	extract_params	extract_params(lines, block_tag, remove_prefix=FALSE)	no	767260f9b56629620e3098acc3155a60
-model-output-tables.R	get_param2	get_param2(model_number, count_model, shrinkage="etasd", models_folder="models", spec_pk=NULL, lookup=NULL, include_ci=FALSE)	no	1ce07760f90716117085ba92d8e99473
-model-output-tables.R	model_report	model_report(model_names, shrinkage="etasd", models_folder="models", spec_pk=NULL, lookup=NULL, bootstrap=FALSE, boot_results=NULL)	yes	62cc2867f8940124a880bf83526bd039
+model-output-tables.R	get_param2	get_param2(model_number, count_model, shrinkage="etasd", models_folder="models", spec_pk=NULL, lookup=NULL, include_ci=FALSE)	no	7e452950c19ee363956e2e097d80a1f4
+model-output-tables.R	model_report	model_report(model_names, shrinkage="etasd", models_folder="models", spec_pk=NULL, lookup=NULL, bootstrap=FALSE, boot_results=NULL)	yes	a5f962549fdba87b8a88b2e1c6e879f3
 model-output-tables.R	theme_pps_table	theme_pps_table(x)	yes	aad765a60d5ecfc2d330db5cf36dd44a
 monitoring-files.R	read_ext_file	read_ext_file(search_state, model_name)	yes	2059e1830f198c5e6b20580073682712
 plot-bootstrap-distributions.R	.bootstrap_distribution_plot	.bootstrap_distribution_plot(draws, quantile_tbl, final_tbl, bins=30, ncol=NULL, footnote=NULL)	no	fe2fd7a52453f5df12bd51ff0a695d6f
@@ -141,8 +142,8 @@ scm-evaluation.R	.report_rse_rejections	.report_rse_rejections(rejected, context
 scm-evaluation.R	select_best_model	select_best_model(search_state, model_names, p_value=NULL, rse_threshold=NULL)	yes	809ea97eb2d44dc04ca83d66774fe730
 scm-execution.R	run_univariate_step	run_univariate_step(search_state, base_model_id, covariates_to_test=NULL, step_name, include_excluded=TRUE, phase="forward_selection")	yes	6bdd31267a3d3b6bcb3aa5675ffa848c
 scm-execution.R	submit_and_wait_for_step	submit_and_wait_for_step(search_state, model_names, step_name, max_wait_minutes=NULL, threads=NULL, auto_submit=TRUE, auto_retry=TRUE)	yes	3e418c540ecb9bdc1b8ec63b95be2222
-scm-results.R	create_scm_results_table	create_scm_results_table(search_state)	yes	c9d8e8fcf40721ef03320df650e641c2
-scm-results.R	print_scm_results_table	print_scm_results_table(search_state, show_rse=TRUE, truncate_covariates=35)	yes	a0ff31c7ce6ce404fd8e63f832beba33
+scm-results.R	create_scm_results_table	create_scm_results_table(search_state)	yes	725ae0d62cc45d74012e5f8009565321
+scm-results.R	print_scm_results_table	print_scm_results_table(search_state, show_rse=TRUE, truncate_covariates=35)	yes	1cbb1084c19e4788a5dc58d4fee8d7b9
 scm-selective-forward.R	.redemption_candidates	.redemption_candidates(search_state, best_model)	no	0ed55f38234eae7bccca5383254d78ed
 scm-selective-forward.R	.trailing_redemption_steps	.trailing_redemption_steps(search_state)	no	0e96f551788ba26d2a042f50de804219
 scm-selective-forward.R	get_covariates_from_models	get_covariates_from_models(search_state, model_names)	yes	34450aa25d0201cf1b47e5ff2bace653

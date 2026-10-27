@@ -642,7 +642,7 @@ checker confirmed the reviewer's `bbr` mocks match the shape of bbr's real captu
 - **Proposed fix:** `diag <- 1` after dropping FIX rows; `cov2cor` for the `.cov` fallback. NONMEM's own
   value (`PRINT=E`) is often absent, so it cannot be the only route. Fix the label ("condition number").
 - **Must keep:** last-TABLE selection; FIX rows removed; `Inf` for a singular matrix; `NA` when unusable.
-- **Status:** open
+- **Status:** fixed in 6cfd760 (2026-10-26)
 
 #### REP-03 — Estimates are rounded to 2 decimals, so small THETAs print as 0
 - **Location:** R/model-output-tables.R:818; also `.join_bootstrap_results` (boot median)
@@ -650,7 +650,7 @@ checker confirmed the reviewer's `bbr` mocks match the shape of bbr's real captu
 - **Evidence:** THETA 0.0045 prints "0" next to CI [0.00274, 0.00626]; -0.082 prints -0.08.
 - **Proposed fix:** 3 significant figures for estimates and the boot median; format OFV and the
   condition number separately; leave RSE rounding alone (it feeds the RSE test).
-- **Status:** open
+- **Status:** fixed in 6cfd760 (2026-10-26)
 
 #### REP-02 — The printed results summary names the wrong final model when several removals are acceptable
 - **Location:** R/scm-results.R:142-146, 414, 424, 469-471
@@ -660,7 +660,7 @@ checker confirmed the reviewer's `bbr` mocks match the shape of bbr's real captu
   model-number-order bug, and the error carries into later steps.
 - **Proposed fix:** pick the smallest ΔOFV in the last backward step **that has an acceptable removal**,
   or relabel (needs a new label for "acceptable, not chosen").
-- **Status:** open
+- **Status:** fixed in 6cfd760 (2026-10-26)
 
 #### REP-06 — `model_report` drops a model on any warning, such as a missing final newline
 - **Location:** R/model-output-tables.R:160, 964-968
@@ -676,7 +676,7 @@ checker confirmed the reviewer's `bbr` mocks match the shape of bbr's real captu
 - **Evidence:** a `precision` column is taken as the interval ("0.1"). The contract documents "first column containing CI".
 - **Proposed fix:** prefer an anchored match; build from a lower/upper pair; error when nothing parses.
 - **Must keep:** "95% CI-bootstrap" (tested); case-insensitive matching.
-- **Status:** open
+- **Status:** fixed in 6cfd760 (2026-10-26)
 
 #### REP-14 — FIX parameters get an absurd asymptotic CI in the bootstrap report (found by the checker)
 - **Location:** R/model-output-tables.R (`get_param2(include_ci = TRUE)`, comment at 632-635)
@@ -693,23 +693,23 @@ checker confirmed the reviewer's `bbr` mocks match the shape of bbr's real captu
 - **Evidence:** the formula `100*sqrt(exp(v)-1)` for every diagonal is a recorded choice; for an additive
   SIGMA the "CV%" is not meaningful, and nothing in the output states the formula.
 - **Proposed fix:** a footer stating the formula. Honouring an SD/ADD tag would also need a validator change (only RATIO/LOG allowed).
-- **Status:** open — decided 2026-10-27: add a footer stating the CV% formula; numbers unchanged
+- **Status:** fixed in 6cfd760 (2026-10-26)
 
 #### REP-08 — Without `spec_pk` the parameter table has no section headers
 - **Location:** R/model-output-tables.R:603-607, 792-800 · **Type:** bug · **Severity:** cosmetic · **Verified:** confirmed (both)
 - **Proposed fix:** derive the section from the NONMEM name; drop the empty header.
-- **Status:** open — low priority
+- **Status:** fixed in 6cfd760 (2026-10-26)
 
 #### REP-09 — A step that contains a retry is headed "REDEMPTION/FINAL TESTING"
 - **Location:** R/reporting.R:75-79 · **Type:** bug · **Severity:** cosmetic · **Verified:** confirmed (both)
 - **Note:** after dropping "retry" from the pattern the redemption label is dead (redemption rows are
   written as forward_selection — SCM-03).
-- **Status:** open — low priority
+- **Status:** fixed in 6cfd760 (2026-10-26)
 
 #### REP-11 — Shrinkage selection evaluates every field
 - **Location:** R/model-output-tables.R:557-574 · **Type:** bug · **Severity:** cosmetic · **Verified:** plausible; already noted as fragile in FUNCTIONS.md
 - **Evidence:** bbr's real example has all six fields, so it does not bite there.
-- **Status:** open — low priority
+- **Status:** fixed in 6cfd760 (2026-10-26)
 
 #### REP-12 — `$OMEGA BLOCK(1) SAME` breaks `get_param2` for IOV models
 - **Location:** R/model-output-tables.R:64-141, 600-613 · **Type:** bug · **Severity:** failure (outside the SCM flow) · **Verified:** plausible (parser confirmed)
@@ -718,7 +718,7 @@ checker confirmed the reviewer's `bbr` mocks match the shape of bbr's real captu
 #### REP-13 — Dead code in the reporting files
 - **Location:** R/scm-results.R:22-23, 86, 202, 209; R/model-output-tables.R:599; eps shrinkage · **Type:** simplification · **Severity:** cosmetic · **Verified:** confirmed
 - **Note:** the local `%||%` in reporting.R is already recorded in FUNCTIONS.md.
-- **Status:** open — low priority
+- **Status:** fixed in 6cfd760 (2026-10-26)
 
 ### Area 8 — Shared utilities
 Reviewed by Fable (`D:\R\tmp\review-UTL\`), re-checked by Opus (`D:\R\tmp\verify-UTL\`).
@@ -951,7 +951,7 @@ Reviewed by Fable (`D:\R\tmp\review-XAR\`), re-checked by Sonnet (`D:\R\tmp\veri
   `generate_scm_report` calls it a rejected removal. Rows from the backward loop are relabelled and not
   affected. (The retry-of-removal case is unreachable — UTL-02.)
 - **Proposed fix:** use `.scm_backward_rows()` at both sites.
-- **Status:** open (group G4)
+- **Status:** fixed in 6cfd760 (2026-10-26)
 
 #### XAR-05 — `require_cov_step = NA` is read four different ways
 - **Location:** R/file-io.R:478; R/validation.R:239-240; R/scm-evaluation.R:117-118; R/scm-backward.R:40-45; R/initialization.R:55, 198, 222
@@ -975,7 +975,7 @@ Reviewed by Fable (`D:\R\tmp\review-XAR\`), re-checked by Sonnet (`D:\R\tmp\veri
 - **Type:** inconsistency · **Severity:** cosmetic · **Verified:** confirmed by reading (both)
 - **Evidence:** the report shows "Effect of SEX_MALE on CL" instead of "SEX (Male)".
 - **Proposed fix:** always write the numeric level and decode when displaying, or let the reader match decode labels.
-- **Status:** open (group G11) — low priority
+- **Status:** fixed in 6cfd760 (2026-10-26)
 
 #### XAR-10 — `covariate_tested` holds a tag name in most rows but a tag value in discovered rows
 - **Location:** R/model-discovery.R:78-89, 132; R/recovery-actions.R:173; R/model-modification.R:190, 1435
