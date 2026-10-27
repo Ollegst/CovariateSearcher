@@ -713,7 +713,7 @@ checker confirmed the reviewer's `bbr` mocks match the shape of bbr's real captu
 
 #### REP-12 — `$OMEGA BLOCK(1) SAME` breaks `get_param2` for IOV models
 - **Location:** R/model-output-tables.R:64-141, 600-613 · **Type:** bug · **Severity:** failure (outside the SCM flow) · **Verified:** plausible (parser confirmed)
-- **Status:** open
+- **Status:** rejected — owner 2026-10-27: models must name every parameter for proper table output, so a BLOCK(1) SAME line without its own name is not a supported input
 
 #### REP-13 — Dead code in the reporting files
 - **Location:** R/scm-results.R:22-23, 86, 202, 209; R/model-output-tables.R:599; eps shrinkage · **Type:** simplification · **Severity:** cosmetic · **Verified:** confirmed
@@ -859,7 +859,7 @@ mrgsolve could not compile on this machine, so `simulate_scenario_profiles` was 
 
 #### SIM-09 — Lower-case `$pk` falls back to raw draws with no warning
 - **Location:** R/apply-covariate-model.R:241-247, 401, 409 · **Type:** bug · **Severity:** result (rare input) · **Verified:** confirmed (both)
-- **Status:** open — low priority
+- **Status:** fixed by the shared case-insensitive record matcher (.record_starts, G2, 54e55ae); lower-case code inside $PK is not supported — owner 2026-10-27: models are written in upper case
 
 #### SIM-07 — Exposure tables require a label for every numeric column
 - **Location:** R/forest-plots.R:1230-1231 · **Type:** usability · **Severity:** cosmetic · **Verified:** confirmed; close to the recorded design ("every tabulated quantity must be labelled")
