@@ -214,6 +214,39 @@ get_covariates_from_models <- function(search_state, model_names) {
 }
 
 
+# Covariate tags for the first redemption step. Redemption is a new selective
+# search from the best model: it tests every covariate that is not in the best
+# model and has not already been tested on it. A covariate counts as tested on
+# the best model when a COMPLETED model with that covariate has the best model
+# as its parent; a model built on it that failed does not count, so its
+# covariate is tested again (subject to retest_failed for covariates excluded
+# after a failed retry, which run_univariate_step applies). Backward rows are
+# ignored: a removal model's parent is the model it removes from.
+#' @keywords internal
+#' @noRd
+.redemption_candidates <- function(search_state, best_model) {
+  all_tags <- names(search_state$tags)[grepl("^beta_", names(search_state$tags))]
+
+  # The best model's covariates come from its .yaml tags, which hold tag
+  # values (e.g. "WT_CL"); map them back to tag names.
+  best_values <- tryCatch(
+    get_model_covariates_from_db(search_state, best_model),
+    error = function(e) {
+      cat(sprintf("⚠️  Warning: Could not get covariates for %s: %s\n", best_model, e$message))
+      character(0)
+    })
+  in_best <- all_tags[unlist(search_state$tags[all_tags]) %in% best_values]
+
+  db <- search_state$search_database
+  tested_on_best <- db$covariate_tested[
+    !is.na(db$parent_model) & db$parent_model == best_model &
+      !is.na(db$status) & db$status == "completed" &
+      !.scm_backward_rows(search_state)]
+
+  setdiff(all_tags, c(in_best, tested_on_best))
+}
+
+
 #' @title Execute proper stepwise forward selection with cumulative model building
 #' @description Runs true forward selection where each step builds from the best model
 #'   of the previous step, testing only remaining (untested) covariates. Implements
@@ -266,7 +299,6 @@ run_scm_selective_forward <- function(search_state,
   current_best_model <- base_model_id
   forward_selection_active <- TRUE
   step_results <- list()
-  last_step_covariates_tested <- character(0)  # Track for deduplication
 
   # Fresh run (resume = FALSE): first step tests ALL covariates.
   # Resume (resume = TRUE): first step continues selectively from the previous
@@ -293,10 +325,12 @@ run_scm_selective_forward <- function(search_state,
       cat(sprintf("First selective forward step: Starting from base model %s\n", current_best_model))
       cat("Strategy: Test ALL available covariates\n")
 
+      # The first step is a new search (also the forward phase of SCM+), so
+      # covariates excluded earlier come back when retest_failed is TRUE.
       covariates_to_test <- get_remaining_covariates(
         search_state = search_state,
         base_model_id = current_best_model,
-        include_excluded = FALSE
+        include_excluded = .retest_failed(search_state)
       )
 
       step_base_model <- current_best_model
@@ -435,8 +469,6 @@ run_scm_selective_forward <- function(search_state,
       step_base_model <- current_best_model  # Use current best as base
     }
 
-    # Always update last_step_covariates_tested
-    last_step_covariates_tested <- covariates_to_test
 
     cat(sprintf("\n📋 Covariates to test in Step %d: %d\n", current_step, length(covariates_to_test)))
 
@@ -466,7 +498,7 @@ run_scm_selective_forward <- function(search_state,
       base_model_id = step_base_model,
       covariates_to_test = covariates_to_test,
       step_name = sprintf("Step %d: Selective Forward Selection", current_step),
-      include_excluded = FALSE
+      include_excluded = !is_continuation && .retest_failed(search_state)
     )
 
     # Update search_state
@@ -575,8 +607,12 @@ run_scm_selective_forward <- function(search_state,
     save_search_state(search_state, .scm_checkpoint_name(current_step - 1, "forward", "done"))
   }
 
-  # Store last step number from main loop
-  last_main_step <- current_step - 1
+  # Last step the main loop created. Forward usually ends with a step that was
+  # created and found nothing significant, so this is read from the database
+  # rather than from the loop counter, which only advances after a step with
+  # significant models. Redemption steps are numbered after it.
+  last_main_step <- suppressWarnings(max(search_state$search_database$step_number, na.rm = TRUE))
+  if (!is.finite(last_main_step)) last_main_step <- current_step - 1
 
   # ===================================================================
   # REDEMPTION PHASE - Test remaining covariates
@@ -650,63 +686,10 @@ run_scm_selective_forward <- function(search_state,
       cat(sprintf("Last completed step: %d\n", last_main_step))
 
       # Determine redemption strategy based on where best model came from
-      redemption_needed <- FALSE
-      redemption_covariates <- character(0)
-
-      # Get all available covariates including excluded
-      all_available_tags <- names(search_state$tags)[grepl("^beta_", names(search_state$tags))]
-
-      # Get covariates in best model with error handling
-      best_model_covariates <- tryCatch({
-        get_model_covariates_from_db(search_state, final_best_model)
-      }, error = function(e) {
-        cat(sprintf("⚠️  Warning: Could not get covariates for %s: %s\n",
-                    final_best_model, e$message))
-        character(0)
-      })
-
-      # Convert to tags
-      best_model_tags <- character(0)
-      for (cov_name in best_model_covariates) {
-        matching_tags <- names(search_state$tags)[sapply(search_state$tags, function(x) x == cov_name)]
-        if (length(matching_tags) > 0) {
-          best_model_tags <- c(best_model_tags, matching_tags)
-        }
-      }
-
-      # GUARD 3: Ensure final_best_step is non-empty before comparison
-      if (length(final_best_step) == 0) {
-        cat("⚠️  WARNING: Unable to determine step number for best model - skipping scenario branching\n")
-        redemption_needed <- FALSE
-      } else if (final_best_step < last_main_step) {
-        # Scenario B: Best model from earlier step
-        cat("📋 Scenario B: Best model from earlier step - avoiding duplicates\n")
-
-        # Remove covariates already in best model
-        redemption_covariates <- setdiff(all_available_tags, best_model_tags)
-
-        # Ensure last_step_covariates_tested is valid
-        if (length(last_step_covariates_tested) > 0) {
-          # Remove covariates tested in last step to avoid duplicates
-          redemption_covariates <- setdiff(redemption_covariates, last_step_covariates_tested)
-          cat(sprintf("Excluding %d covariates tested in Step %d\n",
-                      length(last_step_covariates_tested), last_main_step))
-        }
-
-        cat(sprintf("Covariates to test: All except those in best model and tested in Step %d\n",
-                    last_main_step))
-        redemption_needed <- length(redemption_covariates) > 0
-
-      } else if (final_best_step == last_main_step) {
-        # Scenario A: Best model from last step
-        cat("📋 Scenario A: Best model from last step - test all remaining\n")
-
-        # Test all covariates not in best model
-        redemption_covariates <- setdiff(all_available_tags, best_model_tags)
-
-        cat("Covariates to test: All not in best model (including excluded)\n")
-        redemption_needed <- length(redemption_covariates) > 0
-      }
+      redemption_covariates <- .redemption_candidates(search_state, final_best_model)
+      cat(sprintf("Covariates to test: not in %s and not already tested on it\n",
+                  final_best_model))
+      redemption_needed <- length(redemption_covariates) > 0
 
       if (redemption_needed) {
         cat(sprintf("\n🎯 STARTING REDEMPTION TESTING\n"))
@@ -827,7 +810,7 @@ run_scm_selective_forward <- function(search_state,
           base_model_id = current_redemption_base,  # Use updated base
           covariates_to_test = covariates_to_test,
           step_name = sprintf("Step %d: Redemption Testing", current_step_number),
-          include_excluded = TRUE  # Include excluded covariates
+          include_excluded = .retest_failed(search_state)
         )
 
         search_state <- redemption_result$search_state

@@ -13,7 +13,8 @@ continue_search(
   backward_p_value = NULL,
   rse_threshold = NULL,
   auto_submit = TRUE,
-  auto_retry = TRUE
+  auto_retry = TRUE,
+  retest_failed = NULL
 )
 }
 \arguments{
@@ -42,6 +43,10 @@ Thresholds; default to the state's \code{search_config}.}
 \item{auto_submit}{Logical. Whether to submit newly created models (default TRUE).}
 
 \item{auto_retry}{Logical. Whether to auto-retry failed models (default TRUE).}
+
+\item{retest_failed}{Logical or NULL. Whether covariates excluded after a
+failed retry are tested again (see \code{run_automated_scm_testing()}).
+NULL (default) keeps the value stored in \code{search_config}.}
 }
 \value{
 Invisibly, a list with \code{search_state}, \code{status}

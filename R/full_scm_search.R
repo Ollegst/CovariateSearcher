@@ -35,9 +35,16 @@
 #' @param auto_submit Logical. Whether to automatically submit models to cluster (default: TRUE)
 #' @param auto_retry Logical. Whether to enable automatic retry for failed models (default: TRUE)
 #' @param save_checkpoints Logical. Whether to save state after each major step (default: TRUE)
-#' @param final_testing Logical. No longer has an effect: the final testing of
-#'   excluded covariates was retired (it could never run). Kept so existing calls
-#'   still work.
+#' @param final_testing Logical. Has no effect; kept so existing calls still
+#'   work. Use \code{retest_failed} to choose whether failed covariates are
+#'   tested again.
+#' @param retest_failed Logical. Whether a covariate excluded after its model
+#'   and its retry both failed is tested again (default: TRUE). With TRUE it is
+#'   offered again at every step of standard SCM, in the first step of
+#'   selective forward (including the forward phase of SCM+) and in every
+#'   redemption step; with FALSE it is not tested again in this search. Stored
+#'   in \code{search_config}, so \code{continue_search()} keeps it; when not
+#'   supplied, the stored value (default TRUE) is used.
 #' @return List containing comprehensive SCM results
 #' @export
 run_automated_scm_testing <- function(search_state,
@@ -52,7 +59,8 @@ run_automated_scm_testing <- function(search_state,
                                       auto_submit = TRUE,
                                       auto_retry = TRUE,
                                       save_checkpoints = TRUE,
-                                      final_testing = TRUE) {
+                                      final_testing = TRUE,
+                                      retest_failed = TRUE) {
 
   if (is.null(search_state) || !is.list(search_state)) {
     stop("search_state must be a valid list")
@@ -124,6 +132,11 @@ run_automated_scm_testing <- function(search_state,
     require_cov_step <- .require_cov_step(search_state)
   }
   search_state$search_config$require_cov_step <- require_cov_step
+  # Same rule for retest_failed: a value stored earlier survives the default.
+  if (!missing(retest_failed)) {
+    .check_retest_failed(retest_failed)
+    search_state$search_config$retest_failed <- retest_failed
+  }
 
   # Calculate ΔOFV thresholds for display (df=1 for typical single parameter)
   forward_ofv_threshold_display <- pvalue_to_threshold(forward_p_value, df = 1)
@@ -148,6 +161,7 @@ run_automated_scm_testing <- function(search_state,
   cat(sprintf("Require covariance step: %s\n", require_cov_step))
   cat(sprintf("Auto-retry enabled: %s\n", auto_retry))
   cat(sprintf("Checkpoints enabled: %s\n", save_checkpoints))
+  cat(sprintf("Retest failed covariates: %s\n", .retest_failed(search_state)))
   cat(paste(rep("=", 80), collapse=""), "\n")
 
   # Initialize tracking

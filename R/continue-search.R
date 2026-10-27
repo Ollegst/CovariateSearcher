@@ -185,6 +185,9 @@
 #'   Thresholds; default to the state's \code{search_config}.
 #' @param auto_submit Logical. Whether to submit newly created models (default TRUE).
 #' @param auto_retry Logical. Whether to auto-retry failed models (default TRUE).
+#' @param retest_failed Logical or NULL. Whether covariates excluded after a
+#'   failed retry are tested again (see \code{run_automated_scm_testing()}).
+#'   NULL (default) keeps the value stored in \code{search_config}.
 #' @return Invisibly, a list with \code{search_state}, \code{status}
 #'   ("completed" or "incomplete_step"), \code{resumed_phase}, \code{final_model}
 #'   and \code{final_covariates}.
@@ -197,8 +200,10 @@ continue_search <- function(search_state = NULL,
                             backward_p_value = NULL,
                             rse_threshold = NULL,
                             auto_submit = TRUE,
-                            auto_retry = TRUE) {
+                            auto_retry = TRUE,
+                            retest_failed = NULL) {
   .check_rse_threshold(rse_threshold)
+  if (!is.null(retest_failed)) .check_retest_failed(retest_failed)
 
   # ---- 1. Obtain the search state ----------------------------------------
   if (is.null(search_state)) {
@@ -226,6 +231,7 @@ continue_search <- function(search_state = NULL,
   search_state$search_config$forward_p_value   <- forward_p_value
   search_state$search_config$backward_p_value  <- backward_p_value
   search_state$search_config$max_rse_threshold <- rse_threshold
+  if (!is.null(retest_failed)) search_state$search_config$retest_failed <- retest_failed
 
   cat("🔁 CONTINUE SEARCH\n")
   cat(paste(rep("=", 60), collapse = ""), "\n")

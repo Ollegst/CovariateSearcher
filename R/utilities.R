@@ -502,6 +502,21 @@ extract_covariate_name_from_tag <- function(tag) {
   !identical(search_state$search_config$require_cov_step %||% TRUE, FALSE)
 }
 
+# Whether covariates excluded after a failed model and failed retry are tested
+# again: at every step of standard SCM, in the first step of selective forward
+# (a new search, including the forward phase of SCM+) and in every redemption step.
+# Read from search_config; anything but an explicit FALSE is TRUE.
+.retest_failed <- function(search_state) {
+  !identical(search_state$search_config$retest_failed %||% TRUE, FALSE)
+}
+
+.check_retest_failed <- function(retest_failed) {
+  if (!isTRUE(retest_failed) && !identical(retest_failed, FALSE)) {
+    stop("retest_failed must be TRUE or FALSE, not ", deparse(retest_failed), call. = FALSE)
+  }
+  invisible(retest_failed)
+}
+
 .check_require_cov_step <- function(require_cov_step) {
   if (!isTRUE(require_cov_step) && !identical(require_cov_step, FALSE)) {
     stop("require_cov_step must be TRUE or FALSE, not ", deparse(require_cov_step),

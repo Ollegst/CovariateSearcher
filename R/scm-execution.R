@@ -82,10 +82,11 @@ run_univariate_step <- function(search_state, base_model_id, covariates_to_test 
 
   # Show exclusion status
   if (include_excluded) {
-    excluded_in_this_step <- intersect(covariate_names, get_excluded_covariates(search_state))
+    excluded_in_this_step <- intersect(covariates_to_test, get_excluded_covariates(search_state))
     if (length(excluded_in_this_step) > 0) {
       cat(sprintf("📋 Including %d previously excluded covariates: %s\n",
-                  length(excluded_in_this_step), paste(excluded_in_this_step, collapse = ", ")))
+                  length(excluded_in_this_step),
+                  paste(unlist(search_state$tags[excluded_in_this_step]), collapse = ", ")))
     }
   }
 
