@@ -134,7 +134,7 @@ independent Opus pass (`D:\R\tmp\verify-scm\`). Verdicts below are the checker's
   `starting_phase = "backward"`.
 - **Proposed fix:** add `&& run_initial_backward` to the skip condition.
 - **Must keep:** the skip for SCM+ (backward → forward → backward) when forward changed nothing.
-- **Status:** open — decision needed
+- **Status:** open — decided 2026-10-27: supported: run final backward unless an initial backward already ran (add `&& run_initial_backward` to the skip)
 
 #### SCM-03 — Resuming a selective search can skip the redemption phase
 - **Location:** R/continue-search.R:308-345 (caller side); R/model-modification.R:29; R/scm-selective-forward.R:612-950
@@ -267,7 +267,7 @@ R >= 4.2 on Windows and on Linux/Metworx).
   test covers a listing without `Stop Time:`. Decision needed (see top).
 - **Must keep:** the rejected design (termination verdict never disqualifies; rounding-error run with OFV
   + `.cov` is `completed`); the `incomplete`/`in_progress` spellings; `read_error` → `failed` first.
-- **Status:** open — decision needed
+- **Status:** open — decided 2026-10-27: runs go through bbi/nmfe: finished means `Stop Time:` present; align get_model_status_from_files to it
 
 #### NIO-03 — `.read_listing_lines`' latin1 fallback can never fire
 - **Location:** R/file-io.R:51-71; FUNCTIONS.md:185 describes it
@@ -693,7 +693,7 @@ checker confirmed the reviewer's `bbr` mocks match the shape of bbr's real captu
 - **Evidence:** the formula `100*sqrt(exp(v)-1)` for every diagonal is a recorded choice; for an additive
   SIGMA the "CV%" is not meaningful, and nothing in the output states the formula.
 - **Proposed fix:** a footer stating the formula. Honouring an SD/ADD tag would also need a validator change (only RATIO/LOG allowed).
-- **Status:** open — owner decision
+- **Status:** open — decided 2026-10-27: add a footer stating the CV% formula; numbers unchanged
 
 #### REP-08 — Without `spec_pk` the parameter table has no section headers
 - **Location:** R/model-output-tables.R:603-607, 792-800 · **Type:** bug · **Severity:** cosmetic · **Verified:** confirmed (both)
@@ -849,7 +849,7 @@ mrgsolve could not compile on this machine, so `simulate_scenario_profiles` was 
   writes `ENDIF`, so only hand-written blocks are affected. The removal-side pattern is a different issue
   (only package-written blocks), but if hit it would delete the rest of `$PK`.
 - **Proposed fix:** `^END\s*IF\b` (harmless either way; matches the existing `ELSE IF` acceptance).
-- **Status:** open — needs the NONMEM syntax settled
+- **Status:** open — decided 2026-10-27: accept both `ENDIF` and `END IF`
 
 #### SIM-06 — A categorical covariate without LEVELS silently gets no forest scenario
 - **Location:** R/forest-plots.R:515-527 · **Type:** bug · **Severity:** result (unlikely) · **Verified:** confirmed
@@ -864,7 +864,7 @@ mrgsolve could not compile on this machine, so `simulate_scenario_profiles` was 
 #### SIM-07 — Exposure tables require a label for every numeric column
 - **Location:** R/forest-plots.R:1230-1231 · **Type:** usability · **Severity:** cosmetic · **Verified:** confirmed; close to the recorded design ("every tabulated quantity must be labelled")
 - **Proposed fix:** tabulate only labelled columns, if the owner agrees.
-- **Status:** open — owner decision
+- **Status:** open — decided 2026-10-27: tabulate only labelled columns
 
 #### SIM-05 — Percentile labels round 2.5 to "2nd" and 97.5 to "98th"
 - **Location:** R/forest-plots.R:464-478 · **Type:** bug · **Severity:** cosmetic · **Verified:** confirmed (both)

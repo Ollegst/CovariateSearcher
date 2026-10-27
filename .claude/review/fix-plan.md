@@ -37,7 +37,7 @@ agent files.
 
 | # | Task | Why |
 |---|---|---|
-| 0.1 | Owner answers the open decisions (table below) | Phases 3–6 contain items that cannot start without them |
+| 0.1 | Owner answers the open decisions (table below) — **all answered 2026-10-27** | Phases 3–6 contain items that cannot start without them |
 | 0.2 | Add characterisation tests for untested functions that fixes will touch: `get_remaining_covariates`, `get_excluded_covariates`, `print_scm_results_table`, `calculate_covariate_df` with one covariate on two parameters, `build_scenario_parameters` with one covariate | So a fix cannot silently change behaviour nobody tested |
 | 0.3 | Extend `compare-model-readers.R` to also compare `create_covariate_table`, `detect_param_transform` and `get_param2`'s name/scale columns | These are touched by G1–G3 |
 
@@ -136,7 +136,7 @@ and 7 are closed here. **Order matters:** each step uses the one before.
 | 3.6 | **G7: STA-05**, MOD-05, UTL-03, XAR-09 | one `.covariate_is_time_varying()` ignoring NA and "."; read the dataset with `na = c("", "NA", ".")` at the dataset call sites; fix the Quick Start sentence about TIME_DEPENDENT | M | — |
 | 3.7 | **MOD-04** | after Steps 6/7, stop if a removed THETA is still referenced | S | G1 |
 | 3.8 | **MOD-07** | stop when no non-reference level is observed; require declared LEVELS = observed (or df from observed) | S | G8 |
-| 3.9 | **SCM-02** | per decision: add `run_initial_backward` to the skip, or document | S | decision |
+| 3.9 | **SCM-02** | add `&& run_initial_backward` to the final-backward skip | S | decided 2026-10-27 |
 | 3.10 | SCM-05, SCM-07, SCM-10 | fallback block → `prev_step$base_model` (update the grep test); excluded-covariates filter on `forward_selection`, retire the dead block; drop the dead tag fallback | S | — |
 
 ---
@@ -150,7 +150,7 @@ and 7 are closed here. **Order matters:** each step uses the one before.
 | 4.3 | **G10: SCM-04**, REC-07 | stop after an initial-backward error; raise the counter to the highest model on disk after auto-heal | S | 1.10 |
 | 4.4 | **G5: XAR-05**, SCM-08 | one `require_cov_step` accessor; stop at initialization unless TRUE/FALSE; banner wording | S | — |
 | 4.5 | **G9: STA-07**, REC-06 | retry path keeps status "failed" and sets only `estimation_issue`; display maps cover every status; retire or gate `detect_estimation_problems` | S | — |
-| 4.6 | **NIO-02** (= STA-02) | align the two run-success readers per decision; add a test without `Stop Time:` | M | decision |
+| 4.6 | **NIO-02** (= STA-02) | align the two run-success readers per decision; add a test without `Stop Time:` | M | decided 2026-10-27: `Stop Time:` |
 | 4.7 | UTL-06 | `is.numeric` check for `rse_threshold` at every exported entry point | S | — |
 | 4.8 | REC-05, NIO-05, NIO-07, STA-06, STA-08, STA-09, STA-10, UTL-02, UTL-05, UTL-07 | smaller robustness fixes, one commit each or grouped by file | S each | — |
 
@@ -167,7 +167,7 @@ and 7 are closed here. **Order matters:** each step uses the one before.
 | 5.5 | REP-08 | section headers from the NONMEM name without `spec_pk` | S | — |
 | 5.6 | REP-11 | shrinkage `switch()` | S | — |
 | 5.7 | XAR-08 | categorical THETA names keep the numeric level; decode at display time | S | G11 |
-| 5.8 | REP-05 | per decision: footer stating the CV% formula | S | decision |
+| 5.8 | REP-05 | per decision: footer stating the CV% formula | S | decided 2026-10-27 |
 
 ---
 
@@ -177,10 +177,10 @@ and 7 are closed here. **Order matters:** each step uses the one before.
 |---|---|---|---|---|
 | 6.1 | **SIM-01** | follow the defining variable to the parameter (`MU_k`, `TVV → V2`); syntactic version in `.structural_param_names` | M | G1 |
 | 6.2 | **SIM-03** | depth-counted single-line `IF`; warn on conditions that cannot be evaluated (state the behaviour change) | S | — |
-| 6.3 | SIM-02 | accept `END IF` in the interpreter and the remover | S | decision |
+| 6.3 | SIM-02 | accept `END IF` in the interpreter and the remover | S | decided 2026-10-27 |
 | 6.4 | SIM-06 | warn (or use observed levels) when a categorical covariate has no LEVELS | S | — |
 | 6.5 | SIM-05, SIM-10, SIM-11 | percentile labels; subject counts and bin labels in boxplots; cap/seed the jitter layer | S each | — |
-| 6.6 | SIM-07 | per decision | S | decision |
+| 6.6 | SIM-07 | tabulate only labelled columns | S | decided 2026-10-27 |
 
 ---
 
