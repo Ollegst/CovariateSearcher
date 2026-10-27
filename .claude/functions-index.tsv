@@ -147,7 +147,7 @@ scm-selective-forward.R	run_scm_selective_forward	run_scm_selective_forward(sear
 utilities.R	.add_footnote	.add_footnote(p, footnote, size=NULL)	no	6e4ee26c7dc243403b5df562467ce419
 utilities.R	.check_require_cov_step	.check_require_cov_step(require_cov_step)	no	c4329e1076ede27a50503e382c2332a4
 utilities.R	.check_rse_threshold	.check_rse_threshold(rse_threshold)	no	bf490ed5e02b3960fbd1e781be53037d
-utilities.R	.covariate_is_time_varying	.covariate_is_time_varying(data, cov, id)	no	58c20d0feb0c64cdb74db4c22a8f8a83
+utilities.R	.covariate_is_time_varying	.covariate_is_time_varying(data, cov, id)	no	74957acac28450af1be80a1324279e54
 utilities.R	.ensure_provenance_column	.ensure_provenance_column(search_state)	no	c8b683a1892302aecd63a48f3657caf3
 utilities.R	.find_model_component	.find_model_component(model, models_folder, exts)	no	b252e047e14179c053c10d19a60fdbc1
 utilities.R	.is_pending_status	.is_pending_status(status)	no	fcb1eb0b2b2626f97869bf23c4b9ff22
