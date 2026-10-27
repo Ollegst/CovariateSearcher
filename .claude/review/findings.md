@@ -267,7 +267,7 @@ R >= 4.2 on Windows and on Linux/Metworx).
   test covers a listing without `Stop Time:`. Decision needed (see top).
 - **Must keep:** the rejected design (termination verdict never disqualifies; rounding-error run with OFV
   + `.cov` is `completed`); the `incomplete`/`in_progress` spellings; `read_error` → `failed` first.
-- **Status:** open — decided 2026-10-27: runs go through bbi/nmfe: finished means `Stop Time:` present; align get_model_status_from_files to it
+- **Status:** fixed in 304a56a (2026-10-26)
 
 #### NIO-03 — `.read_listing_lines`' latin1 fallback can never fire
 - **Location:** R/file-io.R:51-71; FUNCTIONS.md:185 describes it
