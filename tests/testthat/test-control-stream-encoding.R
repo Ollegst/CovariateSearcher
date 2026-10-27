@@ -107,6 +107,24 @@ test_that("saving a Windows-1252 model keeps it in Windows-1252", {
 })
 
 
+test_that("adjusting a covariate THETA keeps a Windows-1252 model in Windows-1252", {
+  # functions-index review: adjust_theta_for_covariate read through the
+  # repairing reader but wrote with writeLines, re-saving the file as UTF-8.
+  models_dir <- write_cp1252_model()
+  path <- file.path(models_dir, "run1.ctl")
+  st <- list(models_folder = models_dir, tags = list(cov_cl_wt = "WT_CL"),
+             covariate_search = data.frame(cov_to_test = "beta_WT_CL", COVARIATE = "WT",
+                                           stringsAsFactors = FALSE))
+  invisible(capture.output(res <- adjust_theta_for_covariate(st, "run1", "cov_cl_wt")))
+  expect_true(res$success)
+
+  after <- readBin(path, "raw", file.size(path))
+  expect_true(any(after == as.raw(0xB5)))
+  expect_false(any(after == as.raw(0xC2)))
+  expect_false(any(grepl("^0.75 ; beta_WT_CL", .read_control_stream(path))))
+})
+
+
 test_that("saving a UTF-8 model leaves it UTF-8", {
   models_dir <- tempfile("models")
   dir.create(models_dir)

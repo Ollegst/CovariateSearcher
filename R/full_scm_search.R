@@ -351,7 +351,7 @@ run_automated_scm_testing <- function(search_state,
     } else {
       # Proceed with final backward elimination
       phase_num <- if (run_initial_backward) "FINAL" else ""
-      cat(sprintf("\nðŸ“‰ %s BACKWARD ELIMINATION PHASE\n", phase_num))
+      cat(sprintf("\n📉 %s BACKWARD ELIMINATION PHASE\n", phase_num))
       cat(paste(rep("-", 50), collapse=""), "\n")
 
     cat(sprintf("Starting final backward elimination from: %s\n", current_model))
