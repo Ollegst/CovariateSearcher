@@ -136,7 +136,7 @@ and 7 are closed here. **Order matters:** each step uses the one before.
 | 3.6 | **G7: STA-05**, MOD-05, UTL-03, XAR-09 | one `.covariate_is_time_varying()` ignoring NA and "."; read the dataset with `na = c("", "NA", ".")` at the dataset call sites; fix the Quick Start sentence about TIME_DEPENDENT | M | — |
 | 3.7 | **MOD-04** | after Steps 6/7, stop if a removed THETA is still referenced | S | G1 |
 | 3.8 | **MOD-07** | stop when no non-reference level is observed; require declared LEVELS = observed (or df from observed) | S | G8 |
-| 3.9 | **SCM-02** | add `&& run_initial_backward` to the final-backward skip | S | decided 2026-10-27 |
+| 3.9 | **SCM-02** | skip final backward after an unchanged forward only if the initial backward ran or the model has no covariates (owner, 2026-10-27) | S | decided 2026-10-27 |
 | 3.10 | SCM-05, SCM-07, SCM-10 | fallback block → `prev_step$base_model` (update the grep test); excluded-covariates filter on `forward_selection`, retire the dead block; drop the dead tag fallback | S | — |
 
 ---
@@ -212,7 +212,7 @@ Mark items here as they land (`done <commit>`), and the register entry as `fixed
 | 0 | not started |
 | 1 | done — 10 items, commits 24eade5..c13da8f (2026-10-26) |
 | 2 | done — 2.1 G13 (a08a8cb), 2.2 G2 (54e55ae; SIM-09 → 6.x), 2.3 G1 (fd22066; REP-12 → 5.x), 2.4 G3 (bef931c) |
-| 3 | in progress — 3.1 UTL-01 + SCM-09 (f0dd2bc), 3.4 MOD-02 (6c8365b), 3.5 G8 (f16b579), 3.6 G7, 3.7 MOD-04, 3.8 MOD-07, 3.10 SCM-05/07/10 (2bcf8c9); Phase 3 audit (Sonnet) follow-ups f670f39; 3.2 SCM-01 + 3.3 REC-04/SCM-06 + retest_failed (d6cdce4); 3.9 decided, not started |
+| 3 | in progress — 3.1 UTL-01 + SCM-09 (f0dd2bc), 3.4 MOD-02 (6c8365b), 3.5 G8 (f16b579), 3.6 G7, 3.7 MOD-04, 3.8 MOD-07, 3.10 SCM-05/07/10 (2bcf8c9); Phase 3 audit (Sonnet) follow-ups f670f39; 3.2 SCM-01 + 3.3 REC-04/SCM-06 + retest_failed (d6cdce4); 3.9 SCM-02 (4c591ad). **Phase 3 complete.** |
 | 4 | in progress — 4.3 G10 SCM-04 + REC-07, 4.4 G5 XAR-05 + SCM-08, 4.7 UTL-06 (043bec2), 4.5 G9 STA-07 + REC-06 (01e3094) |
 | 5 | not started |
 | 6 | not started |

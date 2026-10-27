@@ -134,7 +134,7 @@ independent Opus pass (`D:\R\tmp\verify-scm\`). Verdicts below are the checker's
   `starting_phase = "backward"`.
 - **Proposed fix:** add `&& run_initial_backward` to the skip condition.
 - **Must keep:** the skip for SCM+ (backward → forward → backward) when forward changed nothing.
-- **Status:** open — decided 2026-10-27: supported: run final backward unless an initial backward already ran (add `&& run_initial_backward` to the skip)
+- **Status:** fixed in 4c591ad (2026-10-26)
 
 #### SCM-03 — Resuming a selective search can skip the redemption phase
 - **Location:** R/continue-search.R:308-345 (caller side); R/model-modification.R:29; R/scm-selective-forward.R:612-950
