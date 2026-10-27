@@ -63,6 +63,17 @@ theme_pps_table <- function(x) {
 #' @keywords internal
 extract_params <- function(lines, block_tag, remove_prefix = FALSE) {
 
+  # $THETA names and transforms come from the one THETA parser, so they line
+  # up with the numbering every other reader uses (several values on one line,
+  # a value on the record line, comment lines).
+  if (toupper(block_tag) == "THETA") {
+    th <- .parse_theta_records(lines)
+    params <- tibble::tibble(param = trimws(th$name), trans = toupper(trimws(th$trans)))
+    if (remove_prefix) params$param <- stringr::str_remove(params$param, "^[0-9]+_")
+    params$trans[!nzchar(params$trans)] <- NA_character_
+    return(params[nzchar(params$param), , drop = FALSE])
+  }
+
   # Find all indices where the block starts (leading blanks and any case
   # allowed; not the $PRIOR records $THETAP / $THETAPV, $OMEGAP / ...)
   block_starts <- .record_starts(lines, block_tag)

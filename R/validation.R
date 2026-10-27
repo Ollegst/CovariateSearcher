@@ -899,6 +899,16 @@ validate_parameter_blocks <- function(model_file,
             "Line %d (THETA): initial estimate is 0 but not FIXED - use a non-zero start or FIX it",
             theta_lines[k]))
         }
+        # A bounded value written across lines ("(0," then "2.5)") breaks the
+        # one-value-per-line layout the THETA numbering relies on.
+        unbalanced <- vapply(theta_values, function(v) {
+          lengths(regmatches(v, gregexpr("\\(", v))) != lengths(regmatches(v, gregexpr("\\)", v)))
+        }, logical(1))
+        for (k in which(unbalanced)) {
+          issues <- c(issues, sprintf(
+            "Line %d (THETA): a bounded value must be written on one line, e.g. (0, 2.5, 100)",
+            theta_lines[k]))
+        }
       }
 
       if (length(block_lines) == 0) next

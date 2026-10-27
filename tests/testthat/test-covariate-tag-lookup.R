@@ -30,3 +30,13 @@ test_that("tags can be generated from a covariate table saved as .rds", {
   invisible(capture.output(generate_tags_from_covariate_search(rds, tags_yaml_path = yml, verbose = FALSE)))
   expect_true(any(grepl('^beta_WT_CL: "WT_CL"', readLines(yml))))
 })
+
+test_that("discovered rows store the tag name, as search-created rows do", {
+  # XAR-10: discovery stored the tag value (WT_CL), which the df lookup and the
+  # exclusion/redemption checks (all keyed on tag names) do not recognise.
+  st <- list(tags = list(beta_WT_CL = "WT_CL", beta_SEX_CL = "SEX_CL"))
+  expect_equal(.tag_name_for(st, c("WT_CL", "SEX_CL")), c("beta_WT_CL", "beta_SEX_CL"))
+  expect_equal(.tag_name_for(st, "beta_WT_CL"), "beta_WT_CL")   # already a name
+  expect_equal(.tag_name_for(st, "AGE_V"), "AGE_V")             # no such tag
+  expect_equal(.tag_name_for(list(), "WT_CL"), "WT_CL")
+})

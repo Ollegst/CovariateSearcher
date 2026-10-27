@@ -447,7 +447,14 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
   # join operator switched to the additive form when op_mode is "add".
   thetanmulti <- tibble()
   if (!is_categorical) {
-    if (op_mode == "add" && !is.null(cov_formula_def$nonmem_log)) {
+    if (op_mode == "add") {
+      # A log-scale parameter takes the additive form; a multiplicative factor
+      # would be multiplied into a log value.
+      if (is.null(cov_formula_def$nonmem_log)) {
+        stop("FORMULA '", cov_formula, "' for '", cova, "' has no additive (log-scale) ",
+             "form, so it cannot be added to the log-scale parameter '", param, "'.",
+             call. = FALSE)
+      }
       formule <- cov_formula_def$nonmem_log(cova, ref, newtheta)
       if (!is.null(cov_formula_def$expr)) {
         log_function(paste0("WARNING: user expression added to log-scale parameter '",
@@ -473,7 +480,6 @@ model_add_cov <- function(search_state, ref_model, cov_on_param, id_var = "ID",
       stop("Covariate '", cova, "' not found in data file. Available columns: ",
            paste(head(names(data_file), 20), collapse = ", "))
     }
-    uniqueval <- unique(data_file[[cova]])
     newvari <- cov_on_param
     formule <- paste0(combine_op, newvari)
     ifelcode <- paste0('IF(', cova, '.EQ.', temp_cov$REFERENCE,')THEN\n', newvari, ' = ', cat_ref_assign, '\n' )

@@ -129,7 +129,11 @@ discover_existing_models <- function(search_state) {
       phase = phase,
       step_number = NA_integer_,
       parent_model = parent_model,
-      covariate_tested = if (nzchar(covariate)) covariate else paste(covariates, collapse = ";"),
+      # covariate_tested holds the tag name (beta_WT_CL) in every row, the
+      # form the df lookup and the exclusion and redemption checks read; a
+      # model's notes and tags carry the tag value (WT_CL).
+      covariate_tested = paste(.tag_name_for(search_state, if (nzchar(covariate)) covariate else covariates),
+                               collapse = ";"),
       action = action,
       ofv = ofv,
       delta_ofv = NA_real_,
@@ -254,4 +258,19 @@ discover_existing_models <- function(search_state) {
 
   cat("Added ", nrow(db), " models to search database.\n", sep = "")
   return(search_state)
+}
+
+
+# The tag name (beta_WT_CL) for each tag value (WT_CL) in `values`, from
+# search_state$tags; a value with no tag, or one that is already a tag name,
+# is returned unchanged.
+#' @keywords internal
+#' @noRd
+.tag_name_for <- function(search_state, values) {
+  values <- as.character(values)
+  tags <- search_state$tags
+  if (length(values) == 0 || is.null(tags) || length(tags) == 0) return(values)
+  tag_values <- vapply(tags, function(v) as.character(v)[1], character(1))
+  hit <- match(values, tag_values)
+  ifelse(is.na(hit), values, names(tags)[hit])
 }

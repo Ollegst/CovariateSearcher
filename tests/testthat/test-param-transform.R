@@ -83,3 +83,25 @@ test_that("a covariate on an IOV parameter is multiplied onto the typical value"
   ctl <- readLines(file.path(models_dir, "run1.ctl"))
   expect_true("TV_CL = THETA(1) * (WT/70)**THETA(2)" %in% trimws(ctl))
 })
+
+test_that("a formula with no additive form stops on a log-scale parameter", {
+  # MOD-11: a registered formula without nonmem_log fell back to the
+  # multiplicative form and multiplied the factor into a log value.
+  key <- register_covariate_formula("con", "mulonly",
+                                    nonmem = function(cov, ref, k) sprintf("(%s/%s)**THETA(%d)", cov, ref, k))
+  on.exit(rm(list = key, envir = .covariate_formula_registry), add = TRUE)
+  models_dir <- tempfile("models")
+  dir.create(models_dir)
+  writeLines(c("$PROBLEM log", "$INPUT ID DV WT", "$DATA d.csv",
+               "$PK", "TV_CL = THETA(1)", "CL = EXP(TV_CL + ETA(1))",
+               "$THETA", "1.0 ; CL ; L/h ; LOG",
+               "$OMEGA", "0.1 ; IIV_CL ; ; RATIO", "$SIGMA", "1 ; EPS ; ; RATIO"),
+             file.path(models_dir, "run1.ctl"))
+  cs <- data.frame(PARAMETER = "CL", COVARIATE = "WT", STATUS = "con", FORMULA = "mulonly",
+                   LEVELS = NA, REFERENCE = 70, TIME_DEPENDENT = "No",
+                   cov_to_test = "beta_WT_CL", stringsAsFactors = FALSE)
+  expect_error(invisible(capture.output(
+    model_add_cov(list(models_folder = models_dir, search_config = list()), "run1", "WT_CL",
+                  data_file = data.frame(ID = 1:2, WT = c(60, 80)), covariate_search = cs))),
+    "has no additive (log-scale) form", fixed = TRUE)
+})

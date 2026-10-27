@@ -159,3 +159,13 @@ test_that("a THETA may start at 0 only when FIXED", {
   expect_false(.theta_init_is_unfixed_zero("0FIX"))
   expect_false(.theta_init_is_unfixed_zero("0.01"))
 })
+
+test_that("a bounded THETA split across lines is rejected", {
+  # Phase 7 (G1): "(0," / "2.5)" counted as no value, shifting THETA numbers.
+  f <- tempfile(fileext = ".ctl")
+  writeLines(c("$PROBLEM v", "$THETA", "(0,", "2.5) ; CL ; ; RATIO",
+               "$OMEGA", "0.1 ; IIV ; ; RATIO"), f)
+  res <- validate_parameter_blocks(f)
+  expect_false(res$valid)
+  expect_true(any(grepl("must be written on one line", res$issues)))
+})
