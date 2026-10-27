@@ -301,7 +301,7 @@ R >= 4.2 on Windows and on Linux/Metworx).
 - **Type:** bug · **Severity:** cosmetic (sole caller `detect_estimation_problems` is not used by the search) · **Verified:** confirmed (both)
 - **Proposed fix:** OFV from the last row with ITERATION >= 0 or == -1000000000; completed iff a
   -1000000000 row exists in the last table.
-- **Status:** open — low priority
+- **Status:** fixed in 7332e14 (2026-10-26)
 
 #### NIO-07 — Timestamps with a numeric time zone (`+03`) never parse
 - **Location:** R/file-io.R:586-589
@@ -510,7 +510,7 @@ by the checker — the corrected versions are the ones below.
 #### MOD-11 — Dead code in model-modification.R
 - **Location:** R/model-modification.R:503, 461-463, 228; FUNCTIONS.md's "formula block duplicated verbatim" note is stale
 - **Type:** simplification · **Severity:** cosmetic · **Verified:** confirmed (both)
-- **Status:** open — low priority
+- **Status:** fixed in 7332e14 (2026-10-26)
 
 #### MOD-12 — Removal counts one THETA per line, so lines holding several values are undercounted (found by the checker)
 - **Location:** R/model-modification.R, `remove_covariate_from_model` Step 4 (THETA counting)
@@ -772,7 +772,7 @@ Reviewed by Fable (`D:\R\tmp\review-UTL\`), re-checked by Opus (`D:\R\tmp\verify
 - **Type:** inconsistency · **Severity:** cosmetic · **Verified:** confirmed (checker, with a corrected script)
 - **Evidence:** 13 undeclared NSE names (band, COLOR, facet_grp, Freq, NAME, Scenario, VALUE, xlev, xmax,
   xmin, y, ymax, ymin); 3 declared names used nowhere (runtime_minutes, get_model_ofv, best_delta_ofv).
-- **Status:** open — low priority
+- **Status:** fixed in 7332e14 (2026-10-26)
 
 #### UTL-05 — Exported helpers fail cryptically on off-contract input
 - **Location:** R/utilities.R:65, 493 · **Type:** bug · **Severity:** cosmetic · **Verified:** confirmed (both)
@@ -983,7 +983,7 @@ Reviewed by Fable (`D:\R\tmp\review-XAR\`), re-checked by Sonnet (`D:\R\tmp\veri
 - **Evidence:** discovery stores `WT_CL`; `extract_covariate_name_from_tag("WT_CL")` returns NA, so such
   a row would get df 1. Whether discovered rows are ever evaluated was not settled.
 - **Proposed fix:** discovery stores the tag name; one display helper for step descriptions.
-- **Status:** open (group G6) — low priority
+- **Status:** fixed in 7332e14 (2026-10-26)
 
 #### XAR-09 — The Quick Start article says TIME_DEPENDENT decides placement; it does not
 - **Location:** vignettes/quick-start.Rmd:127
