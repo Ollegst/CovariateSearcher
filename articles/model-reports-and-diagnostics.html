@@ -270,9 +270,14 @@ smallest eigenvalue of the correlation matrix) computed from the run’s
 <code>.cor</code> (or <code>.cov</code>) output.</p>
 <p>Estimates are shown with 3 significant figures; the OFV has 2
 decimals, the condition number 1 decimal, and RSE and shrinkage 2
-decimals. A footer under the table reads “Variance estimates
-(OMEGA/SIGMA diagonals) are shown as CV% = 100*sqrt(exp(variance) -
-1).”</p>
+decimals.</p>
+<p>OMEGA diagonals are shown as CV% = 100*sqrt(exp(variance) - 1).
+Residual error follows the tag on its <code>$SIGMA</code> line:
+<code>RATIO</code> shows the SIGMA as estimated (a proportional or
+additive variance, or the 1 FIX of a THETA-coded error, which is left
+out), with RSE = |SE/estimate|; <code>LOG</code> (exponential or
+log-data error) shows it as CV% like an OMEGA. A footer under the table
+states this rule.</p>
 </div>
 <div class="section level4">
 <h4 id="sections">Sections<a class="anchor" aria-label="anchor" href="#sections"></a>
@@ -836,11 +841,12 @@ same way as the boxplots’ caption</td>
 <p>Panels are titled and ordered exactly as <code><a href="../reference/model_report.html">model_report()</a></code>
 names its rows, so a panel can be read against its table row. Draws are
 shown on the scale the report uses, not the one NONMEM estimated on: a
-<code>;LOG</code> THETA is exponentiated and an OMEGA/SIGMA diagonal
-becomes a CV%, through the same mapping the table applies. If a record’s
-lines are not all annotated, its <code>;LOG</code> tags are not used and
-its panels stay as NONMEM wrote them — the same rule
-<code><a href="../reference/plot_nonmem_iterations.html">plot_nonmem_iterations()</a></code> follows.</p>
+<code>;LOG</code> THETA is exponentiated, an OMEGA diagonal (and a SIGMA
+tagged <code>LOG</code>) becomes a CV%, and a SIGMA tagged
+<code>RATIO</code> stays as estimated, through the same mapping the
+table applies. If a record’s lines are not all annotated, its
+<code>;LOG</code> tags are not used and its panels stay as NONMEM wrote
+them — the same rule <code><a href="../reference/plot_nonmem_iterations.html">plot_nonmem_iterations()</a></code> follows.</p>
 <p>Two kinds of parameter are left out unless you name them in
 <code>parameters</code>:</p>
 <ul>

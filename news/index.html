@@ -69,7 +69,7 @@
 <code><a href="../reference/build_covariate_reference_table.html">build_covariate_reference_table()</a></code> stops when a covariate has no value at TIME == 0.</li>
 <li>A missing record (<code>NA</code> or <code>.</code>) is not a covariate value: it no longer makes a covariate time-varying and no longer becomes a categorical level. The dataset is read with <code>.</code> as missing.</li>
 <li>A run counts as finished only when its listing has <code>Stop Time:</code>. An NM-TRAN error counts as failed at once, even if result files from an earlier run are present.</li>
-<li>Parameter tables show estimates with 3 significant figures (OFV 2 decimals, condition number 1). The condition number is NONMEM’s (from the correlation matrix), labelled “Condition number”. <code><a href="../reference/model_report.html">model_report()</a></code> states the CV% formula in a footer.</li>
+<li>Parameter tables show estimates with 3 significant figures (OFV 2 decimals, condition number 1). The condition number is NONMEM’s (from the correlation matrix), labelled “Condition number”. OMEGA diagonals are shown as CV%; a SIGMA tagged <code>RATIO</code> is shown as estimated, one tagged <code>LOG</code> as CV%. A footer states the rule.</li>
 <li>The search database’s <code>phase</code> column holds <code>base</code>, <code>forward_selection</code>, <code>redemption</code>, <code>backward_elimination</code> or <code>manual</code>; <code>action</code> holds what was done (<code>add_covariate</code>, <code>remove_covariate</code>, <code>retry</code>, …). Older databases are still read.</li>
 </ul></div>
 <div class="section level3">

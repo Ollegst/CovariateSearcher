@@ -43,9 +43,9 @@ you may notice” before rerunning an existing project.
   earlier run are present.
 - Parameter tables show estimates with 3 significant figures (OFV 2
   decimals, condition number 1). The condition number is NONMEM’s (from
-  the correlation matrix), labelled “Condition number”.
-  [`model_report()`](https://ollegst.github.io/CovariateSearcher/reference/model_report.md)
-  states the CV% formula in a footer.
+  the correlation matrix), labelled “Condition number”. OMEGA diagonals
+  are shown as CV%; a SIGMA tagged `RATIO` is shown as estimated, one
+  tagged `LOG` as CV%. A footer states the rule.
 - The search database’s `phase` column holds `base`,
   `forward_selection`, `redemption`, `backward_elimination` or `manual`;
   `action` holds what was done (`add_covariate`, `remove_covariate`,
