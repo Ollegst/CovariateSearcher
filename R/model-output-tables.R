@@ -424,13 +424,19 @@ decode_cov_level <- function(cov_name, level, lookup) {
 #'   marks a THETA.
 #' @param trans Character vector of control-stream transformations ("LOG", "RATIO").
 #' @param diag Logical vector. `TRUE` for diagonal OMEGA/SIGMA elements.
+#' @param sigma Logical vector. `TRUE` for SIGMA elements. A SIGMA diagonal
+#'   tagged `RATIO` is shown as estimated (residual error coded as a
+#'   proportional or additive variance, or fixed to 1 with THETA-coded error);
+#'   one tagged `LOG` is shown as lognormal CV%, like an OMEGA diagonal.
 #' @return Numeric vector on the reported scale.
 #' @keywords internal
 #' @noRd
-.to_report_scale <- function(value, random_effect_sd, trans, diag) {
+.to_report_scale <- function(value, random_effect_sd, trans, diag, sigma = FALSE) {
+  sigma <- rep_len(sigma %in% TRUE, length(value))
   dplyr::case_when(
     is.na(random_effect_sd) & trans == "RATIO" ~ value,
     is.na(random_effect_sd) & trans == "LOG" ~ exp(value),
+    sigma & diag == TRUE & !(trans %in% "LOG") ~ value,
     diag == TRUE ~ 100 * sqrt(ifelse(exp(value) - 1 >= 0, exp(value) - 1, NA)),
     diag == FALSE ~ value
   )
@@ -671,10 +677,12 @@ get_param2 <- function(model_number,
     ) %>%
     dplyr::filter(!(parameter_names2 == "SIGMA(1,1)" & fixed == TRUE)) %>%
     dplyr::mutate(
-      Parameter = .to_report_scale(estimate, random_effect_sd, trans, diag),
+      is_sigma = grepl("^SIGMA", parameter_names2),
+      Parameter = .to_report_scale(estimate, random_effect_sd, trans, diag, is_sigma),
       RSE = dplyr::case_when(
         is.na(random_effect_sd) & trans == "RATIO" ~ abs((stderr/estimate) * 100),
         is.na(random_effect_sd) & trans == "LOG" ~ abs(stderr) * 100,
+        is_sigma & diag == TRUE & !(trans %in% "LOG") ~ abs((stderr/estimate) * 100),
         diag == TRUE ~  100 * stderr * exp(estimate) / (2 * (exp(estimate) - 1)),
         diag == FALSE ~ abs(100 * stderr / estimate)
       ),
@@ -687,11 +695,12 @@ get_param2 <- function(model_number,
         fixed %in% TRUE,
         NA_character_,
         .format_ci(
-          .to_report_scale(estimate - 1.96 * stderr, random_effect_sd, trans, diag),
-          .to_report_scale(estimate + 1.96 * stderr, random_effect_sd, trans, diag)
+          .to_report_scale(estimate - 1.96 * stderr, random_effect_sd, trans, diag, is_sigma),
+          .to_report_scale(estimate + 1.96 * stderr, random_effect_sd, trans, diag, is_sigma)
         )
       )
     ) %>%
+    dplyr::select(-is_sigma) %>%
     dplyr::rename(nonmem_name = "parameter_names2")
 
   # Extract shrinkage for diagonal OMEGA elements only
@@ -1206,12 +1215,12 @@ model_report <- function(model_names,
     )
   }
 
-  # Every OMEGA/SIGMA diagonal is reported on the lognormal CV% scale, which is
-  # not meaningful for an additive (SD-type) residual error; say how it is
-  # computed so the reader can judge.
+  # Say how the variances are shown, so the reader can judge them.
   flextable_object <- flextable::add_footer_lines(
     flextable_object,
-    values = "Variance estimates (OMEGA/SIGMA diagonals) are shown as CV% = 100*sqrt(exp(variance) - 1)."
+    values = paste("OMEGA diagonals (and SIGMA diagonals tagged LOG) are shown as",
+                   "CV% = 100*sqrt(exp(variance) - 1); SIGMA diagonals tagged RATIO",
+                   "as estimated.")
   )
 
   return(flextable_object)

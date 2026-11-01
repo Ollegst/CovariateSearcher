@@ -185,3 +185,13 @@ test_that("each panel gets its own x range", {
   expect_length(ranges, 2)
   expect_false(identical(ranges[[1]]$x.range, ranges[[2]]$x.range))
 })
+
+test_that("bootstrap draws of a SIGMA follow its tag", {
+  nm <- c("SIGMA(1,1)", "SIGMA.2.2.", "OMEGA(1,1)")
+  si <- .name_scale_inputs(nm, log_cols = character(0), sigma_log = 2L)
+  expect_equal(si$sigma, c(TRUE, TRUE, FALSE))
+  out <- .to_report_scale(c(0.04, 0.04, 0.04), si$random_effect_sd, si$trans, si$diag, si$sigma)
+  expect_equal(out[1], 0.04)                                  # RATIO: as estimated
+  expect_equal(out[2], 100 * sqrt(exp(0.04) - 1))             # LOG: CV%
+  expect_equal(out[3], 100 * sqrt(exp(0.04) - 1))             # OMEGA unchanged
+})

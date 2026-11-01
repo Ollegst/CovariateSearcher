@@ -65,7 +65,7 @@ utils::globalVariables(c(
 
   # From model_report function
   "comment_info", "group", "nonmem_name", "CI", "rse_shrinkage",
-  "boot_median", "boot_ci", "is_omega",
+  "boot_median", "boot_ci", "is_omega", "is_sigma",
 
   # From plot_bootstrap_distributions
   "panel", "value", "final_estimate", "q_value",
