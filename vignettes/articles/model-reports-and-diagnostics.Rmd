@@ -95,9 +95,13 @@ Two rows are appended below the parameter sections: `OFV`, and
 `Condition number` (NONMEM's: the largest over the smallest eigenvalue of the correlation matrix) computed from the run's `.cor` (or `.cov`) output.
 
 Estimates are shown with 3 significant figures; the OFV has 2 decimals, the
-condition number 1 decimal, and RSE and shrinkage 2 decimals. A footer under the
-table reads "Variance estimates (OMEGA/SIGMA diagonals) are shown as CV% =
-100*sqrt(exp(variance) - 1)."
+condition number 1 decimal, and RSE and shrinkage 2 decimals.
+
+OMEGA diagonals are shown as CV% = 100*sqrt(exp(variance) - 1). Residual error
+follows the tag on its `$SIGMA` line: `RATIO` shows the SIGMA as estimated (a
+proportional or additive variance, or the 1 FIX of a THETA-coded error, which
+is left out), with RSE = |SE/estimate|; `LOG` (exponential or log-data error)
+shows it as CV% like an OMEGA. A footer under the table states this rule.
 
 ### Sections
 
@@ -423,8 +427,9 @@ Draws that did not converge are dropped.
 
 Panels are titled and ordered exactly as `model_report()` names its rows, so a
 panel can be read against its table row. Draws are shown on the scale the report
-uses, not the one NONMEM estimated on: a `;LOG` THETA is exponentiated and an
-OMEGA/SIGMA diagonal becomes a CV%, through the same mapping the table applies.
+uses, not the one NONMEM estimated on: a `;LOG` THETA is exponentiated, an
+OMEGA diagonal (and a SIGMA tagged `LOG`) becomes a CV%, and a SIGMA tagged
+`RATIO` stays as estimated, through the same mapping the table applies.
 If a record's lines are not all annotated, its `;LOG` tags are not used and its
 panels stay as NONMEM wrote them — the same rule `plot_nonmem_iterations()`
 follows.
