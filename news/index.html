@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">CovariateSearcher</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -48,6 +48,10 @@
     </div>
 
     <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.5.1" id="covariatesearcher-051">CovariateSearcher 0.5.1<a class="anchor" aria-label="anchor" href="#covariatesearcher-051"></a></h2>
+<ul><li>Residual error in parameter tables: a <code>$SIGMA</code> diagonal tagged <code>RATIO</code> is shown as estimated (RSE = |SE/estimate|), so a proportional SIGMA of 0.0784 shows as 0.0784. One tagged <code>LOG</code> (exponential or log-data error) is still shown as lognormal CV%. OMEGA diagonals are unchanged. The <code><a href="../reference/model_report.html">model_report()</a></code> footer states the rule, and bootstrap plots use the same mapping.</li>
+</ul></div>
+    <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.5.0" id="covariatesearcher-050">CovariateSearcher 0.5.0<a class="anchor" aria-label="anchor" href="#covariatesearcher-050"></a></h2>
 <p>This release comes from a full review of the package. Searches are more reliable, validation is stricter, and some outputs change. Read “Changes you may notice” before rerunning an existing project.</p>
 <div class="section level3">
@@ -69,7 +73,7 @@
 <code><a href="../reference/build_covariate_reference_table.html">build_covariate_reference_table()</a></code> stops when a covariate has no value at TIME == 0.</li>
 <li>A missing record (<code>NA</code> or <code>.</code>) is not a covariate value: it no longer makes a covariate time-varying and no longer becomes a categorical level. The dataset is read with <code>.</code> as missing.</li>
 <li>A run counts as finished only when its listing has <code>Stop Time:</code>. An NM-TRAN error counts as failed at once, even if result files from an earlier run are present.</li>
-<li>Parameter tables show estimates with 3 significant figures (OFV 2 decimals, condition number 1). The condition number is NONMEM’s (from the correlation matrix), labelled “Condition number”. OMEGA diagonals are shown as CV%; a SIGMA tagged <code>RATIO</code> is shown as estimated, one tagged <code>LOG</code> as CV%. A footer states the rule.</li>
+<li>Parameter tables show estimates with 3 significant figures (OFV 2 decimals, condition number 1). The condition number is NONMEM’s (from the correlation matrix), labelled “Condition number”. <code><a href="../reference/model_report.html">model_report()</a></code> states the CV% formula in a footer.</li>
 <li>The search database’s <code>phase</code> column holds <code>base</code>, <code>forward_selection</code>, <code>redemption</code>, <code>backward_elimination</code> or <code>manual</code>; <code>action</code> holds what was done (<code>add_covariate</code>, <code>remove_covariate</code>, <code>retry</code>, …). Older databases are still read.</li>
 </ul></div>
 <div class="section level3">

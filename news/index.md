@@ -1,5 +1,15 @@
 # Changelog
 
+## CovariateSearcher 0.5.1
+
+- Residual error in parameter tables: a `$SIGMA` diagonal tagged `RATIO`
+  is shown as estimated (RSE = \|SE/estimate\|), so a proportional SIGMA
+  of 0.0784 shows as 0.0784. One tagged `LOG` (exponential or log-data
+  error) is still shown as lognormal CV%. OMEGA diagonals are unchanged.
+  The
+  [`model_report()`](https://ollegst.github.io/CovariateSearcher/reference/model_report.md)
+  footer states the rule, and bootstrap plots use the same mapping.
+
 ## CovariateSearcher 0.5.0
 
 This release comes from a full review of the package. Searches are more
@@ -43,9 +53,9 @@ you may notice” before rerunning an existing project.
   earlier run are present.
 - Parameter tables show estimates with 3 significant figures (OFV 2
   decimals, condition number 1). The condition number is NONMEM’s (from
-  the correlation matrix), labelled “Condition number”. OMEGA diagonals
-  are shown as CV%; a SIGMA tagged `RATIO` is shown as estimated, one
-  tagged `LOG` as CV%. A footer states the rule.
+  the correlation matrix), labelled “Condition number”.
+  [`model_report()`](https://ollegst.github.io/CovariateSearcher/reference/model_report.md)
+  states the CV% formula in a footer.
 - The search database’s `phase` column holds `base`,
   `forward_selection`, `redemption`, `backward_elimination` or `manual`;
   `action` holds what was done (`add_covariate`, `remove_covariate`,
