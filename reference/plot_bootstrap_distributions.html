@@ -154,9 +154,10 @@ to push one down. <code>NULL</code> or <code>Inf</code> leaves titles on one lin
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>Draws are plotted on the scale the report shows, not the scale NONMEM
-estimated on: a <code>;LOG</code> THETA is exponentiated and an OMEGA/SIGMA diagonal
-becomes a CV percentage, through the same mapping <code><a href="model_report.html">model_report()</a></code> applies to
-the estimate. The <code>;LOG</code> annotations are read with the count check
+estimated on: a <code>;LOG</code> THETA is exponentiated, an OMEGA diagonal (and a
+SIGMA diagonal tagged <code>LOG</code>) becomes a CV percentage, and a SIGMA diagonal
+tagged <code>RATIO</code> stays as estimated, through the same mapping <code><a href="model_report.html">model_report()</a></code>
+applies to the estimate. The <code>;LOG</code> annotations are read with the count check
 <code><a href="plot_nonmem_iterations.html">plot_nonmem_iterations()</a></code> uses, so a record whose lines are not all
 annotated contributes no rescaling and its panels stay as NONMEM wrote them.</p>
 <p>Two kinds of parameter are left out by default. One that did not move across

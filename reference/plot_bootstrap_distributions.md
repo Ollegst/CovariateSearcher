@@ -97,8 +97,9 @@ A ggplot2 object.
 ## Details
 
 Draws are plotted on the scale the report shows, not the scale NONMEM
-estimated on: a `;LOG` THETA is exponentiated and an OMEGA/SIGMA
-diagonal becomes a CV percentage, through the same mapping
+estimated on: a `;LOG` THETA is exponentiated, an OMEGA diagonal (and a
+SIGMA diagonal tagged `LOG`) becomes a CV percentage, and a SIGMA
+diagonal tagged `RATIO` stays as estimated, through the same mapping
 [`model_report()`](https://ollegst.github.io/CovariateSearcher/reference/model_report.md)
 applies to the estimate. The `;LOG` annotations are read with the count
 check
