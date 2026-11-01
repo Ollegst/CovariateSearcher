@@ -172,8 +172,8 @@ test_that("shrinkage reads only the requested fields", {
 })
 
 test_that("the report says how variances are shown", {
-  # REP-05 (owner decision): the table states how variances are shown:
-  # lognormal CV% for OMEGA (and SIGMA tagged LOG), as estimated for SIGMA RATIO.
+  # REP-05 (owner decision): every OMEGA/SIGMA diagonal is shown as lognormal
+  # CV%, and the table now states the formula.
   s <- real_summary()
   models_dir <- write_basic_model()
   ft <- NULL
@@ -187,39 +187,5 @@ test_that("the report says how variances are shown", {
     )
   ))
   footer <- paste(unlist(ft$footer$dataset), collapse = " ")
-  expect_match(footer, "CV% = 100*sqrt(exp(variance) - 1); SIGMA diagonals tagged RATIO", fixed = TRUE)
-})
-
-test_that("a SIGMA tagged RATIO is shown as estimated; one tagged LOG as CV%", {
-  # Owner decision: residual error is reported as estimated unless its
-  # $SIGMA line is tagged LOG (exponential / log-data error).
-  sigma_row <- function(sigma_trans) {
-    s <- real_summary()
-    models_dir <- write_basic_model()
-    ctl <- file.path(models_dir, "b1.ctl")
-    lines <- readLines(ctl)
-    lines[lines == "1 FIX ; SIG ; - ; RATIO"] <- paste("0.04 ; SIG ; - ;", sigma_trans)
-    writeLines(lines, ctl)
-    out <- testthat::with_mocked_bindings(
-      read_model = function(path) list(path = path),
-      model_summary = function(mod) s,
-      param_estimates = function(x, ...) {
-        p <- bbr:::param_estimates.bbi_nonmem_summary(s)
-        i <- p$parameter_names == "SIGMA(1,1)"
-        p$estimate[i] <- 0.04
-        p$stderr[i] <- 0.004
-        p$fixed[i] <- FALSE
-        p
-      },
-      .package = "bbr",
-      as.data.frame(get_param2("b1", 1, models_folder = models_dir, include_ci = TRUE))
-    )
-    out[out$nonmem_name %in% "SIGMA(1,1)", c("Parameter", "RSE", "CI")]
-  }
-  r <- sigma_row("RATIO")
-  expect_equal(as.numeric(r$Parameter), 0.04)
-  expect_equal(as.numeric(r$RSE), 10)
-  expect_equal(r$CI, "[0.0322, 0.0478]")
-  l <- sigma_row("LOG")
-  expect_equal(as.numeric(l$Parameter), signif(100 * sqrt(exp(0.04) - 1), 3))
+  expect_match(footer, "CV% = 100*sqrt(exp(variance) - 1)", fixed = TRUE)
 })

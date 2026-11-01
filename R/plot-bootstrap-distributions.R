@@ -77,28 +77,21 @@
 #' @param nonmem_name Character vector of NONMEM parameter names, in either the
 #'   `OMEGA(1,1)` or the `.ext`-sanitised `OMEGA.1.1.` spelling.
 #' @param log_cols Character vector of THETA names annotated `;LOG`.
-#' @param sigma_log Integer vector of SIGMA diagonal indices whose `$SIGMA` line
-#'   is tagged `LOG` (shown as CV%); every other SIGMA diagonal is shown as
-#'   estimated.
-#' @return List of `random_effect_sd`, `trans`, `diag` and `sigma` vectors, the
-#'   arguments `.to_report_scale()` expects.
+#' @return List of `random_effect_sd`, `trans` and `diag` vectors, the arguments
+#'   `.to_report_scale()` expects.
 #' @keywords internal
 #' @noRd
-.name_scale_inputs <- function(nonmem_name, log_cols, sigma_log = integer(0)) {
+.name_scale_inputs <- function(nonmem_name, log_cols) {
   is_theta <- grepl("^THETA", nonmem_name)
   block_pat <- "^(OMEGA|SIGMA)[.(](\\d+)[,.](\\d+)[.)]$"
   is_block <- grepl(block_pat, nonmem_name)
   is_diag <- is_block &
     sub(block_pat, "\\2", nonmem_name) == sub(block_pat, "\\3", nonmem_name)
-  is_sigma <- is_block & sub(block_pat, "\\1", nonmem_name) == "SIGMA"
-  sigma_idx <- suppressWarnings(as.integer(sub(block_pat, "\\2", nonmem_name)))
 
   list(
     random_effect_sd = ifelse(is_theta, NA_real_, 1),
-    trans = ifelse((is_theta & nonmem_name %in% log_cols) |
-                     (is_sigma & is_diag & sigma_idx %in% sigma_log), "LOG", "RATIO"),
-    diag = ifelse(is_theta, NA, is_diag),
-    sigma = is_sigma
+    trans = ifelse(is_theta & nonmem_name %in% log_cols, "LOG", "RATIO"),
+    diag = ifelse(is_theta, NA, is_diag)
   )
 }
 
@@ -279,27 +272,20 @@ plot_bootstrap_distributions <- function(boot_run,
   model_obj <- bbr::read_model(file.path(models_folder, model_name))
   finals <- bbr::param_estimates(bbr::model_summary(model_obj))
 
-  # $SIGMA lines tagged LOG, by position (the k-th line is SIGMA(k,k)).
-  sigma_tbl <- tryCatch(
-    suppressWarnings(extract_model_params(model_name, models_folder = models_folder))$SIGMA,
-    error = function(e) NULL)
-  sigma_log <- if (is.null(sigma_tbl)) integer(0) else which(toupper(sigma_tbl$trans) %in% "LOG")
-
-  scale_draws <- .name_scale_inputs(draws$nonmem_name, log_cols, sigma_log)
+  scale_draws <- .name_scale_inputs(draws$nonmem_name, log_cols)
   draws$value <- .to_report_scale(draws$value, scale_draws$random_effect_sd,
-                                  scale_draws$trans, scale_draws$diag, scale_draws$sigma)
+                                  scale_draws$trans, scale_draws$diag)
 
   final_tbl <- data.frame(
     nonmem_name = as.character(finals$parameter_names),
     final_estimate = suppressWarnings(as.numeric(finals$estimate)),
     stringsAsFactors = FALSE
   )
-  scale_final <- .name_scale_inputs(final_tbl$nonmem_name, log_cols, sigma_log)
+  scale_final <- .name_scale_inputs(final_tbl$nonmem_name, log_cols)
   final_tbl$final_estimate <- .to_report_scale(final_tbl$final_estimate,
                                                scale_final$random_effect_sd,
                                                scale_final$trans,
-                                               scale_final$diag,
-                                               scale_final$sigma)
+                                               scale_final$diag)
 
   # A draw the mapping cannot place - an OMEGA whose variance is not positive -
   # is not a value on this scale and is dropped rather than shown at zero.

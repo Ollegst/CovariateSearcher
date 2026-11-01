@@ -99,22 +99,22 @@ model-output-tables.R	.format_ci	.format_ci(low, high, digits=3)	no	d6f0b3230946
 model-output-tables.R	.join_bootstrap_results	.join_bootstrap_results(param_est, boot_results)	no	00539df263ec4d472c6e816e89c31f93
 model-output-tables.R	.level_from_decoded_name	.level_from_decoded_name(cov_name, suffix_tokens, lookup)	no	ad50e566d036ecc1629b4d79da200323
 model-output-tables.R	.reformat_boot_ci	.reformat_boot_ci(x)	no	112d3d9290a850ed1f3a928c8a676e75
-model-output-tables.R	.to_report_scale	.to_report_scale(value, random_effect_sd, trans, diag, sigma=FALSE)	no	fc89efa3c57801f14487a2889ef60d05
+model-output-tables.R	.to_report_scale	.to_report_scale(value, random_effect_sd, trans, diag)	no	4475e21c3b150c11fb1a00d522214890
 model-output-tables.R	calculate_condition_number	calculate_condition_number(model_number, models_folder="models", tolerance=1e-10)	no	fad59c8717058a58635eb15ff395ace0
 model-output-tables.R	decode_cov_level	decode_cov_level(cov_name, level, lookup)	no	ce51662c1cc4f12fec395bd13e517ddd
 model-output-tables.R	extract_model_params	extract_model_params(model_name, models_folder="models")	no	9d45e14fd94298643395a236f8845f76
 model-output-tables.R	extract_params	extract_params(lines, block_tag, remove_prefix=FALSE)	no	4bc1331a204822726187078024f7bef5
-model-output-tables.R	get_param2	get_param2(model_number, count_model, shrinkage="etasd", models_folder="models", spec_pk=NULL, lookup=NULL, include_ci=FALSE)	no	3bf3d577abd1ae3fea5c62a53136c40c
-model-output-tables.R	model_report	model_report(model_names, shrinkage="etasd", models_folder="models", spec_pk=NULL, lookup=NULL, bootstrap=FALSE, boot_results=NULL)	yes	3a660e17aeb91d31bd0d55a5e38557c5
+model-output-tables.R	get_param2	get_param2(model_number, count_model, shrinkage="etasd", models_folder="models", spec_pk=NULL, lookup=NULL, include_ci=FALSE)	no	7e452950c19ee363956e2e097d80a1f4
+model-output-tables.R	model_report	model_report(model_names, shrinkage="etasd", models_folder="models", spec_pk=NULL, lookup=NULL, bootstrap=FALSE, boot_results=NULL)	yes	a5f962549fdba87b8a88b2e1c6e879f3
 model-output-tables.R	theme_pps_table	theme_pps_table(x)	yes	aad765a60d5ecfc2d330db5cf36dd44a
 monitoring-files.R	read_ext_file	read_ext_file(search_state, model_name)	yes	07d36ef28edc501145dcf3c29f80aee2
 plot-bootstrap-distributions.R	.bootstrap_distribution_plot	.bootstrap_distribution_plot(draws, quantile_tbl, final_tbl, bins=30, ncol=NULL, footnote=NULL)	no	fe2fd7a52453f5df12bd51ff0a695d6f
 plot-bootstrap-distributions.R	.bootstrap_draws	.bootstrap_draws(boot_run)	no	f598b0f069aea6e3801d20908992b074
-plot-bootstrap-distributions.R	.name_scale_inputs	.name_scale_inputs(nonmem_name, log_cols, sigma_log=integer(0))	no	fd577804b4d1f8c32633dad2393ac27d
+plot-bootstrap-distributions.R	.name_scale_inputs	.name_scale_inputs(nonmem_name, log_cols)	no	d1e9f229243561567625956c9ab7d058
 plot-bootstrap-distributions.R	.nonmem_name_order	.nonmem_name_order(nonmem_name)	no	3e00bf5cff744d8a32c109ba19bdcd4c
 plot-bootstrap-distributions.R	.select_boot_parameters	.select_boot_parameters(parameters, draws)	no	cbedf33b6c076d2f5b77c1401f9a6b34
 plot-bootstrap-distributions.R	.wrap_two_lines	.wrap_two_lines(x, width=22)	no	4e35b54efbba04f2b2a56f7c91b89a26
-plot-bootstrap-distributions.R	plot_bootstrap_distributions	plot_bootstrap_distributions(boot_run, model_name, models_folder="models", spec_pk=NULL, lookup=NULL, parameters=NULL, bins=30, ncol=NULL, footnote=NULL, wrap_width=22)	yes	a637b267d6acee9d2ef96244879c4b73
+plot-bootstrap-distributions.R	plot_bootstrap_distributions	plot_bootstrap_distributions(boot_run, model_name, models_folder="models", spec_pk=NULL, lookup=NULL, parameters=NULL, bins=30, ncol=NULL, footnote=NULL, wrap_width=22)	yes	90aea50f213b0dbaf10e3ab85c183827
 plot_nonmem_iterations.R	.listing_column_meta	.listing_column_meta(ext_cols, model_name, models_dir)	no	bb3b254c05728ce32a32e7fd042d29b3
 plot_nonmem_iterations.R	plot_nonmem_iterations	plot_nonmem_iterations(model_name, models_dir="models", transform=TRUE, skip_iterations=0, obj_var="OBJ", max_iterations=100)	yes	cb98fcbfa2b162189d0c8238672af97b
 plot_nonmem_iterations.R	read_ext_iterations	read_ext_iterations(ext_file)	yes	9b822e70de3a66faec00dcdd26215531
