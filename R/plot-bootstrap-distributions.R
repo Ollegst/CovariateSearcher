@@ -213,9 +213,10 @@
 #'
 #' @details
 #' Draws are plotted on the scale the report shows, not the scale NONMEM
-#' estimated on: a `;LOG` THETA is exponentiated and an OMEGA/SIGMA diagonal
-#' becomes a CV percentage, through the same mapping [model_report()] applies to
-#' the estimate. The `;LOG` annotations are read with the count check
+#' estimated on: a `;LOG` THETA is exponentiated, an OMEGA diagonal (and a
+#' SIGMA diagonal tagged `LOG`) becomes a CV percentage, and a SIGMA diagonal
+#' tagged `RATIO` stays as estimated, through the same mapping [model_report()]
+#' applies to the estimate. The `;LOG` annotations are read with the count check
 #' `plot_nonmem_iterations()` uses, so a record whose lines are not all
 #' annotated contributes no rescaling and its panels stay as NONMEM wrote them.
 #'
@@ -282,7 +283,12 @@ plot_bootstrap_distributions <- function(boot_run,
   # $SIGMA lines tagged LOG, by position (the k-th line is SIGMA(k,k)).
   sigma_tbl <- tryCatch(
     suppressWarnings(extract_model_params(model_name, models_folder = models_folder))$SIGMA,
-    error = function(e) NULL)
+    error = function(e) {
+      warning("Could not read the $SIGMA tags of '", model_name, "'; every SIGMA is ",
+              "shown as estimated (a SIGMA tagged LOG would be shown as CV%).",
+              call. = FALSE)
+      NULL
+    })
   sigma_log <- if (is.null(sigma_tbl)) integer(0) else which(toupper(sigma_tbl$trans) %in% "LOG")
 
   scale_draws <- .name_scale_inputs(draws$nonmem_name, log_cols, sigma_log)

@@ -70,9 +70,10 @@ so a panel and its table row can be read against one another.
 }
 \details{
 Draws are plotted on the scale the report shows, not the scale NONMEM
-estimated on: a \verb{;LOG} THETA is exponentiated and an OMEGA/SIGMA diagonal
-becomes a CV percentage, through the same mapping \code{\link[=model_report]{model_report()}} applies to
-the estimate. The \verb{;LOG} annotations are read with the count check
+estimated on: a \verb{;LOG} THETA is exponentiated, an OMEGA diagonal (and a
+SIGMA diagonal tagged \code{LOG}) becomes a CV percentage, and a SIGMA diagonal
+tagged \code{RATIO} stays as estimated, through the same mapping \code{\link[=model_report]{model_report()}}
+applies to the estimate. The \verb{;LOG} annotations are read with the count check
 \code{plot_nonmem_iterations()} uses, so a record whose lines are not all
 annotated contributes no rescaling and its panels stay as NONMEM wrote them.
 
